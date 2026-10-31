@@ -43,7 +43,11 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub code_review_model: Patch<ModelRef>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub commit_message_model: Patch<ModelRef>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub commit_message_enabled: Patch<bool>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub advisor: Patch<ash_protocol::AdvisorConfig>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
@@ -140,6 +144,8 @@ pub enum UserConfigCommand {
     },
     AuthorizeCommitMessageEgress {
         dir: DirId,
+        /// The actual inherited model to authorize when there is no dedicated override.
+        model: Option<ModelRef>,
     },
     RevokeCommitMessageEgress {
         dir: DirId,

@@ -2,35 +2,28 @@ import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 
-suite('tabbed model picker browser component', () => {
+suite('model picker browser component', () => {
 	const browserTests = useBrowserTests();
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`provider icons follow the product theme and shared details open documentation in ${locale}`, async () => {
+		test(`model controls and details use model names and open documentation in ${locale}`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?modelSet=providers&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const trigger = page.locator('.ash-chat-input-model-action');
-			const triggerIcon = trigger.locator('.ash-icon');
-			await expect(triggerIcon).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-			await expect(triggerIcon).toHaveAttribute('aria-hidden', 'true');
-			await triggerIcon.evaluate(element => element.setAttribute('data-retained-icon', 'true'));
-			const previousGlyph = await triggerIcon.getAttribute('data-ash-icon-character');
+			await expect(trigger).toHaveText('Test Model');
+			await expect(trigger).toHaveAccessibleName('Test Model');
+			await expect(trigger.locator('.ash-icon')).toHaveCount(0);
 			await trigger.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
-			const tabIcon = picker.getByRole('tab', { name: 'GPT', exact: true, includeHidden: true }).locator('.ash-icon');
-			await expect(tabIcon).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-			await picker.getByRole('button', { name: chinese ? 'Test Model 详情' : 'Test Model details', exact: true }).click();
+			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
+			await expect(picker.getByRole('tabpanel')).toHaveCount(0);
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const card = picker.getByRole('region', { name: 'Test Model', exact: true });
-			const cardIcon = card.locator('h3 .ash-icon');
-			await expect(cardIcon).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-			await page.evaluate(() => window.ashChatInputIntegration.setProviderIconTheme());
-			await expect(triggerIcon).not.toHaveAttribute('data-ash-icon-character', previousGlyph!);
-			await expect(triggerIcon).toHaveAttribute('data-retained-icon', 'true');
-			const themedGlyph = await triggerIcon.getAttribute('data-ash-icon-character');
-			await expect(tabIcon).toHaveAttribute('data-ash-icon-character', themedGlyph!);
-			await expect(cardIcon).toHaveAttribute('data-ash-icon-character', themedGlyph!);
+			await expect(card.getByRole('heading', { name: 'Test Model', exact: true })).toBeVisible();
+			await expect(card.locator('h3 .ash-icon')).toHaveCount(0);
 			await expect(card).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setDescription('**Provider** description. [Documentation](https://example.test/model)'));
 			await expect(card.locator('strong')).toHaveText('Provider');
@@ -61,8 +54,6 @@ suite('tabbed model picker browser component', () => {
 			const trigger = page.locator('.ash-chat-input-model-action');
 			await trigger.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
-			const provider = picker.getByRole('tab', { name: 'Team endpoint', exact: true });
-			await expect(provider).toHaveAttribute('aria-selected', 'true');
 			const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
 			await expect(automatic).toBeHidden();
 			const welcome = picker.locator('.ash-chat-model-picker-empty');
@@ -75,14 +66,13 @@ suite('tabbed model picker browser component', () => {
 			await expect(picker.getByRole('menuitem', { name: chinese ? '添加模型' : 'Add Models', exact: true })).toBeVisible();
 			const model = picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true });
 			await expect(model).toBeVisible();
-			await expect(provider).toHaveAttribute('aria-selected', 'true');
 			await model.focus();
 			await model.press('Enter');
 			await expect(trigger).toHaveText('Custom fixture');
 			await expect(trigger).toBeFocused();
 		});
 
-		test(`an unavailable provider explains setup and opens management without selecting a model in ${locale}`, async () => {
+		test(`search covers enabled models across providers and management preserves selection in ${locale}`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?modelSet=providers&unavailableProvider&locale=${locale}`);
@@ -91,37 +81,29 @@ suite('tabbed model picker browser component', () => {
 			const trigger = page.locator('.ash-chat-input-model-action');
 			await trigger.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
+			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
+			await expect(picker.getByRole('menuitemradio')).toHaveCount(5);
+			for (const name of ['Test Model', 'Claude fixture', 'Gemini fixture', 'DeepSeek fixture', 'Qwen fixture']) {
+				await expect(picker.getByRole('menuitemradio', { name, exact: true })).toBeVisible();
+			}
 			const search = picker.getByRole('combobox');
+			await expect(search).toBeFocused();
 			await search.fill('fixture');
-			const provider = picker.getByRole('tab', { name: 'Team endpoint', exact: true });
-			await provider.click();
-			const welcome = picker.locator('.ash-chat-model-picker-empty');
-			await expect(welcome.getByRole('status')).toHaveText('Team endpoint');
-			await expect(welcome).toContainText(chinese ? '此连接尚未就绪。请在语言模型管理中检查其配置。' : 'This connection is not ready. Check its configuration in Language Models.');
-			await picker.screenshot({ path: browserTests.info.outputPath(`model-provider-welcome-${locale}.png`) });
-			await expect(search).toBeHidden();
-			await expect(picker.getByRole('menuitemradio')).toHaveCount(0);
-			await expect(picker.getByRole('menuitem', { name: chinese ? '添加模型' : 'Add Models', exact: true })).toHaveCount(0);
-			await picker.getByRole('tab', { name: 'Claude', exact: true }).click();
-			await expect(search).toHaveValue('fixture');
-			await expect(picker.getByRole('menuitemradio', { name: 'Claude fixture', exact: true })).toBeVisible();
-			await provider.click();
-			const manage = welcome.getByRole('button', { name: chinese ? '添加模型' : 'Add Models', exact: true });
-			await provider.focus();
-			await provider.press('ArrowDown');
-			await expect(manage).toBeFocused();
-			await manage.press('Escape');
+			await expect(picker.getByRole('menuitemradio')).toHaveText(['Claude fixture', 'Gemini fixture', 'DeepSeek fixture', 'Qwen fixture']);
+			await search.fill('Claude');
+			await expect(picker.getByRole('menuitemradio')).toHaveText(['Claude fixture']);
+			await search.press('Enter');
+			await expect(trigger).toHaveText('Claude fixture');
 			await expect(trigger).toBeFocused();
 			await trigger.press('ArrowDown');
-			await provider.click();
-			await manage.focus();
-			await manage.press('Enter');
+			await expect(picker.getByRole('menuitemradio', { name: 'Claude fixture', exact: true })).toHaveAttribute('aria-checked', 'true');
+			await picker.getByRole('menuitem', { name: chinese ? '添加模型' : 'Add Models', exact: true }).click();
 			await expect(picker).toHaveCount(0);
 			await expect(page.getByRole('status', { name: 'Opened sources', exact: true })).toHaveText(JSON.stringify([{ command: 'workbench.action.chat.manage' }]));
-			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(before);
+			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ ...(before as Record<string, unknown>), selectedModel: { provider: 'anthropic', model: 'claude-fixture' } });
 		});
 
-		test(`provider tabs retain search and configure the chosen model in ${locale}`, async () => {
+		test(`the unified list retains search and configures the chosen model in ${locale}`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?modelSet=providers&initialProvider=anthropic&locale=${locale}`);
@@ -129,21 +111,23 @@ suite('tabbed model picker browser component', () => {
 			const trigger = page.locator('.ash-chat-input-model-action');
 			await trigger.press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: chinese ? '选择聊天模型' : 'Choose a chat model', exact: true });
-			await expect(picker.getByRole('tab')).toHaveText(['GPT', 'Claude', 'Gemini', 'DeepSeek', 'Qwen', 'Team endpoint']);
-			await expect(picker.getByRole('tab', { name: 'Claude', exact: true })).toHaveAttribute('aria-selected', 'true');
-			await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
-			const geometry = await picker.locator('.ash-action-widget-action').evaluate(row => {
+			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
+			await expect(picker.getByRole('menuitemradio')).toHaveCount(6);
+			await expect(picker.getByRole('menuitemradio', { name: 'Claude fixture', exact: true })).toHaveAttribute('aria-checked', 'true');
+			const geometry = await picker.locator('.ash-action-widget-action').first().evaluate(row => {
 				const primary = row.firstElementChild!.getBoundingClientRect();
-				const details = row.lastElementChild!.getBoundingClientRect();
-				return { aligned: primary.top === details.top, separate: primary.right <= details.left, height: row.getBoundingClientRect().height };
+				const bounds = row.getBoundingClientRect();
+				return { fullWidth: primary.left === bounds.left && primary.right === bounds.right, height: bounds.height };
 			});
-			expect(geometry).toEqual({ aligned: true, separate: true, height: 22 });
+			expect(geometry).toEqual({ fullWidth: true, height: 22 });
+			await expect(picker.locator('.ash-action-widget-secondary')).toHaveCount(0);
+			await expect(picker.locator('.ash-action-widget-summary, .ash-menu-badge')).toHaveCount(0);
 			const search = picker.getByRole('combobox');
 			await search.fill('fixture');
-			await picker.getByRole('tab', { name: 'Team endpoint', exact: true }).click();
-			await expect(search).toHaveValue('fixture');
+			await expect(picker.getByRole('menuitemradio')).toHaveCount(5);
 			const before = await page.evaluate(() => window.ashChatInputIntegration.modelState());
-			await picker.getByRole('button', { name: chinese ? 'Custom fixture 详情' : 'Custom fixture details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const card = picker.getByRole('region', { name: 'Custom fixture', exact: true });
 			await expect(card).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(before);
@@ -164,13 +148,13 @@ suite('tabbed model picker browser component', () => {
 			});
 			await card.press('Alt+ArrowLeft');
 			await expect(search).toHaveValue('fixture');
-			await expect(picker.getByRole('tab', { name: 'Team endpoint', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
 			await picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true }).focus();
 			await page.keyboard.press('Enter');
 			await expect(picker).toHaveCount(0);
 			await expect(trigger).toBeFocused();
 			await trigger.press('ArrowDown');
-			await expect(picker.getByRole('tab', { name: 'Team endpoint', exact: true })).toHaveAttribute('aria-selected', 'true');
+			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
 			await page.keyboard.press('Escape');
 		});
 
@@ -181,7 +165,8 @@ suite('tabbed model picker browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
-			await picker.getByRole('button', { name: chinese ? 'Test Model 详情' : 'Test Model details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const expanded = picker.getByRole('radio', { name: '872K', exact: true });
 			await expanded.focus();
 			await expanded.press('Space');
@@ -190,9 +175,8 @@ suite('tabbed model picker browser component', () => {
 			await expect(expanded).toBeEnabled();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ preferenceWrites: [] });
 			await picker.getByRole('button', { name: chinese ? '返回模型列表' : 'Back to models', exact: true }).click();
-			await picker.getByRole('tab', { name: 'Gemini', exact: true }).focus();
-			await page.keyboard.press('Enter');
-			await page.keyboard.press('ArrowDown');
+			await picker.getByRole('combobox').fill('Gemini');
+			await picker.getByRole('combobox').press('ArrowDown');
 			await expect(picker.getByRole('menuitemradio', { name: 'Gemini fixture', exact: true })).toBeFocused();
 			await page.keyboard.press('ArrowRight');
 			await expect(picker.getByRole('radio')).toHaveCount(0);
@@ -243,7 +227,7 @@ suite('tabbed model picker browser component', () => {
 			await page.keyboard.press('Escape');
 		});
 
-		test(`failed speed writes recover without changing selection and an inactive provider can be configured in ${locale}`, async () => {
+		test(`failed speed writes recover without changing selection and another provider can be configured in ${locale}`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?modelSet=providers&modelPreferenceFailure&locale=${locale}`);
@@ -263,8 +247,8 @@ suite('tabbed model picker browser component', () => {
 			await page.goto(`/chatInput.html?modelSet=providers&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('.ash-chat-input-model-action').press('ArrowDown');
-			await picker.getByRole('tab', { name: 'Team endpoint', exact: true }).click();
-			await picker.getByRole('button', { name: chinese ? 'Custom fixture 详情' : 'Custom fixture details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const customFast = picker.getByRole('radiogroup', { name: chinese ? '速度' : 'Speed', exact: true }).getByRole('radio', { name: chinese ? '快速' : 'Fast', exact: true });
 			await customFast.focus();
 			await customFast.press('Space');
@@ -278,7 +262,7 @@ suite('tabbed model picker browser component', () => {
 	}
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-		test(`provider tabs and detail options fit a narrow popup in ${theme}`, async () => {
+		test(`the unified list and detail options fit a narrow popup in ${theme}`, async () => {
 			const { page } = browserTests;
 			await page.setViewportSize({ width: 320, height: 600 });
 			await page.goto(`/chatInput.html?modelSet=providers&unavailableProvider&theme=${theme}`);
@@ -293,14 +277,15 @@ suite('tabbed model picker browser component', () => {
 			expect(metrics.right).toBeLessThanOrEqual(320);
 			expect(metrics.overflow).toBe(false);
 			expect(metrics.border).not.toBe('rgba(0, 0, 0, 0)');
-			await picker.getByRole('button', { name: 'Test Model details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const high = picker.getByRole('radio', { name: 'High', exact: true });
 			await high.focus();
 			await expect(picker.locator('.ash-chat-model-card-configurable')).toBeVisible();
 			expect(await picker.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await page.screenshot({ path: browserTests.info.outputPath(`model-details-${theme}.png`) });
 			await high.press('Alt+ArrowLeft');
-			await picker.getByRole('tab', { name: 'Team endpoint', exact: true }).click();
+			await page.evaluate(() => window.ashChatInputIntegration.setModelsAvailable(false));
 			await expect(picker.locator('.ash-chat-model-picker-empty')).toBeVisible();
 			expect(await picker.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await page.keyboard.press('Escape');

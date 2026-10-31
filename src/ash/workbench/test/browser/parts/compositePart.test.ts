@@ -368,7 +368,7 @@ suite('composite browser component', () => {
 		}
 	});
 
-	test('standard editor tabs fill the title row and switch styles without losing keyboard focus', async function () {
+	test('connected editor tabs fill the title row and switch styles without losing keyboard focus', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/composite.html?editorTabs');
@@ -408,11 +408,11 @@ suite('composite browser component', () => {
 		await expect(alpha).toHaveAttribute('aria-selected', 'true');
 		await alpha.focus();
 		const retained = await alpha.elementHandle();
-		for (const style of ['pill', 'connected', 'standard'] as const) {
+		for (const style of ['pill', 'connected'] as const) {
 			await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
 			await expect(alpha).toBeFocused();
 			expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
-			await expect(host.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(new RegExp(`ash-tab-list-${style === 'standard' ? 'flush' : 'inset'}`));
+			await expect(host.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(new RegExp(`ash-tab-list-${style === 'connected' ? 'flush' : 'inset'}`));
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
@@ -428,7 +428,7 @@ suite('composite browser component', () => {
 		}
 		await page.evaluate(async () => {
 			await window.ashCompositeIntegration.openEditor('a-file-with-a-name-that-is-much-longer-than-the-fixed-editor-tab-width');
-			await window.ashCompositeIntegration.configureEditorTabs('standard', 'fixed');
+			await window.ashCompositeIntegration.configureEditorTabs('connected', 'fixed');
 		});
 		const longTab = host.getByRole('tab', { name: /a-file-with-a-name/ });
 		const label = longTab.locator('.ash-icon-label-text');
@@ -1024,7 +1024,7 @@ suite('composite browser component', () => {
 		const selected = host.getByRole('button', { name: 'Switch conversation: Chat beta', exact: true });
 		await expect(selected).toBeFocused();
 		await expect(selected).toHaveAttribute('aria-expanded', 'false');
-		for (const style of ['pill', 'connected', 'standard'] as const) {
+		for (const style of ['pill', 'connected'] as const) {
 			await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style, 'fixed'), style);
 			await expect(selected).toBeFocused();
 			await expect(host.getByRole('tab')).toHaveCount(0);
@@ -1096,7 +1096,7 @@ suite('composite browser component', () => {
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
-			for (const style of ['standard', 'connected', 'pill'] as const) {
+			for (const style of ['connected', 'pill'] as const) {
 				await page.evaluate(style => window.ashCompositeIntegration.configureEditorTabs(style), style);
 				for (const [part, tab] of [[editorPart, editorTab], [chatPart, chatTab]] as const) {
 					await tab.focus();
@@ -1124,7 +1124,7 @@ suite('composite browser component', () => {
 			await host.evaluate(element => { element.style.removeProperty('background'); });
 		}
 		await page.evaluate(async () => {
-			await window.ashCompositeIntegration.configureEditorTabs('standard');
+			await window.ashCompositeIntegration.configureEditorTabs('connected');
 			window.ashCompositeIntegration.setEditorTheme('ash-light');
 		});
 		await testInfo.attach('rounded-editor-title', { body: await editorPart.screenshot(), contentType: 'image/png' });
@@ -1355,14 +1355,14 @@ suite('composite browser component', () => {
 		});
 	}
 
-	test('selected standard editor tabs join the editor surface without a separator', async function () {
+	test('selected connected editor tabs join the editor surface without a separator', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;
 
 		await page.goto('/composite.html?editorTabs');
 		await page.waitForFunction(() => !!window.ashCompositeIntegration);
 		await page.evaluate(async () => {
-			await window.ashCompositeIntegration.configureEditorTabs('standard', 'fit', false);
+			await window.ashCompositeIntegration.configureEditorTabs('connected', 'fit', false);
 			await window.ashCompositeIntegration.openEditor('alpha');
 			await window.ashCompositeIntegration.openEditor('beta');
 		});
@@ -1413,7 +1413,7 @@ suite('composite browser component', () => {
 		await page.goto('/composite.html?editorTabs');
 		await page.waitForFunction(() => !!window.ashCompositeIntegration);
 		await page.evaluate(async () => {
-			await window.ashCompositeIntegration.configureEditorTabs('standard');
+			await window.ashCompositeIntegration.configureEditorTabs('connected');
 			await window.ashCompositeIntegration.openEditor('alpha');
 			await window.ashCompositeIntegration.openEditor('beta');
 		});

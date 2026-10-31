@@ -1,10 +1,13 @@
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../configuration/common/configuration.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suite } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
 import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../../registry/common/platform.js';
-import { ListConfiguration, WorkbenchObjectTree, type ResourceOpenEvent } from '../../browser/listService.js';
+import { ListConfiguration, WorkbenchObjectTree, WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncDataTreeOptions, type ResourceOpenEvent } from '../../browser/listService.js';
 import { h } from '../../../../base/browser/dom.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -165,3 +168,26 @@ function mouse(dom: JSDOM, type: string, init: MouseEventInit): MouseEvent {
 function keyboard(dom: JSDOM, key: string, init: KeyboardEventInit = {}): KeyboardEvent {
 	return new dom.window.KeyboardEvent('keydown', { bubbles: true, key, ...init }) as unknown as KeyboardEvent;
 }
+
+
+suite('compressed Tree service assembly', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('compressed Workbench trees resolve their configuration dependency before creation', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = new InstantiationService();
+			using configuration = new InMemoryConfigurationService();
+			const source = { hasChildren: () => true, getChildren: () => [{ id: 'leaf' }] };
+			const options: WorkbenchCompressibleAsyncDataTreeOptions<TestItem> = {
+				identityProvider: { getId: item => item.id },
+				renderCompressedElements: () => dom.window.document.createElement('span'),
+			};
+			assert.throws(() => services.createInstance(WorkbenchCompressibleAsyncDataTree<null, TestItem>, dom.window.document.body, source, options), /configurationService/);
+			services.registerInstance(IConfigurationService, configuration);
+			using tree = services.createInstance(WorkbenchCompressibleAsyncDataTree<null, TestItem>, dom.window.document.body, source, options);
+			await tree.setInput(null);
+			assert.equal(tree.getInput(), null);
+		} finally { dom.window.close(); }
+	});
+
+});

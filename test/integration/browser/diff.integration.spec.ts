@@ -23,6 +23,83 @@ async function clickFileAction(section: Locator, name: string): Promise<void> {
 	await section.getByRole('button', { name, exact: true }).click();
 }
 
+for (const sideBySide of [false, true]) {
+	test(`typing at the end of a scrolled diff renders the new last line (${sideBySide ? 'side-by-side' : 'inline'})`, async ({ page }, testInfo) => {
+		await openDiffPage(page);
+		const lines = Array.from({ length: 200 }, (_, index) => `const line${index + 1} = ${index}; // ${'content '.repeat(14)}`).join('\n') + '\n';
+		await page.evaluate(({ lines, sideBySide }) => {
+			window.ashDiffIntegration.setHiddenRegions(false);
+			window.ashDiffIntegration.setComparisonText(lines, lines.replace('line5 = 4', 'line5 = 500'));
+			window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+		}, { lines, sideBySide });
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const editor = page.locator('#single .modified .stanza-editor');
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+End');
+		const before = await page.evaluate(() => window.ashDiffIntegration.linePositions(201, 201));
+		await page.keyboard.type('eof_render_marker');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('eof_render_marker');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await testInfo.attach('eof-scroll.json', { body: JSON.stringify({ before, after: await page.evaluate(() => window.ashDiffIntegration.linePositions(201, 201)), viewport: await editor.boundingBox() }), contentType: 'application/json' });
+		await expect(editor.locator('.view-lines')).toContainText('eof_render_marker');
+		await expect(editor.locator('.view-line').last()).toBeInViewport();
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).not.toContain('eof_render_marker');
+		await page.keyboard.press('ControlOrMeta+Shift+z');
+		await expect(editor.locator('.view-lines')).toContainText('eof_render_marker');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('next_eof_line');
+		await expect(editor.locator('.view-line').last()).toHaveText('next_eof_line');
+		await expect(editor.locator('.view-line').last()).toBeInViewport();
+	});
+}
+
+test('diff highlights name hyphens continuously while retaining subtraction in both view modes', async ({ page }, testInfo) => {
+	await openDiffPage(page, 'zh-CN');
+	for (const sideBySide of [true, false]) {
+		await page.evaluate(sideBySide => {
+			window.ashDiffIntegration.setTheme('vs');
+			window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+			window.ashDiffIntegration.setComparisonText(
+				'.ash-chat-body.sessions-sidebar-visible > .ash-chat-pane-host {',
+				'.ash-chat-body.sessions-side-by-side > .ash-chat-sessions-sidebar {',
+				'css',
+			);
+		}, sideBySide);
+		await expect.poll(() => page.evaluate(() => [
+			window.ashDiffIntegration.readCharacterChanges('original'),
+			window.ashDiffIntegration.readCharacterChanges('modified'),
+		])).toEqual([['sidebar-visible', 'pane-host'], ['side-by-side', 'sessions-sidebar']]);
+		// Live editors paint background rectangles; inline deleted rows decorate text spans.
+		const added = page.locator('#single .modified .cdr.stanza-diff-inline-added');
+		await expect(added).toHaveCount(2);
+		for (const highlight of await added.all()) {
+			await expect(highlight).toBeVisible();
+		}
+		if (sideBySide) {
+			await expect(page.locator('#single .original .cdr.stanza-diff-inline-removed')).toHaveCount(2);
+		} else {
+			await expect.poll(async () => (await page.locator('#single .stanza-diff-inline-original-line .stanza-diff-inline-removed').allTextContents()).join('')).toBe('sidebar-visiblepane-host');
+		}
+		await testInfo.attach(`name-hyphens-${sideBySide ? 'side-by-side' : 'inline'}`, { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('const value = first-second;', 'const value = alpha-beta;', 'javascript'));
+		await expect.poll(() => page.evaluate(() => [
+			window.ashDiffIntegration.readCharacterChanges('original'),
+			window.ashDiffIntegration.readCharacterChanges('modified'),
+		])).toEqual([['first', 'second'], ['alpha', 'beta']]);
+		await expect(added).toHaveCount(2);
+		const bounds = await added.evaluateAll(nodes => nodes.map(node => {
+			const rect = node.getBoundingClientRect();
+			return { left: rect.left, right: rect.right };
+		}));
+		expect(bounds[1]!.left).toBeGreaterThan(bounds[0]!.right);
+		if (!sideBySide) {
+			await expect.poll(async () => (await page.locator('#single .stanza-diff-inline-original-line .stanza-diff-inline-removed').allTextContents()).join('')).toBe('firstsecond');
+		}
+	}
+});
+
 test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
@@ -201,6 +278,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	test(`multi diff updates configuration and uses scoped file menus (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		expect(await page.evaluate(() => window.ashDiffIntegration.focusedHistoryView())).toBeUndefined();
 		const host = page.locator('#title-comparison');
 		const sections = host.locator('.stanza-multi-diff-editor-section');
 		await expect(sections).toHaveCount(2);
@@ -753,7 +831,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
 		await expect(page.getByText(localized(locale, 'Guessed from Content', '根据内容猜测'), { exact: true })).toBeVisible();
-		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveCount(48);
+		// Virtual rows expose the complete catalog through ARIA, even when only a page is mounted.
+		const options = page.locator('.ash-quick-pick-list').getByRole('option');
+		await expect(options.first()).toHaveAttribute('aria-setsize', '48');
+		expect(await options.count()).toBeLessThan(48);
 		await picker.fill('cp1125');
 		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveText(/CP 1125/);
 		await picker.fill('UTF-16 LE');

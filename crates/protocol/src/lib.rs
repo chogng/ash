@@ -181,6 +181,7 @@ pub use model::ModelMetadataQuality;
 pub use model::ModelMoneyAmount;
 pub use model::ModelOutputTransport;
 pub use model::ModelPreset;
+pub use model::ModelPurpose;
 pub use model::ModelReasoningEffortOption;
 pub use model::ModelReasoningSummary;
 pub use model::ModelRef;

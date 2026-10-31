@@ -1,5 +1,5 @@
 use crate::Error;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use remote::RemoteDirPath;
 use remote::RemoteProfile;
 use remote::RemoteRuntime;
@@ -86,14 +86,14 @@ impl SshEndpoint {
 }
 
 pub(crate) struct SshStream {
-    socket: UnixStream,
+    socket: IpcStream,
     child: Child,
     workers: Vec<thread::JoinHandle<()>>,
 }
 
 impl SshStream {
     pub(crate) fn open(endpoint: &SshEndpoint) -> Result<Self, Error> {
-        let (socket, peer) = UnixStream::pair()?;
+        let (socket, peer) = IpcStream::pair()?;
         socket.set_read_timeout(Some(Duration::from_secs(15)))?;
         socket.set_write_timeout(Some(Duration::from_secs(5)))?;
         let mut input = peer.try_clone()?;

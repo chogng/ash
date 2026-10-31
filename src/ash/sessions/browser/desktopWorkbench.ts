@@ -2,7 +2,7 @@ import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import {
 	CodeInformationView,
-	CodeFilesView,
+	CodeChangesView,
 	readCodeCardLayout,
 	type ICodeCardLayout,
 	type CodeCardId,
@@ -29,6 +29,9 @@ import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
 import { AuxiliaryBarPart } from './parts/auxiliaryBarPart.js';
+import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import type { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
+import type { EditorPart as WorkbenchEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
@@ -470,14 +473,17 @@ export class DesktopWorkbenchLayout
 	extends BrowserLayoutService
 	implements IAgentWorkbenchLayoutService, ICodeCardLayout {
 	private readonly views = new Map<SessionsPartId, SessionsWorkbenchPartView>();
-	private grid!: SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | CodeFilesView>;
+	private grid!: SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView>;
 	private readonly gridHandle = this._register(
-		new MutableDisposable<SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | CodeFilesView>>(),
+		new MutableDisposable<SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView>>(),
 	);
 	private readonly gridChangeHandle = this._register(new MutableDisposable<IDisposable>());
 	readonly codeCards: ICodeCardLayout = this;
 	readonly information: CodeInformationView;
-	readonly files: CodeFilesView;
+	private desktopEditor!: DesktopMainEditorPart;
+	get files(): DockedAuxiliaryBarController { return this.desktopEditor.dockedAuxiliaryBar; }
+	readonly changes: CodeChangesView;
+	private changesVisible = false;
 	private readonly cardsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeCards = this.cardsChanged.event;
 	private informationElement: HTMLElement | undefined;
@@ -487,7 +493,7 @@ export class DesktopWorkbenchLayout
 	private readonly detachedCards = new Set<CodeCardId>();
 	get expandedCard(): CodeCardId | undefined {
 		if (!this.grid?.hasMaximizedView()) return undefined;
-		return (['terminal', 'files', 'info'] as const).find(id => this.grid.isViewMaximized(this.cardView(id)));
+		return (['terminal', 'files', 'changes', 'info'] as const).find(id => this.grid.isViewMaximized(this.cardView(id)));
 	}
 	get active(): boolean {
 		return this.primaryPart === 'sessions' && !this.unavailableParts.has('panel') && !this.customViewVisible;
@@ -538,7 +544,7 @@ export class DesktopWorkbenchLayout
 	) {
 		super({ root: container, focus: options.focus });
 		this.information = new CodeInformationView(container.ownerDocument);
-		this.files = this._register(new CodeFilesView(container.ownerDocument, storageService, () => this.detachedCards.has('files')));
+		this.changes = new CodeChangesView(container.ownerDocument);
 		this.informationVisible = storageService.getBoolean('sessions.code.infoPinned', StorageScope.PROFILE, false);
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
 		this.layoutStyle = options.layoutStyle ?? 'modern';
@@ -606,9 +612,13 @@ export class DesktopWorkbenchLayout
 			);
 		}
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => this.compositionChanged.fire()));
+		const editor = requiredPart(parts, 'editor');
+		if (!(editor instanceof DesktopMainEditorPart)) { throw new Error('Desktop layout requires DesktopMainEditorPart'); }
+		this.desktopEditor = editor;
 		const savedCards = this.storageService.get('sessions.code.cardLayout', StorageScope.PROFILE);
 		const cardIds = [...parts.keys()].filter(id => id !== 'editor' && id !== 'auxiliarybar');
-		const groupedCards = readCodeCardLayout(savedCards, [...cardIds, 'files', 'info']);
+		const groupedCards = readCodeCardLayout(savedCards, [...cardIds, 'files', 'changes', 'info'])
+			?? readCodeCardLayout(savedCards, [...cardIds, 'files', 'info']);
 		this.codeDescriptor = groupedCards ?? readCodeCardLayout(savedCards, [...parts.keys(), 'info']);
 		// Older profiles could show a document while Files was closed. The combined card must reveal that document.
 		if (!groupedCards && this.primaryPart === 'sessions' && this.desiredVisibility.editor) {
@@ -705,23 +715,26 @@ export class DesktopWorkbenchLayout
 		this.gridHandle.clear();
 		const groupedFiles = this.primaryPart === 'sessions';
 		if (groupedFiles) {
-			this.files.mount(this.view('editor'), this.view('auxiliarybar'));
+			this.files.mount(this.view('editor').frame, this.view('auxiliarybar'), this.desiredVisibility.editor, () => this.detachedCards.has('files'));
 		} else {
 			this.files.unmount();
 		}
 		const auxiliary = this.view('auxiliarybar').part;
-		if (auxiliary instanceof AuxiliaryBarPart) { auxiliary.setEmbedded(groupedFiles ? this.files.header : undefined); }
+		if (auxiliary instanceof AuxiliaryBarPart) { auxiliary.setDocked(groupedFiles); }
 		const source = descriptor ?? (groupedFiles ? this.codeDescriptor : undefined)
 			?? createSessionsWorkbenchGridDescriptor(this.views, dimension, state, this.primaryPart);
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
 			groupedFiles ? groupFilesDescriptor(source) : source,
-			{ fromJSON: data => data === 'info' ? this.information : data === 'files' ? this.files : this.view(parseSessionsPartId(data)) },
+			{ fromJSON: data => data === 'info' ? this.information : data === 'files' ? this.files : data === 'changes' ? this.changes : this.view(parseSessionsPartId(data)) },
 			{ edgeSnapping: true },
 		);
 		this.gridHandle.value = this.grid;
 		if (!descriptor && !(this.primaryPart === 'sessions' && this.codeDescriptor))
 			this.grid.addView(this.information, Sizing.Invisible(280), this.view('sessions'), Direction.Right);
+		if (!containsChanges(this.grid.serialize())) {
+			this.grid.addView(this.changes, Sizing.Invisible(600), this.view('sessions'), Direction.Right);
+		}
 		this.grid.layout(dimension.width, dimension.height);
 		this.restorePartVisibility();
 		this.gridChangeHandle.value = combinedDisposable(this.grid.onDidChangeViewMaximized(() => this.cardsChanged.fire()), this.grid.onDidChange(() => {
@@ -961,11 +974,11 @@ export class DesktopWorkbenchLayout
 		if (partId === 'titlebar' || partId === 'sessions')
 			throw new Error('Required Sessions Part cannot be hidden: ' + partId);
 		this.updateParts(() => {
-			if (partId === 'editor' && visible && !this.desiredVisibility.editor && this.files.grid) {
+			if (partId === 'editor' && visible && !this.desiredVisibility.editor && this.files.isMounted) {
 				this.detailsWidth = Math.max(this.detailsWidth, Math.min(800, this.mainContainerDimension.width * 0.6));
 			}
 			this.desiredVisibility[partId] = visible;
-			if (partId === 'editor' && visible && this.files.grid) {
+			if (partId === 'editor' && visible && this.files.isMounted) {
 				this.desiredVisibility.auxiliarybar = true;
 				this.setViewVisible(this.view('auxiliarybar'), !this.unavailableParts.has('auxiliarybar'));
 			}
@@ -1103,7 +1116,7 @@ export class DesktopWorkbenchLayout
 			left: !sessionsVisible ? contentLeft : 0,
 		});
 		for (const partId of ['panel', 'auxiliarybar', 'editor'] as const) {
-			const nested = !!this.files.grid && partId !== 'panel';
+			const nested = !!this.files.isMounted && partId !== 'panel';
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-tool-card', toolCards && !nested);
 			if (nested) {
 				this.view(partId).setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -1180,10 +1193,21 @@ export class DesktopWorkbenchLayout
 	}
 
 	isCardVisible(id: CodeCardId): boolean {
-		return (
-			this.active &&
-			(id === 'info' ? !!this.informationElement && this.informationVisible : this.desiredVisibility[id === 'files' ? 'auxiliarybar' : 'panel'])
-		);
+		if (!this.active) { return false; }
+		if (id === 'changes') { return this.changesVisible; }
+		if (id === 'info') { return !!this.informationElement && this.informationVisible; }
+		return this.desiredVisibility[id === 'files' ? 'auxiliarybar' : 'panel'];
+	}
+
+	setChangesPart(part: WorkbenchEditorPart): void {
+		this.changes.mount(part);
+	}
+
+	setChangesVisible(visible: boolean): void {
+		if (this.changesVisible === visible) { return; }
+		if (!visible && this.expandedCard === 'changes') { this.expandCard('changes'); }
+		this.changesVisible = visible;
+		this.updateParts(() => this.applyCardVisibility());
 	}
 
 	setInformation(element: HTMLElement | undefined): void {
@@ -1209,24 +1233,34 @@ export class DesktopWorkbenchLayout
 
 	closeCard(id: CodeCardId): void {
 		if (this.expandedCard === id) this.expandCard(id);
-		if (id === 'info') {
+		if (id === 'changes') {
+			this.setChangesVisible(false);
+		} else if (id === 'info') {
 			if (this.informationVisible) this.toggleInformation();
 		} else this.hidePart(id === 'files' ? 'auxiliarybar' : 'panel');
 		this.mainContainer
 			.querySelector<HTMLElement>(
 				'[data-action-id="' +
-				(id === 'info' ? 'ash.sessions.toggleInfo' : id === 'terminal' ? 'ash.sessions.togglePanel' : 'ash.sessions.toggleFiles') +
+				(id === 'changes' ? 'workbench.agentSessions.action.viewChanges' : id === 'info' ? 'ash.sessions.toggleInfo' : id === 'terminal' ? 'ash.sessions.togglePanel' : 'ash.sessions.toggleFiles') +
 				'"] button',
 			)
 			?.focus();
 	}
 
-	private cardView(id: CodeCardTarget): SessionsWorkbenchPartView | CodeInformationView | CodeFilesView {
-		return id === 'info' ? this.information : id === 'files' ? this.files : this.view(id === 'terminal' ? 'panel' : 'sessions');
+	private cardView(id: CodeCardTarget): SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView {
+		switch (id) {
+			case 'changes': return this.changes;
+			case 'info': return this.information;
+			case 'files': return this.files;
+			case 'terminal': return this.view('panel');
+			case 'sessions': return this.view('sessions');
+		}
 	}
 
 	private applyCardVisibility(): void {
 		if (!this.grid || this.grid.hasMaximizedView()) return;
+		this.setViewVisible(this.changes, this.active && this.changesVisible && !this.detachedCards.has('changes'));
+		this.changes.setVisible(this.active && this.changesVisible);
 		this.setViewVisible(
 			this.information,
 			this.active &&
@@ -1238,28 +1272,9 @@ export class DesktopWorkbenchLayout
 			const card = id === 'panel' ? 'terminal' : id === 'auxiliarybar' || id === 'editor' ? 'files' : undefined;
 			if (card && this.detachedCards.has(card)) {
 				// Files is one outer leaf. Its embedded editor keeps its visibility while the card is covered.
-				if (id !== 'editor' || !this.files.grid) { this.setViewVisible(this.view(id), false); }
+				if (id !== 'editor' || !this.files.isMounted) { this.setViewVisible(this.view(id), false); }
 			}
 		}
-	}
-
-	resizeCard(id: CodeCardId, widthDelta: number, heightDelta: number): void {
-		if (!this.active || this.detachedCards.has(id)) return;
-		if (this.expandedCard) this.expandCard(this.expandedCard);
-		const view = this.cardView(id),
-			size = this.getViewSize(view);
-		this.updateParts(() => {
-			this.resizeView(
-				view,
-				new Dimension(
-					Math.max(view.minimumWidth, size.width + widthDelta),
-					Math.max(view.minimumHeight, size.height + heightDelta),
-				),
-			);
-			if (this.isViewVisible(this.view('auxiliarybar')))
-				this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
-			this.rememberDetachedArrangement();
-		});
 	}
 
 	moveCard(id: CodeCardId, target: CodeCardTarget, direction: Direction): void {
@@ -1275,7 +1290,8 @@ export class DesktopWorkbenchLayout
 
 	expandCard(id: CodeCardId): void {
 		if (!this.active || this.detachedCards.has(id)) return;
-		if (id !== 'info' && !this.isCardVisible(id)) this.showPart(id === 'files' ? 'auxiliarybar' : 'panel');
+		if (id === 'changes' && !this.changesVisible) this.setChangesVisible(true);
+		else if (id !== 'info' && !this.isCardVisible(id)) this.showPart(id === 'files' ? 'auxiliarybar' : 'panel');
 		this.updateParts(() => {
 			if (this.grid.isViewMaximized(this.cardView(id))) this.grid.exitMaximizedView();
 			else {
@@ -1302,7 +1318,7 @@ export class DesktopWorkbenchLayout
 		if (!this.active || this.expandedCard || this.detachedCards.size === 0) return;
 		const normal = (node: SerializedGridDescriptor): SerializedGridDescriptor => {
 			if (node.type === 'branch') return { ...node, children: node.children.map(normal) };
-			const card = node.data === 'panel' ? 'terminal' : node.data === 'files' ? 'files' : node.data === 'info' ? 'info' : undefined;
+			const card = node.data === 'panel' ? 'terminal' : node.data === 'files' ? 'files' : node.data === 'changes' ? 'changes' : node.data === 'info' ? 'info' : undefined;
 			return card && this.detachedCards.has(card) ? { ...node, visible: this.isCardVisible(card) } : node;
 		};
 		this.codeDescriptor = this.transientDescriptor = normal(this.grid.serialize());
@@ -1319,30 +1335,29 @@ export class DesktopWorkbenchLayout
 		if (this.detachedCards.size === 0) this.transientDescriptor = undefined;
 	}
 
-	private isViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView): boolean {
-		if (this.files.grid && view === this.view('editor')) {
-			return (this.detachedCards.has('files') || this.grid.isViewVisible(this.files)) && this.files.grid.isViewVisible(view);
+	private isViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView): boolean {
+		if (this.files.isMounted && view === this.view('editor')) {
+			return (this.detachedCards.has('files') || this.grid.isViewVisible(this.files)) && this.files.editorVisible;
 		}
-		return this.grid.isViewVisible(this.files.grid && view === this.view('auxiliarybar') ? this.files : view);
+		return this.grid.isViewVisible(this.files.isMounted && view === this.view('auxiliarybar') ? this.files : view);
 	}
 
-	private setViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView, visible: boolean): void {
-		if (this.files.grid && view === this.view('editor')) {
-			this.files.grid.setViewVisible(view, visible);
-			view.setVisible(visible && this.isPartVisible('auxiliarybar'));
+	private setViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView, visible: boolean): void {
+		if (this.files.isMounted && view === this.view('editor')) {
+			this.files.setEditorVisible(visible);
 		} else {
-			this.grid.setViewVisible(this.files.grid && view === this.view('auxiliarybar') ? this.files : view, visible);
+			this.grid.setViewVisible(this.files.isMounted && view === this.view('auxiliarybar') ? this.files : view, visible);
 		}
 	}
 
-	private getViewSize(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView): IDimension {
-		if (this.files.grid && view === this.view('editor')) { return this.files.grid.getViewSize(view); }
-		return this.grid.getViewSize(this.files.grid && view === this.view('auxiliarybar') ? this.files : view);
+	private getViewSize(view: SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView): IDimension {
+		if (this.files.isMounted && view === this.view('editor')) { return this.files.editorSize; }
+		return this.grid.getViewSize(this.files.isMounted && view === this.view('auxiliarybar') ? this.files : view);
 	}
 
-	private resizeView(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView, dimension: IDimension): void {
-		if (this.files.grid && view === this.view('editor')) { this.files.grid.resizeView(view, dimension); }
-		else { this.grid.resizeView(this.files.grid && view === this.view('auxiliarybar') ? this.files : view, dimension); }
+	private resizeView(view: SessionsWorkbenchPartView | CodeInformationView | DockedAuxiliaryBarController | CodeChangesView, dimension: IDimension): void {
+		if (this.files.isMounted && view === this.view('editor')) { this.files.resizeEditor(dimension); }
+		else { this.grid.resizeView(this.files.isMounted && view === this.view('auxiliarybar') ? this.files : view, dimension); }
 	}
 
 	private view(partId: SessionsPartId): SessionsWorkbenchPartView {
@@ -1374,4 +1389,8 @@ function groupFilesDescriptor(descriptor: SerializedGridDescriptor): SerializedG
 		return children.length ? { ...node, children } : undefined;
 	};
 	return visit(descriptor)!;
+}
+
+function containsChanges(descriptor: SerializedGridDescriptor): boolean {
+	return descriptor.type === 'leaf' ? descriptor.data === 'changes' : descriptor.children.some(containsChanges);
 }

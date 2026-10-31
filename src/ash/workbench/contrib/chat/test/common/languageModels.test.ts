@@ -8,7 +8,8 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
+import { modelsRecommendedFor } from '../../../../services/chat/common/modelCatalog.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../../services/accounts/browser/appServerAccountService.js';
@@ -85,6 +86,49 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 		},
 	};
 }
+
+test('Usable capacity changes reach consumers independently of compaction budgets and old snapshots', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const entry = modelEntry('gpt-6.1-sol');
+	entry.context_window = 500000;
+	entry.available_context_window = 425000;
+	entry.usable_context_window = 475000;
+	source.catalog = [entry];
+	const first = await models.refreshModels();
+	assert.equal(first[0].usableContextWindow, 475000);
+	const before = source.changes;
+	entry.usable_context_window = 450000;
+	const second = await models.refreshModels();
+	assert.equal(second[0].usableContextWindow, 450000);
+	assert.equal(second[0].contextWindow, 500000);
+	assert.equal(first[0].usableContextWindow, 475000);
+	assert.equal(source.changes, before + 1);
+	await models.refreshModels();
+	assert.equal(source.changes, before + 1);
+});
+
+test('task recommendation changes refresh candidate lists without changing selections or previous snapshots', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const advisor = modelEntry('advisor-fixture');
+	advisor.recommended_for = ['advisor', 'review'];
+	const commit = modelEntry('commit-fixture');
+	commit.recommended_for = ['commit'];
+	source.catalog = [advisor, commit, modelEntry('unmarked')];
+	const first = await models.refreshModels();
+	assert.deepEqual(modelsRecommendedFor(first, ModelPurpose.Advisor).map(entry => entry.model.model), ['advisor-fixture']);
+	assert.deepEqual(modelsRecommendedFor(first, ModelPurpose.Commit).map(entry => entry.model.model), ['commit-fixture']);
+	const previousChanges = source.changes;
+	advisor.recommended_for = ['commit'];
+	const second = await models.refreshModels();
+	assert.equal(source.changes, previousChanges + 1);
+	assert.deepEqual(first[0].recommendedFor, [ModelPurpose.Advisor, ModelPurpose.Review]);
+	assert.deepEqual(modelsRecommendedFor(second, ModelPurpose.Advisor), []);
+	assert.deepEqual(modelsRecommendedFor(second, ModelPurpose.Commit).map(entry => entry.model.model), ['advisor-fixture', 'commit-fixture']);
+	assert.equal(source.selectionWrites, 0);
+	assert.equal(source.configWrites, 0);
+});
 
 test('model input capabilities notify consumers and do not change previous catalog snapshots', async () => {
 	using resources = new DisposableStore();
@@ -713,7 +757,7 @@ function modelCatalogApi(
 test('Model and effort saves serialize against fresh backend revisions while Auto retains executable defaults', async () => {
 	using resources = new DisposableStore();
 	const first = new DeferredPromise<void>();
-	let defaults = { revision: 1, model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
+	let defaults = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
 	const writes: unknown[] = [];
 	const api = {
 		...modelCatalogApi(async () => ({ models: [] })),
@@ -722,7 +766,7 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 			writes.push({ update, revision });
 			if (writes.length === 1) await first.p;
 			assert.equal(revision, defaults.revision);
-			defaults = { revision: revision + 1, model: update.model === undefined ? defaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort };
+			defaults = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: revision + 1, model: update.model === undefined ? defaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? defaults.reasoningEffort : update.reasoningEffort };
 		},
 	};
 	const models = resources.add(new LanguageModelsService(api,
@@ -742,14 +786,14 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 		{ revision: 1, update: { model, reasoningEffort: null } },
 		{ revision: 2, update: { model, reasoningEffort: 'high' } },
 	]);
-	assert.deepEqual(await models.readModelDefaults(), { revision: 3, model, reasoningEffort: 'high' });
+	assert.deepEqual(await models.readModelDefaults(), { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 3, model, reasoningEffort: 'high' });
 });
 
 test('A failed default save leaves the backend snapshot intact and permits a later save', async () => {
 	using resources = new DisposableStore();
 	let fail = true;
 	let configured = false;
-	const defaults = { revision: 3, model: null, reasoningEffort: null };
+	const defaults = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 3, model: null, reasoningEffort: null };
 	const models = resources.add(new LanguageModelsService({
 		...modelCatalogApi(async () => ({ models: [] })),
 		readDefaults: async () => defaults,
@@ -769,7 +813,7 @@ test('A failed default save leaves the backend snapshot intact and permits a lat
 test('A late model-default snapshot from a disconnected connection cannot become the new profile selection', async () => {
 	using resources = new DisposableStore();
 	const connection = resources.add(new Emitter<AppServerConnectionState>());
-	const old = new DeferredPromise<{ revision: number; model: null; reasoningEffort: null; }>();
+	const old = new DeferredPromise<{ codeReviewModel: null; commitMessageModel: null; commitMessageEnabled: boolean; revision: number; model: null; reasoningEffort: null; }>();
 	let generation = 1;
 	const models = resources.add(new LanguageModelsService({ ...modelCatalogApi(async () => ({ models: [] })), readDefaults: () => old.p },
 		{ get connectionGeneration() { return generation; }, onConnectionState: connection.event } as unknown as IAppServerApi,
@@ -778,7 +822,7 @@ test('A late model-default snapshot from a disconnected connection cannot become
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const reading = models.readModelDefaults();
 	connection.fire('stopped');
-	await old.complete({ revision: 99, model: null, reasoningEffort: null });
+	await old.complete({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 99, model: null, reasoningEffort: null });
 	await assert.rejects(reading, error => isCancellationError(error));
 });
 
@@ -793,7 +837,7 @@ for (const pendingOperation of ['read', 'write'] as const) {
 		let remembered = 0;
 		const models = resources.add(new LanguageModelsService({
 			...modelCatalogApi(async () => ({ models: [] })),
-			readDefaults: async () => { if (pendingOperation === 'read') { await started.complete(); await pending.p; } return { revision: 1, model: null, reasoningEffort: null }; },
+			readDefaults: async () => { if (pendingOperation === 'read') { await started.complete(); await pending.p; } return { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }; },
 			configureDefaults: async () => { writes++; if (pendingOperation === 'write') { await started.complete(); await pending.p; } },
 		}, { connectionGeneration: 1, onConnectionState: connection.event } as unknown as IAppServerApi,
 			{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
@@ -816,7 +860,7 @@ test('A config notification racing a confirmed model save cannot turn its readba
 	const readback = new DeferredPromise<Awaited<ReturnType<IAgentModelsService['readDefaults']>>>();
 	const reading = new DeferredPromise<void>();
 	let notify: (event: ServerNotification) => void = () => { throw new Error('Expected a notification subscription'); };
-	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = { revision: 1, model: null, reasoningEffort: null };
+	let defaults: Awaited<ReturnType<IAgentModelsService['readDefaults']>> = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null };
 	let reads = 0;
 	let writes = 0;
 	let remembered = 0;

@@ -77,7 +77,10 @@ export class DecorationsOverviewRuler extends ViewPart {
 		return event.affectsOverviewRuler ? this.markMaybe() : false;
 	}
 	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return this.markNeeded(); }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollHeightChanged ? this.markNeeded() : false; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		// The ruler stays beside the fixed scrollbar; only its document scale can change.
+		return event.scrollHeightChanged ? this.markNeeded() : false;
+	}
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return this.markNeeded(); }
 	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean { return this.updateSettings(); }
 
@@ -96,8 +99,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 		}
 	}
 
-	public render(context: RestrictedRenderingContext): void {
-		this.domNode.setTransform(`translate3d(${context.scrollLeft}px, ${context.scrollTop}px, 0)`);
+	public render(_context: RestrictedRenderingContext): void {
 		if (this.renderState !== RenderState.Needed) return;
 		this.paint();
 	}

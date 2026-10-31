@@ -51,7 +51,7 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly boundarySashPresentation = this._register(new MutableDisposable());
 	private readonly visibleViewContainersTracker: VisibleViewContainersTracker | undefined;
 	private activityBarLocation = ActivityBarPosition.DEFAULT;
-	override get minimumWidth(): number { return 170; }
+	override get minimumWidth(): number { return 220; }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;

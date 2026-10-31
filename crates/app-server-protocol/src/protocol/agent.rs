@@ -48,6 +48,48 @@ pub struct AgentRoleListResult {
     pub agents: Vec<AgentRoleEntry>,
 }
 
+/// Product launch restrictions are visible in Settings without becoming launch authority.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentRoleLaunch {
+    Any,
+    Workflow,
+    Delegation,
+    Host,
+}
+
+/// A validated definition for inspection, independent of the root Session picker.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRoleDefinition {
+    pub name: String,
+    pub description: String,
+    pub source: AgentRoleSource,
+    pub launch: AgentRoleLaunch,
+    pub callers: Vec<String>,
+    pub delegates: Option<Vec<String>>,
+    pub path: Option<String>,
+    pub content_digest: String,
+    pub model: Option<String>,
+    pub tools: Option<Vec<String>>,
+    pub disallowed_tools: Vec<String>,
+    pub required_tools: Vec<String>,
+    pub delegation_tools: Option<Vec<String>>,
+    pub disallowed_delegation_tools: Vec<String>,
+    pub required_delegation_tools: Vec<String>,
+    pub skills: Option<Vec<String>>,
+    pub required_skills: Vec<String>,
+    pub instructions: Vec<String>,
+    pub prompt: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRoleCatalogResult {
+    pub agents: Vec<AgentRoleDefinition>,
+    pub diagnostics: Vec<String>,
+}
+
 /// Describes the authority a tool may request; the decision is made for each call.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

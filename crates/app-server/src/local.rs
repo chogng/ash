@@ -131,6 +131,7 @@ pub struct AppServerOptions {
     github_extension: Option<PathBuf>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
     trace_exporter: Option<otel_trace_websocket::Exporter>,
+    build_info: Option<build_info::BuildInfo>,
     pty_helper: Option<std::path::PathBuf>,
 }
 
@@ -205,8 +206,15 @@ impl AppServerOptions {
             github_extension: None,
             profile_runtime: None,
             trace_exporter: None,
+            build_info: None,
             pty_helper: None,
         }
+    }
+
+    /// Supplies the embedding product's compiled provenance without coupling the runtime to Git.
+    pub fn with_build_info(mut self, build_info: build_info::BuildInfo) -> Self {
+        self.build_info = Some(build_info);
+        self
     }
 
     pub fn with_dir_config(mut self, dir_config: LocalDirConfigOptions) -> Self {
@@ -837,6 +845,7 @@ impl std::error::Error for OpenAppServerError {}
 pub struct LocalProfileRuntime {
     ide_registry: Arc<crate::ide_registry::IdeRegistry>,
     diagnostics: diagnostics::Diagnostics,
+    pub(crate) build_info: build_info::BuildInfo,
     telemetry: ash_otel::Telemetry,
     analytics: Arc<analytics::Analytics>,
     queue: Arc<queue::QueueStore>,
@@ -984,6 +993,7 @@ impl LocalProfileRuntime {
             editor_extension_policy,
             session_runtimes,
             diagnostics,
+            build_info: build_info::BuildInfo::new(None, None),
             telemetry,
             analytics: Arc::new(analytics::Analytics::default()),
             profile_root,
@@ -1937,6 +1947,12 @@ pub fn open_app_server_with_codebase_providers(
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics.clone(), telemetry, analytics)
+    .with_build_info(options.build_info.take().unwrap_or_else(|| {
+        profile_runtime
+            .as_ref()
+            .map(|runtime| runtime.build_info.clone())
+            .unwrap_or_else(|| build_info::BuildInfo::new(None, None))
+    }))
     .with_model_catalog(direct_catalog)
     .with_secret_store(Arc::clone(&profile_secrets))
     .with_provider_credentials(Arc::new(
@@ -3323,6 +3339,7 @@ fn runtime_catalog_entry(
         ContextWindow::Unknown => None,
     };
     result.available_context_window = context.available_input();
+    result.usable_context_window = context.usable_input();
     Ok(result)
 }
 

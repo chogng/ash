@@ -192,8 +192,15 @@ suite('Split button rendering', () => {
 				const right = arrow!.getBoundingClientRect();
 				const mainStyle = getComputedStyle(main!);
 				const arrowStyle = getComputedStyle(arrow!);
+				const separator = getComputedStyle(arrow!, '::before');
 				const icon = arrow!.querySelector('.ash-icon')!.getBoundingClientRect();
-				return { height: left.height, arrowHeight: right.height, gap: right.left - left.right, iconOffset: icon.left + icon.width / 2 - right.left - right.width / 2, innerRadius: mainStyle.borderTopRightRadius, arrowRadius: arrowStyle.borderTopLeftRadius, border: arrowStyle.borderLeftWidth, borderColor: arrowStyle.borderLeftColor, background: mainStyle.backgroundColor };
+				return {
+					height: left.height, arrowHeight: right.height, gap: right.left - left.right,
+					iconOffset: icon.left + icon.width / 2 - right.left - right.width / 2,
+					innerRadius: mainStyle.borderTopRightRadius, arrowRadius: arrowStyle.borderTopLeftRadius,
+					border: arrowStyle.borderLeftWidth, borderColor: arrowStyle.borderLeftColor, background: mainStyle.backgroundColor,
+					separator: { top: parseFloat(separator.top), bottom: parseFloat(separator.bottom), width: separator.width, color: separator.backgroundColor, pointerEvents: separator.pointerEvents },
+				};
 			});
 			assert.equal(geometry.height, geometry.arrowHeight);
 			assert.equal(geometry.gap, 0);
@@ -201,7 +208,12 @@ suite('Split button rendering', () => {
 			assert.equal(geometry.innerRadius, '0px');
 			assert.equal(geometry.arrowRadius, '0px');
 			assert.equal(geometry.border, '1px');
-			assert.notEqual(geometry.borderColor, geometry.background);
+			assert.equal(geometry.borderColor, 'rgba(0, 0, 0, 0)');
+			assert.ok(geometry.separator.top > 0);
+			assert.equal(geometry.separator.top, geometry.separator.bottom);
+			assert.equal(geometry.separator.width, '1px');
+			assert.notEqual(geometry.separator.color, geometry.background);
+			assert.equal(geometry.separator.pointerEvents, 'none');
 			await primary.focus();
 			await primary.press('Enter');
 			await expect(page.locator('output')).toHaveText('primary');

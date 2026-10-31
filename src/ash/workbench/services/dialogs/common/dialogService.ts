@@ -66,6 +66,7 @@ export class DialogService extends Disposable
 		const result = await this.model.show({
 			kind: 'choice',
 			message: options.message,
+			custom: options.custom,
 			title: options.title ?? localize('dialog.confirm', 'Confirm'),
 			detail: options.detail,
 			severity: options.severity,

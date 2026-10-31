@@ -33,6 +33,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
         root_uri: crate::paths::ResourceUri::parse("file:///workspace").unwrap(),
         configuration: Configuration::default(),
         status: initial_status,
+        incoming_changes: None,
         catalog: None,
         draft: "Retained draft".into(),
         input_revision: 7,
@@ -101,6 +102,56 @@ fn restarted_repository_stream_rejects_late_retired_and_older_snapshots() {
     assert_eq!(repository.status.as_ref().unwrap().revision, 2);
     assert_eq!(repository.draft, "Retained draft");
     assert_eq!(repository.input_revision, 7);
+}
+
+#[test]
+fn incoming_decorations_follow_commits_without_invalidating_for_worktree_edits() {
+    let mut initial = status("first", 1);
+    initial.head = Head::Branch {
+        name: "main".into(),
+        object_id: "a".repeat(40),
+        upstream: Some(crate::model::Upstream {
+            name: "origin/main".into(),
+            object_id: Some("b".repeat(40)),
+            ahead: 1,
+            behind: 1,
+        }),
+    };
+    let path = crate::paths::RepoPath::parse("file.txt").unwrap();
+    let mut repository = repository(Some(initial.clone()));
+    repository.incoming_changes = Some(std::sync::Arc::new(crate::model::IncomingChanges {
+        head: initial.head.clone(),
+        stream_instance_id: initial.stream_instance_id.clone(),
+        history_revision: initial.history_revision,
+        changes: [(path.clone(), "modified".into())].into(),
+    }));
+    let mut worktree_edit = initial.clone();
+    worktree_edit.revision = 2;
+    accept_repository_status(&mut repository, worktree_edit);
+    assert_eq!(repository.incoming_change(&path), Some("modified"));
+    repository.configuration = Configuration(serde_json::json!({"decorations.enabled":false}));
+    assert_eq!(repository.incoming_change(&path), None);
+    repository.configuration = Configuration::default();
+    let mut rewritten = repository.clone();
+    let mut same_counts = rewritten.status.clone().unwrap();
+    same_counts.revision = 3;
+    same_counts.history_revision += 1;
+    accept_repository_status(&mut rewritten, same_counts);
+    assert!(rewritten.incoming_changes.is_none());
+    let mut fetched = initial.clone();
+    fetched.revision = 3;
+    if let Head::Branch {
+        upstream: Some(upstream),
+        ..
+    } = &mut fetched.head
+    {
+        upstream.object_id = Some("c".repeat(40));
+    }
+    accept_repository_status(&mut repository, fetched);
+    assert!(repository.incoming_changes.is_none());
+    accept_repository_status(&mut repository, initial);
+    assert_eq!(repository.incoming_change(&path), None);
+    assert_eq!(repository.status.as_ref().unwrap().revision, 3);
 }
 
 #[test]

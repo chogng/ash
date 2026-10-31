@@ -9,6 +9,8 @@ export interface ILinesDiffComputerOptions {
 	readonly maxComputationTimeMs: number;
 	readonly computeMoves: boolean;
 	readonly extendToSubwords?: boolean;
+	/** Shared document language, omitted when the compared models use different languages. */
+	readonly languageId?: string;
 }
 
 export class LinesDiff {

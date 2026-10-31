@@ -2,7 +2,7 @@
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	padding: 8px 0;
+	padding: var(--ash-spacing-size80) 0 0;
 }
 
 .ash-scm-secondary-pane {
@@ -25,6 +25,10 @@
 	font-weight: var(--ash-fontWeight-regular);
 }
 
+.ash-scm-history-filter > .ash-button > .ash-button-content {
+	gap: var(--ash-spacing-size20);
+}
+
 .ash-scm-empty {
 	margin: 0;
 	padding: 8px;
@@ -34,30 +38,11 @@
 
 .ash-scm-graph {
 	--scm-graph-accent: var(--ash-accent-background);
-	--scm-graph-lane-0: var(--ash-accent-foreground);
-	--scm-graph-lane-1: var(--ash-success-foreground);
-	--scm-graph-lane-2: var(--ash-warning-foreground);
-	--scm-graph-lane-3: var(--ash-error-foreground);
-	--scm-graph-lane-4: color-mix(
-		in srgb,
-		var(--ash-accent-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-5: color-mix(
-		in srgb,
-		var(--ash-success-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-6: color-mix(
-		in srgb,
-		var(--ash-warning-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-7: color-mix(
-		in srgb,
-		var(--ash-error-foreground) 70%,
-		var(--ash-foreground)
-	);
+	--scm-graph-lane-0: var(--ash-scmGraph-foreground1);
+	--scm-graph-lane-1: var(--ash-scmGraph-foreground2);
+	--scm-graph-lane-2: var(--ash-scmGraph-foreground3);
+	--scm-graph-lane-3: var(--ash-scmGraph-foreground4);
+	--scm-graph-lane-4: var(--ash-scmGraph-foreground5);
 	min-height: 0;
 	flex: 1 1 auto;
 	padding: 2px 0 8px;
@@ -80,13 +65,8 @@
 	margin-inline-start: calc(
 		var(--ash-spacing-size40) + var(--ash-spacing-size20) +
 			var(--ash-lxiconFontSize) / 2 - var(--ash-spacing-size80) -
-			var(--scm-graph-lane-width) - var(--scm-graph-row-inset, 0px)
+			var(--scm-graph-lane-width) - var(--ash-list-row-inset-start, 0px)
 	);
-}
-
-.ash-workbench.modern-ui .ash-sidebar-part .ash-scm-graph-tree {
-	/* Modern UI insets sidebar list rows independently of their content padding. */
-	--scm-graph-row-inset: var(--ash-spacing-size40);
 }
 
 .ash-scm-graph-commit {
@@ -184,26 +164,11 @@
 
 .ash-scm-graph-path[data-lane-color="5"],
 .ash-scm-graph-node[data-lane-color="5"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-5);
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
 }
 
 .ash-scm-graph-path[data-lane-color="6"],
 .ash-scm-graph-node[data-lane-color="6"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-6);
-}
-
-.ash-scm-graph-path[data-lane-color="7"],
-.ash-scm-graph-node[data-lane-color="7"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-7);
-}
-
-.ash-scm-graph-path[data-lane-color="8"],
-.ash-scm-graph-node[data-lane-color="8"] {
-	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
-}
-
-.ash-scm-graph-path[data-lane-color="9"],
-.ash-scm-graph-node[data-lane-color="9"] {
 	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRemoteRefColor);
 }
 
@@ -320,7 +285,6 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	/* The tree row already supplies the trailing gutter. */
 	inset-inline-end: 0;
 	bottom: 0;
 	display: flex;
@@ -373,7 +337,7 @@
 
 /* A remembered row focus reveals actions only while the tree has keyboard focus. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
-.ash-scm-graph-actions:has(button[aria-expanded="true"]),
+.ash-scm-graph-actions.dropdown-visible,
 .ash-scm-graph-commit:is(
 		:focus-within,
 		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
@@ -682,6 +646,17 @@
 	min-width: 0;
 }
 
+.ash-scm-commit.ash-button,
+.ash-scm-commit-dropdown.ash-button,
+.ash-scm-find-issues > .ash-button {
+	box-sizing: border-box;
+	height: 24px;
+	min-height: 24px;
+	padding-block: 0;
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-files-emptyExplorerOpenFolderBackground);
+}
+
 .ash-scm-commit .ash-icon-label-container {
 	min-width: 0;
 }
@@ -708,21 +683,14 @@
 	text-overflow: ellipsis;
 }
 
-.ash-scm-find-issues.ash-button {
-	width: 100%;
-	color: var(--ash-button-primaryForeground);
-}
-
-.ash-scm-find-issues.ash-button {
-	background: var(--ash-files-emptyExplorerOpenFolderBackground);
-}
-
-.ash-scm-find-issues.ash-button:not(:disabled):hover {
+.ash-scm-commit.ash-button:not(:disabled):hover,
+.ash-scm-commit-dropdown.ash-button:not(:disabled):hover,
+.ash-scm-find-issues > .ash-button:not(:disabled):hover {
 	background: var(--ash-files-emptyExplorerOpenFolderHoverBackground);
 }
 
-.ash-scm-find-issues.ash-button {
-	margin: 0 8px 8px;
+.ash-scm-find-issues {
+	margin: 8px;
 	width: calc(100% - 16px);
 }
 
@@ -791,12 +759,12 @@
 }
 
 .ash-scm-change-actions {
-	/* Actions cover the label on intent; only the status marker reserves row width. */
-	position: absolute;
+	/* Share the label's grid cell so compound status badges keep their full width. */
+	position: relative;
 	z-index: 1;
-	top: 0;
-	inset-inline-end: var(--ash-toolbar-actionSize);
-	bottom: 0;
+	grid-area: 1 / 1;
+	justify-self: end;
+	align-self: stretch;
 	display: flex;
 	align-items: center;
 	padding-inline-start: var(--ash-spacing-size40);
@@ -966,10 +934,6 @@
 	}
 }
 
-.ash-scm-change {
-	position: relative;
-}
-
 .ash-scm-change,
 .ash-scm-folder {
 	display: flex;
@@ -981,7 +945,13 @@
 	line-height: var(--ash-list-rowHeight);
 }
 
+.ash-scm-change {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .ash-scm-change-open {
+	grid-area: 1 / 1;
 	display: flex;
 	min-width: 0;
 	height: var(--ash-list-rowHeight);
@@ -1014,13 +984,14 @@
 }
 
 .ash-scm-change-status {
-	flex: 0 0 var(--ash-spacing-size200);
-	width: var(--ash-spacing-size200);
-	margin-left: var(--ash-spacing-size40);
+	grid-area: 1 / 2;
+	min-width: var(--ash-spacing-size200);
+	margin-inline-start: var(--ash-spacing-size40);
 	color: color-mix(in srgb, currentColor 78%, transparent);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-align: center;
+	white-space: nowrap;
 }
 
 .ash-scm-change-status.status-added,

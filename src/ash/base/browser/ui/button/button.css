@@ -146,12 +146,27 @@
 }
 
 .ash-button-dropdown > .ash-button:last-child {
+	position: relative;
 	flex: 0 0 auto;
 	aspect-ratio: 1;
 	padding-inline: var(--ash-spacing-size20);
 	border-start-start-radius: 0;
 	border-end-start-radius: 0;
-	border-inline-start-color: currentColor;
+	border-inline-start-color: transparent;
+}
+
+.ash-button-dropdown > .ash-button:last-child::before {
+	content: "";
+	position: absolute;
+	inset-block: var(--ash-spacing-size40);
+	inset-inline-start: calc(-1 * var(--ash-strokeThickness));
+	width: var(--ash-strokeThickness);
+	background: color-mix(in srgb, currentColor 35%, transparent);
+	pointer-events: none;
+}
+
+.ash-high-contrast .ash-button-dropdown > .ash-button:last-child::before {
+	background: currentColor;
 }
 
 .ash-button-dropdown > .ash-button-primary {

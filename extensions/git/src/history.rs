@@ -53,7 +53,7 @@ impl GitRuntime {
                                 &decode::<String>(ancestor)?,
                                 &decode::<String>(reference.clone())?,
                                 crate::model::CompareMode::MergeBase,
-                                token
+                                Some(token)
                             )?
                             .base_object_id
                     );
@@ -121,7 +121,7 @@ impl GitRuntime {
                         &decode::<String>(id.clone())?,
                         &decode::<String>(parent.clone())?,
                         crate::model::CompareMode::Direct,
-                        token
+                        Some(token)
                     )?);
                     json!({"changes":comparison["changes"],"parentObjectId":comparison["baseObjectId"]})
                 } else {
@@ -417,7 +417,7 @@ impl GitRuntime {
                     } else {
                         crate::model::CompareMode::Direct
                     },
-                    token
+                    Some(token)
                 )?);
                 let input = self.committed_diff(
                     repository,

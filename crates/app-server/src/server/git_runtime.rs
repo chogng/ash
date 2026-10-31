@@ -22,6 +22,7 @@ use ash_app_server_protocol::protocol::git::GitGraphResult;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
 use ash_app_server_protocol::protocol::git::GitHistoryRefsResult;
 use ash_app_server_protocol::protocol::git::GitIgnoreChanged;
+use ash_app_server_protocol::protocol::git::GitReferenceCommitDto;
 use ash_app_server_protocol::protocol::git::GitReferenceDto;
 use ash_app_server_protocol::protocol::git::GitReferenceKindDto;
 use ash_app_server_protocol::protocol::git::GitRemoteDto;
@@ -3471,6 +3472,13 @@ fn project_reference(reference: &ash_git::GitReference) -> GitReferenceDto {
         },
         remote_name: reference.remote_name().map(Into::into),
         current: reference.is_current(),
+        commit_details: reference
+            .commit_details()
+            .map(|commit| GitReferenceCommitDto {
+                author_name: commit.author_name.clone(),
+                timestamp_seconds: commit.timestamp_seconds,
+                subject: commit.subject.clone(),
+            }),
     }
 }
 

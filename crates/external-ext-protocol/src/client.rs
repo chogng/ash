@@ -599,7 +599,7 @@ pub enum ExtensionClientOperation {
     },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "export", derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -611,6 +611,14 @@ pub struct ExtensionQuickPickItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "export", ts(optional))]
     pub detail: Option<String>,
+    /// Starts a labeled group before this selectable item, retaining its selection index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub separator: Option<String>,
+    /// Keeps an action available while the user filters reference names.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "export", ts(optional))]
+    pub always_show: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

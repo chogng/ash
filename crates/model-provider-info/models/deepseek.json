@@ -4,6 +4,7 @@
     {
       "provider_id": "deepseek",
       "model_id": "deepseek-flash",
+      "recommended_for": ["review", "commit"],
       "display_name": "DeepSeek V4.1 Flash",
       "context_window": 1000000,
       "capabilities": {
@@ -68,6 +69,7 @@
     {
       "provider_id": "deepseek",
       "model_id": "deepseek-v4-pro",
+      "recommended_for": ["advisor", "review", "commit"],
       "display_name": "DeepSeek V4 Pro",
       "context_window": 1000000,
       "capabilities": {

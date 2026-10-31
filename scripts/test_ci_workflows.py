@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +22,124 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_runtime_recheck_does_not_build_or_publish(self):
+        workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
+        for job in ("build", "publish"):
+            self.assertIn(
+                f"  {job}:\n    if: ${{{{ inputs.verify_runtime_run == '' }}}}",
+                workflow,
+            )
+        self.assertIn(
+            "  recheck:\n    if: ${{ inputs.verify_runtime_run != '' }}", workflow
+        )
+        self.assertIn(
+            "assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY']",
+            workflow,
+        )
+        self.assertIn("persist-credentials: false", workflow)
+        plan = textwrap.dedent(
+            workflow.split("python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        for scope, run in (("linux", "123"), ("windows", "../123")):
+            result = subprocess.run(
+                [sys.executable, "-c", plan],
+                env={**os.environ, "PLATFORMS": scope, "VERIFY_RUNTIME_RUN": run},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("numeric workflow run ID", result.stderr)
+
+    def test_real_windows_ssh_preflight_runs_before_the_full_backend_build(self):
+        workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
+        self.assertLess(
+            workflow.index(
+                "name: Verify large binary install and reuse over real Windows SSH"
+            ),
+            workflow.index("name: Build standalone Remote package"),
+        )
+        self.assertIn("build/release/verify_windows_installer.py --target", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+
+    def test_remote_release_plans_native_windows_and_gates_the_client_binding(self):
+        workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
+        plan = textwrap.dedent(
+            workflow.split("python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            environment = {
+                **os.environ,
+                "PLATFORMS": "windows",
+                "MACOS_SIGNING_READY": "false",
+                "GITHUB_OUTPUT": str(output),
+            }
+            subprocess.run([sys.executable, "-c", plan], env=environment, check=True)
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            self.assertEqual(
+                json.loads(values["matrix"]),
+                {
+                    "include": [
+                        {
+                            "runner": "windows-2025",
+                            "target": "x86_64-pc-windows-msvc",
+                            "python": "python",
+                        },
+                        {
+                            "runner": "windows-11-arm",
+                            "target": "aarch64-pc-windows-msvc",
+                            "python": "python",
+                        },
+                    ]
+                },
+            )
+            self.assertEqual(
+                set(json.loads(values["targets"])),
+                {"x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"},
+            )
+            output.unlink()
+            subprocess.run(
+                [sys.executable, "-c", plan],
+                env={**environment, "PLATFORMS": "all", "MACOS_SIGNING_READY": "true"},
+                check=True,
+            )
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            self.assertEqual(len(json.loads(values["targets"])), 6)
+            output.unlink()
+            subprocess.run(
+                [sys.executable, "-c", plan],
+                env={
+                    **environment,
+                    "PLATFORMS": "linux",
+                },
+                check=True,
+            )
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            self.assertEqual(
+                set(json.loads(values["targets"])),
+                {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"},
+            )
+        verify = workflow.split("\n  verify:\n", 1)[1].split("\n  binding:\n", 1)[0]
+        self.assertIn("needs: [plan, publish]", verify)
+        self.assertIn("fromJSON(needs.plan.outputs.matrix)", verify)
+        self.assertIn(
+            "--binding-file .build/remote-release/remote-release.json", verify
+        )
+        self.assertNotIn("continue-on-error", verify)
+        binding = workflow.split("\n  binding:\n", 1)[1]
+        self.assertIn("needs: verify", binding)
+        self.assertIn("name: remote-server-release-binding", binding)
+        self.assertNotIn(
+            "name: remote-server-release-binding",
+            workflow.split("\n  binding:\n", 1)[0],
+        )
+
     def test_component_fixture_sources_select_the_blocking_screenshot_workflow(
         self,
     ) -> None:

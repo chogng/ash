@@ -1,3 +1,4 @@
+import '../../../advisor/browser/advisor.contribution.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { ScreenshotGlobalShortcutSetting } from '../../../chat/common/constants.js';
@@ -63,6 +64,8 @@ import { ILanguageServerService } from '../../../../../platform/language/common/
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
+import { createDisconnectedAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
@@ -88,6 +91,7 @@ import type { HookSource } from '../../../../../platform/agentHost/common/appSer
 import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
 import { IAccessibleViewService, AccessibleViewType, AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -720,6 +724,8 @@ test('Extension settings use catalog identities and standard schemas without a p
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
+	assert.deepEqual(registry.getConfiguration('sample.nested')?.section, { id: 'preferences', title: 'Sample settings' });
+	assert.equal(registry.getConfiguration('sample.nested')?.section, registry.getConfiguration('sample.text')?.section);
 	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
 	assert.equal(
 		createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id),
@@ -751,12 +757,30 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
 			['extension.ash.git', 103],
-			['extension.ash.markdown-language-features', 13],
+			['extension.ash.markdown-language-features', 18],
 			['extension.ash.media-preview', 2],
 		],
 	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
+	assert.deepEqual(['fontFamily', 'codeFontFamily', 'blockquoteFontFamily'].map(key => defaults.get(`markdown.preview.${key}`).title), ['正文字体', '代码字体', '引用字体']);
+	const markdown = layout.find(category => category.id === 'extension.ash.markdown-language-features')!;
+	assert.deepEqual(markdown.groups.map(group => [group.id, group.title]), [
+		['markdown', '语言功能'],
+		['markdown.validate', '验证'],
+		['markdown.preview', '预览'],
+	]);
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
+	tree.setChildren(settingsRootNodes(layout));
+	const toc = new TOCTreeModel(tree, () => [markdown.descriptor]);
+	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), [
+		'extension.ash.markdown-language-features.group.markdown',
+		'extension.ash.markdown-language-features.group.markdown.validate',
+		'extension.ash.markdown-language-features.group.markdown.preview',
+	]);
+	tree.setQuery('@id:markdown.preview.fontSize');
+	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), ['extension.ash.markdown-language-features.group.markdown.preview']);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['markdown.preview.fontSize']);
 	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
 	assert.equal(severity.valueType, 'select');
 	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
@@ -764,19 +788,98 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	await configuration.updateValue('mediaPreview.video.loop', true);
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
+	await configuration.updateValue('markdown.preview.fontFamily', '"Microsoft YaHei", sans-serif');
+	await configuration.updateValue('markdown.preview.codeFontFamily', '"Fira Code", monospace');
+	await configuration.updateValue('markdown.preview.blockquoteFontFamily', 'Georgia, serif');
+	await configuration.updateValue('markdown.preview.fontSize', 20);
+	await configuration.updateValue('markdown.preview.lineHeight', 2);
 	const document = (await configuration.read()).source;
 	assert.deepEqual(JSON.parse(document), {
 		'mediaPreview.video.loop': true,
 		'markdown.validate.enabled': false,
 		'git.untrackedChanges': 'separate',
+		'markdown.preview.fontFamily': '"Microsoft YaHei", sans-serif',
+		'markdown.preview.codeFontFamily': '"Fira Code", monospace',
+		'markdown.preview.blockquoteFontFamily': 'Georgia, serif',
+		'markdown.preview.fontSize': 20,
+		'markdown.preview.lineHeight': 2,
 	});
 	using reopened = new WorkspaceService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
+	assert.equal(reopened.getValue('markdown.preview.fontSize'), 20);
+	assert.equal(reopened.getValue('markdown.preview.codeFontFamily'), '"Fira Code", monospace');
+	assert.equal(reopened.getValue('markdown.preview.blockquoteFontFamily'), 'Georgia, serif');
+	await reopened.updateValue('markdown.preview.blockquoteFontFamily', undefined);
+	assert.equal(reopened.getValue('markdown.preview.blockquoteFontFamily'), '');
+	assert.equal(reopened.getValue('markdown.preview.lineHeight'), 2);
+	await assert.rejects(reopened.updateValue('markdown.preview.fontSize', 0), TypeError);
+	await assert.rejects(reopened.updateValue('markdown.preview.lineHeight', 0), TypeError);
+	await assert.rejects(reopened.updateValue('markdown.preview.fontFamily', []), TypeError);
+	await reopened.updateValue('markdown.preview.fontSize', undefined);
+	assert.equal(reopened.getValue('markdown.preview.fontSize'), 13);
 	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
 	await reopened.updateValue('mediaPreview.video.loop', undefined);
 	assert.equal(reopened.getValue('mediaPreview.video.loop'), false);
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Markdown font controls distinguish system, custom and inherited fonts (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		resources.add(toDisposable(resetNlsResolver));
+		const manifest = JSON.parse(await readFile('extensions/markdown-language-features/package.json', 'utf8'));
+		const messages = JSON.parse(await readFile(`extensions/markdown-language-features/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({
+			add: [...parseExtensionManifest(JSON.stringify(localizeManifest(manifest, messages)), {
+				id: 'ash.markdown-language-features', name: manifest.name, publisher: manifest.publisher, version: manifest.version,
+			}).contributes.configuration],
+			remove: [],
+		});
+		const configuration = resources.add(new WorkspaceService({ registry }));
+		const defaults = new DefaultSettings(registry);
+		const root = h(browserEnvironment.window.document, 'div');
+		browserEnvironment.window.document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const contextView = resources.add(new BrowserContextViewService(root));
+		for (const key of ['fontFamily', 'codeFontFamily', 'blockquoteFontFamily']) {
+			const id = `markdown.preview.${key}`;
+			const widget = resources.add(createSettingWidget(resources, root, defaults.get(id), {
+				configurationService: configuration, contextViewProvider: contextView,
+				contextMenuProvider: { showContextMenu() { } },
+				clipboardService: {
+					triggerPaste() { }, read: async () => [],
+					readText: async () => '', writeText: async () => { },
+					readFindText: async () => '', writeFindText: async () => { },
+					readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }),
+					writeResources: async () => { }, hasResources: async () => false,
+				},
+				onStatus(message, error) { if (error) assert.fail(message); },
+			}));
+			root.append(widget.domNode);
+			const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
+			const mode = widget.domNode.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+			assert.ok(mode.textContent?.includes(key === 'blockquoteFontFamily' ? messages['markdown.preview.blockquoteFontFamily.default'] : locale === 'en' ? 'System (' : '系统（'));
+			assert.equal(input.hidden, true);
+			mode.click();
+			const choices = root.ownerDocument.getElementById(mode.getAttribute('aria-controls')!)!;
+			choices.querySelectorAll<HTMLElement>('[role="option"]')[1].click();
+			assert.equal(input.hidden, false);
+			assert.equal(root.ownerDocument.activeElement, input);
+			assert.equal(JSON.parse((await configuration.read()).source)[id], undefined, 'choosing custom only starts an edit');
+			input.value = '"Example Font", serif';
+			input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+			await nextTurn();
+			assert.equal(configuration.getValue(id), '"Example Font", serif');
+			assert.equal(mode.textContent, locale === 'en' ? 'Custom' : '自定义');
+			await configuration.updateValue(id, undefined);
+			assert.equal(input.hidden, true, 'reset returns the control to its system or inherited font');
+		}
+	});
+}
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Rust numeric settings save numbers, automatic values and named modes directly (${locale})`, async () => {
@@ -1517,6 +1620,19 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(status, '字号 必须介于 1 和 10 之间。');
 
 	const search = resources.add(new SettingsSearchWidget(root, { ariaControls: 'settings-results', contextMenuProvider, localizationService }));
+	const clearSearch = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-clear')!;
+	assert.equal(clearSearch.getAttribute('aria-label'), '清空搜索');
+	assert.equal(clearSearch.disabled, true);
+	const searchChanges: string[] = [];
+	resources.add(search.onDidChange(value => searchChanges.push(value)));
+	search.value = 'workbench.editor';
+	assert.equal(clearSearch.disabled, false);
+	clearSearch.focus();
+	clearSearch.click();
+	assert.equal(search.value, '');
+	assert.deepEqual(searchChanges, ['workbench.editor', '']);
+	assert.equal(clearSearch.disabled, true);
+	assert.equal(browserEnvironment.window.document.activeElement, search.domNode.querySelector('input'));
 	const filter = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-filter')!;
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';
@@ -1704,6 +1820,74 @@ test('file opening preferences have a translated group and correctly typed contr
 	}
 });
 
+test('editor line height displays pixels and preserves automatic settings until edited', async () => {
+	using resources = new DisposableStore();
+	const configuration = resources.add(new WorkspaceService());
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	let actions: readonly IAction[] = [];
+	const errors: string[] = [];
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('editor.lineHeight'), {
+		configurationService: configuration,
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
+		clipboardService: {
+			triggerPaste: () => undefined,
+			read: async () => [],
+			readText: async () => '',
+			writeText: async () => { },
+			readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => { },
+			hasResources: async () => false,
+		},
+		onStatus: (message, error) => { if (error) errors.push(message); },
+	}));
+	root.append(widget.domNode);
+	const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
+	const { isMacintosh } = await import('../../../../../base/common/platform.js');
+	assert.ok(input.valueAsNumber >= 8);
+	assert.equal(configuration.inspect('editor.lineHeight').userLocalValue, undefined);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
+	assert.equal(input.getAttribute('aria-label'), 'Line height');
+	assert.equal(input.min, '8');
+	await configuration.write('{ "editor.fontSize": 20, "editor.lineHeight": 0 }');
+	assert.equal(input.value, isMacintosh ? '30' : '27');
+	assert.equal(configuration.getValue('editor.lineHeight'), 0);
+	assert.equal(widget.domNode.classList.contains('is-configured'), true);
+	await configuration.write('{ "editor.fontSize": 20, "editor.lineHeight": 2 }');
+	assert.equal(input.value, '40');
+	input.value = '24';
+	await configuration.updateValue('editor.fontSize', 21);
+	assert.equal(input.value, '24', 'font size changes preserve an uncommitted line height edit');
+	const change = async (value: string) => {
+		input.value = value;
+		input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+		await nextTurn();
+	};
+	await change('24');
+	assert.equal(configuration.getValue('editor.lineHeight'), 24);
+	await configuration.updateValue('editor.fontSize', 30);
+	assert.equal(input.value, '24');
+	for (const invalid of ['0', '7', '81', '']) {
+		await change(invalid);
+		assert.equal(input.value, '24');
+		assert.equal(configuration.getValue('editor.lineHeight'), 24);
+	}
+	assert.equal(errors.length, 4);
+	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+	await actions.find(action => action.id === 'settings.resetSetting')!.run();
+	await nextTurn();
+	assert.equal(input.value, isMacintosh ? '45' : '41');
+	assert.equal(configuration.inspect('editor.lineHeight').userLocalValue, undefined);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
+	await configuration.updateValue('editor.fontSize', 20);
+	assert.equal(input.value, isMacintosh ? '30' : '27');
+});
+
 test('font preferences show translated labels and the actual platform defaults', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
@@ -1725,6 +1909,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(family.valueType === 'text' && family.placeholder, '系统默认');
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
+		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
 		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
 		assert.equal(input.groups[0]?.title, '消息输入');
 		assert.deepEqual(
@@ -1843,7 +2028,11 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
 	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
-	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
+	const styleCard = layout.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style');
+	assert.equal(styleCard?.title, 'Workbench Style');
+	assert.deepEqual(styleCard?.settings.map(setting => setting.id), [WorkbenchConfiguration.layoutStyle]);
+	assert.equal(findSettingCategory(layout, 'chat.viewSessions.orientation'), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
 	const startupWindow = defaults.get('window.startupWindow');
@@ -1894,10 +2083,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
 	assert.equal(tabStyleSetting.valueType, 'select');
 	if (tabStyleSetting.valueType === 'select') {
-		assert.equal(tabStyleSetting.configuration.defaultValue, 'standard');
+		assert.equal(tabStyleSetting.configuration.defaultValue, 'connected');
 		assert.deepEqual(
 			tabStyleSetting.options.map(option => option.value),
-			['standard', 'connected', 'pill'],
+			['connected', 'pill'],
 		);
 	}
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
@@ -1959,6 +2148,8 @@ test('settingsLayout is the single projection from registered settings to catego
 		);
 	}
 	const layoutStyleSetting = defaults.get(WorkbenchConfiguration.layoutStyle);
+	assert.equal(layoutStyleSetting.title, 'Workbench Style');
+	assert.equal(layoutStyleSetting.configuration.defaultValue, 'modern');
 	assert.equal(layoutStyleSetting.valueType, 'select');
 	if (layoutStyleSetting.valueType === 'select') {
 		assert.deepEqual(layoutStyleSetting.options, [
@@ -1991,6 +2182,11 @@ test('feature settings navigation and groups capture the language initialized be
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const layout = await loadChineseSettingsLayout();
+		const style = new DefaultSettings().get(WorkbenchConfiguration.layoutStyle);
+		assert.equal(style.title, '工作台样式');
+		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
+		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
+		assert.equal(layout.SettingsCategories.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style')?.label, '工作台样式');
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
@@ -2329,22 +2525,36 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	modelTree.setNavigationTarget(undefined);
 	catalog = [{ model, displayName: 'GPT Test Updated' }];
 	changed.fire();
-	resolveProviders([
-		{
-			connection: 'openai',
-			provider: 'openai',
-			displayName: 'OpenAI API',
-			apiKeyPolicy: 'required',
-			apiKeyConfigured: false,
-		},
-	]);
+	const providerObservation = {
+		connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required' as const, apiKeyConfigured: false,
+		access: 'apiKey' as const, configured: false,
+		catalog: { connection: 'openai', provider: 'openai', freshness: 'staticOnly' as 'staticOnly' | 'fresh', issues: [] },
+	};
+	resolveProviders([providerObservation]);
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
 	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
 	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
+	let refreshes = 0;
+	disposables.add(panel.onDidChange(() => refreshes++));
+	const providerName = root.querySelector('.ash-models-settings-api-row h5')!.firstChild;
+	catalog = [{ model, displayName: 'GPT Test Context Updated' }];
+	providerObservation.catalog.freshness = 'fresh';
+	providerObservation.configured = true;
+	changed.fire();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Context Updated');
+	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
+	assert.equal(root.querySelector('.ash-models-settings-api-row h5')!.firstChild, providerName);
+	assert.equal(refreshes, 0, 'Catalog-only updates leave connection sections and the Settings tree intact');
+	providerObservation.displayName = 'OpenAI API Updated';
+	changed.fire();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API Updated');
+	assert.equal(refreshes, 1, 'Connection metadata changes still update their Settings section');
 });
 
-test('Models Settings orders enabled models by catalog position and restores disabled positions', async () => {
+test('Models Settings orders enabled models first in a unified list', async () => {
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
@@ -2365,7 +2575,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
@@ -2425,6 +2635,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
 	resources.add(
@@ -2445,15 +2656,15 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		content.getNodes(query);
 		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
-	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
 	// Enable in reverse order so activation order cannot masquerade as catalog order.
 	await models.setModelVisible(catalog[3].model, true);
 	await models.setModelVisible(catalog[2].model, true);
-	assert.deepEqual(names(), ['Second', 'Third', 'First newest']);
+	assert.deepEqual(names(), ['Second', 'Third', 'First newest', 'First older']);
 	await models.setModelVisible(catalog[2].model, false);
-	assert.deepEqual(names(), ['Third', 'First newest', 'Second']);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[3].model, false);
-	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
 	await models.setModelVisible(catalog[1].model, true);
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
 	search.value = 'first';
@@ -2651,15 +2862,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let rejectAdvisorSave = false;
 	const chatService = {
 		onDidChangeModels: modelsChanged.event,
-		listAdvisorModels: async () => [
-			{ model: advisorModel, displayName: 'GPT-6.1 Sol' },
-			{
-				model: otherAdvisorModel,
-				displayName: 'Muse Spark 1.3',
-				supportedReasoningEfforts: [{ effort: 'high' }],
-			},
-			{ model, displayName: 'GPT Test' },
-		],
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => {
 			if (rejectAdvisorSave) {
@@ -2668,7 +2870,16 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 			advisor = next;
 			advisorWrites.push(next);
 		},
-		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
+		listModelCatalog: async () => [
+			{ model, displayName: 'GPT Test' },
+			{ model: advisorModel, displayName: 'GPT-6.1 Sol', recommendedFor: [ModelPurpose.Advisor] },
+			{
+				model: otherAdvisorModel,
+				displayName: 'Muse Spark 1.3',
+				recommendedFor: [ModelPurpose.Advisor],
+				supportedReasoningEfforts: [{ effort: 'high' }],
+			},
+		],
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		listModelProviders: async () => [
@@ -2728,6 +2939,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	};
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAgentSessionService, { readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
 	services.registerInstance(IAppServerHookApi, hooksBackend);
 	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
@@ -2800,6 +3012,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
 	});
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(IAgentModelsService, {
+		...createDisconnectedAgentModelsService(async operation => { throw new Error(`Unexpected ${operation}`); }),
+		readDefaults: () => (chatService as unknown as ILanguageModelsService).readModelDefaults(),
+	});
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
 	services.registerInstance(ISecretStorageStatusService, {
@@ -3320,17 +3536,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
-	const advisorSwitch = root.querySelector<HTMLInputElement>('.ash-advisor-settings input[role="switch"]');
-	assert.ok(advisorSwitch);
-	assert.equal(advisorSwitch.checked, true);
-	advisorSwitch.checked = false;
-	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
+	const selectAdvisor = (label: string): void => {
+		root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')!.click();
+		const option = [...root.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === label);
+		assert.ok(option);
+		option.click();
+	};
+	selectAdvisor('Disable');
 	await nextTurn();
 	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
-	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
-	const otherAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Muse Spark 1.3');
-	assert.ok(otherAdvisorOption);
-	otherAdvisorOption.click();
+	selectAdvisor('Muse Spark 1.3 · High');
 	await nextTurn();
 	assert.deepEqual(advisorWrites[1], {
 		model: otherAdvisorModel,
@@ -3340,44 +3556,36 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		reasoningEffort: 'high',
 	});
 	rejectAdvisorSave = true;
-	advisorSwitch.checked = false;
-	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	selectAdvisor('Disable');
 	await nextTurn();
-	assert.equal(advisorSwitch.checked, true);
-	assert.match(root.querySelector('.ash-advisor-settings [role="status"]')?.textContent ?? '', /Preference write failed/u);
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
+	assert.match(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="status"]')?.textContent ?? '', /Preference write failed/u);
 	rejectAdvisorSave = false;
-	advisorSwitch.checked = true;
-	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	selectAdvisor('Disable');
 	await nextTurn();
-	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
-	const clearAdvisorOption = [...root.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(option => option.textContent === 'Disable');
-	assert.ok(clearAdvisorOption);
-	clearAdvisorOption.click();
-	await nextTurn();
-	assert.deepEqual(advisorWrites[3], {
+	assert.deepEqual(advisorWrites[2], {
 		model: otherAdvisorModel,
 		enabled: false,
 		maxCalls: 5,
 		maxOutputTokens: 4096,
 		reasoningEffort: 'high',
 	});
-	assert.equal(advisorSwitch.checked, false);
-	assert.equal(advisorSwitch.disabled, false);
-	advisorSwitch.checked = true;
-	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Disable');
+	selectAdvisor('Muse Spark 1.3 · High');
 	await nextTurn();
 	hiddenAdvisors.add(otherAdvisorModel.model);
 	modelsChanged.fire();
 	await nextTurn();
-	assert.equal(root.querySelector('.ash-advisor-settings [aria-haspopup="menu"]')?.textContent, 'Muse Spark 1.3');
-	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
+	root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.click();
 	assert.deepEqual(
-		[...root.querySelectorAll('[role="menuitemradio"]')].map(option => option.textContent),
-		['Disable', 'GPT-6.1 Sol'],
+		[...root.querySelectorAll('[role="option"]')].map(option => option.textContent),
+		['Inherit from chat', 'Disable', 'GPT-6.1 Sol · Default', 'Muse Spark 1.3 · Default', 'Muse Spark 1.3 · High'],
 	);
-	assert.equal(advisorWrites.length, 5, 'Hiding a model must not change the saved preference');
-	assert.ok(root.querySelector('.ash-advisor-settings.ash-settings-card'));
-	assert.equal(root.querySelector('.ash-advisor-settings')?.textContent?.includes('Refresh'), false);
+	assert.equal(advisorWrites.length, 4, 'Hiding a model must not change the saved preference');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] > .ash-settings-card-title')?.textContent, 'Advisor');
+	assert.ok(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] > .ash-settings-card'));
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"]')?.textContent?.includes('Refresh'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="tools"]'), null);
 	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
 	await nextTurn();
@@ -3550,7 +3758,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(root.querySelector('[data-settings-container]')?.getAttribute('data-active-settings-category'), 'models');
 	assert.equal(root.querySelector('[data-configuration-key="dictation.model"]'), null);
-	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[role="switch"]');
+	const modelSwitch = root.querySelector<HTMLInputElement>('.ash-models-settings-model-row input[aria-label="Show GPT Test in model picker"]');
 	assert.ok(modelSwitch);
 	assert.equal(modelSwitch.getAttribute('aria-label'), 'Show GPT Test in model picker');
 	modelSwitch.click();
@@ -3681,6 +3889,21 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	const commands = editorServices.get(ICommandService);
+	await preferences.openSettings({ query: `@id:${WorkbenchConfiguration.modernUIEditorTabStyle}` });
+	const styleBeforeNavigation = configuration.getValue(WorkbenchConfiguration.layoutStyle);
+	const tabStyleRow = root.querySelector<HTMLElement>(`[data-settings-item-id="${WorkbenchConfiguration.modernUIEditorTabStyle}"]`)!;
+	assert.match(tabStyleRow.textContent ?? '', /Pill tabs only take effect when Workbench Style is Modern/);
+	const styleLink = tabStyleRow.querySelector<HTMLElement>('.ash-link')!;
+	assert.equal(styleLink.textContent, 'Workbench Style');
+	styleLink.focus();
+	styleLink.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	assert.equal(search.value, '', 'setting navigation clears the source filter');
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'appearance');
+	const styleCard = root.querySelector<HTMLElement>('[data-settings-tree-group-id="appearance.group.style"]')!;
+	assert.equal(styleCard.querySelector('.ash-settings-tree-group-title')?.textContent, 'Workbench Style');
+	assert.deepEqual([...styleCard.querySelectorAll<HTMLElement>('[data-settings-item-id]')].map(row => row.dataset.settingsItemId), [WorkbenchConfiguration.layoutStyle]);
+	assert.equal(ownerDocument.activeElement, styleCard.querySelector('[role="combobox"]'), 'setting navigation focuses the destination control');
+	assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), styleBeforeNavigation, 'navigation leaves the style choice to the user');
 	await commands.executeCommand('workbench.action.configureEditor');
 	assert.equal(search.value, 'workbench.editor');
 	assert.equal(ownerDocument.activeElement, search);
@@ -3898,7 +4121,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
 });
 
-test('Models Settings collapses by provider and saves keys and custom models on blur', async () => {
+test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {
 	using disposables = new DisposableStore();
 	const document = browserEnvironment.window.document;
 	document.body.replaceChildren();
@@ -3918,13 +4141,13 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
 		listModelProviders: async () =>
-			['openai', 'openai-compatible'].map(connection => ({
+			[...['openai', 'openai-compatible'].map(connection => ({
 				connection,
 				provider: connection,
 				displayName: connection,
 				apiKeyPolicy: 'required',
 				apiKeyConfigured: true,
-			})),
+			})), { connection: 'chatgpt-subscription', provider: 'openai', displayName: 'ChatGPT subscription', access: 'subscription', active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false }, { connection: 'unused-subscription', provider: 'other', displayName: 'Not connected', access: 'subscription', active: true, configured: false, ready: false, apiKeyPolicy: 'unsupported', apiKeyConfigured: false }],
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
@@ -4008,19 +4231,15 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	await nextTurn();
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
-		['Newest OpenAI', 'Opus'],
+		['Newest OpenAI', 'Older OpenAI', 'Opus'],
 	);
-	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
-	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
-	assert.equal(expand.getAttribute('aria-expanded'), 'true');
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
-	assert.equal(root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!.hidden, false);
-	[...root.querySelectorAll<HTMLButtonElement>('.ash-chat-models-catalog > button')].find(button => button.textContent === 'Collapse All')!.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
-	expand.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 0);
+	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
+	assert.deepEqual(content.getNodes().map(node => node.element.id), ['models.catalog', 'models.subscriptions', 'models.providers']);
+	assert.equal(root.querySelector('.ash-models-settings-subscription-row')?.textContent, 'ChatGPT subscriptionAccount connected');
+	assert.equal(root.querySelectorAll('.ash-models-settings-subscription-row').length, 1);
+	assert.equal(root.querySelector('.ash-chat-models-filters, .ash-models-settings-expand'), null);
+	assert.equal(root.querySelector('.ash-chat-models-provider input'), null);
 	assert.equal(
 		content
 			.getNodes(new SettingsSearchQuery('Older'))
@@ -4053,7 +4272,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	searchModels('');
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
-		['Newest OpenAI', 'Opus'],
+		['Newest OpenAI', 'Older OpenAI', 'Opus'],
 	);
 	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
 	const input = root.querySelector<HTMLInputElement>('.ash-models-settings-api-row input')!;
@@ -4083,7 +4302,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	await nextTurn();
 	assert.equal(input.value, '••••••••');
 	assert.equal(input.hasAttribute('aria-invalid'), false);
-	root.querySelector<HTMLButtonElement>('.ash-models-settings-provider-title button')!.click();
+	[...root.querySelectorAll<HTMLButtonElement>('.ash-models-settings-provider-title button')].find(button => button.textContent === 'New provider')!.click();
 	const card = root.querySelector<HTMLElement>('.ash-chat-models-widget')!;
 	assert.equal(document.activeElement, card.querySelector('input'));
 	edit(card.querySelector<HTMLInputElement>('input[aria-label="Provider name"]')!, 'Gateway');
@@ -4163,8 +4382,57 @@ function createSettingWidget(
 		hideContextMenu() { },
 	});
 	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
-	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
+	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings, onRevealSetting: options.onRevealSetting }, services);
 }
+
+test('Chinese editor tab styles link to Workbench Style and retain keyboard focus across metadata updates', () => {
+	using resources = new DisposableStore();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const reveals: string[] = [];
+	const descriptor = new DefaultSettings().get(WorkbenchConfiguration.modernUIEditorTabStyle);
+	const widget = resources.add(createSettingWidget(resources, root, descriptor, {
+		configurationService: resources.add(new WorkspaceService()),
+		clipboardService: {
+			triggerPaste() { },
+			read: async () => [],
+			readText: async () => '',
+			writeText: async () => { },
+			readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => { },
+			hasResources: async () => false,
+		},
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu() { } },
+		onStatus() { },
+		onRevealSetting: key => reveals.push(key),
+	}));
+	root.append(widget.domNode);
+	assert.match(widget.domNode.textContent ?? '', /独立圆角标签仅在工作台样式为 Modern 时生效/);
+	assert.doesNotMatch(widget.domNode.textContent ?? '', /`#|#`/);
+	const link = widget.domNode.querySelector<HTMLElement>('.ash-link')!;
+	assert.equal(link.textContent, '工作台样式');
+	assert.equal(link.tabIndex, 0);
+	link.focus();
+	widget.update(descriptor);
+	assert.equal(widget.domNode.querySelector('.ash-link'), link);
+	assert.equal(root.ownerDocument.activeElement, link);
+	for (const key of ['Enter', ' ']) {
+		link.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+	}
+	assert.deepEqual(reveals, [WorkbenchConfiguration.layoutStyle, WorkbenchConfiguration.layoutStyle]);
+	widget.dispose();
+	link.click();
+	assert.equal(reveals.length, 2, 'disposing the widget releases its link listeners');
+});
 
 test('Settings widgets require their scoped clipboard registration and clean up when creation fails', async () => {
 	using resources = new DisposableStore();
@@ -4237,6 +4505,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	content.setVisible(true);
 	await nextTurn();

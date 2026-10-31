@@ -50,6 +50,14 @@ connection owner independently of visible history. `ChatWidget` owns pagination,
 focus and reading-position presentation. Consumers that omit the history option,
 including Cowork, retain full-history behavior.
 
+Regular Workbench Chat presents opened Sessions through the shared Workbench tab
+control by default, with a List alternative in Chat More Actions. ChatViewPane
+owns opened-tab order and per-session Thread selection in `chat.viewState` version
+2; Session and execution state remain with the existing services. Closing a tab
+captures its draft and releases its view without archiving or interrupting the
+Session. The Chat title projects into AuxiliaryBarPart's single header, which
+suppresses redundant container navigation when Chat is its only visible container.
+
 Web embedders load `sessions.web.main.internal.ts` after initializing localization,
 then call `create(container, profile)` and retain its disposable handle. The Web
 entry loads shared and browser contributions; `browser/web.factory.ts` owns the

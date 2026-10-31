@@ -3437,7 +3437,9 @@ pub(crate) fn resumable_model_providers(
         }
     }
     if let ash_protocol::AdvisorSelection::Model { config } = &snapshot.advisor {
-        retain(&config.model);
+        if let Some(model) = &config.model {
+            retain(model);
+        }
     }
     for turn in &snapshot.turns {
         if !has_resumable_model_selection(turn.status) {
@@ -3446,8 +3448,12 @@ pub(crate) fn resumable_model_providers(
         if let Some(model) = &turn.model {
             retain(model);
         }
-        if let Some(advisor) = &turn.advisor {
-            retain(&advisor.model);
+        if let Some(model) = turn
+            .advisor
+            .as_ref()
+            .and_then(|advisor| advisor.model.as_ref())
+        {
+            retain(model);
         }
         if let Some(model) = turn.instructions.as_ref().and_then(instruction_model) {
             retain(model);
@@ -3505,7 +3511,9 @@ pub(crate) fn migrate_model_providers(
         }
     }
     if let ash_protocol::AdvisorSelection::Model { config } = &mut snapshot.advisor {
-        migrate(&mut config.model);
+        if let Some(model) = &mut config.model {
+            migrate(model);
+        }
     }
     for turn in &mut snapshot.turns {
         if !has_resumable_model_selection(turn.status) {
@@ -3514,8 +3522,12 @@ pub(crate) fn migrate_model_providers(
         if let Some(model) = &mut turn.model {
             migrate(model);
         }
-        if let Some(advisor) = &mut turn.advisor {
-            migrate(&mut advisor.model);
+        if let Some(model) = turn
+            .advisor
+            .as_mut()
+            .and_then(|advisor| advisor.model.as_mut())
+        {
+            migrate(model);
         }
         if let Some(base) = &mut turn.instructions {
             instructions(base, &mut migrate);

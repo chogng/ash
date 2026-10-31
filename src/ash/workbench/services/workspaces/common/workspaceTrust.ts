@@ -15,6 +15,7 @@ import {
 	IWorkspaceTrustManagementService,
 	IWorkspaceTrustRequestService,
 	READ_DIR_PERMISSIONS,
+	RESTRICTED_DIR_PERMISSIONS,
 	type IWorkspaceTrustInfo,
 	type IWorkspaceTrustTransitionParticipant,
 	type IWorkspaceTrustUriInfo,
@@ -148,13 +149,13 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 				try {
 					for (const path of paths) {
 						assertTarget();
-						const result = await this.trust.setDirectoryPermissions(path, trusted ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS, revision);
+						const result = await this.trust.setDirectoryPermissions(path, trusted ? DEVELOPMENT_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS, revision);
 						written = true;
 						revision = result.revision;
 					}
 				} finally {
 					// Even a partially saved multi-root change must be reflected in the active environment.
-					if (written) { assertTarget(); await this.api.recovery!.reconnect(); }
+					if (written) { assertTarget(); await this.api.recovery!.reconnect({ reason: 'permissions' }); }
 				}
 			} finally {
 				this.permissionChange = undefined;

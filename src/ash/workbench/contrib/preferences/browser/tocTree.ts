@@ -69,10 +69,23 @@ export class TOCTreeModel {
 
 	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> | undefined {
 		if (this.content.isSearching && this.content.countVisibleItems(category.id) === 0) return undefined;
-		// Page sections stay in the content pane; the sidebar stops at categories.
+		// Extension-declared sections use the same IDs as their content groups.
+		const children = category.id.startsWith('extension.') && category.groups.length > 1
+			? category.groups.flatMap(group => {
+				const child = this.categoryElement({
+					...category,
+					id: `${category.id}.group.${group.id}`,
+					label: group.label,
+					description: group.description,
+					groups: [],
+				});
+				return child ? [child] : [];
+			})
+			: [];
 		return {
 			element: { kind: 'category', id: category.id, category, searchKeywords: this.contentSearchKeywords(category.id) },
-			collapsible: false,
+			children,
+			collapsible: children.length > 0,
 		};
 	}
 }

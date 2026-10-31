@@ -45,7 +45,7 @@ test('repeated folder opens wait for the permission choice past 30 seconds', { t
 	}, nextFolder).then(() => undefined, error => String(error));
 	await page.waitForTimeout(31_000);
 	await expect(prompt).toBeVisible();
-	await prompt.getByRole('button', { name: 'Open Read-Only' }).click();
+	await prompt.getByRole('button', { name: 'Open in Restricted Mode' }).click();
 	expect(await Promise.all([opening, repeatedOpening])).toEqual([undefined, undefined]);
 	await expect.poll(async () => {
 		const workspace = await page.evaluate(() => {
@@ -69,7 +69,7 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	}, nextFolder);
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
-	await prompt.getByRole('button', { name: 'Open Read-Only' }).click();
+	await prompt.getByRole('button', { name: 'Open in Restricted Mode' }).click();
 	await opening;
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'visible.txt' });
 	await expect(file).toHaveCount(1);
@@ -107,7 +107,47 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(0);
 	expect(await fileRow?.evaluate(row => row.isConnected)).toBe(true);
 	await workbench.quickaccess.runCommand('workbench.trust.manage');
-	await expect(page.locator('.ash-workspace-trust-editor').getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
+	await expect(page.locator('.ash-workspace-trust-editor').getByRole('heading', { level: 2 })).toHaveText('Restricted Mode');
+});
+
+test('Trust changes apply permissions before restoring terminal access', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
+	const page = workbench.page;
+	const initializations = (): Promise<number[]> => page.evaluate(() => performance.getEntriesByName('ash.appServer.initialized').map(entry => entry.startTime));
+	const connected = await initializations();
+	expect(connected.length).toBeGreaterThan(0);
+	const observation = await page.evaluateHandle(() => {
+		const messages: string[] = [];
+		const observer = new MutationObserver(() => {
+			const message = document.querySelector('[data-part="banner"] .ash-banner-message')?.textContent;
+			if (message) messages.push(message);
+		});
+		observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+		return { messages, observer };
+	});
+	await workbench.quickaccess.runCommand('workbench.trust.manage');
+	const editor = page.locator('.ash-workspace-trust-editor');
+	const heading = editor.getByRole('heading', { level: 2 });
+	await expect(heading).toHaveText('Trusted workspace');
+	await editor.getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
+	await expect(heading).toHaveText('Restricted Mode');
+	expect((await initializations()).length).toBeGreaterThan(connected.length);
+	await editor.getByRole('button', { name: 'Trust workspace', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: 'Trust workspace', exact: true }).click();
+	await expect(heading).toHaveText('Trusted workspace');
+	await expect(page.locator('[data-part="banner"]')).toBeHidden();
+	const messages = await observation.evaluate(value => { value.observer.disconnect(); return value.messages; });
+	await observation.dispose();
+	expect(messages).toContain('Applying workspace permissions…');
+	expect(messages).not.toContain('Reconnecting to the Agent Host…');
+	await page.screenshot({ path: testInfo.outputPath('trust-permissions-applied.png') });
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await expect(editor).toBeHidden();
+	await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+	await expect(workbench.terminal.instances).toHaveCount(1);
+	await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'running');
+	await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'trust-live.txt\', \'authorized\')"');
+	await expect.poll(() => readFile(join(testWorkspace.directory, 'trust-live.txt'), 'utf8').catch(() => '')).toBe('authorized');
 });
 
 test('Explorer file context menu includes file actions for the clicked row', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {

@@ -16,7 +16,7 @@ use ash_remote::powershell_command;
 use ash_remote::quote_powershell_argument;
 pub use ash_remote::remote_app_server_command;
 
-const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
+const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(30).expect("non-zero");
 const RUNTIME_FOUND_MARKER: &str = "__ASH_REMOTE_RUNTIME_FOUND__:";
 const RUNTIME_MISSING_MARKER: &str = "__ASH_REMOTE_RUNTIME_MISSING__";
 
@@ -33,7 +33,7 @@ pub struct SshAppServerConnectionOptions {
 }
 
 impl SshAppServerConnectionOptions {
-    /// Creates options that use the platform `ssh` command and a ten-second connection timeout.
+    /// Creates options that use the platform `ssh` command and a thirty-second connection timeout.
     pub fn new(profile: RemoteProfile) -> Self {
         Self {
             profile,
@@ -80,6 +80,10 @@ impl SshAppServerConnectionOptions {
                 "ConnectTimeout={}",
                 self.connect_timeout_seconds.get()
             ))
+            .with_argument("-o")
+            .with_argument("ServerAliveInterval=15")
+            .with_argument("-o")
+            .with_argument("ServerAliveCountMax=3")
             .with_argument(target.host().as_str())
             .with_argument(remote_app_server_command(&self.profile))
     }
@@ -98,6 +102,10 @@ impl SshAppServerConnectionOptions {
                 "BatchMode=yes".to_owned(),
                 "-o".to_owned(),
                 format!("ConnectTimeout={}", self.connect_timeout_seconds),
+                "-o".to_owned(),
+                "ServerAliveInterval=15".to_owned(),
+                "-o".to_owned(),
+                "ServerAliveCountMax=3".to_owned(),
                 self.profile.target().host().as_str().to_owned(),
                 match self.profile.target().dir().style() {
                     RemotePathStyle::Posix => {

@@ -22,6 +22,9 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IBannerService } from '../../../services/banner/browser/bannerService.js';
+import { ITerminalService } from '../../terminal/browser/terminal.js';
+import { IDebugService } from '../../debug/common/debug.js';
+import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 
 const bannerId = 'workbench.banner.restrictedMode';
 const dismissedKey = 'workbench.banner.restrictedMode.dismissed';
@@ -129,7 +132,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 			actions: [{ label: localize('workspaceTrust.manage', 'Manage'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
 			message: this.trustInfo.isReadOnly
 				? localize('workspaceTrust.readOnlyBanner', 'This workspace is read-only. Editing files and running commands are unavailable.')
-				: localize('workspaceTrust.restrictedBanner', 'This workspace has limited directory permissions. Some features are unavailable.'),
+				: localize('workspaceTrust.restrictedBanner', 'Restricted Mode is intended for safe code browsing. Trust this workspace to enable all features.'),
 			onClose: () => {
 				// A pending close must never dismiss a different workspace after a switch.
 				if (workspaceId === this.workspace.getWorkspace().id) this.storage.store(dismissedKey, true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -150,6 +153,8 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 		@IDialogsModel private readonly dialogs: IDialogsModel,
 		@IEditorService private readonly editors: IEditorService,
 		@INotificationService private readonly notifications: INotificationService,
+		@ITerminalService private readonly terminals: ITerminalService,
+		@IDebugService private readonly debug: IDebugService,
 	) {
 		super();
 		this._register(requests.onDidInitiateWorkspaceTrustRequest(options => { void this.showRequest(options); }));
@@ -171,18 +176,32 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 		try {
 			await this.management.workspaceResolved;
 			if (!current()) return;
+			const folders = this.workspace.getWorkspace().folders;
 			const buttons = options?.buttons ?? [
-				{ label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'), type: 'ContinueWithTrust' },
+				{
+					label: folders.length === 1
+						? localize('workspaceTrust.trustFolderContinue', 'Trust folder and continue')
+						: localize('workspaceTrust.trustWorkspaceContinue', 'Trust workspace and continue'), type: 'ContinueWithTrust'
+				},
 				{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
 			] as const;
 			const actions = buttons.filter(button => button.type !== 'Cancel');
+			const paths = folders.map(folder => isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath).join('\n');
+			const hasRunningSessions = this.terminals.instances.some(instance => instance.state !== 'exited' && instance.state !== 'error')
+				|| this.debug.sessions.some(session => session.state !== 'terminated' && session.state !== 'error');
 			const dialog = this.dialog = this.dialogs.show({
 				kind: 'choice',
+				custom: true,
 				title: localize('workspaceTrust.editorTitle', 'Workspace Trust'),
-				message: options?.message ?? localize('workspaceTrust.requestMessage', 'Do you trust the authors of the files in this workspace?'),
-				detail: localize('workspaceTrust.requestDetail', 'Trusting this workspace enables commands and workspace integrations in every folder. Only continue if you trust this project. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.'),
+				message: localize('workspaceTrust.requestMessage', 'Do you trust the authors of the files in this workspace?'),
+				detail: [
+					options?.message,
+					localize('workspaceTrust.requestDetail', 'Trust enables commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services in all folders listed below. Only continue if you trust these projects.'),
+					localize('workspaceTrust.requestFolders', 'Folders to trust:\n{0}', paths),
+					...(hasRunningSessions ? [localize('workspaceTrust.runningSessionsWarning', 'Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.')] : []),
+				].filter(Boolean).join('\n\n'),
 				buttons: actions.map(button => button.label),
-				cancelButton: buttons.find(button => button.type === 'Cancel')?.label ?? localize('cancel', 'Cancel'),
+				cancelButton: buttons.find(button => button.type === 'Cancel')?.label ?? localize('dialog.cancel', 'Cancel'),
 			});
 			const result = await dialog.result;
 			if (this.dialog === dialog) this.dialog = undefined;

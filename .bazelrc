@@ -12,6 +12,10 @@ common:windows --disk_cache=.build/bazel-disk-cache
 common:linux --disk_cache=~/.cache/ash/bazel-disk-cache
 common:macos --disk_cache=~/.cache/ash/bazel-disk-cache
 
+# Let Bazel coordinate eviction with active cache users, including in containers.
+common --experimental_disk_cache_gc_max_size=4G
+common --experimental_disk_cache_gc_max_age=7d
+
 # Do not probe the machine's Xcode installation; the SDK is supplied by
 # MODULE.bazel and the LLVM toolchain.
 common --xcode_version_config=//:disable_xcode

@@ -96,6 +96,20 @@ fn git_foundation_serves_tui_reads_and_mutations_without_editor_extensions() {
 
 #[test]
 fn app_server_serves_an_explicit_dir_over_stdio() {
+    let build = build_identity::current();
+    let version = std::process::Command::new(env!("CARGO_BIN_EXE_ash-app-server"))
+        .arg("--version")
+        .env(
+            "ASH_BUILD_COMMIT",
+            "runtime-value-must-not-replace-compiled-identity",
+        )
+        .output()
+        .unwrap();
+    assert!(version.status.success());
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&version.stdout).unwrap(),
+        serde_json::to_value(&build).unwrap()
+    );
     let root = tempdir().unwrap();
     let dir = root.path().join("dir");
     let profile = root.path().join("profile");
@@ -121,6 +135,7 @@ fn app_server_serves_an_explicit_dir_over_stdio() {
         dirs::home_dir().and_then(|path| path.into_os_string().into_string().ok())
     );
     assert!(client.list_sessions().unwrap().sessions.is_empty());
+    assert_eq!(client.read_diagnostics().unwrap().build, build);
     session.shutdown().unwrap();
 }
 

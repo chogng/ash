@@ -1,7 +1,11 @@
 use crate::CoreError;
+use crate::ThreadController;
+use crate::ThreadUpdateSink;
 use ash_protocol::CommandId;
+use ash_protocol::StableTurnError;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 
 /// Executes an already-created durable Turn without owning Thread persistence.
@@ -32,4 +36,38 @@ pub trait TurnExecutionBackend: Send + Sync {
             "Turn execution backend does not support steering".into(),
         ))
     }
+}
+
+/// Returns whether recovered work was accepted for execution. A rejected Turn must have a
+/// durable terminal state before the recovery batch can continue; storage failures still abort it.
+pub(crate) fn recover_dispatch(
+    threads: &ThreadController,
+    updates: &dyn ThreadUpdateSink,
+    thread_id: &ThreadId,
+    turn_id: &TurnId,
+    result: Result<(), CoreError>,
+) -> Result<bool, CoreError> {
+    if let Err(error) = result {
+        let snapshot = threads.read_thread(thread_id)?;
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or(error)?;
+        if !matches!(
+            turn.status,
+            TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+        ) {
+            threads.fail_turn(
+                thread_id,
+                turn_id,
+                StableTurnError::model_invocation_failed(),
+            )?;
+            for update in threads.thread_updates_after(thread_id, snapshot.sequence)? {
+                updates.publish(update);
+            }
+        }
+        return Ok(false);
+    }
+    Ok(true)
 }

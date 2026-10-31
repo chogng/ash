@@ -227,10 +227,10 @@
 
 ### Workbench 模型选择器容错搜索
 
-未排期的查找体验增强。`src/ash/platform/actionWidget/browser/actionList.ts` 目前按空格拆词、匹配名称与详情的连续子串并保留目录顺序；Workbench `modelPickerItems.ts` 经 `modelPickerItemPrimitives.ts` 已包含 provider 与模型 ID，`modelPickerTabbedWidget.ts` 将活动 provider tab 的模型交给同一列表，不能把这些搜索能力列为缺失。参考 [Zed 模型选择器搜索](https://github.com/zed-industries/zed/pull/64147)（2026-10-20 已合并，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），补充 `gpt6.1` 对 `GPT-6.1 Sol` 这类非连续匹配，并让名称命中优先于仅详情命中；现有 `GPT 6.1` 分词查询本就可用。
+未排期的查找体验增强。`src/ash/platform/actionWidget/browser/actionList.ts` 目前按空格拆词、匹配名称与详情的连续子串并保留目录顺序；Workbench `modelPickerItems.ts` 经 `modelPickerItemPrimitives.ts` 已包含 provider 与模型 ID，`modelPickerTabbedWidget.ts` 已将所有启用模型交给同一列表并支持跨 provider 搜索（[Ash 统一列表改动](https://github.com/chogng/ash/commit/90df1306b4fff532eb6161d101a20a1ef8f55f74)），不能把这些搜索能力列为缺失。参考 [Zed 模型选择器搜索](https://github.com/zed-industries/zed/pull/64147)（2026-10-20 已合并，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），补充 `gpt6.1` 对 `GPT-6.1 Sol` 这类非连续匹配，并让名称命中优先于仅详情命中；现有 `GPT 6.1` 分词查询本就可用。
 
 - 进入条件与范围：先确定查询及排序语义，再在 `src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerTabbedWidget.ts` 的弹出层 owner 内接入，`modelPickerWidget.ts` 仅保留现有触发职责；可评估既有 `src/ash/base/common/fuzzyScorer.ts`，但 ActionList 尚无领域专用评分入口，须先提供窄范围的可选接入，不全局替换通用列表语义、不新建平行 picker、不顺带扩张到独立 Sessions picker 或后端模型目录。
-- 风险与验收：保留 provider／模型 ID、跨字段及不同词序的既有查询；名称和详情分别评分、同分稳定、空查询恢复原顺序，元数据命中不伪造名称高亮。保持活动 provider tab 的范围以及切换 tab／详情返回时同一查询的保留，不新增每 tab 缓存或跨 provider 全局搜索。由 `src/ash/workbench/contrib/chat/test/browser/modelPickerWidget.test.ts`、`modelPickerTabbedWidget.test.ts` 与真实输入场景覆盖精确名称、紧凑输入、非拉丁文字、同名跨 provider、目录刷新／移除、已选身份、禁用项、Auto、键盘与焦点；通用 ActionList 行为保持不变。不移植上游 GPUI 任务模型或把其基准当作 Ash 性能收益。
+- 风险与验收：保留 provider／模型 ID、跨字段及不同词序的既有查询；名称和详情分别评分、同分稳定、空查询恢复原顺序，元数据命中不伪造名称高亮。保持现有跨 provider 统一列表范围、详情返回时同一查询的保留，以及 Auto 时隐藏列表与筛选框的行为，不恢复 provider tabs 或引入每 tab 缓存。由 `src/ash/workbench/contrib/chat/test/browser/modelPickerWidget.test.ts`、`modelPickerTabbedWidget.test.ts` 与真实输入场景覆盖精确名称、紧凑输入、非拉丁文字、同名跨 provider、目录刷新／移除、已选身份、禁用项、Auto、键盘与焦点；通用 ActionList 行为保持不变。不移植上游 GPUI 任务模型或把其基准当作 Ash 性能收益。
 
 ### Desktop 文件粘贴路径回退
 

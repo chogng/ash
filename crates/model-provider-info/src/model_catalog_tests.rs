@@ -7,6 +7,35 @@ fn row() -> serde_json::Value {
 }
 
 #[test]
+fn task_recommendations_are_explicit_validated_catalog_metadata() {
+    let mut model = row();
+    model["recommended_for"] = json!(["advisor", "review"]);
+    let parsed = parse_catalog(&json!({"models": [model.clone()]}).to_string()).unwrap();
+    assert_eq!(
+        parsed[0].model().recommended_for,
+        vec![
+            ash_protocol::ModelPurpose::Advisor,
+            ash_protocol::ModelPurpose::Review
+        ]
+    );
+    model.as_object_mut().unwrap().remove("recommended_for");
+    assert!(
+        parse_catalog(&json!({"models": [model.clone()]}).to_string()).unwrap()[0]
+            .model()
+            .recommended_for
+            .is_empty()
+    );
+    for invalid in [
+        json!(["unknown-purpose"]),
+        json!(["advisor", "advisor"]),
+        json!(true),
+    ] {
+        model["recommended_for"] = invalid;
+        assert!(parse_catalog(&json!({"models": [model.clone()]}).to_string()).is_err());
+    }
+}
+
+#[test]
 fn provider_catalogs_preserve_source_and_model_order() {
     let first = row();
     let mut second = first.clone();

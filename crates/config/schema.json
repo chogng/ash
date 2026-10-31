@@ -2,7 +2,7 @@
   "$defs": {
     "AdvisorConfig": {
       "additionalProperties": false,
-      "description": "Immutable model and budget selected for consultations in one Turn.",
+      "description": "Advisor preference; chat inheritance is resolved before freezing a Turn.",
       "properties": {
         "enabled": {
           "default": true,
@@ -23,7 +23,15 @@
           "type": "integer"
         },
         "model": {
-          "$ref": "#/$defs/ModelRef"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An absent model inherits the initiating chat's model and reasoning effort."
         },
         "reasoningEffort": {
           "anyOf": [
@@ -36,9 +44,6 @@
           ]
         }
       },
-      "required": [
-        "model"
-      ],
       "type": "object"
     },
     "AgentConfig": {
@@ -61,7 +66,7 @@
             "type": "automatic"
           }
         },
-        "commitMessageModel": {
+        "codeReviewModel": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRef"
@@ -70,6 +75,21 @@
               "type": "null"
             }
           ]
+        },
+        "commitMessageEnabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "commitMessageModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "No override inherits the model of the Turn that produced the changes."
         },
         "context": {
           "$ref": "#/$defs/ContextCompactionPolicy",
@@ -1859,6 +1879,7 @@
         "approvalReviewModel": {
           "type": "automatic"
         },
+        "commitMessageEnabled": false,
         "context": {
           "mode": "summary",
           "recentTokens": 16384,
@@ -2005,7 +2026,7 @@
       }
     },
     "schemaVersion": {
-      "const": 11,
+      "const": 12,
       "type": "integer"
     },
     "skills": {

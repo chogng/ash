@@ -13,6 +13,25 @@ import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
+test('Agent role catalog maps source paths to the owning local or SSH editor resource', async () => {
+	const methods: string[] = [];
+	const role = { name: 'reviewer', path: '/workspace/.ash/agents/reviewer.md' };
+	const connection = {
+		request: async (method: { method: string; }) => {
+			methods.push(method.method);
+			return { agents: [role, { name: 'advisor', path: null }], diagnostics: ['broken definition'] };
+		}
+	} as unknown as AppServerProtocolClient;
+	const local = await createAppServerAgentSessionService(connection).readRoleCatalog();
+	assert.equal(local.agents[0]!.resource?.toString(), 'file:///workspace/.ash/agents/reviewer.md');
+	assert.equal(local.agents[1]!.resource, undefined);
+	assert.equal('path' in local.agents[0]!, false);
+	const remote = await createAppServerAgentSessionService(connection, 'dev-box').readRoleCatalog();
+	assert.equal(remote.agents[0]!.resource?.toString(), 'ash-remote://ssh+dev-box/workspace/.ash/agents/reviewer.md');
+	assert.deepEqual(remote.diagnostics, ['broken definition']);
+	assert.deepEqual(methods, ['agent/roles/catalog', 'agent/roles/catalog']);
+});
+
 suite('Session runtime connection ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -404,7 +423,11 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 });
 
 test('Session restoration uses the existing typed lifecycle request', async () => {
-	const session = { sessionId: 'session', title: 'Restored', status: 'active' as const, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'session', title: 'Root', status: 'active' as const }] };
+	const session = {
+		sessionId: 'session', title: 'Restored', status: 'active' as const,
+		manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 },
+		threads: [{ threadId: 'session', title: 'Root', createdAtUnixMs: 1_000, lastActivityAtUnixMs: 2_000, status: 'active' as const }],
+	};
 	const requests: { method: string; params: unknown; }[] = [];
 	const api = createAppServerAgentSessionService({
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
@@ -414,6 +437,33 @@ test('Session restoration uses the existing typed lifecycle request', async () =
 	} as unknown as AppServerProtocolClient);
 	const restored = await api.restore({ sessionId: 'session', commandId: 'restore-session' });
 	assert.deepEqual({ requests, restored }, { requests: [{ method: 'session/request', params: { sessionId: 'session', commandId: 'restore-session', request: { type: 'restore' } } }], restored: { session: { ...session, executionTarget: undefined, model: undefined, threads: [{ ...session.threads[0]!, forkedFromId: undefined, manager: undefined, parentThreadId: undefined }] }, agentTree: { roots: [] } } });
+});
+
+test('Review starts a reviewer Turn with the exact scope and never a normal coding Turn', async () => {
+	const requests: unknown[] = [];
+	const service = createAppServerAgentTurnService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return { type: 'turn', value: { turnId: 'review-turn', sequence: 8 } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const mutation = { commandId: 'review', sessionId: 'session', threadId: 'thread', expectedSequence: 7 };
+	for (const target of [{ type: 'uncommittedChanges' as const }, { type: 'baseBranch' as const, branch: 'refs/heads/main' }, { type: 'custom' as const, instructions: 'Check concurrency' }]) {
+		assert.deepEqual(await service.startReview({ ...mutation, target }), { turnId: 'review-turn', sequence: 8 });
+		assert.deepEqual(requests.at(-1), {
+			method: 'session/request', params: { sessionId: 'session', commandId: 'review', request: { type: 'startReview', threadId: 'thread', expectedSequence: 7, target } },
+		});
+	}
+	await service.startReview({ ...mutation, target: { type: 'stagedChanges' } });
+	assert.deepEqual(requests.at(-1), {
+		method: 'session/request', params: {
+			sessionId: 'session', commandId: 'review', request: {
+				type: 'startReview', threadId: 'thread', expectedSequence: 7, target: {
+					type: 'custom', instructions: 'Review only staged changes in the Git index (git diff --cached). Read the staged file contents from the index when needed. Exclude unstaged and untracked changes, including unstaged edits to partially staged files. Do not modify files or the index.',
+				}
+			}
+		},
+	});
 });
 
 test('Turn interruption keeps the Session, Thread and accepted sequence on the existing request', async () => {

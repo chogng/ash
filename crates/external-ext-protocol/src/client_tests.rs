@@ -96,7 +96,7 @@ fn notification_buttons_round_trip_and_legacy_messages_keep_their_wire_shape() {
 
 #[test]
 fn quick_pick_preserves_descriptions_and_rejects_invalid_peer_items() {
-    let wire = json!({"operation":"showQuickPick","placeholder":"Choose a branch","items":[{"label":"main"},{"label":"occupied","description":"origin/occupied","detail":"Checked out in another worktree"}]});
+    let wire = json!({"operation":"showQuickPick","placeholder":"Choose a branch","items":[{"label":"Create branch","alwaysShow":true},{"label":"main","separator":"branches"},{"label":"occupied","description":"origin/occupied","detail":"Checked out in another worktree"}]});
     let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
     assert_eq!(serde_json::to_value(&operation).unwrap(), wire);
     ExtensionClientRequest {
@@ -110,6 +110,8 @@ fn quick_pick_preserves_descriptions_and_rejects_invalid_peer_items() {
         json!("main"),
         json!({"label":4}),
         json!({"label":"main","detail":false}),
+        json!({"label":"main","separator":false}),
+        json!({"label":"main","alwaysShow":"true"}),
         json!({"label":"main","owner":"forged"}),
     ] {
         assert!(

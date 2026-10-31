@@ -9,9 +9,13 @@ import { IDialogService } from '../../../../../../platform/dialogs/common/dialog
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../../../../common/dialogs.js';
 import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
+import type { INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
+import { ITerminalService } from '../../../../../contrib/terminal/browser/terminal.js';
+import { IDebugService } from '../../../../../contrib/debug/common/debug.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
-import { IWorkspaceTrustApi, READ_DIR_PERMISSIONS, DEVELOPMENT_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustApi, READ_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, DEVELOPMENT_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import settingsChinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
@@ -83,7 +87,10 @@ const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, root));
 const dialogs = resources.add(new DialogService());
-resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(root)));
+const dialogHandler = new URLSearchParams(location.search).has('native')
+	? new NativeDialogHandler({ showMessageBox: async () => { throw new Error('Workspace Trust must use a workbench dialog'); } } as unknown as INativeHostApi, root)
+	: new BrowserDialogHandler(root);
+resources.add(new DialogHandlerContribution(dialogs.model, dialogHandler));
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => formatNlsMessage(new URLSearchParams(location.search).has('zh') ? (settingsChinese as Record<string, Record<string, string>>)[bundle]?.[key] ?? fallback : fallback, parameters) });
@@ -150,10 +157,16 @@ const trustResponses: string[] = [];
 let effectiveKnown = true;
 let granted: readonly WorkspaceTrustPermission[] = DEVELOPMENT_DIR_PERMISSIONS;
 let savedPermissions: readonly WorkspaceTrustPermission[] = granted;
+let runningSessions: 'none' | 'terminal' | 'debug' | 'exited' = 'none';
+// Trust presentation observes session lifetimes without launching real processes in this fixture.
+services.registerInstance(ITerminalService, { get instances() { return runningSessions === 'terminal' ? [{ state: 'running' }] : runningSessions === 'exited' ? [{ state: 'exited' }] : []; } } as unknown as ITerminalService);
+services.registerInstance(IDebugService, { get sessions() { return runningSessions === 'debug' ? [{ state: 'stopped' }] : runningSessions === 'exited' ? [{ state: 'terminated' }] : []; } } as unknown as IDebugService);
 
-const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
+const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; phase: IAppServerConnectionRecovery['phase']; } = {
+	phase: 'connection',
 	status: 'idle', error: 'Authorization expired', onDidChange: changed.event,
-	reconnect: async () => {
+	reconnect: async options => {
+		recovery.phase = options?.reason === 'permissions' ? 'permissions' : 'connection';
 		retries++; recovery.status = 'recovering'; changed.fire();
 		if (managementMode) {
 			await Promise.resolve();
@@ -173,7 +186,7 @@ services.registerInstance(IWorkspaceTrustApi, {
 	setDirectoryPermissions: async (path, permissions, expectedRevision) => {
 		if (!managementAllowed || expectedRevision !== revision) throw new Error('Directory grant revision conflict');
 		if (path !== workspace.getWorkspace().folders[0]!.uri.fsPath) throw new Error('Wrong workspace path');
-		grantWrites++; savedPermissions = permissions; revision++; permissionChanges.fire();
+		grantWrites++; savedPermissions = permissions; granted = permissions; revision++; permissionChanges.fire();
 		return { revision, generation: 1, disposition: 'updated' };
 	},
 	forgetDirectory: async () => { throw new Error('Not used'); }, createGrant: async () => { throw new Error('Not used'); }, persistGrant: async () => { throw new Error('Not used'); },
@@ -202,10 +215,15 @@ const contribution = resources.add(WorkbenchContributionsRegistry.createHost(ser
 contribution.advance(WorkbenchPhase.AfterRestored);
 let closed = 0;
 window.ashBannerIntegration = {
-	setRecovery(status) { recovery.status = status; changed.fire(); },
+	setRunningSessions(value) { runningSessions = value; },
+	addWorkspaceFolder() {
+		workspace.updateWorkspace({ id: 'multi', folders: [...workspace.getWorkspace().folders, { id: 'second', name: 'second', uri: URI.file('/second'), index: 1 }] });
+		permissionChanges.fire();
+	},
+	setRecovery(status, phase = 'connection') { recovery.status = status; recovery.phase = phase; changed.fire(); },
 	setPermissions(mode) {
 		effectiveKnown = mode !== 'unknown';
-		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : [...READ_DIR_PERMISSIONS, 'executeCommands'];
+		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS;
 		savedPermissions = granted;
 		permissionChanges.fire();
 	},
@@ -244,7 +262,9 @@ window.ashBannerIntegration = {
 declare global {
 	interface Window {
 		ashBannerIntegration: {
-			setRecovery(status: IAppServerConnectionRecovery['status']): void;
+			setRunningSessions(value: 'none' | 'terminal' | 'debug' | 'exited'): void;
+			addWorkspaceFolder(): void;
+			setRecovery(status: IAppServerConnectionRecovery['status'], phase?: IAppServerConnectionRecovery['phase']): void;
 			setManagementAllowed(value: boolean): void;
 			conflictGrant(): void;
 			bumpConnection(): void;

@@ -1432,7 +1432,10 @@ pub(crate) fn advisor_choices(
     let model_label = config
         .advisor
         .as_ref()
-        .map(|advisor| format!("{}/{}", advisor.model.provider, advisor.model.model))
+        .map(|advisor| match &advisor.model {
+            Some(model) => format!("{}/{}", model.provider, model.model),
+            None => nls::text(language, Message::ConfigAdvisorInherit).into(),
+        })
         .unwrap_or_else(|| nls::text(language, Message::ConfigAdvisorNoModel).into());
     let enabled_id = ListSelectionItemId::new("advisor-enabled");
     let model_id = ListSelectionItemId::new("advisor-model");
@@ -1506,7 +1509,11 @@ pub(crate) fn advisor_choices(
     let selected = config
         .advisor
         .as_ref()
-        .and_then(|advisor| models.iter().position(|entry| entry.model == advisor.model))
+        .and_then(|advisor| {
+            models
+                .iter()
+                .position(|entry| Some(&entry.model) == advisor.model.as_ref())
+        })
         .map(|index| index + model_start)
         .unwrap_or(0);
     for entry in models {
@@ -1515,10 +1522,10 @@ pub(crate) fn advisor_choices(
         let mut advisor = config
             .advisor
             .as_ref()
-            .filter(|advisor| advisor.model == model)
+            .filter(|advisor| advisor.model.as_ref() == Some(&model))
             .cloned()
             .unwrap_or_else(|| AdvisorConfig::new(model.clone()));
-        advisor.model = model;
+        advisor.model = Some(model);
         advisor.enabled = enabled;
         model_actions.insert(id.clone(), ConfigSelectionAction::SetAdvisor(Some(advisor)));
         items.push(ListSelectionItem::new(&entry.display_name).with_id(id));

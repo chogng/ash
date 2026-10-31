@@ -352,9 +352,25 @@ fn generated_remote_script_commits_a_package_and_is_idempotent() {
     let executable_text = executable.to_string_lossy().into_owned();
     assert!(receipt.contains(&executable_text));
     assert_eq!(fs::read(&executable).unwrap(), b"ash");
+    let package = executable.parent().unwrap().parent().unwrap();
+    let sidecar = package.with_extension("sha256");
+    let legacy_receipt = package.join(".ash-remote-runtime-sha256");
+    assert!(
+        !legacy_receipt.exists(),
+        "installation must preserve the package manifest"
+    );
+    assert_eq!(
+        fs::read_to_string(&sidecar).unwrap().trim(),
+        artifact.integrity().sha256()
+    );
+    // Existing installs used an in-package receipt. Reuse must migrate it out
+    // before the shared package store validates and activates this runtime.
+    fs::rename(&sidecar, &legacy_receipt).unwrap();
 
     let output = Command::new("sh").arg("-c").arg(command).output().unwrap();
     assert!(output.status.success());
+    assert!(sidecar.is_file());
+    assert!(!legacy_receipt.exists());
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()
@@ -432,15 +448,36 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
     );
     // Exceed OpenSSH's input window with incompressible bytes. A tiny fixture or
     // a regular input file hides ConsoleStream's nonblocking-pipe failure.
-    assert!(artifact.integrity().archive_size().get() > 3 * 1024 * 1024);
+    assert!(artifact.integrity().archive_size().get() > 8 * 1024 * 1024);
     artifact.open_verified().unwrap();
-    for (shell, args) in [
-        ("cmd.exe", vec!["/d", "/s", "/c"]),
+    // A developer shell can put Git/MSYS tar first on PATH. It treats C: as a
+    // remote host; the installer must select the inbox tar instead of this entry.
+    let shadow_tar = root.path().join("shadow-tar");
+    fs::create_dir(&shadow_tar).unwrap();
+    fs::write(shadow_tar.join("tar.exe"), b"not the Windows inbox tar").unwrap();
+    let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(shadow_tar).chain(std::env::split_paths(&inherited_path)),
+    )
+    .unwrap();
+    let mut shells = vec![
+        (
+            "cmd.exe",
+            std::ffi::OsString::from("cmd.exe"),
+            vec!["/d", "/s", "/c"],
+        ),
         (
             "powershell.exe",
+            std::ffi::OsString::from("powershell.exe"),
             vec!["-NoProfile", "-NonInteractive", "-Command"],
         ),
-    ] {
+    ];
+    // The release preflight supplies a private loopback client. Ordinary unit
+    // runs retain their direct-shell coverage without requiring an SSH service.
+    if let Some(ssh) = std::env::var_os("ASH_REMOTE_INSTALLER_TEST_SSH") {
+        shells.push(("OpenSSH", ssh, vec!["-T", "ash-release-fixture"]));
+    }
+    for (shell, executable, args) in shells {
         let install_root = root.path().join(format!("安装 O'Brien $literal% {shell}"));
         let location = RemoteRuntimeInstallLocation::Absolute(
             RemoteRuntimeInstallRoot::parse(install_root.to_str().unwrap()).unwrap(),
@@ -450,8 +487,9 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
             "__ASH_REMOTE_RUNTIME_INSTALLED__:",
             "__ASH_REMOTE_RUNTIME_REUSED__:",
         ] {
-            let mut process = Command::new(shell);
+            let mut process = Command::new(&executable);
             process.args(&args);
+            process.env("PATH", &path);
             if shell == "cmd.exe" {
                 // OpenSSH supplies shell syntax after /c. Rust's normal CRT quoting
                 // would turn the nested PowerShell command into a string expression.
@@ -472,7 +510,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
             let uploaded = upload.join().unwrap();
             assert!(
                 output.status.success(),
-                "{}\n{}",
+                "{shell} {expected}\n{}\n{}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
@@ -495,13 +533,23 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
                 fs::read(package.join("ash-resources/binary.dat")).unwrap(),
                 binary_fixture()
             );
+            let sidecar = package.with_extension("sha256");
+            let legacy_receipt = package.join(".ash-remote-runtime-sha256");
+            assert!(!legacy_receipt.exists());
+            assert_eq!(
+                fs::read_to_string(&sidecar).unwrap().trim(),
+                artifact.integrity().sha256()
+            );
+            if expected == "__ASH_REMOTE_RUNTIME_INSTALLED__:" {
+                fs::rename(sidecar, legacy_receipt).unwrap();
+            }
         }
     }
 }
 
 #[cfg(windows)]
 fn binary_fixture() -> Vec<u8> {
-    (0u32..98_304)
+    (0u32..262_144)
         .flat_map(|counter| Sha256::digest(counter.to_le_bytes()))
         .collect()
 }
@@ -649,4 +697,87 @@ fn make_executable(path: &Path) {
     let mut permissions = fs::metadata(path).unwrap().permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(path, permissions).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn windows_download_installs_without_upload_and_falls_back_only_on_network_failure() {
+    for outcome in ["installed", "download-failed", "archive-sha256-mismatch"] {
+        let root = tempfile::tempdir().unwrap();
+        let artifact = package_artifact_for_platform(
+            root.path(),
+            PackageVariant::Canonical,
+            RemotePlatform::windows(RemoteArchitecture::X86_64),
+        );
+        let attempts = root.path().join("attempts");
+        let captured = root.path().join("uploaded");
+        let fake_ssh = root.path().join("ssh");
+        let executable = format!(
+            "C:/Ash/remote/{}/bin/ash-remote-server.exe",
+            artifact.integrity().sha256()
+        );
+        let first_reply = if outcome == "installed" {
+            format!(
+                "__ASH_REMOTE_RUNTIME_INSTALLED__:{}:{executable}",
+                artifact.integrity().sha256()
+            )
+        } else {
+            format!("__ASH_REMOTE_RUNTIME_INSTALL_ERROR__:{outcome}")
+        };
+        fs::write(&fake_ssh, format!(
+            "#!/bin/sh\ncase \"$*\" in *__ASH_REMOTE_PLATFORM__*) echo '__ASH_REMOTE_PLATFORM__:windows:x86_64:msvc'; exit 0 ;; esac\nn=0; [ ! -f '{count}' ] || n=$(cat '{count}'); n=$((n+1)); echo $n > '{count}'\nif [ $n -eq 1 ]; then echo '{first_reply}'; exit {status}; fi\ncat > '{upload}'; echo '__ASH_REMOTE_RUNTIME_INSTALLED__:{digest}:{executable}'\n",
+            count=attempts.display(), upload=captured.display(), digest=artifact.integrity().sha256(), status=if outcome == "installed" {0} else {69},
+        )).unwrap();
+        make_executable(&fake_ssh);
+        let mut progress = Vec::new();
+        let result = SshRemoteRuntimeInstaller::new(SshHost::parse("windows-dev").unwrap())
+            .with_ssh_executable(fake_ssh)
+            .with_download_url("https://github.com/owner/repo/releases/download/v1/runtime.tar.gz")
+            .unwrap()
+            .install_with_progress(&artifact, |event| progress.push(event));
+        assert!(progress.contains(&RemoteRuntimeInstallProgress::DownloadingOnRemote));
+        match outcome {
+            "installed" => {
+                assert_eq!(result.unwrap().runtime().executable(), executable);
+                assert!(!captured.exists());
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "1");
+            }
+            "download-failed" => {
+                assert_eq!(result.unwrap().runtime().executable(), executable);
+                assert_eq!(
+                    fs::read(captured).unwrap(),
+                    fs::read(artifact.archive()).unwrap()
+                );
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "2");
+            }
+            "archive-sha256-mismatch" => {
+                assert_eq!(
+                    result.unwrap_err().kind(),
+                    RemoteRuntimeInstallFailureKind::ArtifactIntegrity
+                );
+                assert!(!captured.exists());
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "1");
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn remote_download_rejects_credentials_and_non_https_sources() {
+    for url in [
+        "http://github.com/file",
+        "https://user@github.com/file",
+        "https://github.com/file?token=secret",
+        "https://github.com/file#fragment",
+    ] {
+        assert!(
+            crate::SshRemoteRuntimeInstaller::new(
+                ash_remote::SshHost::parse("windows-dev").unwrap()
+            )
+            .with_download_url(url)
+            .is_err(),
+            "{url}"
+        );
+    }
 }

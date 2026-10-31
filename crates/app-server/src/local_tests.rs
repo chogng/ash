@@ -1069,10 +1069,20 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         "initialize",
         serde_json::json!({"clientInfo":{"name":"auth-test","version":"1"},"capabilities":{}}),
     );
-    assert_eq!(
-        call(2, "account/read", serde_json::json!({}))["result"]["accounts"][0]["plan"],
-        "pro"
-    );
+    let accounts = call(2, "account/read", serde_json::json!({}))["result"]["accounts"].clone();
+    let accounts = accounts.as_array().unwrap();
+    assert_eq!(accounts.len(), 2);
+    let codex = accounts
+        .iter()
+        .find(|account| account["provider"] == ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID)
+        .unwrap();
+    assert_eq!(codex["plan"], "pro");
+    let web = accounts
+        .iter()
+        .find(|account| account["provider"] == ash_chatgpt::CHATGPT_WEB_PROVIDER_ID)
+        .unwrap()
+        .clone();
+    assert_eq!(web["status"], "ready");
     assert_eq!(
         call(
             3,
@@ -1081,10 +1091,12 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         )["result"]["status"],
         "loggedOut"
     );
+    // Both providers reuse the external login, but own independent disconnect states.
     assert_eq!(
         call(4, "account/read", serde_json::json!({}))["result"]["accounts"],
-        serde_json::json!([])
+        serde_json::json!([web])
     );
+    assert_eq!(std::fs::read(home.path().join("auth.json")).unwrap(), auth);
     // Reconnect uses a fresh external login regardless of who owns logout on this machine.
     std::fs::write(home.path().join("auth.json"), &auth).unwrap();
     assert_eq!(
@@ -1095,10 +1107,19 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         )["result"]["type"],
         "connected"
     );
-    assert_eq!(
-        call(6, "account/read", serde_json::json!({}))["result"]["accounts"][0]["status"],
-        "ready"
-    );
+    let accounts = call(6, "account/read", serde_json::json!({}))["result"]["accounts"].clone();
+    let accounts = accounts.as_array().unwrap();
+    assert_eq!(accounts.len(), 2);
+    for provider in [
+        ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+        ash_chatgpt::CHATGPT_WEB_PROVIDER_ID,
+    ] {
+        let account = accounts
+            .iter()
+            .find(|account| account["provider"] == provider)
+            .unwrap();
+        assert_eq!(account["status"], "ready");
+    }
     assert!(auth == std::fs::read(home.path().join("auth.json")).unwrap());
     std::fs::remove_file(home.path().join("auth.json")).unwrap();
     assert_eq!(
@@ -3044,6 +3065,63 @@ fn model_ref(model: &str) -> ModelRef {
 }
 
 #[test]
+fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservations() {
+    let registry = ProviderConfigRegistry::builtin();
+    let manager = ash_models_manager::ModelsManager::new(registry.clone());
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6.1-sol").unwrap(),
+    );
+    let resolved = manager
+        .resolve_static(&model, &ash_models_manager::ModelRequirements::agent())
+        .unwrap();
+    let entry = resolved.entry();
+    let mut provider = ModelProviderConfig::new(model.provider.clone());
+    for (expanded, window, usable, pressure) in [
+        (false, 500_000, 475_000, 425_000),
+        (true, 872_000, 828_400, 741_200),
+    ] {
+        entry
+            .apply_preferences(
+                &mut provider,
+                &ash_models_manager::ModelPreferencesUpdate {
+                    acceleration: Patch::Missing,
+                    long_context: Some(expanded),
+                },
+            )
+            .unwrap();
+        let context = ModelContext::resolve(entry, &provider, &registry).unwrap();
+        assert_eq!(
+            context.info.context_window,
+            ash_protocol::ContextWindow::Known(window)
+        );
+        assert_eq!(context.usable_input(), Some(usable));
+        assert_eq!(context.available_input(), Some(pressure));
+        let ash_core::ResolvedContextBudget::CoreManaged(limits) =
+            context.require_budget().unwrap().resolve().unwrap()
+        else {
+            panic!("Sol has an explicit context budget");
+        };
+        assert_eq!(limits.hard_maximum_input().get(), usable);
+        assert_eq!(limits.maximum_input().get(), pressure);
+    }
+    provider.max_output_tokens = Some(64_000);
+    let context = ModelContext::resolve(entry, &provider, &registry).unwrap();
+    assert_eq!(context.usable_input(), Some(872_000 - 64_000 - 1_024));
+    let other = ModelRef::new(model.provider.clone(), ModelId::new("gpt-6-astra").unwrap());
+    let resolved = manager
+        .resolve_static(&other, &ash_models_manager::ModelRequirements::agent())
+        .unwrap();
+    let context = ModelContext::resolve(
+        resolved.entry(),
+        &ModelProviderConfig::new(other.provider),
+        &registry,
+    )
+    .unwrap();
+    assert_eq!(context.usable_input(), Some(272_000 - 4_096 - 1_024));
+}
+
+#[test]
 fn configured_model_context_enables_core_managed_compaction() {
     let provider = ProviderId::new("openai").unwrap();
     let model = ModelId::new("gpt-5.6").unwrap();
@@ -3126,6 +3204,7 @@ fn configured_model_context_enables_core_managed_compaction() {
     assert_eq!(entry.discovered, None);
     assert_eq!(entry.auto_compact_token_limit, Some(15_000));
     assert_eq!(entry.available_context_window, Some(15_000 - 2_048 - 1_024));
+    assert_eq!(entry.usable_context_window, Some(20_000 - 2_048 - 1_024));
     let serialized = serde_json::to_value(entry).unwrap();
     assert_eq!(serialized["context_window"], 20_000);
     assert_eq!(serialized["auto_compact_token_limit"], 15_000);
@@ -3517,7 +3596,9 @@ fn select_model(
                 model: Patch::Value(model_ref(model)),
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
                 trace: Patch::Missing,
@@ -5113,6 +5194,7 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
             entry.context_window = Some(1_000_000);
             entry.auto_compact_token_limit = Some(900_000);
             entry.available_context_window = Some(900_000 - 4_096 - 1_024);
+            entry.usable_context_window = Some(1_000_000 - 4_096 - 1_024);
         }
     }
     let model = ModelRef::new(

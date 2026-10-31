@@ -6,6 +6,20 @@
 	gap: var(--ash-spacing-size120);
 }
 
+.ash-settings-section.ash-settings-card-section {
+	padding: 0;
+}
+
+.ash-settings-card > .ash-settings-section-status {
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+}
+
+.ash-settings-card > .ash-settings-section-status:empty {
+	display: none;
+}
+
 .ash-settings-section-actions {
 	display: flex;
 	flex-wrap: wrap;

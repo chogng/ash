@@ -17,6 +17,8 @@ export interface ExtensionQuickPickItem {
 	readonly label: string;
 	readonly description?: string;
 	readonly detail?: string;
+	readonly separator?: string;
+	readonly alwaysShow?: boolean;
 }
 
 /** Window services available during a connection-owned extension invocation. */

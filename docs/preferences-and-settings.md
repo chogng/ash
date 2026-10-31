@@ -45,14 +45,14 @@ flowchart TD
     SM --> SV["Preferences SettingsSectionRenderer"]
     V --> H["Workbench / Sessions 页面实例"]
     SV --> H
-    D --> RV["Preferences 专用 renderer：Models / Advisor / Dictation / Language Server / Network"]
+    D --> RV["Preferences 专用 renderer：Models / Dictation / Language Server / Network"]
     RV --> H
     H --> T["SettingsTree：注册设置与区段 ID；DOM 由 renderer 保留"]
 ```
 
 Preferences 负责搜索、分类、导航、控件、布局、主题、键盘与无障碍交互；功能模块拥有配置语义和领域业务状态。新接入只提供注册配置或数据与操作，不传 DOM、widget 或渲染回调。完整约束与迁移边界仅在 [Preferences README](../src/ash/workbench/contrib/preferences/README.md) 维护。
 
-普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor、Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences。Models 设置使用 Chat 的共享目录 Widget 和 ViewModel；供应商配置表单及其临时探测状态归 Preferences，发现、测试和持久化继续调用 Chat 领域服务。
+普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor 由 `contrib/advisor` 注册设置数据模型，两个宿主通过共享 Preferences 注册契约创建模型并使用 section renderer；模型切换规则复用共享 Chat 层，配置继续经 Chat 服务持久化。Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences。Models 设置使用 Chat 的共享目录 Widget 和 ViewModel；供应商配置表单及其临时探测状态归 Preferences，发现、测试和持久化继续调用 Chat 领域服务。
 
 `SettingsTreeModel` 的区段和交互标题只保存 `SettingsSectionReference`，由当前打开实例的 `SettingsRenderer` 找到保留的控件；不再在可搜索元数据中传递 DOM。Sessions 的普通设置只声明 ID 和顺序，由 `DefaultSettings` 解析注册表中的类型、文案与选项。宿主专属条目使用 `setting.included: false` 退出自动目录，仍可按 ID 显式解析，不改变配置的存储、作用域或默认值。
 
@@ -141,6 +141,8 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 `Test models` 测试当前表格全部模型，与启用开关无关；表格为空时先发现模型。`Refresh models` 重新发现，保留手动配置和启用选择。发现成功的空列表、尚未发现、发现失败是不同状态，失败保留之前成功的列表。批量测试逐行更新结果，最后只发一条汇总通知；橙点表示未通过，绿点表示通过，同时提供文字状态。探测通过不证明 1M 上下文可用。
 
 `Add model` 添加 Model ID、上下文 token 数、可选上游 Model ID 与 1M 预设。上游 ID 映射只解析一次，由 Rust 在真正发送请求时使用；配置、开关和上下文绑定界面 ID。行内可编辑上下文和映射，也可删除手动声明；删除发现模型的手动上下文声明后，端点模型仍在表格中并关闭启用开关。Rust 的 models-manager 拥有发现与缓存，model-provider 拥有 HTTP 发现、分页和探测，成功发现的自定义模型进入聊天选择器。ChatService 只保留聊天、线程和 Advisor 配置操作。
+
+Chat → Agents 中的审查模型和提交信息模型由 Preferences 的 `AgentTaskModelSettingsModel` 与共享 renderer 呈现，分别读写后端 `agent.codeReviewModel` 和 `agent.commitMessageModel`，不改变对话模型。提交信息模型为空表示继承产生改动的那一轮对话模型；`agent.commitMessageEnabled` 独立控制自动生成，关闭后保留模型选择。更换模型会由配置 owner 清除原有目录授权，生成仍经过既有的目录授权检查。这些值均为后端用户配置，不另存到 Workbench `settings.json`。文件 schema 12 保留旧配置的显式模型并启用自动生成，原先未配置模型的用户保持关闭。继承时仍校验实际模型与目录授权绑定的接入；授权 API 可传入该轮模型，模型或接入不匹配时不生成，也不静默退回用户默认模型。
 
 ## Configuration 的存储与配置层
 

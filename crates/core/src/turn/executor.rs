@@ -1,4 +1,5 @@
 use super::code_mode::CodeModeBroker;
+use super::recover_dispatch;
 use super::tool_scheduler::ToolScheduler;
 use super::tool_scheduler::ToolSchedulingProgress;
 use crate::ActionPolicyService;
@@ -503,6 +504,23 @@ impl TurnExecutor {
     /// lock. Completion, failure, and cancellation remain durable Core transitions.
     pub fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         let mut executor = self.clone();
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+        // Older Goal continuations may contain an unresolved Advisor preference. Reject them
+        // before taking the shared model lock so recovery cannot disrupt other Sessions.
+        let advisor_model = turn
+            .advisor
+            .as_ref()
+            .map(|advisor| {
+                advisor.model.as_ref().ok_or_else(|| {
+                    CoreError::Execution("Turn Advisor configuration has no frozen model".into())
+                })
+            })
+            .transpose()?;
         // Duplicate wakeups for one Turn must share the very same connection snapshot.
         let mut models = self
             .turn_models
@@ -517,12 +535,6 @@ impl TurnExecutor {
             executor.policy = Arc::clone(policy);
             Arc::clone(model)
         } else {
-            let snapshot = self.threads.read_thread(thread_id)?;
-            let turn = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
             let selection = turn
                 .model
                 .as_ref()
@@ -535,9 +547,9 @@ impl TurnExecutor {
                 .policy_source
                 .snapshot(Arc::clone(&model))?
                 .unwrap_or_else(|| Arc::clone(&self.policy_source));
-            if let Some(advisor) = &turn.advisor {
+            if let Some(advisor_model) = advisor_model {
                 let auxiliary = model
-                    .snapshot(ModelSelection::Session(&advisor.model))?
+                    .snapshot(ModelSelection::Session(advisor_model))?
                     .unwrap_or_else(|| Arc::clone(&model));
                 self.threads
                     .turn_tool_models
@@ -545,7 +557,7 @@ impl TurnExecutor {
                     .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
                     .insert(
                         thread_id.clone(),
-                        (turn_id.clone(), advisor.model.clone(), auxiliary),
+                        (turn_id.clone(), advisor_model.clone(), auxiliary),
                     );
             }
             models.insert(
@@ -691,10 +703,13 @@ impl TurnExecutor {
             .extensions
             .recover_turns(sessions)
             .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let mut resumed = 0;
         for turn in &turns {
-            self.resume_recovered_turn(&turn.thread_id, &turn.turn_id)?;
+            if self.resume_recovered_turn(&turn.thread_id, &turn.turn_id)? {
+                resumed += 1;
+            }
         }
-        Ok(turns.len())
+        Ok(resumed)
     }
 
     /// Re-evaluates extension work after an explicit user state change.
@@ -723,8 +738,8 @@ impl TurnExecutor {
             for turn in &snapshot.turns {
                 if turn.status == TurnStatus::Running
                     && snapshot.has_resumable_tool_continuation(&turn.turn_id)
+                    && self.resume_recovered_turn(&snapshot.thread_id, &turn.turn_id)?
                 {
-                    self.resume_recovered_turn(&snapshot.thread_id, &turn.turn_id)?;
                     resumed += 1;
                 }
             }
@@ -736,28 +751,14 @@ impl TurnExecutor {
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
-    ) -> Result<(), CoreError> {
-        if let Err(error) = self.resume(thread_id, turn_id) {
-            // Recovery bypasses Runtime's normal dispatch failure transition. Persist failure
-            // here too, or every restart will retry a Turn that was never accepted by its lane.
-            let snapshot = self.threads.read_thread(thread_id)?;
-            if snapshot.turns.iter().any(|turn| {
-                &turn.turn_id == turn_id
-                    && !matches!(
-                        turn.status,
-                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
-                    )
-            }) {
-                self.threads.fail_turn(
-                    thread_id,
-                    turn_id,
-                    StableTurnError::model_invocation_failed(),
-                )?;
-                self.publish_committed_after(thread_id, snapshot.sequence);
-            }
-            return Err(error);
-        }
-        Ok(())
+    ) -> Result<bool, CoreError> {
+        recover_dispatch(
+            &self.threads,
+            self.updates.as_ref(),
+            thread_id,
+            turn_id,
+            self.resume(thread_id, turn_id),
+        )
     }
 
     fn notify_failed_turn(

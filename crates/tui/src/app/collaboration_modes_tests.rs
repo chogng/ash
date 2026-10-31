@@ -915,6 +915,7 @@ fn effort_data() -> crate::models::ModelPickerData {
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -933,6 +934,7 @@ fn effort_data() -> crate::models::ModelPickerData {
         acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: None,
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![

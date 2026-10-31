@@ -5,7 +5,7 @@ import type { AsyncTreeDataSource, TreeIndentGuides } from '../../../base/browse
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
-import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import type { IEditorOptions } from '../../editor/common/editor.js';
 import { toOpenEditorOptions, type IOpenEditorOptions } from '../../editor/browser/editor.js';
@@ -83,14 +83,14 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 	}
 }
 
-export interface WorkbenchCompressibleAsyncDataTreeOptions<T> extends CompressibleAsyncDataTreeOptions<T>, ResourceNavigatorOptions { }
+export interface WorkbenchCompressibleAsyncDataTreeOptions<T> extends CompressibleAsyncDataTreeOptions<T>, Pick<ResourceNavigatorOptions, 'openOnSingleClick'> { }
 
 /** Workbench resource navigation over the shared compressed async tree. */
 export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleAsyncDataTree<TInput, T> {
 	readonly onDidOpen: Event<ResourceOpenEvent<T>>;
 
-	constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchCompressibleAsyncDataTreeOptions<T>) {
-		const { configurationService, openOnSingleClick, ...treeOptions } = options;
+	constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchCompressibleAsyncDataTreeOptions<T>, @IConfigurationService configurationService: IConfigurationService) {
+		const { openOnSingleClick, ...treeOptions } = options;
 		super(container, dataSource, {
 			...treeOptions,
 			styles: treeOptions.styles ?? defaultListStyles,

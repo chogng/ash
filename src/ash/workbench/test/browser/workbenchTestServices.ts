@@ -67,9 +67,17 @@ import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { ITerminalProcessService } from '../../../platform/terminal/common/terminal.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../common/workbenchTestServices.js';
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
+	if (!services.has(IWorkspaceTrustManagementService)) services.registerSingleton(IWorkspaceTrustManagementService, () => new TestWorkspaceTrustManagementService());
+	if (!services.has(IWorkspaceTrustRequestService)) services.registerInstance(IWorkspaceTrustRequestService, {
+		onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+		requestWorkspaceTrust: async () => { throw new Error('Terminal tests must supply any expected trust decision'); },
+		requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
+	});
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new WorkbenchConfigurationService());
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));

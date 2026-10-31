@@ -38,11 +38,12 @@ import { WorkbenchConfiguration } from '../../../../workbench/common/configurati
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { SettingsRenderer, SettingsPageRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
-import { AdvisorSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/advisorSettingsRenderer.js';
+import type { SettingsSectionField } from '../../../../workbench/services/preferences/common/preferences.js';
+import { getSettingsSections } from '../../../../workbench/services/preferences/browser/settingsSections.js';
 import { ModelSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/dictationSettingsRenderer.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import { SettingsTreeModel, type SettingsSectionReference, type SettingsSectionField, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
@@ -123,7 +124,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model and enable switch. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.'),
+					() => localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents contains the Advisor model selector. Select a model to enable Advisor or Off to disable it. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -306,7 +307,6 @@ export class SessionsPreferences extends Disposable {
 		const modelContent = resources.add(contentServices.createInstance(ModelSettingsRenderer, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
-		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsRenderer, list));
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.dispose(); }));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
@@ -351,10 +351,20 @@ export class SessionsPreferences extends Disposable {
 			management.set(id, managementContent(id, title,
 				localize('sessions.settings.sharedDescription', 'These preferences are shared with the Workbench. Open the settings editor to view, change, search, or reset them.'), fields));
 		}
-		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent, management);
+		const sections = this.sections(modelContent, dictationContent, customizeContent, githubContent, traceContent, executionContent, management);
 		const categories = sections.flatMap(section => section.categories);
+		const contributed = getSettingsSections().map(section => ({
+			categoryId: section.categoryId,
+			content: resources.add(contentServices.createInstance(SettingsSectionRenderer, list,
+				resources.add(contentServices.createInstance(section.model)),
+				section.accessibleViewProviderId, section.accessibilityVerbositySettingId)),
+		}));
+		const categoryContents = (category: SettingsCategory): readonly SettingsPageRenderer[] => [
+			...category.content ? [category.content] : [],
+			...contributed.filter(section => section.categoryId === category.id).map(section => section.content),
+		];
 		for (const category of categories) {
-			if (category.content) resources.add(renderer.registerPage(category.content));
+			for (const content of categoryContents(category)) resources.add(renderer.registerPage(content));
 		}
 		const categoryIndex = (id: string | undefined): number => {
 			const target = id === 'hooks' ? 'customize' : id === 'dictation' ? 'general' : id;
@@ -416,14 +426,14 @@ export class SessionsPreferences extends Disposable {
 				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
-					...category.content?.getNodes(query) ?? [],
+					...categoryContents(category).flatMap(content => content.getNodes(query)),
 				],
 			}));
 			treeModel.setChildren(nodes);
 			tree.setNavigationTarget(query.isEmpty ? `sessions.category.${categories[activeCategory].id}` : undefined);
 			treeModel.setQuery(query);
 			for (const [index, category] of categories.entries()) {
-				category.content?.setVisible(!query.isEmpty || index === activeCategory);
+				for (const content of categoryContents(category)) content.setVisible(!query.isEmpty || index === activeCategory);
 			}
 			heading.textContent = query.isEmpty ? categories[activeCategory].title : localize('sessions.settings.results', 'Search results');
 			heading.hidden = treeModel.visibleItems.length === 0;
@@ -437,12 +447,14 @@ export class SessionsPreferences extends Disposable {
 			pageScrollable.layout();
 		};
 		for (const [index, category] of categories.entries()) {
-			if (category.content) resources.add(category.content.onDidChange(render));
-			if (category.content?.onDidRequestReveal) resources.add(category.content.onDidRequestReveal(() => {
-				activeCategory = index;
-				searchInput.value = '';
-				render();
-			}));
+			for (const content of categoryContents(category)) {
+				resources.add(content.onDidChange(render));
+				if (content.onDidRequestReveal) resources.add(content.onDidRequestReveal(() => {
+					activeCategory = index;
+					searchInput.value = '';
+					render();
+				}));
+			}
 		}
 		resources.add(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
@@ -494,7 +506,7 @@ export class SessionsPreferences extends Disposable {
 			if (focus) searchInput.focus();
 		};
 		this.applySectionQuery = options => {
-			const sectionSearch = categories[categoryIndex(options.section)].content?.sectionSearch;
+			const sectionSearch = categoryContents(categories[categoryIndex(options.section)]).find(content => content.sectionSearch)?.sectionSearch;
 			if (!sectionSearch) { throw new RangeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedSectionSearch' }, 'This Settings section does not provide its own search.')); }
 			this.navigate?.(options.section!);
 			if (options.query !== undefined) { this.applyQuery?.(options.query, false); }
@@ -541,7 +553,7 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, advisorContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, executionContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>): readonly SettingsSection[] {
+	private sections(modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, executionContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>): readonly SettingsSection[] {
 		const defaults = new DefaultSettings();
 		const appearanceSettings: readonly ISetting[] = [
 			SESSIONS_LAYOUT_SCOPE_SETTING,
@@ -577,7 +589,7 @@ export class SessionsPreferences extends Disposable {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
 				{ id: 'execution-permissions', title: localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'), icon: Lxicon.settings, settings: [], content: executionContent },
-				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: advisorContent },
+				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [] },
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'projects', title: localize('projects.title', 'Projects'), icon: Lxicon.projects, settings: projectsSettings },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },

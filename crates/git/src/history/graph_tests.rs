@@ -55,6 +55,20 @@ async fn graph_includes_local_and_fetched_remote_refs() {
             .any(|commit| commit.object_id() == topic_oid)
     );
     assert_eq!(graph.remotes().len(), 1);
+    let remote = graph
+        .references()
+        .iter()
+        .find(|reference| reference.name() == "origin/topic")
+        .unwrap();
+    let details = remote
+        .commit_details()
+        .expect("remote branch commit metadata");
+    assert_eq!(details.author_name, "Ash Test");
+    assert_eq!(details.subject, "topic commit");
+    assert_eq!(
+        details.timestamp_seconds.to_string(),
+        repository.git(&["show", "-s", "--format=%ct", &topic_oid])
+    );
     assert_eq!(
         graph.remotes()[0]
             .identity()
@@ -203,11 +217,49 @@ async fn graph_tags_point_to_commits_for_lightweight_and_annotated_tags() {
         tags.iter()
             .all(|tag| tag.object_id() == head && !tag.is_current() && tag.remote_name().is_none())
     );
+    for tag in tags {
+        let details = tag.commit_details().expect("tag target commit metadata");
+        assert_eq!(details.author_name, "Ash Test");
+        assert_eq!(details.subject, "tagged commit");
+        assert_eq!(
+            details.timestamp_seconds.to_string(),
+            repository.git(&["show", "-s", "--format=%ct", &head])
+        );
+    }
     let mut cursor = client.start_graph(&opened).await.unwrap();
     let graph = cursor.page(NonZeroUsize::new(20).unwrap()).await.unwrap();
     assert_eq!(graph.commits().len(), 2);
     assert_eq!(graph.commits()[0].object_id(), head);
     assert!(!graph.has_more());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn references_keep_non_commit_tags_without_commit_details() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "base\n");
+    repository.commit_all("base");
+    let blob = repository.git(&["rev-parse", "HEAD:file.txt"]);
+    repository.git(&["tag", "blob", &blob]);
+    repository.git(&[
+        "tag",
+        "-a",
+        "annotated-blob",
+        "-m",
+        "blob annotation",
+        &blob,
+    ]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let refs = client.references(&opened).await.unwrap();
+    let tags: Vec<_> = refs
+        .iter()
+        .filter(|reference| reference.kind() == GitReferenceKind::Tag)
+        .collect();
+    assert_eq!(tags.len(), 2);
+    assert!(
+        tags.iter()
+            .all(|tag| tag.object_id() == blob && tag.commit_details().is_none())
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

@@ -121,7 +121,9 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         model: None,
         model_reasoning_effort: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
+        code_review_model: None,
         commit_message_model: None,
+        commit_message_enabled: false,
         commit_message_active_dir_authorized: false,
         issues: ash_app_server_protocol::protocol::issues::IssueConfigDto {
             auto_refresh_minutes: 10,

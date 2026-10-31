@@ -580,7 +580,9 @@ fn update_preferences(
             model,
             model_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
+            code_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
+            commit_message_enabled: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
             git: Patch::Missing,
@@ -934,7 +936,9 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(GrepBackend::Tgrep),
                 git: Patch::Missing,
@@ -1454,6 +1458,70 @@ fn built_in_model_can_be_selected_before_any_connection_is_configured() {
 }
 
 #[test]
+fn code_review_model_persists_independently_and_clears_to_current() {
+    let path = config_path("code-review-model");
+    let store = ConfigStore::open(&path).unwrap();
+    assert!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .code_review_model
+            .is_none()
+    );
+    let configured = configure_provider(&store, 0, "openai");
+    let chat_model = model_ref("openai", "gpt-6-astra");
+    let review_model = model_ref("openai", "gpt-6.1-sol");
+    let selected = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("code-review-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(chat_model.clone()),
+                code_review_model: Patch::Value(review_model.clone()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    let restored = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
+    assert_eq!(
+        restored.values.code_review_model,
+        Some(review_model.clone())
+    );
+    assert_eq!(restored.values.model, Some(chat_model.clone()));
+    assert_eq!(
+        restored.values.approval_review_model,
+        ApprovalReviewModelSelection::Automatic
+    );
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("stale-code-review-model").unwrap(),
+                expected_revision: configured.revision,
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    code_review_model: Patch::Null,
+                    ..PreferencesUpdate::default()
+                }),
+            })
+            .is_err()
+    );
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("clear-code-review-model").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                code_review_model: Patch::Null,
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    let cleared = store.read_snapshot().unwrap();
+    assert_eq!(cleared.values.code_review_model, None);
+    assert_eq!(cleared.values.model, Some(chat_model));
+    remove_config_files(&path);
+}
+
+#[test]
 fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
     let path = config_path("approval-review-model");
     let store = ConfigStore::open(&path).unwrap();
@@ -1476,7 +1544,9 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 features: Default::default(),
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
                 git: Patch::Missing,
@@ -2678,6 +2748,36 @@ fn advisor_default_validates_provider_and_survives_reopening() {
     remove_config_files(&path);
 }
 
+#[test]
+fn inherited_advisor_survives_reopening_without_a_pinned_provider() {
+    let path = config_path("advisor-inherit");
+    let store = ConfigStore::open(&path).unwrap();
+    let advisor: ash_protocol::AdvisorConfig = serde_json::from_value(serde_json::json!({
+        "enabled": true, "maxCalls": 7, "maxOutputTokens": 8192
+    }))
+    .unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("inherit-advisor").unwrap(),
+            expected_revision: store.read_snapshot().unwrap().revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Patch::Value(advisor.clone()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        ConfigStore::open(&path)
+            .unwrap()
+            .read_snapshot()
+            .unwrap()
+            .values
+            .advisor,
+        Some(advisor)
+    );
+    remove_config_files(&path);
+}
+
 fn connection_id(id: &str) -> ash_protocol::ModelConnectionId {
     ash_protocol::ModelConnectionId::new(id).unwrap()
 }
@@ -3290,4 +3390,110 @@ fn custom_language_server_configuration_round_trips_and_rejects_invalid_boundari
     );
     drop(reopened);
     remove_config_files(&path);
+}
+
+#[test]
+fn commit_message_enablement_migrates_once_without_changing_the_override() {
+    for (legacy_model, enabled) in [
+        ("", false),
+        (
+            "[agent.commitMessageModel]\nprovider = 'openai'\nmodel = 'summary'\n",
+            true,
+        ),
+    ] {
+        let source = format!("schemaVersion = 11\n{legacy_model}");
+        let decoded = crate::document_migration::decode(&source).unwrap();
+        assert!(decoded.rewrite_required);
+        assert_eq!(decoded.document.agent.commit_message_enabled, enabled);
+        let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+        let reopened = crate::document_migration::decode(&encoded).unwrap();
+        assert!(!reopened.rewrite_required);
+        assert_eq!(reopened.document, decoded.document);
+        assert_eq!(
+            reopened.document.agent.commit_message_model.is_some(),
+            enabled
+        );
+    }
+    let conflict = "schemaVersion = 11\n[agent]\ncommitMessageEnabled = false\n[agent.commitMessageModel]\nprovider = 'openai'\nmodel = 'summary'\n";
+    assert!(crate::document_migration::decode(conflict).is_err());
+    assert!(
+        crate::document_migration::decode(
+            "schemaVersion = 11\n[agent]\ncommitMessageEnabled = 'invalid'\n"
+        )
+        .is_err()
+    );
+    assert!(
+        UserConfigDocument::default()
+            .agent
+            .commit_message_model
+            .is_none()
+    );
+}
+
+#[test]
+fn commit_message_toggle_preserves_the_model_and_inherited_authorization_is_exact() {
+    let mut document = UserConfigDocument::default();
+    let model = model_ref("openai", "summary");
+    let dir = directory_grant_id();
+    let update = |document: &mut UserConfigDocument, enabled| {
+        crate::mutation::apply_command(
+            document,
+            &UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                commit_message_enabled: Patch::Value(enabled),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    };
+    let provider = ModelProviderConfig::new(model.provider.clone());
+    document
+        .connections
+        .insert(provider.connection.clone(), provider);
+    document.agent.commit_message_model = Some(model.clone());
+    update(&mut document, true);
+    update(&mut document, false);
+    assert!(!document.agent.commit_message_enabled);
+    assert_eq!(document.agent.commit_message_model, Some(model.clone()));
+    crate::mutation::apply_command(
+        &mut document,
+        &UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            commit_message_model: Patch::Null,
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    assert!(document.agent.commit_message_model.is_none());
+    crate::mutation::apply_command(
+        &mut document,
+        &UserConfigCommand::AuthorizeCommitMessageEgress {
+            dir: dir.clone(),
+            model: Some(model.clone()),
+        },
+    )
+    .unwrap();
+    let config = ResolvedConfig::from(&document);
+    assert_eq!(
+        config
+            .commit_messages
+            .authorized_model(&dir, Some(&model), &config.providers),
+        Some(&model)
+    );
+    let other = model_ref("openai", "another-model");
+    assert!(
+        config
+            .commit_messages
+            .authorized_model(&dir, Some(&other), &config.providers)
+            .is_none()
+    );
+    document.agent.commit_message_model = Some(other);
+    assert!(
+        crate::mutation::apply_command(
+            &mut document,
+            &UserConfigCommand::AuthorizeCommitMessageEgress {
+                dir,
+                model: Some(model),
+            }
+        )
+        .is_err()
+    );
 }

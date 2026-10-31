@@ -7,13 +7,10 @@ import { localize } from '../../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
-import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
-import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
 import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
-import { getCompactModelPickerIcon, getProviderIconForIdentity } from './modelProviderIcons.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
 
 /** Toolbar controls project the delegate; TabbedModelPicker owns their shared popup interaction. */
@@ -21,7 +18,6 @@ export class ModelPickerWidget extends Disposable {
 	private readonly hoverGroupId = createUuid();
 	private nameButton: HTMLElement | undefined;
 	private configurationButton: HTMLElement | undefined;
-	private nameIcon: HTMLElement | undefined;
 	private readonly nameHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly configurationHover = this._register(new MutableDisposable<IManagedHover>());
 	private enabled = true;
@@ -41,10 +37,6 @@ export class ModelPickerWidget extends Disposable {
 		const { primaryButton: name, secondaryButton: options } = renderChatInputPickerSplit(control);
 		this._register(trackChatInputPickerFocus(control));
 		this.nameButton = name;
-		this.nameIcon = h(container.ownerDocument, 'span');
-		this.nameIcon.className = 'ash-chat-input-model-icon';
-		this.nameIcon.setAttribute('aria-hidden', 'true');
-		name.prepend(this.nameIcon);
 		this.configurationButton = options;
 		name.classList.add('ash-chat-input-model-action');
 		options.classList.add('ash-chat-input-configuration-action');
@@ -116,15 +108,9 @@ export class ModelPickerWidget extends Disposable {
 		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 		const label = this.delegate.isAutomaticModel()
 			? localize('chat.modelPicker.auto', 'Auto')
-			: model?.displayName ?? (selected ? `${selected.provider}/${selected.model}` : localize('chat.modelPicker.selectModel', 'Select model'));
+			: selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		this.nameButton!.setAttribute('aria-label', label);
-		const icon = this.delegate.isAutomaticModel() ? Lxicon.unlimited
-			: model ? getCompactModelPickerIcon(model) : getProviderIconForIdentity(selected?.provider ?? '');
-		if (this.nameIcon!.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
-			this.nameIcon!.replaceChildren();
-			appendIcon(icon, this.nameIcon!);
-		}
 		this.nameHover.clear();
 		this.nameHover.value = getHoverDelegate().setupHover({ target: this.nameButton!, content: label, groupId: this.hoverGroupId });
 		renderModelConfigurationButton(this.configurationButton!, model, this.delegate.getSelectedReasoningEffort(), this.delegate.isAutomaticModel(),

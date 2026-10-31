@@ -134,6 +134,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
             thread_id: ThreadId::new("thread-sized").unwrap(),
             title: "main".into(),
             created_at_unix_ms: 1,
+            last_activity_at_unix_ms: Some(1),
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
             usage: Default::default(),

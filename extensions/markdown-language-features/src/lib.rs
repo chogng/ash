@@ -141,7 +141,13 @@ impl Extension for MarkdownExtension {
                     Ok(Content {
                         html: "<main id=\"markdown-preview\"></main>".into(),
                         editable: false,
-                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?})),
+                        update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?, "configuration": {
+                            "fontFamily": configuration.pointer("/preview/fontFamily"),
+                            "codeFontFamily": configuration.pointer("/preview/codeFontFamily"),
+                            "blockquoteFontFamily": configuration.pointer("/preview/blockquoteFontFamily"),
+                            "fontSize": configuration.pointer("/preview/fontSize"),
+                            "lineHeight": configuration.pointer("/preview/lineHeight"),
+                        }})),
                         resources: Some(Resources { script: "media/preview.js".into(), style: "media/preview.css".into() }),
                     })
                 }

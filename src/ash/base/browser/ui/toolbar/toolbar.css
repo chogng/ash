@@ -6,6 +6,10 @@
 	display: none;
 }
 
+.ash-toolbar-responsive > .ash-action-view-item {
+	flex-shrink: 0;
+}
+
 .ash-toolbar + .ash-toolbar {
 	margin-left: var(--ash-toolbar-itemGap);
 }

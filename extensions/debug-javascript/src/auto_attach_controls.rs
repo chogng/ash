@@ -174,6 +174,7 @@ impl Controls {
                     label: self.label(choice).into(),
                     description: (choice == mode).then(|| self.messages.current.clone()),
                     detail: Some(self.detail(choice).into()),
+                    ..Default::default()
                 })
                 .collect();
             let temporary = (mode != Mode::Disabled).then_some(items.len());
@@ -185,6 +186,7 @@ impl Controls {
                     },
                     description: None,
                     detail: Some(self.messages.temporary_detail.clone()),
+                    ..Default::default()
                 });
             }
             let scope = items.len();
@@ -195,6 +197,7 @@ impl Controls {
                 },
                 description: None,
                 detail: None,
+                ..Default::default()
             });
             let placeholder = self.messages.picker.replace(
                 "{0}",

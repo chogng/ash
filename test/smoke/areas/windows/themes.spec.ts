@@ -24,6 +24,90 @@ async function selectEditorType(workbench: Workbench, application: PlaywrightApp
 	await workbench.menus.select(application, () => workbench.page.locator('.ash-breadcrumbs-editor-type:visible').click(), [name]);
 }
 
+test('Theme Editor previews live SCM history and hides the containing window supporting Parts', { tag: ['@electron-app-server'] }, async ({ workbench }, testInfo) => {
+	const page = workbench.page;
+	await workbench.openExplorer();
+	for (const [part, command] of [['auxiliarybar', 'workbench.action.toggleAuxiliaryBar'], ['panel', 'workbench.action.togglePanel']]) {
+		if (!await page.locator(`[data-part="${part}"]`).isVisible()) await workbench.quickaccess.runCommand(command!);
+		await expect(page.locator(`[data-part="${part}"]`)).toBeVisible();
+	}
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	const editor = page.locator('.ash-theme-editor:visible');
+	await expect(editor).toBeVisible();
+	for (const part of ['sidebar', 'auxiliarybar', 'panel']) await expect(page.locator(`[data-part="${part}"]`)).toBeHidden();
+	await saveThemeCopy(page, 'SCM live preview regression');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'scm-live-preview-regression.json' })).toHaveAttribute('aria-selected', 'true');
+	const preview = editor.frameLocator('.ash-theme-editor-preview:visible');
+	await expect(preview.locator('body')).toHaveAttribute('data-ready', 'true');
+	await expect(preview.locator('[data-part="sidebar"]')).toBeVisible();
+	await expect(preview.locator('[data-part="panel"]')).toBeVisible();
+	await editor.getByRole('button', { name: 'All colors', exact: true }).click();
+	await expect(editor.locator('#theme-color-group-other').locator('..')).toBeHidden();
+	await editor.getByRole('button', { name: 'All colors', exact: true }).click();
+	const scenes = page.getByRole('tablist', { name: 'Preview scene', exact: true });
+	await scenes.getByRole('tab', { name: 'SCM History', exact: true }).focus();
+	await page.keyboard.press('Enter');
+	const graph = preview.locator('[data-view-id="ash.gitGraph"]');
+	await expect(graph.locator('.ash-scm-graph-commit')).toHaveCount(9);
+	await expect(page.getByRole('button', { name: 'Version control', exact: true })).toHaveAttribute('aria-expanded', 'true');
+	const head = graph.locator('[data-history-item-id="preview-merge"]');
+	const remote = graph.locator('[data-history-item-id="preview-base"]');
+	const headColor = await head.locator('circle.outer').evaluate(node => getComputedStyle(node).fill);
+	const remoteColor = await remote.locator('circle.single').evaluate(node => getComputedStyle(node).fill);
+	expect(headColor).not.toBe(remoteColor);
+	await expect(head.locator('.ash-scm-graph-label.head')).toHaveCSS('background-color', headColor);
+	await expect(remote.locator('.ash-scm-graph-label.remote')).toHaveCSS('background-color', remoteColor);
+	const appliedColor = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-scmGraph-foreground1').trim());
+	const search = page.getByRole('searchbox', { name: 'Search colors', exact: true });
+	const palette = [
+		['16A34A', 'rgb(22, 163, 74)'], ['E11D48', 'rgb(225, 29, 72)'], ['0EA5E9', 'rgb(14, 165, 233)'],
+		['D97706', 'rgb(217, 119, 6)'], ['7C3AED', 'rgb(124, 58, 237)'],
+	];
+	for (const [index, [value, css]] of palette.entries()) {
+		await search.fill(`scmGraph.foreground${index + 1}`);
+		const color = page.getByRole('textbox', { name: `Hex color for scmGraph.foreground${index + 1}`, exact: true });
+		await color.fill(value!);
+		await color.press('Enter');
+		await expect(graph.locator(`[data-history-item-id="preview-branch-${index + 1}"] circle.single`)).toHaveCSS('fill', css!);
+		const paths = graph.locator(`path[data-lane-color="${index}"]`);
+		expect(await paths.count()).toBeGreaterThan(1);
+		for (const path of await paths.all()) await expect(path).toHaveCSS('stroke', css!);
+	}
+	await expect(workbench.element).toHaveCSS('--ash-scmGraph-foreground1', appliedColor);
+	await pressThemeShortcut(page, 'ControlOrMeta+z');
+	await expect(graph.locator('[data-history-item-id="preview-branch-5"] circle.single')).toHaveCSS('fill', 'rgb(182, 109, 255)');
+	await pressThemeShortcut(page, 'ControlOrMeta+Shift+z');
+	await expect(graph.locator('[data-history-item-id="preview-branch-5"] circle.single')).toHaveCSS('fill', palette[4]![1]!);
+	await search.fill('scmGraph.historyItemRefColor');
+	await page.getByRole('button', { name: 'Go to design token charts.blue', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Charts', exact: true })).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByRole('button', { name: 'Choose color for charts.blue', exact: true })).toBeFocused();
+	await search.fill('scmGraph.historyItemRefColor');
+	await page.getByRole('button', { name: 'Choose color for scmGraph.historyItemRefColor', exact: true }).click();
+	const picker = page.getByRole('dialog', { name: 'Color picker', exact: true });
+	const value = picker.getByRole('textbox', { name: 'Color value', exact: true });
+	await value.fill('9D207F');
+	await value.press('Enter');
+	await picker.getByRole('button', { name: 'Close', exact: true }).click();
+	await expect(head.locator('circle.outer')).toHaveCSS('fill', 'rgb(157, 32, 127)');
+	await expect(head.locator('.ash-scm-graph-label.head')).toHaveCSS('background-color', 'rgb(157, 32, 127)');
+	await graph.locator('[data-history-item-id="preview-branch-1"]').click();
+	await expect(graph.locator('.ash-scm-graph-change-row')).toHaveCount(1);
+	await expect(graph.locator('.ash-scm-graph-change-row path[data-lane-color="0"]')).toHaveCSS('stroke', palette[0]![1]!);
+	await scenes.getByRole('tab', { name: 'Code', exact: true }).click();
+	await expect(preview.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
+	await scenes.getByRole('tab', { name: 'SCM History', exact: true }).click();
+	await expect(search).toHaveValue('scmGraph.historyItemRefColor');
+	await expect(graph.locator('.ash-scm-graph-change-row')).toHaveCount(1);
+	await expect(head.locator('circle.outer')).toHaveCSS('fill', 'rgb(157, 32, 127)');
+	await page.screenshot({ path: testInfo.outputPath('scm-history-theme-preview.png') });
+	// Opening an already active theme must also clear Parts the user reopened.
+	await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+});
+
 test('Theme Editor opens an installed source outside the workspace and applies a saved user copy', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 	const popup = workbench.page;
 	const originalPages = popup.context().pages().length;

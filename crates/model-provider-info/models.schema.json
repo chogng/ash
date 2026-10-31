@@ -215,6 +215,15 @@
         "system_instructions"
       ]
     },
+    "ModelPurpose": {
+      "description": "Ash-curated task recommendations, independent of provider capabilities or account access.",
+      "type": "string",
+      "enum": [
+        "advisor",
+        "review",
+        "commit"
+      ]
+    },
     "ModelReasoningEffortOption": {
       "description": "A selectable effort and its catalog explanation. Missing copy is unknown metadata;\nthe effort remains a request value and never implies a fixed token budget.",
       "type": "object",
@@ -502,6 +511,14 @@
         "provider_id": {
           "description": "Exact model vendor ID, independent of API-key or subscription connection identity.",
           "type": "string"
+        },
+        "recommended_for": {
+          "description": "Ash-recommended task uses. Omission means no recommendation; this grants no model access.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelPurpose"
+          }
         },
         "settings": {
           "description": "Parameter support, Ash defaults, acceleration mechanism, and model-visible tool-result budget.",

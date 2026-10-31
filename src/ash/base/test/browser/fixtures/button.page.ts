@@ -1,5 +1,6 @@
 import { ButtonWithDropdown } from '../../../browser/ui/button/button.js';
 import { ToolBar } from '../../../browser/ui/toolbar/toolbar.js';
+import { ActionRunner } from '../../../common/actions.js';
 import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { Disposable, DisposableStore } from '../../../common/lifecycle.js';
 import { Event } from '../../../common/event.js';
@@ -30,6 +31,9 @@ declare global {
 			theme(id: string): void;
 			disable(): void;
 			refreshToolbarDropdown(): void;
+			resizeFoundationToolbar(width: number): void;
+			setFoundationContext(value: string): void;
+			foundationRuns(): readonly { action: string; context: unknown; }[];
 		};
 	}
 }
@@ -48,6 +52,24 @@ const keybindings: IKeybindingService = {
 	resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 };
 const menus = resources.add(new ContextMenuHandler(resources.add(new BrowserContextViewService(document.body)), keybindings, resources.add(new TestNotificationService())));
+const foundationHost = document.querySelector<HTMLElement>('#foundation-toolbar')!;
+foundationHost.style.width = '600px';
+const foundationRunner = resources.add(new ActionRunner());
+const foundationRuns: { action: string; context: unknown; }[] = [];
+resources.add(foundationRunner.onWillRun(event => foundationRuns.push({ action: event.action.id, context: event.context })));
+const foundationToolbar = resources.add(new ToolBar(foundationHost, {
+	contextMenuProvider: menus,
+	actionRunner: foundationRunner,
+	ariaLabel: 'Foundation actions',
+	responsiveBehavior: { enabled: true },
+}));
+foundationToolbar.context = 'initial';
+foundationToolbar.setActions(['First operation', 'Second operation', 'Third operation'].map(label => ({
+	id: label, label, tooltip: label, enabled: true, run() { },
+})), [{ id: 'secondary', label: 'Secondary operation', tooltip: '', enabled: true, run() { } }]);
+resources.add(foundationToolbar.onDidChangeDropdownVisibility(visible => {
+	foundationHost.dataset.dropdownVisible = String(visible);
+}));
 const button = resources.add(new ButtonWithDropdown(document.querySelector('#buttons')!, {
 	...defaultButtonStyles,
 	label: 'Save and Apply', icon: Lxicon.check, presentation: 'primary', contentAlignment: 'labelCentered',
@@ -101,6 +123,9 @@ window.ashButtonIntegration = {
 	theme: id => theme.setColorTheme(themes[id as keyof typeof themes]),
 	disable: () => { button.enabled = false; },
 	refreshToolbarDropdown: () => primaryItem.update(themeMenu, themeActions),
+	resizeFoundationToolbar: width => { foundationHost.style.width = `${width}px`; },
+	setFoundationContext: value => { foundationToolbar.context = value; },
+	foundationRuns: () => foundationRuns,
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';

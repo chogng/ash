@@ -12,7 +12,7 @@ import { parseWorkspace } from '../../workspace/common/workspace.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
 export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
 	const generation = client.generation;
@@ -53,8 +53,8 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal), cancellation.signal);
 			assertCurrent();
 			if (choice === 'cancel') { throw canceled(); }
-			if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
-			const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
+			if (choice !== 'development' && choice !== 'restricted') { throw new TypeError('Invalid directory permission selection'); }
+			const permissions: PermissionDto[] = [...(choice === 'restricted' ? RESTRICTED_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
 			const grant = await trustApi.createGrant(path, permissions);
 			assertCurrent();
 			await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant: { ...grant, permissions: [...grant.permissions] } }] });

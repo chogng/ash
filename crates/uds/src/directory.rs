@@ -1,5 +1,5 @@
-use crate::UnixListener;
-use crate::UnixStream;
+use crate::IpcListener;
+use crate::IpcStream;
 use std::fs::File;
 use std::io;
 use std::path::Component;
@@ -50,26 +50,18 @@ impl SocketDirectory {
         &self.path
     }
 
-    fn endpoint(&self, name: &Path) -> io::Result<PathBuf> {
-        let mut components = name.components();
-        let bytes = name.as_os_str().as_encoded_bytes();
-        if !matches!(components.next(), Some(Component::Normal(_)))
-            || components.next().is_some()
-            || bytes.contains(&0)
-            || (cfg!(windows) && bytes.contains(&b':'))
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "socket name must be one path component",
-            ));
-        }
-        Ok(self.path.join(name))
+    /// Resolves an endpoint identity. Windows hashes this identity into a fixed-length pipe name;
+    /// no socket file is created in this directory.
+    pub fn socket_path(&self, name: &Path) -> io::Result<PathBuf> {
+        validate_name(name)?;
+        let path = self.path.join(name);
+        Ok(path)
     }
 
     /// Binds one new socket. The caller must retain this directory until the listener closes.
-    pub fn bind(&self, name: &Path) -> io::Result<UnixListener> {
-        let path = self.endpoint(name)?;
-        let listener = UnixListener::bind(&path)?;
+    pub fn bind(&self, name: &Path) -> io::Result<IpcListener> {
+        let path = self.socket_path(name)?;
+        let listener = IpcListener::bind(&path)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -78,17 +70,19 @@ impl SocketDirectory {
         Ok(listener)
     }
 
-    /// Connects after verifying that the endpoint is a socket path, not a symlink or directory.
+    /// Connects to the local endpoint. Unix rejects symlinks and ordinary files.
     /// The caller must inspect the peer identity before exchanging application data.
-    pub fn connect(&self, name: &Path) -> io::Result<UnixStream> {
-        let path = self.endpoint(name)?;
+    pub fn connect(&self, name: &Path) -> io::Result<IpcStream> {
+        let path = self.socket_path(name)?;
+        #[cfg(unix)]
         validate_socket(&path)?;
-        UnixStream::connect(path)
+        IpcStream::connect(path)
     }
 
-    /// Removes a socket path after its owner has established that no live listener uses it.
+    /// Removes a Unix socket path after its owner has established that no live listener uses it.
+    #[cfg(unix)]
     pub fn remove_socket(&self, name: &Path) -> io::Result<()> {
-        let path = self.endpoint(name)?;
+        let path = self.socket_path(name)?;
         match validate_socket(&path) {
             Ok(()) => std::fs::remove_file(path),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -97,9 +91,20 @@ impl SocketDirectory {
     }
 }
 
-#[cfg(windows)]
-fn validate_socket(path: &Path) -> io::Result<()> {
-    platform::validate_socket(path)
+fn validate_name(name: &Path) -> io::Result<()> {
+    let mut components = name.components();
+    let bytes = name.as_os_str().as_encoded_bytes();
+    if !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next().is_some()
+        || bytes.contains(&0)
+        || (cfg!(windows) && bytes.contains(&b':'))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "socket name must be one path component",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(unix)]

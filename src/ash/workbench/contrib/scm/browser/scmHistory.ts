@@ -35,10 +35,29 @@ registerColor('scmGraph.historyItemHoverLabelForeground', {
 	dark: 'panel.background', light: 'panel.background', hcDark: 'panel.background', hcLight: 'panel.background',
 }, { description: 'History item hover label foreground color.', owner: 'workbench.scm' });
 
+// Branch series have their own palette so the first side lane cannot reuse HEAD's blue.
+const GraphColors = [
+	registerColor('scmGraph.foreground1', {
+		dark: '#FFB000', light: '#FFB000', hcDark: '#FFB000', hcLight: '#FFB000',
+	}, { description: 'Source control graph foreground color (1).', owner: 'workbench.scm' }),
+	registerColor('scmGraph.foreground2', {
+		dark: '#DC267F', light: '#DC267F', hcDark: '#DC267F', hcLight: '#DC267F',
+	}, { description: 'Source control graph foreground color (2).', owner: 'workbench.scm' }),
+	registerColor('scmGraph.foreground3', {
+		dark: '#994F00', light: '#994F00', hcDark: '#994F00', hcLight: '#994F00',
+	}, { description: 'Source control graph foreground color (3).', owner: 'workbench.scm' }),
+	registerColor('scmGraph.foreground4', {
+		dark: '#40B0A6', light: '#40B0A6', hcDark: '#40B0A6', hcLight: '#40B0A6',
+	}, { description: 'Source control graph foreground color (4).', owner: 'workbench.scm' }),
+	registerColor('scmGraph.foreground5', {
+		dark: '#B66DFF', light: '#B66DFF', hcDark: '#B66DFF', hcLight: '#B66DFF',
+	}, { description: 'Source control graph foreground color (5).', owner: 'workbench.scm' }),
+];
+
 const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
-const ColorCount = 8;
+const ColorCount = GraphColors.length;
 // Reference colors must not be allocated to unrelated branch lanes.
 const HistoryItemRefColor = ColorCount;
 const HistoryItemRemoteRefColor = ColorCount + 1;

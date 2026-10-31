@@ -52,16 +52,21 @@ export interface IWorkspaceTrustApi {
 export const IWorkspaceTrustApi = createServiceIdentifier<IWorkspaceTrustApi>('workspaceTrustApi');
 
 /** Choice made before Rust receives a grant for a newly opened folder. */
-export type WorkspaceTrustChoice = 'development' | 'readOnly' | 'cancel';
+export type WorkspaceTrustChoice = 'development' | 'restricted' | 'cancel';
 
-/** The two choices offered when opening a directory without saved authorization. */
+/** Explicit read-only access remains available through advanced directory permissions. */
 export const READ_DIR_PERMISSIONS: readonly WorkspaceTrustPermission[] = Object.freeze([
 	'readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository',
 ]);
 
+/** Restricted Mode permits text editing without enabling workspace code execution. */
+export const RESTRICTED_DIR_PERMISSIONS: readonly WorkspaceTrustPermission[] = Object.freeze([
+	...READ_DIR_PERMISSIONS, 'writeFiles',
+]);
+
 export const DEVELOPMENT_DIR_PERMISSIONS: readonly WorkspaceTrustPermission[] = Object.freeze([
-	...READ_DIR_PERMISSIONS,
-	'writeFiles', 'executeCommands', 'loadInstructions', 'loadConfig', 'discoverSkills',
+	...RESTRICTED_DIR_PERMISSIONS,
+	'executeCommands', 'loadInstructions', 'loadConfig', 'discoverSkills',
 	'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'mutateRepository',
 ]);
 

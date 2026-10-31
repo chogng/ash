@@ -33,6 +33,7 @@ import type { IEditorPaneDescriptor } from '../../editor.js';
 import { createEditorTypeActions } from './editorTypePicker.js';
 import { BreadcrumbsShowEditorTypeConfiguration } from './breadcrumbs.js';
 import { EditorPane } from './editorPane.js';
+import type { IEditorGroupViewOptions } from './editor.js';
 
 export interface EditorHeaderActions {
 	readonly menuService: IMenuService;
@@ -42,6 +43,7 @@ export interface EditorHeaderActions {
 
 /** Owns the actions and breadcrumbs alongside one group's editor tabs. */
 export class EditorHeaderControl extends Disposable {
+	public static readonly HEIGHT = 32;
 	private readonly heightEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
 	private readonly breadcrumbs: EditorBreadcrumbsControl;
@@ -58,6 +60,7 @@ export class EditorHeaderControl extends Disposable {
 	private editorTypes: readonly IEditorPaneDescriptor[] = [];
 	private selectEditorType: ((id: string) => Promise<unknown>) | undefined;
 	private showEditorType: boolean;
+	private readonly headerRow: HTMLElement | undefined;
 
 	constructor(
 		private readonly titleContainer: HTMLElement,
@@ -69,19 +72,36 @@ export class EditorHeaderControl extends Disposable {
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		private readonly languageFeatures: ILanguageFeaturesService | undefined,
 		private readonly showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		viewOptions: IEditorGroupViewOptions = {},
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
+		if (viewOptions.showHeader) {
+			// Retained group controls share the tab row, including when only Details is visible.
+			this.headerRow = tabsRow;
+			tabsRow.classList.add('ash-editor-group-header');
+		}
+		const actionRow = this.headerRow ?? tabsRow;
+		if (actions && viewOptions.menuIds?.headerPrimary && this.headerRow) {
+			const primary = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-primary' });
+			actionRow.append(primary);
+			this._register(new MenuWorkbenchToolBar(primary, actions.menuService, actions.contextMenuProvider, viewOptions.menuIds.headerPrimary, {
+				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
+				contextKeyService: actions.contextKeyService,
+				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+			}));
+		}
 		const actionsContainer = h(titleContainer.ownerDocument, 'div');
 		actionsContainer.className = 'ash-editor-title-actions';
-		tabsRow.append(actionsContainer);
+		actionRow.append(actionsContainer);
 		this.toolbar = this._register(actions
 			? new MenuWorkbenchToolBar(
 				actionsContainer,
 				actions.menuService,
 				actions.contextMenuProvider,
-				MenuId.EditorTitle,
+				viewOptions.menuIds?.editorActions ?? MenuId.EditorTitle,
 				{
+					ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
 					highlightToggledItems: true,
 					hoverAnchorPosition: AnchorPosition.Below,
 					contextKeyService: actions.contextKeyService,
@@ -98,6 +118,16 @@ export class EditorHeaderControl extends Disposable {
 				},
 			));
 		this._register(toDisposable(() => actionsContainer.remove()));
+		if (actions && viewOptions.menuIds?.headerLayout && this.headerRow) {
+			const layoutActions = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-layout' });
+			actionRow.append(layoutActions);
+			this._register(new MenuWorkbenchToolBar(layoutActions, actions.menuService, actions.contextMenuProvider, viewOptions.menuIds.headerLayout, {
+				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
+				contextKeyService: actions.contextKeyService,
+				highlightToggledItems: true,
+				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+			}));
+		}
 		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
 		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
 		const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)

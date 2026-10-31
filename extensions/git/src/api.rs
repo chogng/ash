@@ -601,12 +601,12 @@ impl Api {
         object_id: &str,
         base: &str,
         mode: model::CompareMode,
-        token: &CancellationToken,
+        token: Option<&CancellationToken>,
     ) -> Result<model::ComparedChanges, ExtensionError> {
-        decode(self.repository_request(
-            repository,
+        decode(self.request(
             "compareChanges",
-            json!({"objectId":object_id,"baseReference":base,"mode":mode}),
+            json!({"repositoryId":repository.descriptor.id,"objectId":object_id,"baseReference":base,"mode":mode}),
+            &repository.configuration,
             token,
         )?)
     }
@@ -859,6 +859,7 @@ impl Api {
                         label,
                         description,
                         detail: None,
+                        ..Default::default()
                     },
                 )
                 .collect(),

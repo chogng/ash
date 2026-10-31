@@ -33,7 +33,7 @@ pub use protocol::remote_platform_probe_command;
 pub use protocol::remote_runtime_install_command;
 use protocol::windows_platform_probe_command;
 
-const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(10).expect("non-zero");
+const DEFAULT_CONNECT_TIMEOUT_SECONDS: NonZeroU16 = NonZeroU16::new(30).expect("non-zero");
 const MAX_DIAGNOSTIC_BYTES: usize = 64 * 1024;
 
 /// A release version used as one component of an immutable Remote runtime path.
@@ -215,6 +215,7 @@ pub struct SshRemoteRuntimeInstaller {
     ssh_executable: PathBuf,
     connect_timeout_seconds: NonZeroU16,
     location: RemoteRuntimeInstallLocation,
+    download_url: Option<url::Url>,
 }
 
 impl SshRemoteRuntimeInstaller {
@@ -225,6 +226,7 @@ impl SshRemoteRuntimeInstaller {
             ssh_executable: PathBuf::from("ssh"),
             connect_timeout_seconds: DEFAULT_CONNECT_TIMEOUT_SECONDS,
             location: RemoteRuntimeInstallLocation::UserData,
+            download_url: None,
         }
     }
 
@@ -244,6 +246,27 @@ impl SshRemoteRuntimeInstaller {
     pub fn with_install_root(mut self, root: RemoteRuntimeInstallRoot) -> Self {
         self.location = RemoteRuntimeInstallLocation::Absolute(root);
         self
+    }
+
+    /// Lets Windows fetch the release-bound archive before falling back to SSH upload.
+    pub fn with_download_url(mut self, value: &str) -> Result<Self, RemoteRuntimeInstallError> {
+        let url = url::Url::parse(value).map_err(|_| {
+            RemoteRuntimeInstallError::artifact_integrity("Invalid runtime download URL")
+        })?;
+        if url.scheme() != "https"
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || value.len() > 16 * 1024
+        {
+            return Err(RemoteRuntimeInstallError::artifact_integrity(
+                "Runtime download URL must be credential-free HTTPS without query or fragment",
+            ));
+        }
+        self.download_url = Some(url);
+        Ok(self)
     }
 
     /// Probes the exact package target before a product selects or uploads an artifact.
@@ -322,6 +345,47 @@ impl SshRemoteRuntimeInstaller {
                     RemoteRuntimeInstallFailureKind::PlatformMismatch,
                     "Remote installation root uses the wrong platform's path syntax",
                 ));
+            }
+        }
+        if matches!(platform, RemotePlatform::Windows { .. })
+            && let Some(url) = &self.download_url
+        {
+            report_progress(RemoteRuntimeInstallProgress::DownloadingOnRemote);
+            let command =
+                windows::install_command_with_download(artifact, &self.location, Some(url));
+            if command.len() > 8000 {
+                return Err(RemoteRuntimeInstallError::new(
+                    RemoteRuntimeInstallFailureKind::RemotePrerequisite,
+                    "Windows download command exceeds the cmd.exe limit",
+                ));
+            }
+            let output = Command::new(&self.ssh_executable)
+                .args(self.ssh_arguments(command))
+                .stdin(Stdio::null())
+                .output()
+                .map_err(|error| RemoteRuntimeInstallError::transport(error.to_string()))?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if output.status.success()
+                && let Some(runtime) = parse_install_receipt(&stdout, artifact)?
+            {
+                report_progress(RemoteRuntimeInstallProgress::Complete {
+                    disposition: runtime.disposition,
+                });
+                return Ok(runtime);
+            }
+            // Only a network download failure permits another attempt via stdin. Integrity
+            // errors, concurrent installs and SSH authentication/transport failures stay visible.
+            let code = stdout
+                .lines()
+                .find_map(|line| line.strip_prefix(INSTALL_ERROR_MARKER));
+            match code {
+                Some("download-failed") => {}
+                Some(code) => return Err(remote_install_failure(code.trim())),
+                None => {
+                    return Err(RemoteRuntimeInstallError::transport(bounded_lossy(
+                        &output.stderr,
+                    )));
+                }
             }
         }
         archive
@@ -424,6 +488,10 @@ impl SshRemoteRuntimeInstaller {
             "BatchMode=yes".into(),
             "-o".into(),
             format!("ConnectTimeout={}", self.connect_timeout_seconds),
+            "-o".into(),
+            "ServerAliveInterval=15".into(),
+            "-o".into(),
+            "ServerAliveCountMax=3".into(),
             self.host.as_str().into(),
             remote_command.into(),
         ]

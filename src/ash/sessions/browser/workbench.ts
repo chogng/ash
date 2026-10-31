@@ -1,4 +1,5 @@
 import { CodeCardControls } from './codeCardControls.js';
+import { Menus } from './menus.js';
 import type { CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
@@ -148,6 +149,9 @@ import { NotificationActionRunner } from '../../workbench/browser/parts/notifica
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, Dimension, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { TaskQueue } from '../../base/common/async.js';
+import { URI } from '../../base/common/uri.js';
+import { SessionChangesEditorInput } from '../contrib/changes/browser/sessionChangesEditorInput.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -238,7 +242,10 @@ import { IExtensionService } from '../../workbench/services/extensions/common/ex
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
-import { EditorPart } from './parts/editorPart.js';
+import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
+import { EditorParts, IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
+import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
@@ -391,7 +398,7 @@ export abstract class Workbench extends Disposable {
 		}
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
+			if (id !== ISessionsLayoutService && !serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
@@ -800,7 +807,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. The list below contains Pinned, Projects and Chats; Code uses Recents in place of Chats. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. New Chat in Session and Fork Conversation are in the current Chat More Actions menu. Input tips appear below the message input.') + ' ' + localize('sessions.list.menuHelp', 'Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.search.navigationHelp', 'Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab, Agent Teams and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. Creating an Agent session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in Details. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
+					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. The list below contains Pinned, Projects and Chats; Code uses Recents in place of Chats. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear below the message input.') + ' ' + localize('sessions.list.menuHelp', 'Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.search.navigationHelp', 'Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab, Agent Teams and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. Creating an Agent session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in Details. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -892,7 +899,7 @@ export abstract class Workbench extends Disposable {
 
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
-		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
+		const editorOptions: IEditorPartOptions = {
 			configurationService,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,
@@ -908,10 +915,31 @@ export abstract class Workbench extends Disposable {
 			dialogService: dialogs,
 			fileDialogService: services.get(IFileDialogService),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
+		};
+		const editor = this._register(services.createInstance(DesktopMainEditorPart, this.domNode, editorOptions));
+		const documentServices = this._register(services.createChild());
+		documentServices.registerInstance(IEditorPart, editor);
+		const documentEditors = this._register(new BrowserEditorService(editor));
+		documentServices.registerInstance(IEditorService, documentEditors);
+		documentServices.registerInstance(IEditorGroupsService, documentEditors);
+		if (!services.has(ISessionsLayoutService)) {
+			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
+		}
+		const changesHost = h(ownerWindow.document, 'div');
+		const changesScope = this._register(services.createChild());
+		const changesContext = this._register(contextKeys.createScoped(changesHost));
+		changesScope.registerInstance(IContextKeyService, changesContext);
+		const changesEditor = this._register(changesScope.createInstance(WorkbenchEditorPart, changesHost, {
+			...editorOptions, editorLimit: 1, contextKeyService: changesContext,
 		}));
-		services.registerInstance(IEditorPart, editor);
-		this._register(new EditorContextKeyController(contextKeys, editor, EditorPanes, languageService));
-		const editors = this._register(new BrowserEditorService(editor));
+		changesEditor.activeGroup.setTitleVisible(false);
+		const editorParts = this._register(services.createInstance(EditorParts, editor,
+			services.get(IAuxiliaryWindowService), undefined, services.get(IAccessibilityService), storage));
+		this._register(editorParts.registerEditorPart(changesEditor, input => input.resource.scheme === 'ash-session-changes', () => layout.codeCards?.setChangesVisible(true)));
+		services.registerInstance(IEditorPartsService, editorParts);
+		services.registerInstance(IEditorPart, editorParts);
+		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
+		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
 		services.registerInstance(IEditorGroupsService, editors);
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
@@ -923,7 +951,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
-		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
+		auxiliarybar = editor.auxiliaryBar;
 		services.registerInstance(ITerminalProcessService, options.api.terminal);
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
@@ -951,13 +979,52 @@ export abstract class Workbench extends Disposable {
 		layout.createWorkbenchLayout(parts);
 		if (layout.codeCards) {
 			const cards = layout.codeCards;
+			cards.setChangesPart(changesEditor);
+			// Projected headers keep window commands targeted at the card receiving focus.
+			for (const [header, part] of [[cards.files.header, editor], [cards.changes.header, changesEditor]] as const) {
+				for (const event of ['focusin', 'pointerdown'] as const) {
+					this._register(addDisposableListener(header, event, () => editorParts.activateGroup(part.activeGroup.id)));
+				}
+			}
+			this._register(changesEditor.onDidChangeEditors(event => {
+				if (event.kind !== 'groupChanged') { return; }
+				if (event.event.kind === 'activeEditorChanged') {
+					for (const group of changesEditor.groups) group.setTitleVisible(false);
+				}
+				if (event.event.kind === 'editorClosed' && event.event.reason !== 'replace' && event.event.reason !== 'previewReplace'
+					&& changesEditor.groups.every(group => group.inputs.length === 0)) {
+					cards.setChangesVisible(false);
+				}
+			}));
+			const changesUpdates = new TaskQueue();
+			this._register(toDisposable(() => changesUpdates.clearPending()));
+			this._register(view.onDidChange(() => {
+				void changesUpdates.scheduleSkipIfCleared(async () => {
+					if (this.isDisposed || !changesEditor.activeInput) { return; }
+					const input = new SessionChangesEditorInput(view.activeSelection ?? URI.parse('ash-session:/draft/empty'));
+					if (changesEditor.activeInput.resource.toString() === input.resource.toString()) { return; }
+					// Updating the retained review follows selection without reopening its closed card.
+					const activePart = editorParts.activePart;
+					await changesEditor.openEditor(input, { pinned: true, preserveFocus: true });
+					if (!changesEditor.domNode.contains(changesEditor.domNode.ownerDocument.activeElement)) {
+						editorParts.activateGroup(activePart.activeGroup.id);
+					}
+				}).catch(error => { if (!this.isDisposed) notificationService.error(getErrorMessage(error)); });
+			}));
 			const presentations = new Map<CodeCardTarget, ICodeCardPresentation>([
 				['terminal', panel.card],
 				['files', {
 					title: localize('sessions.cards.files', 'Files'),
 					domNode: cards.files.card,
 					header: cards.files.header,
+					layoutMenuId: Menus.SessionsEditorHeaderLayout,
 					layout: dimension => cards.files.layoutCard(dimension),
+				}],
+				['changes', {
+					title: localize('sessions.changes.title', 'Changes'),
+					domNode: cards.changes.card,
+					header: cards.changes.header,
+					layout: dimension => cards.changes.layoutCard(dimension),
 				}],
 				['info', {
 					title: localize('sessions.cards.information', 'Session information'),

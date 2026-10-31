@@ -6,6 +6,72 @@ suite('table browser component', () => {
 	const browserTests = useBrowserTests();
 
 	for (const [locale, presentation] of [['en', 'editor'], ['zh-CN', 'editor'], ['en', 'general'], ['zh-CN', 'general']] as const) {
+		test(`settings selects follow the selected label within width bounds (${locale}, ${presentation})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/table.html?locale=${locale}`);
+			const labels = locale === 'zh-CN' ? ['关', '始终显示完整文件路径'] : ['Off', 'Always show the full path'];
+			await page.evaluate(({ presentation, labels }) => window.ashTableIntegration.showSelectSettings(presentation, [
+				{ value: 'short', label: labels[0] }, { value: 'long', label: labels[1] },
+			]), { presentation, labels });
+			const root = page.locator('#select-settings');
+			const choice = root.getByRole('combobox', { name: 'choice', exact: true });
+			const minimum = root.getByRole('combobox', { name: 'minimum', exact: true });
+			const maximum = root.getByRole('combobox', { name: 'maximum', exact: true });
+			const fontRow = root.locator('[data-settings-item-id="width.font"]');
+			const font = fontRow.getByRole('combobox');
+			const width = (control: typeof choice) => control.evaluate(element => element.getBoundingClientRect().width);
+			const choiceWidth = await width(choice);
+			const choiceRight = await choice.evaluate(element => element.getBoundingClientRect().right);
+			const fontWidth = await width(font);
+			expect(choiceWidth).toBe(96);
+			expect(await width(minimum)).toBe(96);
+			expect(await width(maximum)).toBe(96);
+			for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+				await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
+				for (const [key, label] of [['End', labels[1]], ['Home', labels[0]]] as const) {
+					await choice.focus();
+					await choice.press(key);
+					await page.keyboard.press('Enter');
+					await expect(choice).toHaveText(label);
+					await expect(choice).toBeEnabled();
+					if (key === 'End') {
+						expect(await width(choice)).toBeGreaterThan(choiceWidth);
+						expect(await width(choice)).toBeLessThanOrEqual(240);
+					} else {
+						expect(await width(choice)).toBe(choiceWidth);
+					}
+					expect(await choice.evaluate(element => element.getBoundingClientRect().right)).toBe(choiceRight);
+				}
+				await maximum.press('End');
+				await page.keyboard.press('Enter');
+				await expect(maximum).toHaveText('A very long option label '.repeat(12));
+				expect(await width(maximum)).toBe(240);
+				await expect(maximum).toHaveAttribute('title', 'A very long option label '.repeat(12));
+				await maximum.press('Home');
+				await page.keyboard.press('Enter');
+				expect(await width(maximum)).toBe(96);
+				await font.press('End');
+				await page.keyboard.press('Enter');
+				const input = fontRow.getByRole('textbox');
+				await expect(input).toBeFocused();
+				await input.fill('"A custom font with a long name", serif');
+				await input.press('Tab');
+				await expect(font).toHaveText(locale === 'zh-CN' ? '自定义' : 'Custom');
+				expect(await width(font)).toBe(96);
+				expect(await width(font)).toBeLessThan(fontWidth);
+				expect(await width(input)).toBeGreaterThanOrEqual(fontWidth);
+				await font.press('Home');
+				await page.keyboard.press('Enter');
+				await expect(input).toBeHidden();
+				expect(await width(font)).toBe(fontWidth);
+			}
+			await root.locator('[data-settings-item-id="width.maximum"]').evaluate(element => { element.style.removeProperty('grid-template-columns'); });
+			await root.evaluate(element => { element.style.width = '180px'; });
+			await expect.poll(() => root.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		});
+	}
+
+	for (const [locale, presentation] of [['en', 'editor'], ['zh-CN', 'editor'], ['en', 'general'], ['zh-CN', 'general']] as const) {
 		test(`policy controls keep keyboard focus and explain equal-value management across themes (${locale}, ${presentation})`, async function () {
 			const { page } = browserTests;
 			const errors: string[] = [];

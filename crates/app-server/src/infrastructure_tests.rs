@@ -194,7 +194,11 @@ fn queue_dispatch_survives_connection_close() {
 
 #[test]
 fn diagnostics_and_feedback_exclude_rpc_content_and_bind_the_owner() {
-    let server = server();
+    let build = build_info::BuildInfo::new(
+        Some("0123456789012345678901234567890123456789"),
+        Some("fixture-build"),
+    );
+    let server = server().with_build_info(build.clone());
     let mut first = server.connection();
     initialize(&server, &mut first);
     call(
@@ -212,10 +216,13 @@ fn diagnostics_and_feedback_exclude_rpc_content_and_bind_the_owner() {
     assert!(!content.contains("secret-token"));
     assert!(content.contains("activities"));
     let bundle: serde_json::Value = serde_json::from_str(content).unwrap();
-    assert_eq!(
-        bundle["build"],
-        serde_json::to_value(build_identity::current()).unwrap()
+    assert_eq!(bundle["build"], serde_json::to_value(&build).unwrap());
+    let diagnostics = call(
+        &server,
+        &mut first,
+        json!({"jsonrpc":"2.0","id":4,"method":"diagnostics/read","params":{}}),
     );
+    assert_eq!(diagnostics["result"]["build"], bundle["build"]);
     let mut second = server.connection();
     initialize(&server, &mut second);
     let rejected = call(

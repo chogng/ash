@@ -13,6 +13,18 @@ use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
 
 #[test]
+fn git_reference_commit_details_are_optional_and_preserved_when_available() {
+    use crate::protocol::git::GitReferenceDto;
+    let mut value = serde_json::json!({"name":"main","objectId":"tip","kind":"localBranch","remoteName":null,"current":true});
+    let legacy: GitReferenceDto = serde_json::from_value(value.clone()).unwrap();
+    assert!(legacy.commit_details.is_none());
+    assert_eq!(serde_json::to_value(legacy).unwrap(), value);
+    value["commitDetails"] = serde_json::json!({"authorName":"Ash Test","timestampSeconds":1700000000,"subject":"Commit subject"});
+    let decoded: GitReferenceDto = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+}
+
+#[test]
 fn git_upstream_commit_is_optional_and_preserved_when_available() {
     use crate::protocol::git::GitUpstreamDto;
     for value in [

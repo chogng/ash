@@ -47,6 +47,8 @@ use crate::protocol::agent::AgentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleCatalogResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentRoleEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentRoleListResult;
@@ -1322,6 +1324,8 @@ use crate::protocol::git::GitPullParams;
 use crate::protocol::git::GitPullPreflightResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPushModeDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitReferenceCommitDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceDto;
 #[cfg(any(test, feature = "export"))]
@@ -2857,6 +2861,8 @@ use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelPurpose;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReasoningEffortOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReasoningSummary;
@@ -3945,6 +3951,11 @@ client_methods! {
     AgentRoleList => "agent/roles/list" {
         params: EmptyParams,
         response: AgentRoleListResult,
+        serialization: GlobalSharedRead,
+    },
+    AgentRoleCatalog => "agent/roles/catalog" {
+        params: EmptyParams,
+        response: AgentRoleCatalogResult,
         serialization: GlobalSharedRead,
     },
     AgentCapabilitiesRead => "agent/capabilities/read" {
@@ -6751,6 +6762,9 @@ typescript_bindings! {
     AgentRoleSource,
     AgentRoleEntry,
     AgentRoleListResult,
+    AgentRoleCatalogResult,
+    crate::protocol::agent::AgentRoleDefinition,
+    crate::protocol::agent::AgentRoleLaunch,
     AgentCapabilitiesReadResult,
     crate::protocol::agent::SandboxPolicyDto,
     crate::protocol::agent::SandboxHostReadDto,
@@ -7011,6 +7025,7 @@ typescript_bindings! {
     ModelAcceleration,
     ModelAccelerationOption,
     ModelRetirement,
+    ModelPurpose,
     ModelMetadataQuality,
     ModelTokenPricing,
     ModelToolOutputLimit,
@@ -7683,6 +7698,7 @@ typescript_bindings! {
     GitRepositoryIdentityDto,
     GitRemoteDto,
     GitReferenceKindDto,
+    GitReferenceCommitDto,
     GitReferenceDto,
     GitGraphParams,
     GitGraphResult,

@@ -10,6 +10,7 @@ use ash_protocol::ModelAcceleration;
 use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelId;
 use ash_protocol::ModelInputModality;
+use ash_protocol::ModelPurpose;
 use ash_protocol::ModelReasoningEffortOption;
 use ash_protocol::ModelReasoningSummary;
 use ash_protocol::ModelRef;
@@ -67,6 +68,9 @@ pub struct StaticModelSpec {
     pub model_id: String,
     pub display_name: String,
     pub description: Option<String>,
+    /// Ash-recommended task uses. Omission means no recommendation; this grants no model access.
+    #[serde(default)]
+    pub recommended_for: Vec<ModelPurpose>,
     pub model_messages: ModelMessages,
     /// Default context budget in tokens; null or omission means unknown, not unlimited.
     #[serde(
@@ -123,6 +127,7 @@ impl StaticModelSpec {
             ContextWindow::Unknown => self.context_window,
         };
         model.description = self.description.clone();
+        model.recommended_for = self.recommended_for.clone();
         model.auto_compact_token_limit = self.auto_compact_token_limit;
         model.capabilities = self.capabilities;
         model.supported_reasoning_efforts = self.supported_reasoning_efforts.clone();

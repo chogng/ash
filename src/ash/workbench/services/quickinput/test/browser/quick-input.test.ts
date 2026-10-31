@@ -7,6 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks, type FastAndSlowPicks } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import type { IKeyMods } from '../../../../../platform/quickinput/common/quickInput.js';
 import { inQuickInputContext } from '../../../../../platform/quickinput/browser/quickInput.js';
+import { KeybindingResolver, KeybindingResolveKind } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -16,7 +17,8 @@ import { StorageScope, StorageTarget } from '../../../../../platform/storage/com
 import { BrowserLayoutService, ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { QuickInputService } from '../../../../../platform/quickinput/browser/quickInputService.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -66,6 +68,14 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 
+const contextMenus: IContextMenuService = {
+	contextMenuStyle: 'custom',
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
+	showContextMenu() { throw new Error('Unexpected Quick Input context menu'); },
+	hideContextMenu() { },
+};
+
 test('Show All Commands is not duplicated in the titlebar action menu', () => {
 	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
 		.flatMap((item) => 'command' in item ? [item.command.id] : []);
@@ -95,12 +105,16 @@ test('Quick Pick item button fires without accepting its row', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
-	const list = new QuickInputList(dom.window.document.body);
+	const list = new QuickInputList(dom.window.document.body, 'quickPick', contextMenus);
 	const triggered: string[] = [];
 	const accepted: string[] = [];
 	list.onDidTriggerItemButton(({ item, button }) => triggered.push(`${item.label}:${button.id}`));
 	list.onDidAccept(item => accepted.push(item.label));
-	list.items = [{ label: 'main.ts', className: 'ash-editor-quick-pick-item dirty', buttons: [{ id: 'close', label: 'Close Editor' }] }];
+	list.items = [{
+		label: 'main.ts',
+		className: 'ash-editor-quick-pick-item dirty',
+		buttons: [{ id: 'close', label: 'Close Editor' }, { id: 'pin', label: 'Pin Editor' }],
+	}];
 	const button = list.element.querySelector<HTMLButtonElement>('.ash-quick-pick-row-action');
 	assert.ok(button);
 	assert.equal(button.getAttribute('aria-label'), 'Close Editor');
@@ -108,10 +122,21 @@ test('Quick Pick item button fires without accepting its row', () => {
 	assert.deepEqual(triggered, ['main.ts:close']);
 	assert.deepEqual(accepted, []);
 	assert.equal(button.closest('.ash-editor-quick-pick-item.dirty') !== null, true);
-	assert.equal(button.closest('[role="toolbar"]') !== null, true);
+	const toolbar = button.closest('[role="toolbar"]');
+	assert.ok(toolbar);
+	assert.equal(toolbar.getAttribute('aria-label'), 'Actions for main.ts');
+	const pin = toolbar.querySelector<HTMLButtonElement>('[aria-label="Pin Editor"]')!;
+	button.focus();
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+	assert.equal(dom.window.document.activeElement, pin);
+	assert.deepEqual([button.tabIndex, pin.tabIndex], [-1, 0]);
+	pin.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, ctrlKey: true, shiftKey: true }));
+	assert.deepEqual(triggered, ['main.ts:close', 'main.ts:pin']);
+	assert.deepEqual(list.keyMods, { ctrlCmd: true, alt: false, shift: true });
+	assert.deepEqual(accepted, []);
 	list.items = [{ label: 'other.ts' }];
 	button.click();
-	assert.deepEqual(triggered, ['main.ts:close'], 'Removed row actions release their click handlers');
+	assert.deepEqual(triggered, ['main.ts:close', 'main.ts:pin'], 'Removed row actions release their click handlers');
 	assert.equal(list.element.querySelector('[role="toolbar"]'), null);
 	list.dispose();
 	dom.window.close();
@@ -121,7 +146,7 @@ test('QuickInputList skips section headings and reports keyboard modifiers durin
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
-	const list = new QuickInputList(dom.window.document.body);
+	const list = new QuickInputList(dom.window.document.body, 'quickPick', contextMenus);
 	const accepted: unknown[] = [];
 	list.onDidAccept(item => accepted.push({ label: item.label, ...list.keyMods }));
 	list.items = [{ type: 'separator', label: 'Recently opened' }, { label: 'main.ts' }];
@@ -138,11 +163,26 @@ test('QuickInputList skips section headings and reports keyboard modifiers durin
 	dom.window.close();
 });
 
+test('Quick Pick exposes only its active row toolbar in page-level Tab navigation', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browser = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using list = new QuickInputList<IQuickPickItem>(dom.window.document.body, 'quickPick', contextMenus);
+	list.items = ['first', 'second'].map(label => ({ label, buttons: [{ id: 'pin', label: 'Pin' }] }));
+	const tabStops = () => [...list.element.querySelectorAll<HTMLButtonElement>('.ash-quick-pick-row-action')].map(button => button.tabIndex);
+	assert.deepEqual(tabStops(), [0, -1]);
+	list.focus(QuickPickFocus.Next);
+	assert.deepEqual(tabStops(), [-1, 0]);
+	list.filter('second');
+	assert.deepEqual(tabStops(), [0]);
+});
+
 test('QuickInputList checkboxes share multi-selection across pointer, keyboard and filtering', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
-	const list = new QuickInputList(dom.window.document.body);
+	const list = new QuickInputList(dom.window.document.body, 'quickPick', contextMenus);
 	try {
 		const main = { label: 'main', picked: true };
 		const topic = { label: 'topic' };
@@ -186,7 +226,7 @@ test('QuickInputList mounts theme icons and retains labeled and unlabeled group 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
-	const list = new QuickInputList(dom.window.document.body);
+	const list = new QuickInputList(dom.window.document.body, 'quickPick', contextMenus);
 	try {
 		list.items = [
 			{ label: 'Auto' },
@@ -217,12 +257,43 @@ test('QuickInputList mounts theme icons and retains labeled and unlabeled group 
 	}
 });
 
+test('QuickInputList renders inline icons while preserving literal labels and acceptance identity', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body, 'quickPick', contextMenus);
+	try {
+		const item = { label: '$(git-branch) main', description: '$(cloud) origin/main', detail: '$(tag) v1' };
+		const literal = { label: '$(git-branch) topic/\\$(cloud)' };
+		const accepted: IQuickPickItem[] = [];
+		list.onDidAccept(value => accepted.push(value));
+		list.items = [item, literal];
+		assert.deepEqual(
+			[...list.element.querySelectorAll('[data-ash-icon-id]')].map(icon => [icon.getAttribute('data-ash-icon-id'), icon.getAttribute('aria-hidden'), !!icon.getAttribute('data-ash-icon-character')]),
+			[['git-branch', 'true', true], ['cloud', 'true', true], ['tag', 'true', true], ['git-branch', 'true', true]],
+		);
+		assert.deepEqual(
+			[...list.element.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].map(label => [label.textContent, label.title]),
+			[[' main', ' main'], [' topic/$(cloud)', ' topic/$(cloud)']],
+		);
+		assert.equal(list.element.querySelector('.ash-quick-pick-row-description')?.textContent, ' origin/main');
+		list.filter('topic');
+		list.acceptActive();
+		assert.deepEqual(accepted, [literal], 'Rendering and filtering must retain the provider item');
+	} finally {
+		list.dispose();
+		dom.window.close();
+	}
+});
+
 test('QuickInputList owns filtering, looping focus, and acceptance', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const list = new QuickInputList<{ label: string; }>(
 		dom.window.document.body,
+		'quickPick',
+		contextMenus,
 	);
 	dom.window.document.body.append(list.element);
 	const activeLabels: (string | undefined)[] = [];
@@ -263,6 +334,54 @@ test('QuickInputList owns filtering, looping focus, and acceptance', () => {
 	activeListener.dispose();
 	list.dispose();
 	dom.window.close();
+});
+
+test('Quick Input section headings follow filtering and never accept a conversation', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using list = new QuickInputList<IQuickPickItem>(dom.window.document.body, 'quickPick', contextMenus);
+	let accepted = 0;
+	using listener = list.onDidAccept(() => accepted++);
+	list.sortByLabel = false;
+	list.canSelectMany = true;
+	list.items = [
+		{ type: 'separator', label: 'Pinned', presentation: 'section' }, { label: 'Alpha' },
+		{ type: 'separator', label: 'Recent', presentation: 'section' }, { label: 'Beta' },
+	];
+	assert.deepEqual([...list.element.querySelectorAll('.ash-quick-pick-section-header')].map(header => header.textContent), ['Pinned', 'Recent']);
+	assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-checkbox').length, 2);
+	list.element.querySelector<HTMLElement>('.ash-quick-pick-section-header')!.click();
+	assert.equal(accepted, 0);
+	list.filter('beta');
+	assert.deepEqual(list.visibleItems.map(item => item.label), ['Beta']);
+	assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-checkbox').length, 1);
+	assert.deepEqual([...list.element.querySelectorAll('.ash-quick-pick-section-header')].map(header => header.textContent), ['Recent']);
+});
+
+test('Quick Input Escape stays scoped to its host while an owned menu has focus', () => {
+	const dom = new JSDOM('<!doctype html><body><button>History</button><button>Menu item</button></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using contexts = new ContextKeyService();
+	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contexts });
+	using picker = service.createQuickPick();
+	picker.anchor = dom.window.document.querySelector('button');
+	picker.ignoreFocusOut = true;
+	picker.items = [{ label: 'Chat' }];
+	picker.show();
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!;
+	const menu = dom.window.document.querySelectorAll('button')[1];
+	const resolver = new KeybindingResolver();
+	const escape = [{ key: 'Escape', code: 'Escape', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false }];
+	const inside = resolver.resolve(contexts.getContext(input), escape);
+	assert.equal(inside.kind, KeybindingResolveKind.Command);
+	if (inside.kind === KeybindingResolveKind.Command) assert.equal(inside.command, 'quickInput.hide');
+	menu.focus();
+	assert.equal(contexts.getValue(inQuickInputContext.key), true);
+	assert.equal(resolver.resolve(contexts.getContext(menu), escape).kind, KeybindingResolveKind.NoMatch);
 });
 
 test('Command Palette filters, executes, closes, and restores focus', async () => {
@@ -909,6 +1028,8 @@ suite('Quick Input shared foundations', () => {
 		assert.throws(() => service.createQuickPick(), /storageService/);
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'position', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
+		assert.throws(() => service.createQuickPick(), /contextMenuService/);
+		services.registerInstance(IContextMenuService, contextMenus);
 		const key = 'workbench.quickInput.viewState';
 		for (const value of ['broken json', 'null', '[]', '{"top":0.2}', '{"top":-1,"left":0.5}', '{"top":0.2,"left":2}', '{"top":"0.2","left":0.5}']) {
 			storage.store(key, value, StorageScope.APPLICATION, StorageTarget.MACHINE);

@@ -384,6 +384,48 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
         "Reviews changes"
     );
     let source = listed["result"]["agents"][0]["source"].clone();
+    let catalog = call(20, "agent/roles/catalog", json!({}));
+    let definitions = catalog["result"]["agents"].as_array().unwrap();
+    let packaged = definitions
+        .iter()
+        .find(|role| role["name"] == "reviewer" && role["source"]["type"] == "builtIn")
+        .unwrap();
+    assert_eq!(packaged["launch"], "host");
+    assert!(packaged["path"].is_null());
+    assert!(
+        packaged["prompt"]
+            .as_str()
+            .unwrap()
+            .contains("Output only JSON")
+    );
+    assert!(
+        definitions
+            .iter()
+            .any(|role| role["name"] == "develop/intent" && role["launch"] == "workflow")
+    );
+    let custom = definitions
+        .iter()
+        .find(|role| role["source"] == source)
+        .unwrap();
+    assert_eq!(custom["prompt"], "Review changes.");
+    assert_eq!(
+        std::path::Path::new(custom["path"].as_str().unwrap()),
+        root.path().join(".ash/agents/reviewer.md")
+    );
+    assert_eq!(catalog["result"]["diagnostics"], json!([]));
+    // A malformed saved definition is reported without hiding valid packaged roles.
+    std::fs::write(root.path().join(".ash/agents/broken.md"), "invalid").unwrap();
+    let invalid = call(21, "agent/roles/catalog", json!({}));
+    assert_eq!(
+        invalid["result"]["diagnostics"].as_array().unwrap().len(),
+        1
+    );
+    assert!(
+        invalid["result"]["diagnostics"][0]
+            .as_str()
+            .unwrap()
+            .contains("broken.md")
+    );
     let created = call(
         3,
         "session/create",
@@ -407,6 +449,15 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     grant.revoke();
     let revoked = call(4, "agent/roles/list", json!({}));
     assert_eq!(revoked["result"]["agents"], json!([]));
+    let revoked_catalog = call(22, "agent/roles/catalog", json!({}));
+    assert!(
+        revoked_catalog["result"]["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|role| role["source"]["type"] == "builtIn")
+    );
+    assert_eq!(revoked_catalog["result"]["diagnostics"], json!([]));
 }
 
 #[test]

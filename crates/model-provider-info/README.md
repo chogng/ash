@@ -1,6 +1,7 @@
 # `ash-model-provider-info`
 
-> 本 README 解释模型与接入声明、校验和规范化。跨系统配置模型和
+> 本 README 解释模型与接入声明、校验和规范化。[Ash 模型字段](../../docs/models/model-fields.md)
+> 说明字段归属、内部元数据与适配边界。跨系统配置模型和
 > 演进见 [`docs/model-provider-info.md`](../../docs/model-provider-info.md)；请求实现见
 > [`ash-model-provider`](../model-provider/README.md)。
 
@@ -20,7 +21,7 @@
 | -------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `ModelProviderConfig`                        | 用户/host 可配置值                      | provider、connection、base URL、max output 与 per-model context metadata                       |
 | `ModelContextConfig`                         | 单模型的 Core budget metadata           | positive context window、optional auto-compact limit                                           |
-| `ProviderDefinition`                         | provider-owned declaration              | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
+| `ProviderDefinition`                         | Ash 的供应商接入声明                    | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
 | `NormalizedModelProviderConfig`              | runtime-ready immutable config          | provider/profile/base URL 已确定                                                               |
 | `ProviderConfigRegistry`                     | definition authority                    | validate、register、merge、selection、normalize                                                |
 | `STATIC_MODEL_CATALOG` / `StaticModelSpec`   | 内置文本模型目录                        | 唯一 model/provider ID、context、capabilities、reasoning、defaults 和完整基础提示词            |
@@ -32,7 +33,7 @@
 | `LiveApiProfile`                             | GPT-Live 会话协议能力                   | 明确声明，不能从文本协议推断                                                                   |
 | `VoiceModelCatalog` / `VoiceModelDefinition` | Provider 的独立语音目录                 | 模型、支持的音色与默认值                                                                       |
 | `VoiceModelConfig`                           | 可序列化的语音选择                      | 与文本模型选择分开，不含密钥                                                                   |
-| `InputTokenCountDefinition`                  | provider-owned preflight declaration    | profile、target 与明确 model policy                                                            |
+| `InputTokenCountDefinition`                  | Ash 的供应商预检声明                    | profile、target 与明确 model policy                                                            |
 | `NormalizedInputTokenCountConfig`            | runtime-ready count snapshot            | 已解析 base URL；不包含 client 或准确度策略                                                    |
 | `EndpointPolicy`                             | provider default 或 configured-only     | 不执行 DNS/network validation                                                                  |
 | `ModelCatalogPolicy`                         | listed-only 或 allow-unlisted           | 声明 static gate，由 `ash-models-manager` 执行 canonical resolution                            |
@@ -158,6 +159,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
   "model_id": "model-id",
   "display_name": "Display Name",
   "description": "A short description of the model",
+  "recommended_for": ["advisor", "review", "commit"],
   "context_window": 200000,
   "max_context_window": 1000000,
   "capabilities": {

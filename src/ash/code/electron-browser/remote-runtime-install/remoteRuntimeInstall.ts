@@ -6,6 +6,7 @@ import { ManagedStyleSheet } from '../../../base/browser/domStylesheets.js';
 import { generateColorThemeCSS } from '../../../workbench/services/themes/browser/colorThemeCss.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { localize } from '../../../nls.js';
 
 const api = createRemoteRuntimeInstallProgressApi();
 const resources = new DisposableStore();
@@ -89,6 +90,12 @@ function render(state: RemoteRuntimeInstallProgressState | undefined): void {
 			progress.value = percent;
 			break;
 		}
+		case 'downloadingOnRemote':
+			showIndeterminate(
+				localize('remoteRuntimeInstall.downloadingOnRemote', "Downloading runtime on the Remote host…"),
+				localize('remoteRuntimeInstall.remoteDownloadDetail', "Verifying the HTTPS release package on the Remote host. If the download fails, Ash will upload the verified local package over SSH."),
+			);
+			break;
 		case 'finalizingRemoteInstall':
 			showIndeterminate('Finalizing Remote installation…', 'Verifying and committing the immutable runtime on the Remote host.');
 			break;

@@ -74,6 +74,7 @@ fn model_reasoning_effort_overrides_catalog_value() {
 
 fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry {
     ModelCatalogEntry {
+        recommended_for: Vec::new(),
         source: None,
         pricing: Vec::new(),
         retirement: None,
@@ -92,6 +93,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         acceleration_options: Vec::new(),
         auto_compact_token_limit: None,
         available_context_window: None,
+        usable_context_window: None,
         capabilities: ModelCapabilities::UNKNOWN,
         settings: Default::default(),
         supported_reasoning_efforts: Vec::new(),

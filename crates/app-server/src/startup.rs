@@ -22,6 +22,7 @@ const DIR_GRANT_SOURCE: &str = "ASH_DIR_GRANT_SOURCE";
 pub fn run(
     arguments: impl IntoIterator<Item = String>,
     diff_handler: crate::DiffRequestHandler,
+    build_info: build_info::BuildInfo,
 ) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     if let [role, directory] = arguments.as_slice()
@@ -100,12 +101,13 @@ pub fn run(
             ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
             discovered_product_services_path(),
             diff_handler,
+            build_info,
         );
     }
     if arguments.as_slice() == ["--version"] {
         println!(
             "{}",
-            serde_json::to_string(&build_identity::current()).map_err(|error| error.to_string())?
+            serde_json::to_string(&build_info).map_err(|error| error.to_string())?
         );
         return Ok(());
     }
@@ -126,14 +128,14 @@ pub fn run(
     };
     let options = StartupOptions::from_environment(product_services)?;
     match command {
-        Command::RemoteStdio => serve_remote_stdio(&options, diff_handler),
+        Command::RemoteStdio => serve_remote_stdio(&options, diff_handler, build_info),
         Command::Stdio => {
-            let server = open_server(&options, diff_handler)?.into_shared();
+            let server = open_server(&options, diff_handler, build_info)?.into_shared();
             let _queue = server.start_queue()?;
             server.serve_stdio().map_err(|error| error.to_string())
         }
         Command::WebSocket(websocket) => {
-            serve_websocket(open_server(&options, diff_handler)?, websocket)
+            serve_websocket(open_server(&options, diff_handler, build_info)?, websocket)
         }
     }
 }
@@ -141,10 +143,12 @@ pub fn run(
 fn serve_remote_stdio(
     host: &StartupOptions,
     diff_handler: crate::DiffRequestHandler,
+    build_info: build_info::BuildInfo,
 ) -> Result<(), String> {
     // Preserve the connector's process-scoped diagnostic mode: no shared profile lifecycle,
     // queue startup or additional local product discovery belongs to this entrypoint.
     let mut options = AppServerOptions::new(host.profile_root())
+        .with_build_info(build_info)
         .with_host_grok_auth()
         .with_host_zcode_credentials();
     if let Some(root) = host.dir_root() {
@@ -414,8 +418,10 @@ pub(super) enum GrantSource {
 pub(super) fn open_server(
     host: &StartupOptions,
     diff_handler: crate::DiffRequestHandler,
+    build_info: build_info::BuildInfo,
 ) -> Result<AppServer, String> {
     let mut options = AppServerOptions::new(host.profile_root())
+        .with_build_info(build_info)
         .with_host_grok_auth()
         .with_host_zcode_credentials()
         .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);

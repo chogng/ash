@@ -10,7 +10,7 @@ import { buildAppServerEnvironment } from '../../src/ash/platform/agentHost/comm
 import { checkAppServerInitializeCompatibility } from '../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
 import { decodeAppServerResult } from '../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { AppServerDaemonLauncher } from '../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
-import { createSshRemoteWorkspaceUri } from '../../src/ash/platform/remote/common/remote.js';
+import { createSshRemoteWorkspaceUri, normalizeRemoteWorkspacePath } from '../../src/ash/platform/remote/common/remote.js';
 import { RemoteConnectionProfiles } from '../../src/ash/platform/remote/electron-main/remoteConnectionProfiles.js';
 import { RemoteRuntimeBootstrapMainService } from '../../src/ash/platform/remote/electron-main/remoteRuntimeBootstrapMainService.js';
 import { RemoteRuntimeProvisioner } from '../../src/ash/platform/remote/electron-main/remoteRuntimeProvisioner.js';
@@ -23,16 +23,18 @@ const root = resolve(values.root!);
 const ssh = resolve(values.ssh!);
 const host = values.host!;
 await mkdir(root, { recursive: true });
-const workspace = join(root, 'workspace');
+const workspace = normalizeRemoteWorkspacePath(join(root, 'workspace'));
 await mkdir(workspace);
 const metadata = JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8'));
 const catalogRoot = values['catalog-dir'] === undefined ? undefined : resolve(values['catalog-dir']);
-const release = values.binding === undefined ? { protocol: metadata.protocol } : JSON.parse(await readFile(values.binding, 'utf8'));
+const release = values.binding === undefined ? { version: metadata.version, protocol: metadata.protocol } : JSON.parse(await readFile(values.binding, 'utf8'));
+assert.equal(release.version, metadata.version);
 assert.deepEqual(release.protocol, metadata.protocol);
-const environment = buildAppServerEnvironment(process.env, process.platform === 'darwin' ? 'macos' : 'linux', {
-	ASH_HOME: join(root, 'local-profile'), ASH_APP_SERVER_PATH: join(packageRoot, 'bin/ash-app-server'), ASH_SSH_PATH: ssh,
+const executable = (name: string) => join(packageRoot, 'bin', `${name}${process.platform === 'win32' ? '.exe' : ''}`);
+const environment = buildAppServerEnvironment(process.env, process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux', {
+	ASH_HOME: join(root, 'local-profile'), ASH_APP_SERVER_PATH: executable('ash-app-server'), ASH_SSH_PATH: ssh,
 }, 'desktop');
-const remoteExecutable = join(packageRoot, 'bin/ash-remote');
+const remoteExecutable = executable('ash-remote');
 const profiles = new RemoteConnectionProfiles({ remoteExecutable, environment });
 assert.equal(await profiles.get(host, workspace), undefined);
 const progress: Array<{ phase: string; disposition?: string; }> = [];
@@ -40,12 +42,12 @@ let installed: string | undefined;
 try {
 	for (const reconnect of [false, true]) {
 		const count = progress.length;
-		const carrier = new AppServerDaemonLauncher({ executable: join(packageRoot, 'bin/ash-app-server-daemon'), args: ['connect-selected'], environment });
+		const carrier = new AppServerDaemonLauncher({ executable: executable('ash-app-server-daemon'), args: ['connect-selected'], environment });
 		const provisioner = new RemoteRuntimeProvisioner({
 			source: catalogRoot === undefined
 				? { kind: 'network', catalogUrl: release.catalog.url, expectedSha256: release.catalog.sha256, cacheRoot: join(root, 'cache') }
 				: { kind: 'packaged', bundleRoot: catalogRoot, expectedSha256: createHash('sha256').update(await readFile(join(catalogRoot, 'catalog.json'))).digest('hex') },
-			remoteExecutable, sshExecutable: ssh, environment, installRoot: join(root, 'remote-installation'),
+			remoteExecutable, sshExecutable: ssh, environment, installRoot: normalizeRemoteWorkspacePath(join(root, 'remote-installation')),
 		});
 		const bootstrap = new RemoteRuntimeBootstrapMainService({
 			workspace: createSshRemoteWorkspaceUri(host, workspace), sshExecutable: ssh,
@@ -84,7 +86,8 @@ try {
 				let timer: ReturnType<typeof setTimeout>;
 				try {
 					return await new Promise((resolve, reject) => {
-						timer = setTimeout(() => reject(new Error(`${method} timeout: ${stderr}`)), 40_000);
+						// First initialize may materialize the complete Windows profile package.
+						timer = setTimeout(() => reject(new Error(`${method} timeout: ${stderr}`)), method === 'initialize' ? 180_000 : 40_000);
 						replies.set(key, { resolve, reject });
 						child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: key, method, params })}\n`);
 					});
@@ -111,13 +114,23 @@ try {
 		} finally { bootstrap.dispose(); carrier.dispose(); }
 	}
 	assert(installed);
+	let downloadCacheReused: boolean | undefined;
+	if (catalogRoot === undefined) {
+		const cached = await promisify(execFile)(remoteExecutable, [
+			'fetch-runtime', '--catalog-url', release.catalog.url, '--catalog-sha256', release.catalog.sha256,
+			'--target', metadata.target, '--cache-root', join(root, 'cache'), '--progress', 'json-lines',
+		], { env: environment, timeout: 180_000 });
+		const events = cached.stderr.trim().split(/\r?\n/u).map(line => JSON.parse(line));
+		assert(events.some(event => event.phase === 'complete' && event.disposition === 'reused'), 'the verified download cache must be reusable');
+		downloadCacheReused = true;
+	}
 	const report = {
-		status: 'passed', catalog: release.catalog, protocol: release.protocol, runtime: installed,
+		status: 'passed', catalog: release.catalog, version: release.version, target: metadata.target, protocol: release.protocol, runtime: installed,
 		firstConnectionAutomaticallyInstalled: true, firstConnectionAutomaticallyDownloaded: catalogRoot === undefined, reconnectReusedActiveRuntimeWithoutProvisioning: true,
-		editingSurvivedReconnect: true, productionDesktopBootstrap: true, transport: 'OpenSSH', progress,
+		editingSurvivedReconnect: true, downloadCacheReused, productionDesktopBootstrap: true, transport: 'OpenSSH', progress,
 	};
 	await writeFile(values.report!, `${JSON.stringify(report, null, 2)}\n`);
 	console.log(JSON.stringify(report));
 } finally {
-	await promisify(execFile)(join(packageRoot, 'bin/ash-app-server-daemon'), ['stop'], { env: environment, timeout: 30_000 });
+	await promisify(execFile)(executable('ash-app-server-daemon'), ['stop'], { env: environment, timeout: 30_000 });
 }

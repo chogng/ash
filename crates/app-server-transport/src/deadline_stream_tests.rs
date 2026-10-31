@@ -1,17 +1,16 @@
-#![cfg(unix)]
-
 use std::io::Read;
 use std::io::Write;
 use std::time::Duration;
 use std::time::Instant;
 
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 
 use super::DeadlineStream;
 
+#[cfg(unix)]
 #[test]
 fn unix_deadline_does_not_install_socket_timeouts() {
-    let (stream, _peer) = UnixStream::pair().unwrap();
+    let (stream, _peer) = IpcStream::pair().unwrap();
     let stream = DeadlineStream::new(stream, Instant::now() + Duration::from_secs(1)).unwrap();
 
     assert_eq!(stream.stream.read_timeout().unwrap(), None);
@@ -20,7 +19,7 @@ fn unix_deadline_does_not_install_socket_timeouts() {
 
 #[test]
 fn read_reports_when_the_absolute_deadline_elapses() {
-    let (stream, _peer) = UnixStream::pair().unwrap();
+    let (stream, _peer) = IpcStream::pair().unwrap();
     let mut stream =
         DeadlineStream::new(stream, Instant::now() + Duration::from_millis(20)).unwrap();
 
@@ -31,7 +30,7 @@ fn read_reports_when_the_absolute_deadline_elapses() {
 
 #[test]
 fn ready_stream_exchanges_bytes_before_its_deadline() {
-    let (client, server) = UnixStream::pair().unwrap();
+    let (client, server) = IpcStream::pair().unwrap();
     let deadline = Instant::now() + Duration::from_secs(1);
     let mut client = DeadlineStream::new(client, deadline).unwrap();
     let mut server = DeadlineStream::new(server, deadline).unwrap();

@@ -32,7 +32,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly activeTitle: HTMLSpanElement;
 
 	// The leading stroke occupies one pixel outside the hosted pane's content width.
-	override get minimumWidth(): number { return Math.max(170, super.minimumWidth + 1); }
+	override get minimumWidth(): number { return Math.max(220, super.minimumWidth + 1); }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
@@ -122,9 +122,10 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			? this.domNode.ownerDocument.activeElement as HTMLElement : undefined;
 		const position = this.configurationService.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		const separateRow = position === ActivityBarPosition.TOP || position === ActivityBarPosition.BOTTOM;
-		const visible = position !== ActivityBarPosition.HIDDEN && !(separateRow
-			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
-			&& this.visibleViewContainersTracker.visibleCount <= 1);
+		const visible = !(projection?.hideContainerSelector && this.visibleViewContainersTracker.visibleCount <= 1)
+			&& position !== ActivityBarPosition.HIDDEN && !(separateRow
+				&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
+				&& this.visibleViewContainersTracker.visibleCount <= 1);
 		const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 		this.activeTitle.textContent = active?.getTitle() ?? '';
 		// Custom view headers and the container selector share this Part-owned title slot.

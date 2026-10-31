@@ -139,7 +139,15 @@ export namespace languages {
 	function registerWorkspaceSymbolProvider(provider: { provideWorkspaceSymbols(query: string, token: CancellationToken): ProviderResult<SymbolInformation[]> }): Disposable;
 	function registerDocumentHighlightProvider(selector: DocumentSelector, provider: { provideDocumentHighlights(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<{ range: Range; kind?: number }[]> }): Disposable;
 }
-export interface QuickPickItem { label: string; description?: string; detail?: string; }
+export interface QuickPickItem {
+	label: string;
+	description?: string;
+	detail?: string;
+	/** Starts a labeled group before this selectable item. */
+	separator?: string;
+	/** Keeps the item visible when its label does not match the filter. */
+	alwaysShow?: boolean;
+}
 export interface AccessibilityInformation { label: string; role?: 'button'; }
 export enum StatusBarAlignment { Left = 1, Right = 2 }
 export interface StatusBarItem extends Disposable { readonly id: string; readonly alignment: StatusBarAlignment; readonly priority: number | undefined; text: string; name?: string; tooltip?: string; command?: string | Command; accessibilityInformation?: AccessibilityInformation; show(): void; hide(): void; }

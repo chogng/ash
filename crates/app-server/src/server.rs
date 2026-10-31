@@ -306,6 +306,7 @@ pub struct AppServer {
     queue: Option<Arc<queue::QueueStore>>,
     queue_directory: Option<String>,
     diagnostics: diagnostics::Diagnostics,
+    build_info: build_info::BuildInfo,
     pub(crate) telemetry: ash_otel::Telemetry,
     analytics: Arc<analytics::Analytics>,
     feedback: feedback::Feedback,
@@ -982,6 +983,7 @@ impl AppServer {
             &self.analytics,
             &self.config,
             &self.diagnostics,
+            &self.build_info,
             &self.feedback,
             &self.telemetry,
             &self.home,
@@ -1291,6 +1293,7 @@ impl AppServer {
             queue: None,
             queue_directory: None,
             diagnostics,
+            build_info: build_info::BuildInfo::new(None, None),
             telemetry,
             analytics: Arc::new(analytics::Analytics::default()),
             feedback: feedback::Feedback::default(),
@@ -1880,6 +1883,11 @@ impl AppServer {
                 log::warn!("Agent interaction cancellation failed: {error}");
             }
         }
+    }
+
+    pub(crate) fn with_build_info(mut self, build_info: build_info::BuildInfo) -> Self {
+        self.build_info = build_info;
+        self
     }
 
     pub(crate) fn with_telemetry(
@@ -3447,6 +3455,7 @@ impl AppServer {
             }
             Some(ClientMethod::AgentRead) => self.session_processor().agent_read(&request.params),
             Some(ClientMethod::AgentRoleList) => self.session_processor().agent_roles_list(),
+            Some(ClientMethod::AgentRoleCatalog) => self.session_processor().agent_role_catalog(),
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }

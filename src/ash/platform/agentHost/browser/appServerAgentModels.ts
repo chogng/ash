@@ -1,5 +1,6 @@
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { ModelCatalogEntry } from '../common/agentModels.js';
+import { ModelPurpose } from '../common/agentModels.js';
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type {
@@ -39,11 +40,21 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 	return {
 		readDefaults: async () => {
 			const config = await appServerRequest(connection, 'config/read', {});
-			return { revision: config.revision, model: config.model ? { ...config.model } : null, reasoningEffort: config.modelReasoningEffort ?? null };
+			return {
+				commitMessageModel: config.commitMessageModel ? { ...config.commitMessageModel } : null,
+				commitMessageEnabled: config.commitMessageEnabled,
+				codeReviewModel: config.codeReviewModel ? { ...config.codeReviewModel } : null,
+				revision: config.revision,
+				model: config.model ? { ...config.model } : null,
+				reasoningEffort: config.modelReasoningEffort ?? null,
+			};
 		},
 		configureDefaults: async (update, expectedRevision) => {
 			await appServerRequest(connection, 'config/update', {
 				commandId: createUuid(), expectedRevision,
+				...(update.commitMessageEnabled !== undefined ? { commitMessageEnabled: update.commitMessageEnabled } : {}),
+				...(update.commitMessageModel !== undefined ? { commitMessageModel: update.commitMessageModel } : {}),
+				...(update.codeReviewModel !== undefined ? { codeReviewModel: update.codeReviewModel } : {}),
 				...(update.model !== undefined ? { model: update.model } : {}),
 				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),
 			});
@@ -252,9 +263,11 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
+	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit };
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,
+		recommendedFor: Object.freeze((entry.recommended_for ?? []).map(purpose => purposes[purpose])),
 		capabilities: Object.freeze({ toolCalling: entry.capabilities.tools, agentMode: entry.capabilities.agent_mode ?? 'unknown' }),
 		source: entry.source ? Object.freeze({ providerId: entry.source.provider_id, connectionId: entry.source.connection_id, metadata: entry.source.metadata }) : undefined,
 		pricing: Object.freeze((entry.pricing ?? []).map(price => Object.freeze({
@@ -273,6 +286,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
+		usableContextWindow: entry.usable_context_window,
 		supportedReasoningEfforts: Object.freeze(
 			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
 		),

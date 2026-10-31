@@ -80,7 +80,7 @@ test('Catalog filters quoted provider names, OR providers, text and declared vis
 	assert.equal(models('  ').length, 3);
 });
 
-test('Group visibility is scoped by connection identity even when provider labels are identical', async () => {
+test('Provider headings keep connection identities and model visibility changes stay scoped to one model', async () => {
 	using resources = new DisposableStore();
 	const { view, source, writes, models } = setup(resources);
 	source.providers = async () => ['first', 'second'].map(connection => ({ connection, provider: 'same-vendor', displayName: 'Same name' })) as ModelProviderCredentialStatus[];
@@ -88,18 +88,13 @@ test('Group visibility is scoped by connection identity even when provider label
 	const groups = view.viewModelEntries.filter(isLanguageModelProviderEntry);
 	assert.equal(groups.length, 2);
 	assert.notEqual(groups[0].id, groups[1].id);
-	assert.deepEqual(view.getModelsForGroup(groups[0]).map(model => model.model.model), ['newest', 'older']);
-	view.filter('@provider:first older');
-	const filteredGroup = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
-	assert.equal(filteredGroup.hidden, false, 'A hidden search result does not hide another enabled model in the same connection');
-	await view.toggleGroupHidden(filteredGroup);
-	assert.deepEqual(writes.map(write => [write.provider, write.model, write.visible]), [['first', 'newest', false], ['first', 'older', false]]);
-	assert.equal(models('@provider:second')[0].model.hidden, true);
-	await view.setModelsHidden(models('@provider:first'), false);
+	await view.toggleModelHidden(models('@provider:first older')[0]);
+	assert.deepEqual(writes, [{ provider: 'first', model: 'older', visible: true }]);
 	assert.ok(models('@provider:first').every(entry => !entry.model.hidden));
+	assert.equal(models('@provider:second')[0].model.hidden, true);
 });
 
-test('Collapsing provider groups and searching uses one projection and preserves a surviving selection', async () => {
+test('Provider headings always expose matching models and preserve a surviving selection', async () => {
 	using resources = new DisposableStore();
 	const { view, models } = setup(resources);
 	await view.refresh();
@@ -107,33 +102,19 @@ test('Collapsing provider groups and searching uses one projection and preserves
 	const id = view.selectedEntry.id;
 	await view.refresh();
 	assert.equal(view.selectedEntry?.id, id);
-	view.collapseAll();
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0);
-	const group = view.viewModelEntries.filter(isLanguageModelProviderEntry)[0];
-	view.toggleCollapsed(group);
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
-	assert.equal(models('other').length, 1, 'A new search expands its matching groups');
-	view.collapseAll();
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0, 'Collapse remains effective while searching');
+	assert.deepEqual(view.viewModelEntries.map(entry => entry.type), ['vendor', 'model', 'model', 'vendor', 'model']);
+	assert.equal(models('other').length, 1);
+	assert.deepEqual(view.viewModelEntries.map(entry => entry.type), ['vendor', 'model']);
 	assert.equal(models('').length, 3);
 });
 
-test('A single configured provider retains its group visibility and collapse controls', async () => {
+test('A single configured provider retains its heading and all models', async () => {
 	using resources = new DisposableStore();
-	const { view, source, writes } = setup(resources);
+	const { view, source } = setup(resources);
 	source.read = async () => catalog.slice(0, 2);
 	await view.refresh();
-	const group = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
-	assert.ok(group);
-	view.collapseAll();
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0);
-	view.toggleCollapsed(view.viewModelEntries.find(isLanguageModelProviderEntry)!);
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
-	await view.toggleGroupHidden(group);
-	assert.deepEqual(writes, [
-		{ provider: 'first', model: 'newest', visible: false },
-		{ provider: 'first', model: 'older', visible: false },
-	]);
+	assert.deepEqual(view.viewModelEntries.map(entry => entry.type), ['vendor', 'model', 'model']);
+	assert.equal(view.viewModelEntries.find(isLanguageModelProviderEntry)?.label, 'First Provider');
 });
 
 test('Catalog refresh is independent of a pending provider credential observation', async () => {

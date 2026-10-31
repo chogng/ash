@@ -1,21 +1,32 @@
 .stanza-editor-find-widget {
+	--ash-toolbar-actionSize: 22px;
 	position: absolute;
 	z-index: 7;
 	display: none;
 	box-sizing: border-box;
 	min-width: 0;
-	padding: 6px;
+	padding: var(--ash-spacing-size80);
 	color: var(--ash-editor-foreground);
+	font-family: var(--ash-font-family, system-ui, sans-serif);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	line-height: 1.4;
 	white-space: normal;
 	background: var(--ash-dialog-background);
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
-	border-radius: var(--ash-cornerRadius-small);
+	border-radius: var(--ash-cornerRadius-large);
 	box-shadow: 0 4px 12px var(--ash-widget-shadow);
 }
 
 .stanza-editor-find-widget.visible {
 	display: grid;
-	gap: 6px;
+	gap: var(--ash-spacing-size60);
+}
+
+.hc-black .stanza-editor-find-widget,
+.hc-light .stanza-editor-find-widget {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
 }
 
 .stanza-editor-find-widget > .ash-sash-vertical {
@@ -26,44 +37,72 @@
 .stanza-editor-find-row,
 .stanza-editor-replace-row {
 	display: grid;
-	grid-template-columns: 24px minmax(80px, 1fr) auto repeat(7, 24px);
-	gap: 4px;
+	grid-template-columns:
+		var(--ash-toolbar-actionSize) minmax(0, 1fr)
+		60px repeat(4, var(--ash-toolbar-actionSize));
+	gap: var(--ash-spacing-size40);
 	align-items: center;
 }
 
-.stanza-editor-replace-row {
-	grid-template-columns: 24px minmax(80px, 1fr) repeat(3, auto);
+.stanza-editor-replace-row[hidden] {
+	display: none;
+}
+
+.stanza-editor-replace-one {
+	grid-column: 6;
+}
+
+.stanza-editor-replace-all {
+	grid-column: 7;
+}
+
+/* Both rows share a field boundary; options stay with the value they affect. */
+.stanza-editor-find-field {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	padding-inline-end: var(--ash-spacing-size20);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+}
+
+.stanza-editor-find-field:focus-within {
+	border-color: var(--ash-focusBorder);
+}
+
+.stanza-editor-find-field.invalid {
+	border-color: var(--ash-error-foreground);
 }
 
 .stanza-editor-find-input {
 	box-sizing: border-box;
 	min-width: 0;
-	height: 24px;
-	padding: 2px 6px;
+	height: 28px;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-input-foreground);
 	font: inherit;
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	background: transparent;
+	border: 0;
 	outline: none;
 }
 
 .stanza-editor-find-input-box {
+	flex: 1;
 	min-width: 0;
 }
 
-.stanza-editor-find-input:focus {
-	border-color: var(--ash-focusBorder);
-}
-
-.stanza-editor-find-input.invalid {
-	border-color: var(--ash-error-foreground);
+.stanza-editor-find-input::placeholder {
+	color: var(--ash-input-placeholderForeground);
 }
 
 .stanza-editor-find-result {
-	min-width: 60px;
+	min-width: 0;
 	overflow: hidden;
 	color: var(--ash-description-foreground);
-	font-size: 11px;
+	font-size: var(--ash-fontSize-body2);
+	font-variant-numeric: tabular-nums;
 	text-align: right;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -71,27 +110,34 @@
 
 .stanza-editor-find-button {
 	box-sizing: border-box;
-	min-width: 24px;
-	height: 24px;
-	padding: 0 6px;
-	color: var(--ash-button-foreground);
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	padding: 0;
+	color: var(--ash-foreground);
 	font: inherit;
-	line-height: 22px;
+	font-size: var(--ash-fontSize-label1);
 	background: transparent;
-	border: 0;
+	border: var(--ash-strokeThickness) solid transparent;
 	border-radius: var(--ash-cornerRadius-small);
 }
 
 .stanza-editor-find-button .ash-icon {
-	width: 16px;
-	height: 16px;
-	vertical-align: middle;
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
 }
 
 .stanza-editor-find-button:hover,
 .stanza-editor-find-button.checked,
 .stanza-editor-find-button.find-options-highlight {
-	background: var(--ash-button-hoverBackground);
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.stanza-editor-find-button.checked {
+	border-color: var(--ash-focusBorder);
 }
 
 .stanza-editor-find-button:disabled {
@@ -107,8 +153,34 @@
 	outline-offset: -1px;
 }
 
-.stanza-editor-find-replace-toggle {
-	font-size: var(--ash-fontSize-heading2);
+.stanza-editor-find-replace-toggle.expanded .ash-icon {
+	transform: rotate(90deg);
+}
+
+/* Narrow editor groups keep the field usable and place navigation below it. */
+.stanza-editor-find-widget.compact .stanza-editor-find-row,
+.stanza-editor-find-widget.compact .stanza-editor-replace-row {
+	grid-template-columns: var(--ash-toolbar-actionSize) minmax(0, 1fr) repeat(
+			4,
+			var(--ash-toolbar-actionSize)
+		);
+}
+
+.stanza-editor-find-widget.compact .stanza-editor-find-field {
+	grid-column: 2 / -1;
+}
+
+.stanza-editor-find-widget.compact .stanza-editor-find-result {
+	grid-column: 2;
+	text-align: start;
+}
+
+.stanza-editor-find-widget.compact .stanza-editor-replace-one {
+	grid-column: 5;
+}
+
+.stanza-editor-find-widget.compact .stanza-editor-replace-all {
+	grid-column: 6;
 }
 
 .stanza-editor .findMatch {
@@ -125,6 +197,10 @@
 }
 
 @media (forced-colors: active) {
+	.stanza-editor-find-widget {
+		box-shadow: none;
+	}
+
 	.stanza-editor-find-button:disabled {
 		color: GrayText;
 		opacity: 1;

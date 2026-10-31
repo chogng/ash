@@ -5,6 +5,7 @@ import { BrowserLayoutService, type ILayoutService } from '../../../layout/brows
 import { IQuickInputService } from '../../common/quickInput.js';
 import { QuickInputService } from '../../browser/quickInputService.js';
 import { IStorageService, StorageScope, StorageTarget, type StorageValue } from '../../../storage/common/storage.js';
+import { IContextMenuService } from '../../../contextview/browser/contextView.js';
 
 /** Test scope owner; every operation still runs through the production service and controller. */
 export class TestQuickInputService extends QuickInputService {
@@ -18,6 +19,13 @@ export class TestQuickInputService extends QuickInputService {
 		const contexts = options.contextKeyService ?? new ContextKeyService();
 		const layout = options.layoutService ?? new BrowserLayoutService({ root: options.container });
 		if (!scope.has(IStorageService)) scope.registerInstance(IStorageService, new TestStorageService());
+		if (!scope.has(IContextMenuService)) scope.registerInstance(IContextMenuService, {
+			contextMenuStyle: 'custom',
+			onDidShowContextMenu: Event.None,
+			onDidHideContextMenu: Event.None,
+			showContextMenu() { throw new Error('Unexpected Quick Input context menu'); },
+			hideContextMenu() { },
+		});
 		super(scope, contexts, layout);
 		if (!options.instantiationService) {
 			this._register(scope);

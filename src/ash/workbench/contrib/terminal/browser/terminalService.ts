@@ -7,6 +7,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ITerminalProcessService, type TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTransferError, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
@@ -68,6 +69,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IPathService private readonly paths: IPathService,
+		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
+		@IWorkspaceTrustRequestService private readonly trustRequests: IWorkspaceTrustRequestService,
 	) {
 		super();
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -96,6 +99,17 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	async createTerminal(options: ICreateTerminalOptions = {}): Promise<ITerminalInstance> {
+		const workspace = this.workspaceContext.getWorkspace();
+		await this.trust.workspaceTrustInitialized;
+		const permissions = await Promise.all(workspace.folders.map(async folder => (await this.trust.getUriTrustInfo(folder.uri)).permissions));
+		if (this.isDisposed || this.workspaceContext.getWorkspace() !== workspace) throw new CancellationError();
+		// All entrypoints, including opening an empty panel, must obtain trust before profile discovery.
+		if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
+			const accepted = await this.trustRequests.requestWorkspaceTrust({
+				message: localize('workspaceTrust.terminalRequest', 'Creating a terminal process requires executing code from this workspace.'),
+			});
+			if (accepted !== true || this.isDisposed || this.workspaceContext.getWorkspace() !== workspace) throw new CancellationError();
+		}
 		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
 		if (!this.connected) {
 			await this.whenConnected;

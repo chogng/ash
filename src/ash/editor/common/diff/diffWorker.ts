@@ -129,7 +129,8 @@ function isOptions(value: unknown): value is DiffComputationRequest['options'] {
 		&& typeof value.maxComputationTimeMs === 'number'
 		&& Number.isFinite(value.maxComputationTimeMs)
 		&& value.maxComputationTimeMs >= 0
-		&& (value.extendToSubwords === undefined || typeof value.extendToSubwords === 'boolean');
+		&& (value.extendToSubwords === undefined || typeof value.extendToSubwords === 'boolean')
+		&& (value.languageId === undefined || typeof value.languageId === 'string');
 }
 
 function isIndex(value: unknown): value is number {

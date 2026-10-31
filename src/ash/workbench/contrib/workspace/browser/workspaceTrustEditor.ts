@@ -19,11 +19,13 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { defaultButtonStyles, defaultSelectBoxStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, workspaceTrustPermissionNames, IWorkspaceTrustApi, IWorkspaceTrustManagementService, type WorkspaceTrustPermission, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, workspaceTrustPermissionNames, IWorkspaceTrustApi, IWorkspaceTrustManagementService, type WorkspaceTrustPermission, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { localize } from '../../../../nls.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { ITerminalService } from '../../terminal/browser/terminal.js';
+import { IDebugService } from '../../debug/common/debug.js';
 
 /** Edits a revisioned grant for the window's current roots, never for an Agents session's host. */
 export class WorkspaceTrustEditor extends EditorPane {
@@ -41,7 +43,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 	private status!: HTMLElement;
 	private statusFooter!: HTMLElement;
 	private trustButton!: Button;
-	private readOnlyButton!: Button;
+	private restrictedButton!: Button;
 	private saveButton!: Button;
 	private resetButton!: Button;
 	private refreshButton!: Button;
@@ -72,6 +74,8 @@ export class WorkspaceTrustEditor extends EditorPane {
 		@IAccessibleViewService private readonly accessible: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ILocalizationService private readonly localization: ILocalizationService,
+		@ITerminalService private readonly terminals: ITerminalService,
+		@IDebugService private readonly debug: IDebugService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) {
@@ -128,13 +132,13 @@ export class WorkspaceTrustEditor extends EditorPane {
 			label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'),
 			presentation: 'primary',
 		}));
-		this.readOnlyButton = this._register(new Button(actions, {
+		this.restrictedButton = this._register(new Button(actions, {
 			...defaultButtonStyles,
-			label: localize('workspaceTrust.openReadOnly', 'Open read-only'),
+			label: localize('workspaceTrust.openRestricted', 'Open in Restricted Mode'),
 			presentation: 'secondary',
 		}));
 		this._register(this.trustButton.onDidClick(() => { void this.savePermissions(DEVELOPMENT_DIR_PERMISSIONS); }));
-		this._register(this.readOnlyButton.onDidClick(() => { void this.savePermissions(READ_DIR_PERMISSIONS); }));
+		this._register(this.restrictedButton.onDidClick(() => { void this.savePermissions(RESTRICTED_DIR_PERMISSIONS); }));
 
 		const advanced = h(document, 'details');
 		advanced.className = 'workspace-trust-advanced';
@@ -155,6 +159,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 		advancedContent.append(presetLabel);
 		this.presets = this._register(new SelectBox(advancedContent, {
 			options: [
+				{ value: 'restricted', label: localize('workspaceTrust.presetRestricted', 'Restricted Mode') },
 				{ value: 'readOnly', label: localize('workspaceTrust.presetReadOnly', 'Read only') },
 				{ value: 'development', label: localize('workspaceTrust.development', 'Development') },
 				{ value: 'custom', label: localize('workspaceTrust.custom', 'Custom permissions') },
@@ -162,7 +167,9 @@ export class WorkspaceTrustEditor extends EditorPane {
 		}, defaultSelectBoxStyles));
 		this._register(this.presets.onDidSelect(({ value }) => {
 			if (value === 'custom') return;
-			this.draft = new Set(value === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS);
+			const permissions = value === 'restricted' ? RESTRICTED_DIR_PERMISSIONS
+				: value === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
+			this.draft = new Set(permissions);
 			this.render();
 		}));
 		const permissions = h(document, 'div');
@@ -209,7 +216,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 				const focused = document.activeElement;
 				if (!this.active || !isHTMLElement(focused) || !this.root.contains(focused)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.WorkspaceTrust, { type }, () => type === AccessibleViewType.Help
-					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open read-only. Each action asks for confirmation before saving and restoring the workspace connection. Trust changes finish after workspace integrations have updated. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
+					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open in Restricted Mode. Restricted Mode allows editing and saving files while commands and workspace integrations are disabled. Each action asks for confirmation before saving and updating workspace integrations. Trust changes finish after workspace integrations have updated. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
 					: [this.folderName.textContent, this.folderPath.textContent, this.heading.textContent, this.summary.textContent, ...[...this.draft].map(permission => this.permissionLabel(permission)), this.status.textContent].join('\n'),
 					() => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.WorkspaceTrust);
 			},
@@ -231,14 +238,14 @@ export class WorkspaceTrustEditor extends EditorPane {
 		this.folders.enabled = !this.busy;
 		this.presets.enabled = enabled;
 		const matches = (permissions: readonly WorkspaceTrustPermission[]): boolean => permissions.length === this.draft.size && permissions.every(permission => this.draft.has(permission));
-		this.presets.value = matches(READ_DIR_PERMISSIONS) ? 'readOnly' : matches(DEVELOPMENT_DIR_PERMISSIONS) ? 'development' : 'custom';
+		this.presets.value = matches(RESTRICTED_DIR_PERMISSIONS) ? 'restricted' : matches(READ_DIR_PERMISSIONS) ? 'readOnly' : matches(DEVELOPMENT_DIR_PERMISSIONS) ? 'development' : 'custom';
 		for (const [permission, toggle] of this.toggles) { toggle.checked = this.draft.has(permission); toggle.enabled = enabled; }
 		this.saveButton.enabled = enabled && this.dirty;
 		this.trustButton.enabled = enabled;
-		this.readOnlyButton.enabled = enabled;
+		this.restrictedButton.enabled = enabled;
 		// Presets use the same revisioned save path as advanced changes, without creating a draft first.
 		this.trustButton.hidden = !this.selected || this.samePermissions(this.saved, DEVELOPMENT_DIR_PERMISSIONS);
-		this.readOnlyButton.hidden = !this.selected || this.samePermissions(this.saved, READ_DIR_PERMISSIONS);
+		this.restrictedButton.hidden = !this.selected || this.samePermissions(this.saved, RESTRICTED_DIR_PERMISSIONS);
 		this.resetButton.enabled = !this.busy && this.dirty;
 		this.refreshButton.enabled = !this.busy;
 		this.statusFooter.hidden = this.effective !== undefined && this.editable && !this.busy && !this.stale;
@@ -258,18 +265,23 @@ export class WorkspaceTrustEditor extends EditorPane {
 			return;
 		}
 		const readOnly = this.samePermissions(this.effective, READ_DIR_PERMISSIONS);
+		const restricted = this.samePermissions(this.effective, RESTRICTED_DIR_PERMISSIONS);
 		const development = this.effectiveTrusted && this.samePermissions(this.effective, DEVELOPMENT_DIR_PERMISSIONS);
-		this.root.dataset.trustState = development ? 'trusted' : readOnly ? 'readOnly' : 'custom';
+		this.root.dataset.trustState = development ? 'trusted' : restricted ? 'restricted' : readOnly ? 'readOnly' : 'custom';
 		this.heading.textContent = development
 			? localize('workspaceTrust.stateTrusted', 'Trusted workspace')
-			: readOnly
-				? localize('workspaceTrust.stateReadOnly', 'Read-only workspace')
-				: localize('workspaceTrust.stateCustom', 'Custom permissions');
+			: restricted
+				? localize('workspaceTrust.stateRestricted', 'Restricted Mode')
+				: readOnly
+					? localize('workspaceTrust.stateReadOnly', 'Read-only workspace')
+					: localize('workspaceTrust.stateCustom', 'Custom permissions');
 		this.summary.textContent = development
 			? localize('workspaceTrust.trustedDescription', 'Files, commands and workspace integrations are enabled.')
-			: readOnly
-				? localize('workspaceTrust.readOnlyDescription', 'You can browse files. Editing and commands are disabled.')
-				: localize('workspaceTrust.customDescription', 'Some features are limited. Review them in Advanced permissions.');
+			: restricted
+				? localize('workspaceTrust.restrictedDescription', 'You can edit and save files. Commands and workspace integrations are disabled.')
+				: readOnly
+					? localize('workspaceTrust.readOnlyDescription', 'You can browse files. Editing and commands are disabled.')
+					: localize('workspaceTrust.customDescription', 'Some features are limited. Review them in Advanced permissions.');
 	}
 
 	private async refresh(): Promise<void> {
@@ -328,23 +340,28 @@ export class WorkspaceTrustEditor extends EditorPane {
 		const selected = this.selected;
 		const permissions = [...(preset ?? this.draft)];
 		const development = this.samePermissions(permissions, DEVELOPMENT_DIR_PERMISSIONS);
-		const readOnly = this.samePermissions(permissions, READ_DIR_PERMISSIONS);
+		const restricted = this.samePermissions(permissions, RESTRICTED_DIR_PERMISSIONS);
 		const primaryButton = preset
-			? development ? localize('workspaceTrust.enableDevelopment', 'Trust workspace') : localize('workspaceTrust.openReadOnly', 'Open read-only')
+			? development ? localize('workspaceTrust.enableDevelopment', 'Trust workspace') : localize('workspaceTrust.openRestricted', 'Open in Restricted Mode')
 			: localize('workspaceTrust.save', 'Save permissions');
 		this.busy = true; this.render();
 		try {
+			const hasRunningSessions = this.terminals.instances.some(instance => instance.state !== 'exited' && instance.state !== 'error')
+				|| this.debug.sessions.some(session => session.state !== 'terminated' && session.state !== 'error');
 			const result = await this.dialogs.confirm({
+				custom: true,
 				message: development
 					? localize('workspaceTrust.confirmTrust', 'Trust {0} and enable development?', this.folderName.textContent)
-					: readOnly
-						? localize('workspaceTrust.confirmReadOnly', 'Open {0} read-only?', this.folderName.textContent)
+					: restricted
+						? localize('workspaceTrust.confirmRestricted', 'Open {0} in Restricted Mode?', this.folderName.textContent)
 						: localize('workspaceTrust.confirm', 'Apply directory permissions to {0}?', path),
-				detail: development
-					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading workspace integrations in {0}. Only continue if you trust this project. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
-					: readOnly
-						? localize('workspaceTrust.confirmReadOnlyDetail', 'This allows browsing and searching files in {0}. Editing files, running commands and workspace integrations will be disabled. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
-						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+				detail: [development
+					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading project configuration, instructions, skills, MCP servers, hooks, plugins and language services in {0}. Only continue if you trust this project.', path)
+					: restricted
+						? localize('workspaceTrust.confirmRestrictedDetail', 'This allows editing and saving files in {0}. Commands and workspace integrations will be disabled.', path)
+						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and updates workspace integrations.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+				...(hasRunningSessions ? [localize('workspaceTrust.runningSessionsWarning', 'Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.')] : []),
+				].join('\n\n'),
 				primaryButton,
 			});
 			// Confirmation may outlive the selected workspace or connection. It authorizes only this captured target.
@@ -356,11 +373,11 @@ export class WorkspaceTrustEditor extends EditorPane {
 			} else {
 				await this.trust.setDirectoryPermissions(path, permissions, revision);
 				if (!this.current(generation) || connectionGeneration !== this.api.connectionGeneration) return;
-				this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Restoring the workspace connection…');
-				await this.api.recovery?.reconnect();
+				this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Updating workspace integrations…');
+				await this.api.recovery?.reconnect({ reason: 'permissions' });
 				await this.management.resolveWorkspaceTrust();
 			}
-			// Recovery invalidates the old snapshot. Reread the still-open folder before restoring focus.
+			// Permission changes invalidate the old snapshot. Reread before restoring focus.
 			if (this.active && this.selected === selected) {
 				await this.refresh();
 				if (preset && this.active && this.selected === selected) this.root.focus();

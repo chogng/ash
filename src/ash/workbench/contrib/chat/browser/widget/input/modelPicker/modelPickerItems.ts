@@ -3,7 +3,7 @@ import type { IAction } from '../../../../../../../base/common/actions.js';
 import type { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
-import { createModelItem, type IModelPickerItemOptions } from './modelPickerItemPrimitives.js';
+import { createModelItem } from './modelPickerItemPrimitives.js';
 import { localize } from '../../../../../../../nls.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
 
@@ -16,11 +16,10 @@ export function createManageModelsAction(commandService: ICommandService): IActi
 	};
 }
 
-/** Projects the chosen provider's ordered catalog into selectable rows. */
+/** Projects the enabled catalog into selectable rows without changing its order or model identities. */
 export function buildModelPickerItems(
 	models: readonly ModelCatalogEntry[],
 	selected: ModelRef | undefined,
-	options?: IModelPickerItemOptions,
 ): readonly IActionListItem<ModelCatalogEntry>[] {
-	return models.map(entry => createModelItem(entry, selected, options));
+	return models.map(entry => createModelItem(entry, selected));
 }

@@ -1,9 +1,53 @@
 .ash-list {
+	/* Resolve against this list's scroll owner, rather than a presentation ancestor.
+	 * By default the background spans the track and content avoids it with padding.
+	 * A presentation can reserve the track with margin or cover the overlap with its
+	 * existing content padding; both use the same effective track dimensions. */
+	--ash-list-scrollbar-inset: 0px;
+	--ash-list-row-scrollbar-space: calc(
+		var(--ash-list-row-reserve-scrollbar, 0) *
+			var(--ash-list-scrollbar-inset)
+	);
+	--ash-list-row-scrollbar-overlap: max(
+		0px,
+		var(--ash-list-scrollbar-inset) - var(--ash-list-row-inset-end, 0px) -
+			var(--ash-list-row-scrollbar-space)
+	);
 	margin: 0;
 	padding: 0;
 }
 
+.ash-list.ash-list-managed {
+	--ash-list-scrollbar-inset: var(--ash-scrollbar-vertical-size, 0px);
+}
+
 .ash-list-row {
+	box-sizing: border-box;
+	margin-inline: var(--ash-list-row-inset-start, 0px)
+		calc(
+			var(--ash-list-row-inset-end, 0px) +
+				var(--ash-list-row-scrollbar-space)
+		);
+	width: calc(
+		100% - var(--ash-list-row-inset-start, 0px) -
+			var(--ash-list-row-inset-end, 0px) -
+			var(--ash-list-row-scrollbar-space)
+	);
+	padding-inline-start: var(--ash-list-row-padding-start, 0px);
+	padding-inline-end: max(
+		calc(
+			var(
+					--ash-list-row-padding-end,
+					var(--ash-list-row-default-padding-end, 0px)
+				) +
+				var(
+					--ash-list-row-extra-scrollbar-padding,
+					var(--ash-list-row-scrollbar-overlap)
+				)
+		),
+		var(--ash-list-row-scrollbar-overlap)
+	);
+	border-radius: var(--ash-list-row-radius, 0px);
 	cursor: default;
 }
 

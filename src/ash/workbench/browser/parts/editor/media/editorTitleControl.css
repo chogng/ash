@@ -43,6 +43,7 @@
 	margin-left: auto;
 	padding: 0 4px;
 }
+
 .ash-editor-group-lock-indicator {
 	align-self: center;
 	flex: 0 0 auto;
@@ -50,5 +51,34 @@
 	color: var(--ash-description-foreground);
 }
 .ash-editor-title-control[hidden] {
+	display: none;
+}
+
+.ash-editor-tabs-and-actions.ash-editor-group-header {
+	align-items: start;
+	padding-inline: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-editor-header-primary {
+	flex: 0 0 auto;
+	min-width: 0;
+	height: var(--ash-pane-titleHeight);
+	display: flex;
+	align-items: center;
+}
+
+.ash-editor-title-control > .ash-editor-breadcrumbs {
+	margin-right: var(--ash-editor-content-right-inset, 0px);
+}
+
+.ash-editor-header-layout {
+	flex: 0 0 auto;
+	height: var(--ash-pane-titleHeight);
+	display: flex;
+	align-items: center;
+}
+
+.ash-editor-tabs-and-actions[hidden] {
 	display: none;
 }

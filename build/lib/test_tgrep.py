@@ -7,6 +7,7 @@ import os
 import tarfile
 import tempfile
 import subprocess
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,6 +18,40 @@ from build.lib.targets import TARGETS
 
 
 class TgrepTests(unittest.TestCase):
+    def test_locked_patch_keeps_windows_hardening_architecture_compatible(self):
+        distribution = Path(__file__).resolve().parents[2] / "third_party/tgrep"
+        lock = json.loads((distribution / "runtime-lock.json").read_text())
+        source = tgrep._verified_input(distribution, lock["source"])
+        runtime_patch = tgrep._verified_input(distribution, lock["patch"])
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            tgrep._extract_source(source, directory)
+            environment = dict(
+                os.environ, GIT_CEILING_DIRECTORIES=str(directory.parent)
+            )
+            for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+                environment.pop(name, None)
+            subprocess.run(
+                ["git", "apply", str(runtime_patch)],
+                cwd=directory,
+                env=environment,
+                check=True,
+            )
+            with (directory / ".cargo/config.toml").open("rb") as config:
+                targets = tomllib.load(config)["target"]
+            windows = targets[
+                'cfg(all(target_os = "windows", target_arch = "x86_64"))'
+            ]["rustflags"]
+            arm64 = targets['cfg(all(target_os = "windows", target_arch = "aarch64"))'][
+                "rustflags"
+            ]
+            for flags in (windows, arm64):
+                self.assertIn("-Ccontrol-flow-guard", flags)
+                self.assertIn("-Ctarget-feature=+crt-static", flags)
+                self.assertIn("/DYNAMICBASE", " ".join(flags))
+            self.assertIn("/CETCOMPAT", " ".join(windows))
+            self.assertNotIn("/CETCOMPAT", " ".join(arm64))
+
     def fixture(self, root):
         source = root / "source.tar.gz"
         with tarfile.open(source, "w:gz") as output:

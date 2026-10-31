@@ -19,31 +19,31 @@
 }
 
 .ash-agent-sessions-viewer {
+	flex: 1 1 0;
 	min-height: 0;
-	overflow: auto;
+	min-width: 0;
+	overflow: hidden;
 }
 
-.ash-agent-sessions-group[hidden],
+.ash-agent-sessions-viewer .ash-agent-session-no-twistie {
+	display: none;
+}
+
 .ash-agent-sessions-empty[hidden] {
 	display: none;
 }
 
-.ash-agent-sessions-group h3 {
-	margin: var(--ash-spacing-size80) var(--ash-spacing-size80)
-		var(--ash-spacing-size40);
+.ash-agent-sessions-group {
+	margin: 0;
+	padding-inline: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-agent-sessions-group ul {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
 .ash-agent-session-row {
 	display: flex;
+	box-sizing: border-box;
 	width: 100%;
 	min-width: 0;
 	flex-direction: column;
@@ -52,7 +52,7 @@
 	padding: var(--ash-spacing-size80);
 	border: 0;
 	border-radius: var(--ash-cornerRadius-small);
-	color: var(--ash-foreground);
+	color: inherit;
 	background: transparent;
 	font: inherit;
 	text-align: start;
@@ -73,16 +73,6 @@
 	font-size: var(--ash-fontSize-label2);
 }
 
-.ash-agent-session-item:hover > .ash-agent-session-row,
-.ash-agent-session-item.menu-visible > .ash-agent-session-row {
-	background: var(--ash-list-hoverBackground);
-}
-
-.ash-agent-session-item > .ash-agent-session-row.selected {
-	background: var(--ash-list-inactiveSelectionBackground);
-}
-
-.ash-agent-session-row:focus-visible,
 .ash-agent-sessions-search:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
@@ -94,6 +84,7 @@
 
 .ash-agent-session-item {
 	position: relative;
+	width: 100%;
 	border-radius: var(--ash-cornerRadius-small);
 }
 
@@ -144,7 +135,7 @@
 		var(--ash-sideBar-background);
 }
 
-.ash-agent-session-row.selected + .ash-agent-session-actions {
+.ash-agent-sessions-viewer .ash-tree-row.selected .ash-agent-session-actions {
 	background:
 		linear-gradient(
 			var(--ash-list-inactiveSelectionBackground),
@@ -178,4 +169,22 @@
 .hc-black .ash-agent-session-actions::before,
 .hc-light .ash-agent-session-actions::before {
 	display: none;
+}
+
+.ash-agent-sessions-viewer .ash-tree-row.focused .ash-agent-session-actions {
+	opacity: 1;
+	pointer-events: auto;
+	transition: none;
+}
+
+.ash-agent-sessions-viewer
+	.ash-tree:focus
+	.ash-tree-row.selected
+	.ash-agent-session-actions {
+	background:
+		linear-gradient(
+			var(--ash-list-activeSelectionBackground),
+			var(--ash-list-activeSelectionBackground)
+		),
+		var(--ash-sideBar-background);
 }

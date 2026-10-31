@@ -309,7 +309,7 @@ suite('Workbench localization', () => {
 				'Close to the Right',
 				'Close Saved',
 				'Close All in Group',
-				'Close All Tabs',
+				'Close All',
 				'Reopen Closed Tab',
 			],
 		);
@@ -855,7 +855,6 @@ suite('Workbench localization', () => {
 		using transcription = new NullLocalTranscriptionService();
 		await assert.rejects(transcription.start(), { message: '语音输入连接不可用' });
 		assert.equal(localize('chat.agentPicker.mode', 'Agent: {0}', 'reviewer'), '智能体：reviewer');
-		assert.equal(localize('chat.agentPicker.default', 'Default Agent'), '默认智能体');
 		assert.equal(localize('chat.input.voice', 'Voice conversation'), '语音对话');
 		assert.equal(localize('chat.providerKeys.inputTitle', 'API key for {0}', 'OpenAI'), 'OpenAI 的 API 密钥');
 		assert.equal(localize('onboarding.stepProgress', 'Step {0} of {1}', 2, 3), '第 2 步，共 3 步');
@@ -887,8 +886,8 @@ suite('Workbench localization', () => {
 		);
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close')), '关闭');
 		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs')),
-			'关闭所有标签页',
+			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All')),
+			'全部关闭',
 		);
 		assert.equal(
 			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab')),

@@ -60,7 +60,7 @@ export const CodeEditorConfiguration = Object.freeze({
 		setting: {
 			valueType: 'number',
 			get title() { return localize('editor.lineHeight.title', 'Line height'); },
-			get description() { return localize('editor.lineHeight.description', 'Set the height of each editor line in pixels. Use 0 to calculate it from the font size. Values below 8 are font-size multipliers.'); },
+			get description() { return localize('editor.lineHeight.description', 'Editor line height in pixels.'); },
 			minimum: 0,
 			maximum: 80,
 		},

@@ -116,6 +116,9 @@ export interface AgentTreeNode {
 /** Coarse durable activity; this does not identify an exact Turn state or waiting reason. */
 export interface IChat {
 	readonly threadId: ThreadId;
+	readonly createdAt?: Date;
+	/** Per-chat activity from the provider; unknown timestamps stay absent. */
+	readonly updatedAt?: Date;
 	readonly workspace?: ISession['workspace'];
 	readonly origin: ThreadOrigin;
 	readonly status: ChatStatus;

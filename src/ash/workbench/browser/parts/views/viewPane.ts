@@ -45,6 +45,8 @@ export interface IFilterViewPaneOptions extends IViewPaneOptions {
 export interface PartTitleProjection {
 	readonly content?: HTMLElement;
 	readonly actions?: HTMLElement;
+	/** The projected title replaces redundant navigation when only one container is visible. */
+	readonly hideContainerSelector?: boolean;
 }
 
 /** A titled, independently managed view hosted inside a workbench view container. */

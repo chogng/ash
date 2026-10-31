@@ -2013,11 +2013,19 @@ export function createApi(configuration, initialization) {
 			showErrorMessage: (text, ...items) => message('error', text, ...items),
 			async showQuickPick(items, options = {}) {
 				if (!Array.isArray(items) || options.canPickMany) return unsupported('window.showQuickPick input/multi-select');
-				if (options.placeHolder !== undefined && typeof options.placeHolder !== 'string' || items.some(item => typeof item !== 'string' && (!item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string'))) throw new TypeError('Invalid Quick Pick item or placeholder');
+				if (options.placeHolder !== undefined && typeof options.placeHolder !== 'string' || items.some(item => typeof item !== 'string' && (
+					!item || typeof item.label !== 'string'
+					|| item.description !== undefined && typeof item.description !== 'string'
+					|| item.detail !== undefined && typeof item.detail !== 'string'
+					|| item.separator !== undefined && typeof item.separator !== 'string'
+					|| item.alwaysShow !== undefined && typeof item.alwaysShow !== 'boolean'
+				))) throw new TypeError('Invalid Quick Pick item or placeholder');
 				const entries = items.map(item => typeof item === 'string' ? { label: item } : {
 					label: item.label,
 					...(item.description === undefined ? {} : { description: item.description }),
 					...(item.detail === undefined ? {} : { detail: item.detail }),
+					...(item.separator === undefined ? {} : { separator: item.separator }),
+					...(item.alwaysShow === undefined ? {} : { alwaysShow: item.alwaysShow }),
 				});
 				const { index } = await request({ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' }, 'selection');
 				return index === null ? undefined : items[index];

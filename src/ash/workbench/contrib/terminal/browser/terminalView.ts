@@ -33,7 +33,6 @@ import { IMenuService, MenuId } from '../../../../platform/actions/common/action
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
@@ -163,18 +162,15 @@ export class TerminalViewPane extends ViewPane {
 	private async initialize(): Promise<void> {
 		if (!this.isBodyVisible() || this.isDisposed || this.initializing) return;
 		this.initializing = true;
-		const progress = this.getProgressIndicator().show(true, 150);
 		try {
-			await this.terminalService.whenConnected;
+			const connectionProgress = this.getProgressIndicator().show(true, 150);
+			try { await this.terminalService.whenConnected; }
+			finally { connectionProgress.done(); }
 			// A transfer window may restore a visible panel before Main offers the PTY.
 			// Its first terminal belongs to that handoff, not an implicit new shell.
 			if (this.awaitingTransfer && this.terminalService.instances.length === 0) return;
 			if (this.terminalService.instances.length === 0) {
-				// Profile readiness also drives the title menu. A hidden panel must
-				// stop here before handing a creation intent to the service.
-				const folders = this.workspaceContext.getWorkspace().folders;
-				if (folders.length <= 1) await this.profileService.refreshAvailableProfiles(folders[0]?.id);
-				// An incoming process can acquire the panel while discovery is pending.
+				// Creation can wait for trust or folder selection; keep user decisions outside progress.
 				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
 				this.creating = this.terminalService.createTerminal();
@@ -184,7 +180,9 @@ export class TerminalViewPane extends ViewPane {
 					if (!this.isDisposed) { this.titleActions.setCreating(false); this.updateInstances(); }
 				}
 			} else {
-				await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId);
+				const profileProgress = this.getProgressIndicator().show(true, 150);
+				try { await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId); }
+				finally { profileProgress.done(); }
 			}
 			if (this.isDisposed) return;
 			this.updateProfiles();
@@ -193,7 +191,6 @@ export class TerminalViewPane extends ViewPane {
 			this.setStatus(terminalErrorMessage(error, 'Terminal is unavailable'));
 			this.updateProfiles();
 		} finally {
-			progress.done();
 			this.initializing = false;
 		}
 	}
@@ -309,11 +306,6 @@ export class TerminalViewPane extends ViewPane {
 }
 
 function terminalErrorMessage(error: unknown, fallback: string): string {
-	const message = error instanceof Error ? error.message : String(error);
-	const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
-	if (/TerminalUnavailable/.test(errorName)) {
-		return 'Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.';
-	}
 	return error instanceof Error ? error.message : fallback;
 }
 

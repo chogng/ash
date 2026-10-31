@@ -908,6 +908,7 @@ fn query_catalog(
                 || record.session_id.as_str() != session_id
                 || i64::from(record.requires_startup_recovery) != requires_recovery
                 || record.sequence != current_sequence
+                || record.thread.last_activity_at_unix_ms.is_none()
             {
                 return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
             }
@@ -1000,6 +1001,14 @@ fn decode_session_catalog(
     let mut session = serde_json::from_str::<Session>(json)
         .map_err(|_| ThreadStoreError::SessionCatalogDamaged(session_id.clone()))?;
     if &session.session_id != session_id {
+        return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
+    }
+    if session
+        .threads
+        .iter()
+        .any(|thread| thread.last_activity_at_unix_ms.is_none())
+    {
+        // Reuse Core's catalog repair path once for histories written before activity metadata.
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
     }
     let mut statement = connection.prepare("SELECT bindings.host, bindings.root FROM remote_history_bindings AS bindings JOIN thread_catalog AS catalog USING(thread_id) WHERE catalog.session_id = ?1 ORDER BY (catalog.thread_id = catalog.session_id) DESC, catalog.thread_id LIMIT 1").map_err(storage_error)?;

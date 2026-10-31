@@ -9,12 +9,15 @@ import { AnchorAlignment, type IContextViewProvider } from '../contextview/conte
 import { Dropdown } from '../dropdown/dropdown.js';
 import { List } from '../list/listWidget.js';
 import { appendIcon } from '../lxicons/lxicon.js';
+import './selectbox.css';
 
 export interface SelectOption {
 	readonly value: string;
 	readonly label: string;
 	readonly description?: string;
 	readonly disabled?: boolean;
+	/** Draw a decorative divider before this option without adding a keyboard stop. */
+	readonly separatorBefore?: boolean;
 }
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
@@ -217,6 +220,7 @@ export class SelectBox extends Disposable {
 	private renderOption(option: SelectOption, row: HTMLDivElement): HTMLElement {
 		const ownerDocument = this.list.ownerDocument;
 		row.classList.add('ash-select-box-option');
+		row.classList.toggle('ash-select-box-option-separator-before', !!option.separatorBefore);
 		row.tabIndex = -1;
 		setAriaAttribute(row, 'disabled', option.disabled ? true : undefined);
 		if (option.disabled) {

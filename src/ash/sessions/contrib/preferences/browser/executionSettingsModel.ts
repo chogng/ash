@@ -8,7 +8,7 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/services/preferences/common/preferences.js';
 
 const readPermissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
 const writePermissions: readonly WorkspaceTrustPermission[] = [...readPermissions, 'writeFiles', 'mutateRepository'];

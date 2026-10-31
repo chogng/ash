@@ -51,6 +51,10 @@ fn ssh_connection_starts_a_non_interactive_stdio_channel() {
             "BatchMode=yes",
             "-o",
             "ConnectTimeout=15",
+            "-o",
+            "ServerAliveInterval=15",
+            "-o",
+            "ServerAliveCountMax=3",
             "build-linux",
             "'env' 'ASH_WORKSPACE_ROOT=/srv/ash/project with spaces' '/opt/ash/bin/ash-remote-server' 'connect'",
         ]

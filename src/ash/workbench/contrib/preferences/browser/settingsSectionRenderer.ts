@@ -6,6 +6,7 @@ import {
 	defaultToggleStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsSection.css';
+import './media/settingsCard.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
@@ -21,7 +22,8 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import type { SettingsSectionReference, SettingsSectionField, SettingsSectionModel, SettingsTreeNode } from './settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
 export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectionReference> {
@@ -31,11 +33,13 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	public readonly onDidChange = this.changed.event;
 	private readonly domNode: HTMLElement;
 	private readonly titleDomNode: HTMLElement;
-	private readonly descriptionDomNode: HTMLElement;
+	private readonly descriptionDomNode: HTMLElement | undefined;
+	private readonly fieldsDomNode: HTMLElement;
 	private readonly controls = new Map<string, Button | InputBox | SelectBox | Switch | HTMLElement>();
 	private readonly actionsDomNode: HTMLElement;
 	private readonly fields = new Map<string, SettingsSectionField>();
 	private isVisible = false;
+	private pendingFocus: HTMLElement | undefined;
 
 	constructor(container: HTMLElement, private readonly model: SettingsSectionModel, providerId: AccessibleViewProviderId, verbosity: AccessibilityVerbositySettingId,
 		@IContextViewService private readonly contextView: IContextViewService,
@@ -46,9 +50,38 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div'); this.domNode.className = 'ash-settings-section';
-		this.titleDomNode = h(document, 'h5'); this.descriptionDomNode = h(document, 'p'); this.domNode.append(this.titleDomNode, this.descriptionDomNode);
+		if (model.itemId) { this.domNode.dataset.settingsItemId = model.itemId; }
+		if (model.groupId === null) {
+			this.domNode.classList.add('ash-settings-card-section');
+			this.titleDomNode = h(document, 'h4');
+			this.titleDomNode.className = 'ash-settings-card-title';
+			this.titleDomNode.id = `settingsSectionTitle-${generateUuid()}`;
+			this.domNode.setAttribute('role', 'group');
+			this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
+			this.fieldsDomNode = h(document, 'div');
+			this.fieldsDomNode.className = 'ash-settings-card';
+			this.domNode.append(this.titleDomNode, this.fieldsDomNode);
+		} else {
+			this.titleDomNode = h(document, 'h5');
+			this.descriptionDomNode = h(document, 'p');
+			this.domNode.append(this.titleDomNode, this.descriptionDomNode);
+			this.fieldsDomNode = this.domNode;
+		}
 		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
-		this._register(model.onDidChange(() => { this.render(); this.changed.fire(); }));
+		this._register(model.onDidChange(() => {
+			const focused = document.activeElement;
+			if (isHTMLElement(focused) && this.domNode.contains(focused)) { this.pendingFocus = focused; }
+			this.render();
+			this.changed.fire();
+			// Saving disables controls; rebuilding the settings tree can detach them.
+			// Return focus once usable, without taking it from another control.
+			if (document.activeElement === document.body && this.pendingFocus?.isConnected && !this.pendingFocus.matches(':disabled')) {
+				this.pendingFocus.focus();
+			}
+			if (document.activeElement !== document.body && (document.activeElement !== this.pendingFocus || !this.pendingFocus?.matches(':disabled'))) {
+				this.pendingFocus = undefined;
+			}
+		}));
 		const key = `settingsSection-${generateUuid()}`;
 		const scope = this._register(contextKeys.createScoped(this.domNode)); scope.createKey(key, true);
 		const updateHint = (): void => {
@@ -74,10 +107,19 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 
 	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.render();
-		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [{ element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } }] }];
+		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } };
+		if (this.model.groupId === null) { return [item]; }
+		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [item] }];
 	}
 
-	public setVisible(visible: boolean): void { this.isVisible = visible; this.model.setVisible(visible); }
+	public setVisible(visible: boolean): void {
+		this.isVisible = visible;
+		this.model.setVisible(visible);
+		if (!visible) {
+			this.pendingFocus = undefined;
+			for (const control of this.controls.values()) { if (control instanceof SelectBox) { control.hide(); } }
+		}
+	}
 
 	private accessibleContent(): string {
 		const content = this.model.fields.map(field => {
@@ -95,18 +137,46 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	}
 
 	private render(): void {
-		this.titleDomNode.textContent = this.model.title; this.descriptionDomNode.textContent = this.model.description;
+		this.titleDomNode.textContent = this.model.title;
+		if (this.descriptionDomNode) { this.descriptionDomNode.textContent = this.model.description; }
 		for (const field of this.model.fields) {
 			this.fields.set(field.id, field);
 			let control = this.controls.get(field.id);
 			if (!control) {
+				let container = this.fieldsDomNode;
+				let copy = container;
+				if (this.model.groupId === null && field.kind !== 'status' && field.kind !== 'action') {
+					container = h(this.domNode.ownerDocument, 'div');
+					container.className = 'ash-settings-field-row';
+					copy = h(this.domNode.ownerDocument, 'div');
+					copy.className = 'ash-settings-field-copy';
+					container.append(copy);
+					this.fieldsDomNode.append(container);
+					if (field.description) {
+						const description = h(this.domNode.ownerDocument, 'p');
+						description.className = 'ash-settings-field-description';
+						description.textContent = field.description;
+						description.id = `settingsFieldDescription-${generateUuid()}`;
+						copy.append(description);
+						container.setAttribute('role', 'group');
+						container.setAttribute('aria-describedby', description.id);
+					}
+				}
 				if (field.kind === 'status') {
-					control = h(this.domNode.ownerDocument, 'p'); control.setAttribute('role', 'status'); control.setAttribute('aria-live', 'polite'); this.domNode.append(control);
+					control = h(this.domNode.ownerDocument, 'p');
+					control.className = 'ash-settings-section-status';
+					control.setAttribute('role', 'status');
+					control.setAttribute('aria-live', 'polite');
+					this.fieldsDomNode.append(control);
 				} else if (field.kind === 'text') {
 					const label = h(this.domNode.ownerDocument, 'label');
 					label.textContent = field.label;
-					this.domNode.append(label);
-					const input = this._register(new InputBox(this.domNode, {
+					if (copy === container) {
+						copy.append(label);
+					} else {
+						copy.prepend(label);
+					}
+					const input = this._register(new InputBox(container, {
 						inputBoxStyles: defaultInputBoxStyles,
 						ariaLabel: field.label,
 						placeholder: field.placeholder,
@@ -118,29 +188,45 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 					// value different from the model is a user edit, otherwise a read dirties the draft.
 					this._register(input.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'text' && current.value !== value) { current.setValue(value); } })); control = input;
 				} else if (field.kind === 'boolean') {
-					const toggle = this._register(new Switch(this.domNode, {
+					const standalone = this.model.groupId === null;
+					const toggle = this._register(new Switch(container, {
 						...defaultToggleStyles,
-						label: field.label,
+						label: standalone ? undefined : field.label,
 						ariaLabel: field.label,
 					}));
+					if (standalone) {
+						const label = h(this.domNode.ownerDocument, 'label');
+						label.textContent = field.label;
+						toggle.input.id = `settingsField-${generateUuid()}`;
+						label.htmlFor = toggle.input.id;
+						copy.prepend(label);
+					}
 					this._register(toggle.onDidChange(value => { const current = this.fields.get(field.id); if (current?.kind === 'boolean') { current.setValue(value); } }));
 					control = toggle;
 				} else if (field.kind === 'select') {
 					const label = h(this.domNode.ownerDocument, 'p');
 					label.textContent = field.label;
-					this.domNode.append(label);
-					const select = this._register(new SelectBox(this.domNode, {
+					if (copy === container) {
+						copy.append(label);
+					} else {
+						copy.prepend(label);
+					}
+					const select = this._register(new SelectBox(container, {
 						options: field.options, ariaLabel: field.label, contextViewProvider: this.contextView
 					}, defaultSelectBoxStyles));
 					this._register(select.onDidSelect(({ value }) => { const current = this.fields.get(field.id); if (current?.kind === 'select') { current.setValue(value); } })); control = select;
 				} else {
-					if (!this.actionsDomNode.isConnected) { this.domNode.append(this.actionsDomNode); }
+					if (!this.actionsDomNode.isConnected) { this.fieldsDomNode.append(this.actionsDomNode); }
 					const button = this._register(new Button(this.actionsDomNode, {
 						...defaultButtonStyles,
 						label: field.label,
 						presentation: 'secondary',
 					}));
 					this._register(button.onDidClick(() => { const current = this.fields.get(field.id); if (current?.kind === 'action' && current.enabled) { void current.run(); } })); control = button;
+				}
+				if (copy !== container && copy.firstElementChild) {
+					copy.firstElementChild.id = `settingsFieldLabel-${generateUuid()}`;
+					container.setAttribute('aria-labelledby', copy.firstElementChild.id);
 				}
 				this.controls.set(field.id, control);
 			}

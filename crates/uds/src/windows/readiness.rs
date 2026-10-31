@@ -1,68 +1,81 @@
+//! The synchronous facade blocks only its calling thread; Tokio owns IOCP registration,
+//! readiness, timers and wakeups. One worker drives IPC for all synchronous callers.
+
+use std::future::Future;
 use std::io;
-use std::os::windows::io::AsRawSocket;
+use std::pin::Pin;
+use std::sync::OnceLock;
 use std::time::Duration;
 
-use windows_sys::Win32::Networking::WinSock::POLLNVAL;
-use windows_sys::Win32::Networking::WinSock::POLLRDNORM;
-use windows_sys::Win32::Networking::WinSock::POLLWRNORM;
-use windows_sys::Win32::Networking::WinSock::SOCKET_ERROR;
-use windows_sys::Win32::Networking::WinSock::WSAEINTR;
-use windows_sys::Win32::Networking::WinSock::WSAGetLastError;
-use windows_sys::Win32::Networking::WinSock::WSAPOLLFD;
-use windows_sys::Win32::Networking::WinSock::WSAPoll;
+use futures::future::select_all;
+use tokio::runtime::Builder;
+use tokio::runtime::EnterGuard;
+use tokio::runtime::Runtime;
 
-pub(crate) fn wait_for_socket_activity(
-    listener: Option<&crate::UnixListener>,
-    readers: &[&crate::UnixStream],
-    writers: &[&crate::UnixStream],
+use super::pipe::Direction;
+
+pub(super) fn enter() -> io::Result<EnterGuard<'static>> {
+    static RUNTIME: OnceLock<Result<Runtime, String>> = OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_name("ash-local-ipc")
+                .enable_io()
+                .enable_time()
+                .build()
+                .map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map(Runtime::enter)
+        .map_err(|error| io::Error::other(error.clone()))
+}
+
+pub(super) fn wait(
+    future: impl Future<Output = io::Result<()>>,
+    timeout: Option<Duration>,
+) -> io::Result<()> {
+    let _runtime = enter()?;
+    // Synchronous callers may already be polling a Tokio or futures task. This bridge
+    // permits nesting and owns its wake signal, while our worker keeps driving IO.
+    futures_lite::future::block_on(async {
+        match timeout {
+            Some(timeout) => tokio::time::timeout(timeout, future).await.map_err(|_| {
+                io::Error::new(io::ErrorKind::TimedOut, "local IPC deadline elapsed")
+            })?,
+            None => future.await,
+        }
+    })
+}
+
+pub(crate) fn wait_for_ipc_activity(
+    listener: Option<&crate::IpcListener>,
+    readers: &[&crate::IpcStream],
+    writers: &[&crate::IpcStream],
     timeout: Duration,
 ) -> io::Result<()> {
-    let invalid = || io::Error::new(io::ErrorKind::InvalidInput, "socket wait is out of range");
-    // Round up a fractional millisecond so a short deadline never becomes a busy poll.
-    let milliseconds =
-        i32::try_from(timeout.as_nanos().div_ceil(1_000_000)).map_err(|_| invalid())?;
-    let mut descriptors =
-        Vec::with_capacity(usize::from(listener.is_some()) + readers.len() + writers.len());
-    let descriptor = |socket, events| WSAPOLLFD {
-        fd: socket,
-        events,
-        revents: 0,
-    };
+    let mut pending: Vec<Pin<Box<dyn Future<Output = io::Result<()>> + '_>>> = Vec::new();
     if let Some(listener) = listener {
-        descriptors.push(descriptor(listener.as_raw_socket() as _, POLLRDNORM));
+        pending.push(Box::pin(listener.ready()));
     }
-    descriptors.extend(
+    pending.extend(
         readers
             .iter()
-            .map(|stream| descriptor(stream.as_raw_socket() as _, POLLRDNORM)),
+            .map(|stream| Box::pin(stream.ready(Direction::Read)) as _),
     );
-    descriptors.extend(
+    pending.extend(
         writers
             .iter()
-            .map(|stream| descriptor(stream.as_raw_socket() as _, POLLWRNORM)),
+            .map(|stream| Box::pin(stream.ready(Direction::Write)) as _),
     );
-    let count = u32::try_from(descriptors.len()).map_err(|_| invalid())?;
-    if count == 0 {
+    if pending.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "socket wait requires a socket",
+            "IPC wait requires an endpoint",
         ));
     }
-    // The vector owns count initialized descriptors and the borrowed sockets outlive this call.
-    if unsafe { WSAPoll(descriptors.as_mut_ptr(), count, milliseconds) } == SOCKET_ERROR {
-        let error = unsafe { WSAGetLastError() };
-        if error != WSAEINTR {
-            return Err(io::Error::from_raw_os_error(error));
-        }
+    match wait(async { select_all(pending).await.0 }, Some(timeout)) {
+        Err(error) if error.kind() == io::ErrorKind::TimedOut => Ok(()),
+        result => result,
     }
-    if descriptors
-        .iter()
-        .any(|descriptor| descriptor.revents & POLLNVAL != 0)
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "socket descriptor is invalid",
-        ));
-    }
-    Ok(())
 }

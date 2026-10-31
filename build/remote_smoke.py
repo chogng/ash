@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import argparse
+from contextlib import contextmanager
 import http.server
 import json
 import os
@@ -14,6 +15,70 @@ import sys
 import tempfile
 import threading
 import time
+
+
+@contextmanager
+def remote_fixture_directory(*, prefix: str):
+    """Keep cleanup strict while the independent terminal host retires."""
+    temporary = tempfile.TemporaryDirectory(prefix=prefix)
+    try:
+        yield temporary.name
+    finally:
+        # Unguarded terminal hosts retire after 30 idle seconds. Windows keeps
+        # their package executable mapped until then, even after the backend stops.
+        deadline = time.monotonic() + 45
+        while True:
+            try:
+                temporary.cleanup()
+                break
+            except PermissionError as error:
+                # A stopped process or virus scanner can retain its image mapping
+                # briefly. A persistent lock still fails this fixture's cleanup.
+                if os.name != "nt" or time.monotonic() >= deadline:
+                    if os.name == "nt" and error.filename:
+                        _record_windows_executable_lock(error.filename)
+                    raise
+                time.sleep(0.1)
+
+
+def _record_windows_executable_lock(filename: str) -> None:
+    """Retain scoped process evidence without suppressing a cleanup failure."""
+    import base64
+
+    path = str(Path(filename).resolve()).replace("'", "''")
+    script = (
+        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; "
+        "[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false); "
+        "$items=@(Get-CimInstance Win32_Process -Filter \"Name='ash-app-server.exe'\" "
+        f"| Where-Object {{$_.ExecutablePath -eq '{path}'}} "
+        "| Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine); "
+        "ConvertTo-Json -InputObject $items -Compress"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-EncodedCommand",
+                base64.b64encode(script.encode("utf-16le")).decode(),
+            ],
+            capture_output=True,
+            timeout=20,
+        )
+        details = {
+            "file": filename,
+            "exitCode": result.returncode,
+            "processes": result.stdout.decode("utf-8", errors="replace"),
+            "stderr": result.stderr.decode("utf-8", errors="replace"),
+        }
+    except (OSError, subprocess.TimeoutExpired) as error:
+        details = {"file": filename, "diagnosticError": str(error)}
+    print(
+        "Windows cleanup diagnostics: " + json.dumps(details),
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 class Model(http.server.BaseHTTPRequestHandler):
@@ -68,8 +133,7 @@ def verify(
             mode = "managed" if managed else "stdio"
             start_calls = len(Model.calls)
             with (
-                # Windows AF_UNIX endpoints include the profile path plus a digest.
-                tempfile.TemporaryDirectory(
+                remote_fixture_directory(
                     prefix="ash-rm-" if os.name == "nt" else "ash-release-remote-"
                 ) as temp,
                 (base / f"{mode}.stderr.log").open("w") as errors,
@@ -194,7 +258,7 @@ def verify(
                         rpc("fs/readFile", {"path": "probe.txt"})["content"]
                         == "release-remote-edit-ok"
                     )
-                    rpc(
+                    process_terminal = rpc(
                         "terminal/create",
                         {
                             "rows": 24,
@@ -219,12 +283,23 @@ def verify(
                             },
                         },
                     )
-                    deadline = time.monotonic() + 10
+                    # Windows PowerShell can cold-start under ARM64 emulation.
+                    # Terminal creation confirms the process, not script completion.
+                    deadline = time.monotonic() + (60 if os.name == "nt" else 10)
                     while (
                         not (workspace / "terminal-marker.txt").exists()
                         and time.monotonic() < deadline
                     ):
                         time.sleep(0.05)
+                    assert (workspace / "terminal-marker.txt").exists(), rpc(
+                        "terminal/read",
+                        {
+                            "terminalId": process_terminal["terminalId"],
+                            "afterSequence": 0,
+                            "afterCommandSequence": 0,
+                            "maxChunks": 16,
+                        },
+                    )
                     assert (
                         rpc("fs/readFile", {"path": "terminal-marker.txt"})["content"]
                         == "release-terminal-ok"
@@ -404,12 +479,21 @@ def verify(
                                 else "printf release-reattached-ok > reattached.txt\n",
                             },
                         )
-                        deadline = time.monotonic() + 10
+                        deadline = time.monotonic() + (60 if os.name == "nt" else 10)
                         while (
                             not (workspace / "reattached.txt").exists()
                             and time.monotonic() < deadline
                         ):
                             time.sleep(0.05)
+                        assert (workspace / "reattached.txt").exists(), rpc(
+                            "terminal/read",
+                            {
+                                "terminalId": terminal,
+                                "afterSequence": 0,
+                                "afterCommandSequence": 0,
+                                "maxChunks": 16,
+                            },
+                        )
                         assert (
                             rpc("fs/readFile", {"path": "reattached.txt"})["content"]
                             == "release-reattached-ok"
@@ -457,6 +541,29 @@ def verify(
                         )
                         + "\n"
                     )
+                    if managed:
+                        try:
+                            state = subprocess.run(
+                                command(
+                                    [
+                                        str(
+                                            package
+                                            / f"bin/ash-app-server-daemon{suffix}"
+                                        ),
+                                        "version",
+                                    ]
+                                ),
+                                env=env,
+                                capture_output=True,
+                                timeout=15,
+                            )
+                            (base / f"{mode}-before-stop.json").write_bytes(
+                                state.stdout
+                            )
+                        except (OSError, subprocess.TimeoutExpired) as error:
+                            (base / f"{mode}-before-stop.json").write_text(
+                                json.dumps({"diagnosticError": str(error)}) + "\n"
+                            )
                     process.stdin.close()
                     try:
                         process.wait(timeout=10)
@@ -512,6 +619,7 @@ def verify(
                             stderr=subprocess.PIPE,
                             timeout=30,
                         )
+                        (base / f"{mode}-stop.json").write_bytes(stopped.stdout)
                         assert stopped.returncode == 0, stopped.stderr
     finally:
         server.shutdown()

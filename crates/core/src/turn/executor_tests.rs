@@ -1930,13 +1930,16 @@ fn cancellation_during_overflow_compaction_prevents_the_checkpoint_and_retry() {
 
 #[test]
 fn failed_recovery_dispatch_is_durable_and_does_not_retry_on_the_next_restart() {
-    struct UnavailableModel;
-    impl ModelService for UnavailableModel {
+    struct RecoveryModel(Arc<ScriptedModel>);
+    impl ModelService for RecoveryModel {
         fn snapshot(
             &self,
-            _: ModelSelection<'_>,
+            selection: ModelSelection<'_>,
         ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
-            Err(CoreError::ModelAuthFailed)
+            match selection {
+                ModelSelection::ConfiguredDefault => Err(CoreError::ModelAuthFailed),
+                ModelSelection::Session(_) => Ok(Some(self.0.clone())),
+            }
         }
         fn invoke(
             &self,
@@ -1962,17 +1965,76 @@ fn failed_recovery_dispatch_is_durable_and_does_not_retry_on_the_next_restart() 
             },
         )
         .unwrap();
+    let healthy_thread = ThreadId::new("z-healthy-thread").unwrap();
+    original
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("healthy-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: SessionId::new("healthy-session").unwrap(),
+            thread_id: healthy_thread.clone(),
+            title: "healthy task".into(),
+        })
+        .unwrap();
+    let healthy_turn = original
+        .start_turn(
+            &healthy_thread,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("healthy-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: Some(ModelRef::new(
+                    ProviderId::new("test").unwrap(),
+                    ModelId::new("healthy").unwrap(),
+                )),
+                reasoning_effort: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "finish the healthy task".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    original
+        .record_tool_call(
+            &healthy_thread,
+            &healthy_turn,
+            crate::RecordToolCallRequest {
+                tool_call_id: None,
+                name: ToolName::new("weather").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
     drop(original);
     let recovered = Arc::new(ThreadController::with_store(store.clone()));
     let before = recovered.recover_thread(&thread_id).unwrap();
+    recovered.recover_thread(&healthy_thread).unwrap();
     assert_eq!(before.turns[0].status, TurnStatus::Running);
     let updates = Arc::new(RecordingUpdates::default());
-    let executor = TurnExecutor::without_tools(recovered.clone(), Arc::new(UnavailableModel))
-        .with_thread_updates(updates.clone());
-    assert!(matches!(
-        executor.resume_recovered_tool_continuations(),
-        Err(CoreError::ModelAuthFailed)
-    ));
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("healthy answer"))]));
+    let executor =
+        TurnExecutor::without_tools(recovered.clone(), Arc::new(RecoveryModel(model.clone())))
+            .with_thread_updates(updates.clone());
+    assert_eq!(executor.resume_recovered_tool_continuations().unwrap(), 1);
+    wait_for_turn_status(
+        &recovered,
+        &healthy_thread,
+        &healthy_turn,
+        TurnStatus::Completed,
+    );
+    assert_eq!(model.requests().len(), 1);
     let failed = recovered.read_thread(&thread_id).unwrap();
     assert_eq!(failed.turns[0].status, TurnStatus::Failed);
     assert_eq!(
@@ -2007,6 +2069,69 @@ fn failed_recovery_dispatch_is_durable_and_does_not_retry_on_the_next_restart() 
         0
     );
     assert!(unused.requests().is_empty());
+}
+
+#[test]
+fn failed_recovery_dispatch_propagates_failure_to_persist_the_terminal_state() {
+    struct UnavailableModel;
+    impl ModelService for UnavailableModel {
+        fn snapshot(
+            &self,
+            _: ModelSelection<'_>,
+        ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+            Err(CoreError::ModelAuthFailed)
+        }
+        fn invoke(
+            &self,
+            _: ModelSelection<'_>,
+            _: &ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ModelResponse, CoreError> {
+            unreachable!("model selection failed before dispatch")
+        }
+    }
+    struct UnavailableLease;
+    impl core_api::WriterLease<ThreadId> for UnavailableLease {
+        fn acquire(&self, _: &ThreadId) -> Result<Box<dyn core_api::LeaseGuard>, CoreError> {
+            Err(CoreError::Journal("writer unavailable".into()))
+        }
+    }
+    let store = Arc::new(InMemoryThreadStore::default());
+    let (source, thread_id, turn_id) =
+        started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
+    source
+        .record_tool_call(
+            &thread_id,
+            &turn_id,
+            crate::RecordToolCallRequest {
+                tool_call_id: None,
+                name: ToolName::new("weather").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    let threads = Arc::new(ThreadController::with_store_and_lease(
+        store.clone(),
+        Arc::new(UnavailableLease),
+    ));
+    threads.read_thread(&thread_id).unwrap();
+    let updates = Arc::new(RecordingUpdates::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), Arc::new(UnavailableModel))
+        .with_thread_updates(updates.clone());
+    assert_eq!(
+        executor.resume_recovered_tool_continuations(),
+        Err(CoreError::Journal("writer unavailable".into()))
+    );
+    assert_eq!(
+        ThreadController::with_store(store)
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns[0]
+            .status,
+        TurnStatus::Running
+    );
+    assert!(updates.updates().is_empty());
 }
 
 #[test]

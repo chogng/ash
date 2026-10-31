@@ -92,9 +92,7 @@ test('The shared catalog keeps local search independent of host search and resto
 	const { services, root, enabled } = setup(resources);
 	let hostFilter = '';
 	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {
-		compact: true,
 		matches: (entry: ModelCatalogEntry) => !hostFilter || entry.displayName.includes(hostFilter),
-		isFiltering: () => !!hostFilter,
 	}));
 	root.append(widget.element);
 	widget.render();
@@ -121,70 +119,32 @@ test('The shared catalog keeps local search independent of host search and resto
 	assert.equal(enabled.has('opus'), true);
 	assert.equal(opus.checked, true);
 	assert.equal(document.activeElement, opus);
-	assert.equal(widget.itemCount, 2);
+	assert.equal(widget.itemCount, 3);
 });
 
-test('Expanded Models settings exposes filters and connection-scoped group controls, then restores the overview', async () => {
+test('The model card contains the full model list without connection controls', async () => {
 	using resources = new DisposableStore();
-	const { services, root, enabled, models, writes } = setup(resources);
+	const { services, root, models, menus, enabled } = setup(resources);
 	models.listModelProviders = async () => ['openai', 'anthropic'].map(connection => ({ connection, provider: 'same', displayName: 'Same provider', access: 'apiKey', active: true, configured: false, ready: false, apiKeyPolicy: 'optional', apiKeyConfigured: false }));
-	const widget = resources.add(services.createInstance(ChatModelsWidget, document, { compact: true }));
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 	root.append(widget.element);
 	widget.render();
 	await nextTurn();
-	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
-	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
-	const filters = root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!;
 	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
-	assert.equal(filters.hidden, true);
-	expand.click();
-	assert.equal(filters.hidden, false);
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
-	assert.equal(root.querySelector('button[aria-label^="Pin "], button[aria-label^="Unpin "]'), null);
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
+	assert.equal(root.querySelector('.ash-chat-models-filters, .ash-models-settings-expand'), null);
+	assert.equal(root.querySelector('.ash-chat-models-provider input'), null);
+	assert.equal(root.querySelector('.ash-chat-models-catalog > button'), null);
 	widget.search('older');
-	const group = root.querySelector<HTMLElement>('.ash-chat-models-provider')!;
-	const toggle = group.querySelector<HTMLInputElement>('input[role="switch"]')!;
-	assert.equal(toggle.checked, true, 'The enabled model outside this search still determines group visibility');
-	toggle.focus();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 1);
+	assert.equal(widget.itemCount, 1);
+	const toggle = root.querySelector<HTMLInputElement>('input[role="switch"]')!;
 	toggle.click();
 	await nextTurn();
-	assert.equal(enabled.has('newest'), false);
-	assert.equal(enabled.has('older'), false);
-	assert.equal(enabled.has('opus'), false, 'An identically named connection remains untouched');
-	assert.equal(document.activeElement, toggle);
-	toggle.click();
-	await nextTurn();
-	assert.equal(enabled.has('newest'), true);
-	assert.equal(enabled.has('older'), true);
-	assert.equal(enabled.has('opus'), false);
-	writes.fail = true;
-	toggle.click();
-	await nextTurn();
-	assert.equal(toggle.checked, true);
-	assert.equal(toggle.disabled, false);
-	assert.equal(document.activeElement, toggle);
-	assert.equal(root.querySelector('.ash-models-settings-status')?.textContent, 'Could not save model visibility.');
-	widget.search('');
-	filters.open = true;
-	[...filters.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '@capability:vision')!.click();
-	assert.equal(search.value, '@capability:vision');
-	assert.equal(document.activeElement, search);
-	assert.equal(filters.open, false);
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent), ['Newest OpenAI']);
-	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Collapse All')!.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
-	assert.equal(widget.hasResults, true, 'Collapsed matching groups must remain in the outer Settings search');
-	widget.render({ expandGroups: true });
+	assert.deepEqual([...enabled], ['newest', 'older']);
+	widget.clearSearch();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
-	[...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Collapse All')!.click();
-	expand.click();
-	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
-	assert.equal(filters.hidden, true);
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent), ['Newest OpenAI', 'Opus']);
-	expand.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
+	assert.equal(widget.itemCount, 3);
 });
 
 test('A failed model visibility write restores the switch and reports the error inline', async () => {
@@ -211,8 +171,8 @@ test('Models settings catalog uses Chinese accessibility content and restores se
 	initializeTestLocalization('zh-CN');
 	try {
 		using resources = new DisposableStore();
-		const { services, root } = setup(resources);
-		const widget = resources.add(services.createInstance(ChatModelsWidget, document, { compact: true }));
+		const { services, root, menus } = setup(resources);
+		const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 		root.append(widget.element);
 		widget.render();
 		await nextTurn();
@@ -222,9 +182,19 @@ test('Models settings catalog uses Chinese accessibility content and restores se
 		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View);
 		const provider = services.invokeFunction(implementation!.getProvider.bind(implementation!))!;
 		assert.equal(provider.id, AccessibleViewProviderId.ChatModelConfiguration);
-		assert.equal(provider.provideContent(), 'Older OpenAI');
+		assert.match(provider.provideContent(), /Older OpenAI/);
+		assert.doesNotMatch(provider.provideContent(), /正在刷新模型/);
 		provider.dispose();
 		assert.equal(document.activeElement, search);
+		assert.equal(root.querySelector('button[aria-label="Older OpenAI 的操作"]'), null);
+		widget.focusSearch();
+		const help = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.Help)!;
+		const helpProvider = services.invokeFunction(help.getProvider.bind(help))!;
+		assert.match(helpProvider.provideContent(), /模型开关控制单个模型是否显示/);
+		assert.match(helpProvider.provideContent(), /支持上下文切换的模型会在名称旁显示容量文字按钮/);
+		assert.match(helpProvider.provideContent(), /独立的订阅账号卡片管理账号登录/);
+		assert.doesNotMatch(helpProvider.provideContent(), /勾选|选择全部结果|所选模型|折叠|供应商开关|查看所有模型|搜索筛选条件/);
+		helpProvider.dispose();
 	} finally { resetNlsResolver(); }
 });
 
@@ -267,47 +237,35 @@ test('A hidden or disposed catalog ignores pending results and no longer observe
 });
 
 
-test('Catalog selections support ranges, keyboard navigation and bulk visibility across providers', async () => {
+test('Catalog model switches save independently without selection controls', async () => {
 	using resources = new DisposableStore();
 	const { services, root, enabled, writes } = setup(resources);
 	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 	root.append(widget.element);
 	widget.render();
 	await nextTurn();
-	const select = (name: string) => root.querySelector<HTMLInputElement>(`input[aria-label="Select ${name}"]`)!;
-	const button = (label: string) => [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === label)!;
-	select('Newest OpenAI').click();
-	select('Opus').dispatchEvent(new browserEnvironment.window.MouseEvent('click', { shiftKey: true, bubbles: true }));
-	assert.equal(root.querySelectorAll('input[type="checkbox"]:checked:not([role="switch"])').length, 3);
-	select('Newest OpenAI').focus();
-	select('Newest OpenAI').dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-	assert.equal(document.activeElement, select('Older OpenAI'));
-	button('Hide selected').click();
+	assert.equal(root.querySelector('input[type="checkbox"]:not([role="switch"])'), null);
+	assert.equal(root.querySelector('.ash-chat-models-selection-actions'), null);
+	const opus = root.querySelector<HTMLInputElement>('input[aria-label="Show Opus in model picker"]')!;
+	opus.focus();
+	opus.click();
 	await nextTurn();
-	assert.deepEqual([...enabled], []);
-	button('Show selected').focus();
-	button('Show selected').click();
-	await nextTurn();
-	assert.equal(document.activeElement, button('Show selected'));
-	assert.deepEqual([...enabled], ['newest', 'older', 'opus']);
-	button('Hide selected').click();
-	await nextTurn();
-	assert.deepEqual([...enabled], []);
-	button('Clear selection').click();
-	assert.equal(button('Show selected').disabled, true);
+	assert.deepEqual([...enabled], ['newest', 'opus']);
+	assert.equal(document.activeElement, opus);
 	widget.search('older');
-	button('Select all results').click();
-	button('Show selected').click();
+	const older = root.querySelector<HTMLInputElement>('input[aria-label="Show Older OpenAI in model picker"]')!;
+	older.focus();
+	older.click();
 	await nextTurn();
-	assert.deepEqual([...enabled], ['older']);
+	assert.deepEqual([...enabled], ['newest', 'opus', 'older']);
 	writes.fail = true;
-	button('Hide selected').focus();
-	button('Hide selected').click();
+	older.click();
 	await nextTurn();
-	assert.deepEqual([...enabled], ['older']);
-	assert.equal(root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent, 'Could not save model preferences.');
-	assert.equal(button('Hide selected').disabled, false);
-	assert.equal(document.activeElement, button('Hide selected'));
+	assert.deepEqual([...enabled], ['newest', 'opus', 'older']);
+	assert.equal(root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent, 'Could not save model visibility.');
+	assert.equal(older.checked, true);
+	assert.equal(older.disabled, false);
+	assert.equal(document.activeElement, older);
 });
 
 test('Model filter completions expose an accessible active option and Escape dismisses before clearing', async () => {
@@ -350,7 +308,9 @@ test('Inserting an exact provider filter dismisses suggestions for connections s
 	widget.render();
 	await nextTurn();
 	const input = root.querySelector<HTMLInputElement>('[role="combobox"]')!;
-	[...root.querySelectorAll<HTMLButtonElement>('.ash-chat-models-filters button')].find(button => button.textContent === '@provider:openai')!.click();
+	widget.search('@provider:op');
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	assert.equal(input.value, '@provider:"openai"');
 	assert.equal(input.getAttribute('aria-expanded'), 'false');
 	assert.equal(widget.itemCount, 2);
@@ -400,77 +360,229 @@ test('Management rows omit capability labels and Accessible View retains transla
 	} finally { resetNlsResolver(); }
 });
 
-test('Keyboard ranges and context menus operate on the current selection and search filters preserve the query', async () => {
+test('Ordinary models use switches without row menus and search filters preserve the query', async () => {
 	using resources = new DisposableStore();
 	const { services, root, menus, enabled: visibleModels } = setup(resources);
-	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, { onConfigure: async () => { throw new Error('Ordinary model rows must not configure providers'); } }));
 	root.append(widget.element); widget.render(); await nextTurn();
-	const select = root.querySelector<HTMLInputElement>('input[aria-label="Select Newest OpenAI"]')!;
-	select.focus();
-	select.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
-	assert.equal(root.querySelectorAll('input[type="checkbox"]:checked:not([role="switch"])').length, 2);
-	(document.activeElement as HTMLElement).dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
-	assert.equal(root.querySelectorAll('input[type="checkbox"]:checked:not([role="switch"])').length, 3);
-	select.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	assert.deepEqual(menus.at(-1)!.getActions().map(action => action.id), ['visibility']);
-	await menus.at(-1)!.getActions().find(action => action.id === 'visibility')!.run();
-	assert.deepEqual([...visibleModels], []);
+	assert.equal(root.querySelector('.ash-models-settings-model-row button'), null);
+	const toggle = root.querySelector<HTMLInputElement>('input[aria-label="Show Older OpenAI in model picker"]')!;
+	toggle.focus();
+	const selectAll = new browserEnvironment.window.KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true });
+	toggle.dispatchEvent(selectAll);
+	assert.equal(selectAll.defaultPrevented, false);
+	for (const event of [
+		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
+		new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }),
+		new browserEnvironment.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }),
+	]) {
+		toggle.dispatchEvent(event);
+		assert.equal(event.defaultPrevented, false);
+	}
+	assert.equal(menus.length, 0);
+	toggle.click();
+	await nextTurn();
+	assert.deepEqual([...visibleModels], ['newest', 'older']);
+	const newest = root.querySelector<HTMLInputElement>('input[aria-label="Show Newest OpenAI in model picker"]')!;
+	newest.click();
+	await nextTurn();
+	assert.deepEqual([...visibleModels], ['older']);
 	widget.search('@provider:openai Newest');
-	const filters = root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!;
-	filters.open = true;
-	const vision = [...filters.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '@capability:vision')!;
 	const enabled = root.querySelector<HTMLInputElement>('input[aria-label="Show Newest OpenAI in model picker"]')!.checked;
-	vision.click();
+	widget.search('@provider:openai Newest @capability:vision');
 	const search = root.querySelector<HTMLInputElement>('[role="combobox"]')!;
 	assert.equal(search.value, '@provider:openai Newest @capability:vision');
-	assert.equal(filters.open, false);
 	assert.equal(document.activeElement, search);
 	assert.equal(root.querySelector<HTMLInputElement>('input[aria-label="Show Newest OpenAI in model picker"]')!.checked, enabled);
 });
 
-test('Model menus save supported preferences and configuration shortcuts use the actual connection', async () => {
+test('Context buttons save model-specific usable capacities across providers', async () => {
+	using resources = new DisposableStore();
+	let sol: ModelCatalogEntry = {
+		model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'GPT-6.1 Sol',
+		longContext: false, defaultContextWindow: 500000, maximumContextWindow: 872000, usableContextWindow: 475000,
+	};
+	let other: ModelCatalogEntry = { ...catalog[0], model: { provider: 'other-provider', model: 'switchable' }, displayName: 'Other model', longContext: false, defaultContextWindow: 128000, maximumContextWindow: 256000, usableContextWindow: 123456 };
+	const { services, root, models, changes, notifications } = setup(resources, async () => [sol, other]);
+	const pending = new DeferredPromise<void>();
+	let fail = false;
+	const writes: unknown[] = [];
+	models.setModelPreferences = async (model, update) => {
+		writes.push({ model, update });
+		await pending.p;
+		if (fail) { throw new Error('Fixture save failed'); }
+		if (model.provider === sol.model.provider) {
+			sol = { ...sol, longContext: update.longContext!, usableContextWindow: update.longContext ? 828400 : 475000 };
+		} else {
+			other = { ...other, longContext: update.longContext!, usableContextWindow: update.longContext ? 246912 : 123456 };
+		}
+		changes.fire();
+	};
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	root.append(widget.element); widget.render(); await nextTurn();
+	const button = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for GPT-6.1 Sol"]')!;
+	assert.ok(button);
+	assert.equal(button.closest('label'), null);
+	assert.equal(button.getAttribute('aria-pressed'), 'false');
+	assert.equal(button.querySelector('.ash-model-context-default')!.textContent, '475K');
+	assert.match(button.getAttribute('aria-description')!, /475,000/);
+	const otherButton = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for Other model"]')!;
+	assert.equal(otherButton.querySelector('.ash-model-context-default')!.textContent, '123.5K');
+	assert.equal(otherButton.closest('label'), null);
+	assert.equal(root.querySelectorAll('.ash-select-box').length, 0);
+	const otherRow = otherButton.closest('.ash-models-settings-model-row')!;
+	const unrelatedMutations: MutationRecord[] = [];
+	const observer = new browserEnvironment.window.MutationObserver(records => unrelatedMutations.push(...records));
+	observer.observe(otherRow, { subtree: true, attributes: true, childList: true, characterData: true });
+	resources.add(toDisposable(() => observer.disconnect()));
+	let countChanges = 0;
+	resources.add(widget.onDidChangeItemCount(() => countChanges++));
+	const nameText = button.closest('.ash-models-settings-model-row')!.querySelector('.ash-icon-label-text')!.firstChild;
+	button.focus(); button.click();
+	assert.equal(button.disabled, false);
+	assert.equal(button.getAttribute('aria-busy'), 'true');
+	assert.equal(otherButton.disabled, false);
+	assert.ok([...root.querySelectorAll<HTMLInputElement>('input[role="switch"]')].every(toggle => !toggle.disabled));
+	button.click();
+	assert.equal(writes.length, 1, 'Repeated activation of the saving control is coalesced');
+	assert.equal(button.getAttribute('aria-pressed'), 'false', 'Saving does not invent an optimistic capacity');
+	await pending.complete(); await nextTurn();
+	assert.equal(button.getAttribute('aria-pressed'), 'true');
+	assert.equal(button.querySelector('.ash-model-context-extended')!.textContent, '828.4K');
+	assert.equal(document.activeElement, button);
+	assert.equal(button.hasAttribute('aria-busy'), false);
+	assert.equal(countChanges, 0, 'A capacity change does not invalidate the Settings tree');
+	assert.deepEqual(unrelatedMutations, [], 'Unchanged rows receive no DOM updates');
+	assert.equal(button.closest('.ash-models-settings-model-row')!.querySelector('.ash-icon-label-text')!.firstChild, nameText);
+	observer.disconnect();
+	assert.deepEqual(writes, [{ model: sol.model, update: { longContext: true } }]);
+	fail = true;
+	button.click(); await nextTurn();
+	assert.equal(button.getAttribute('aria-pressed'), 'true');
+	assert.equal(button.disabled, false);
+	assert.equal(button.hasAttribute('aria-busy'), false);
+	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not save model preferences.');
+	fail = false;
+	button.click(); await nextTurn();
+	assert.equal(button.getAttribute('aria-pressed'), 'false');
+	assert.equal(button.querySelector('.ash-model-context-default')!.textContent, '475K');
+	otherButton.click(); await nextTurn();
+	assert.equal(otherButton.getAttribute('aria-pressed'), 'true');
+	assert.equal(otherButton.querySelector('.ash-model-context-extended')!.textContent, '246.9K');
+	assert.deepEqual(writes.at(-1), { model: other.model, update: { longContext: true } });
+	assert.equal(sol.longContext, false);
+	button.focus();
+	sol = { ...sol, usableContextWindow: null }; changes.fire(); await nextTurn();
+	assert.equal(button.isConnected, false);
+	assert.equal(document.activeElement, root.querySelector('input[aria-label="Show GPT-6.1 Sol in model picker"]'));
+});
+
+test('Context saves keep other models interactive and complete independently', async () => {
+	using resources = new DisposableStore();
+	let entries: readonly ModelCatalogEntry[] = ['first', 'second'].map(id => ({
+		model: { provider: 'openai', model: id }, displayName: id, longContext: false, usableContextWindow: 128000,
+	}));
+	const { services, root, models, changes } = setup(resources, async () => entries);
+	const pending = [new DeferredPromise<void>(), new DeferredPromise<void>()];
+	const writes: string[] = [];
+	models.setModelPreferences = async (model, update) => {
+		writes.push(model.model);
+		const index = entries.findIndex(entry => entry.model.model === model.model);
+		await pending[index].p;
+		entries = entries.map((entry, candidate) => candidate === index ? { ...entry, longContext: update.longContext!, usableContextWindow: 256000 } : entry);
+		changes.fire();
+	};
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	root.append(widget.element);
+	widget.render();
+	await nextTurn();
+	const first = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for first"]')!;
+	const second = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for second"]')!;
+	first.click();
+	second.click();
+	first.click();
+	second.click();
+	assert.deepEqual(writes, ['first', 'second']);
+	assert.ok([first, second].every(button => !button.disabled && button.getAttribute('aria-busy') === 'true'));
+	assert.ok([...root.querySelectorAll<HTMLInputElement>('input[role="switch"]')].every(toggle => !toggle.disabled));
+	await pending[0].complete();
+	await nextTurn();
+	assert.equal(first.getAttribute('aria-pressed'), 'true');
+	assert.equal(first.hasAttribute('aria-busy'), false);
+	assert.equal(second.getAttribute('aria-pressed'), 'false');
+	assert.equal(second.getAttribute('aria-busy'), 'true');
+	await pending[1].complete();
+	await nextTurn();
+	assert.equal(second.getAttribute('aria-pressed'), 'true');
+	assert.equal(second.hasAttribute('aria-busy'), false);
+});
+
+test('Inline model settings save supported preferences and reveal the matching custom model', async () => {
 	using resources = new DisposableStore();
 	let entry: ModelCatalogEntry = {
-		...catalog[0], model: { provider: 'custom-actual', model: 'newest' }, longContext: false, defaultContextWindow: 128000, maximumContextWindow: 1000000,
-		accelerationOptions: [{ id: 'provider-fast', name: 'Fast', description: 'Provider choice' }], selectedAcceleration: null,
+		...catalog[0], model: { provider: 'custom-actual', model: 'newest' }, longContext: false, defaultContextWindow: 128000, maximumContextWindow: 1000000, usableContextWindow: 123456,
+		accelerationOptions: [{ id: 'provider-fast', name: 'Fast', description: 'Provider choice' }], selectedAcceleration: 'provider-fast',
 		source: { providerId: 'custom-actual', connectionId: 'custom-actual', metadata: 'providerSeed' },
 	};
-	const { services, root, models, menus, changes } = setup(resources, async () => [entry]);
-	models.setModelPreferences = async (_model, update) => { entry = { ...entry, ...update, selectedAcceleration: update.acceleration ?? entry.selectedAcceleration }; changes.fire(); };
+	const { services, root, models, changes } = setup(resources, async () => [entry]);
+	models.setModelPreferences = async (_model, update) => { entry = { ...entry, ...update, usableContextWindow: update.longContext ? 987654 : 123456, selectedAcceleration: update.acceleration ?? entry.selectedAcceleration }; changes.fire(); };
 	const configured: unknown[] = [];
 	const widget = resources.add(services.createInstance(ChatModelsWidget, document, { onConfigure: async (...args: unknown[]) => { configured.push(args); } }));
 	root.append(widget.element); widget.render(); await nextTurn();
-	const openMenu = (): readonly import('../../../../../base/common/actions.js').IAction[] => {
-		root.querySelector<HTMLButtonElement>('button[aria-label="Actions for Newest OpenAI"]')!.click();
-		return menus.at(-1)!.getActions();
-	};
-	const context = openMenu().find(action => action.id === 'context') as import('../../../../../base/common/actions.js').SubmenuAction;
-	await context.actions.find(action => action.id === 'context.true')!.run(); await nextTurn();
+
+	const details = root.querySelector<HTMLElement>('.ash-model-details')!;
+	assert.equal(details.hidden, false);
+	const context = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for Newest OpenAI"]')!;
+	assert.equal(context.querySelector('.ash-model-context-default')!.textContent, '123.5K');
+	context.click(); await nextTurn();
+	assert.equal(context.querySelector('.ash-model-context-extended')!.textContent, '987.7K');
 	assert.equal(entry.longContext, true);
-	const acceleration = openMenu().find(action => action.id === 'acceleration') as import('../../../../../base/common/actions.js').SubmenuAction;
-	await acceleration.actions.find(action => action.id === 'acceleration.provider-fast')!.run(); await nextTurn();
+	assert.equal(root.querySelector('button[aria-label="Speed for Newest OpenAI"]'), null);
 	assert.equal(entry.selectedAcceleration, 'provider-fast');
-	await openMenu().find(action => action.id === 'configureModel')!.run();
+	const edit = [...details.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Configure model')!;
+	edit.click(); await nextTurn();
 	assert.deepEqual(configured, [['custom-actual', 'newest']]);
+
 });
 
-test('An empty provider keeps its header when collapsed and its status respects host filtering', async () => {
+test('Inline controls follow current model options without exposing connection actions', async () => {
 	using resources = new DisposableStore();
-	const { services, root, models } = setup(resources, async () => []);
-	models.listModelProviders = async () => [{
-		connection: 'empty', provider: 'empty', displayName: 'Empty', access: 'apiKey', active: true,
-		configured: true, ready: true, apiKeyPolicy: 'optional', apiKeyConfigured: true,
-		catalog: { provider: 'empty', connection: 'empty', freshness: 'fresh', issues: [] },
-	}];
-	let matches = true;
-	const widget = resources.add(services.createInstance(ChatModelsWidget, document, { compact: true, matchesProvider: () => matches }));
+	let entries: readonly ModelCatalogEntry[] = [
+		{ ...catalog[0], longContext: false, defaultContextWindow: 128000, maximumContextWindow: 1000000, usableContextWindow: 123456 },
+		{ ...catalog[1], accelerationOptions: [{ id: 'fast', name: 'Fast', description: 'Fixture speed' }] },
+		{ ...catalog[2], model: { provider: 'custom-fixture', model: 'opus' } },
+	];
+	const { services, root, models, changes } = setup(resources, async () => entries);
+	const configured: unknown[] = [];
+	const refreshed: string[] = [];
+	models.discoverProviderModels = async connection => { refreshed.push(connection); return []; };
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, { onConfigure: async (...args: unknown[]) => { configured.push(args); } }));
 	root.append(widget.element); widget.render(); await nextTurn();
-	const header = root.querySelector('.ash-chat-models-provider')!;
-	assert.match(root.textContent!, /This connection returned no models/);
-	header.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click();
-	assert.equal(root.querySelector('.ash-chat-models-provider'), header);
-	header.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click();
-	assert.match(root.querySelector('.ash-models-catalog-connection-status')!.textContent!, /no models/);
-	matches = false; widget.render();
+
+	assert.equal(root.querySelector('button[aria-label="Speed for Older OpenAI"]'), null);
+	assert.equal(root.querySelectorAll('.ash-model-details:not([hidden])').length, 1);
+	[...root.querySelectorAll<HTMLButtonElement>('.ash-model-details button')].find(button => button.textContent === 'Configure model')!.click(); await nextTurn();
+	assert.deepEqual(configured, [['custom-fixture', 'opus']]);
+	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
+	const previous = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for Newest OpenAI"]')!;
+	previous.focus();
+	entries = [catalog[0], entries[1], entries[2]];
+	changes.fire(); await nextTurn();
+	assert.equal(previous.isConnected, false);
+	assert.equal(root.querySelector('button[aria-label="Context size for Newest OpenAI"]'), null);
+	assert.equal(document.activeElement, root.querySelector('input[aria-label="Show Newest OpenAI in model picker"]'));
+	entries = [{ ...catalog[0], longContext: false, usableContextWindow: 123456 }, entries[1], entries[2]];
+	changes.fire(); await nextTurn();
+	assert.equal(root.querySelectorAll('button[aria-label="Context size for Newest OpenAI"]').length, 1);
+});
+
+test('An empty catalog keeps model loading feedback independent of connections', async () => {
+	using resources = new DisposableStore();
+	const { services, root } = setup(resources, async () => []);
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	root.append(widget.element); widget.render(); await nextTurn();
+	assert.equal(widget.itemCount, 0);
+	assert.equal(widget.hasResults, false);
+	assert.match(root.textContent!, /No models available/);
 	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
 });

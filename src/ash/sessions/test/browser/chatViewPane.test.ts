@@ -45,7 +45,7 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose, type ModelCatalogEntry } from '../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -67,7 +67,8 @@ import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -83,18 +84,23 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { ForkConversationActionId } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
-import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
+import { IViewDescriptorService, ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
+import { IPaneCompositePartService } from '../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from '../../../workbench/contrib/chat/browser/widget/chatListItems.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
+import { AgentSessionsViewerOrientation } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
 import { Menus } from '../../browser/menus.js';
 import { IPreferencesService, type IPreferencesService as PreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { PreferencesService as BrowserPreferencesService } from '../../../workbench/services/preferences/browser/preferencesService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
-import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
+import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
@@ -120,9 +126,9 @@ import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { IOpenerService, OpenOptions } from '../../../platform/opener/common/opener.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
-import { FileNotFoundError, FileRevisionConflictError } from '../../../platform/files/common/files.js';
+import { FileNotFoundError } from '../../../platform/files/common/files.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { parseJsonDocument } from '../../../base/common/json.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -134,7 +140,6 @@ import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat
 
 const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
 const inputResources = new DisposableStore();
-const userDataProfile = new UserDataProfileService();
 const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleService;
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
@@ -212,6 +217,7 @@ for (const [name, value] of Object.entries({
 await import(
 	'../../browser/workbenchChat.contribution.js'
 );
+await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { BrowserContextViewService } = await import(
 	'../../../platform/contextview/browser/contextViewService.js'
 );
@@ -326,7 +332,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -381,7 +387,7 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menus, services.get(IContextMenuService), contextView, services.get(ICommandService),
 		testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
+		services, services.get(IConfigurationService), services.get(IStorageService), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
@@ -430,15 +436,25 @@ test('Chat title and history switching retain conversations and drafts', async (
 	// The production window binds this key from its Chat enablement contribution.
 	ChatContextKeys.enabled.bindTo(contextKeys).set(true);
 	using viewDescriptors = new TestViewDescriptorService({
-		registry: new WorkbenchViewRegistry(),
+		registry: ViewsRegistry,
 	}, contextKeys);
 	const services = new InstantiationService();
+	services.registerInstance(IViewDescriptorService, viewDescriptors);
+	services.registerInstance(IPaneCompositePartService, testChatPartService);
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.List);
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
+	let shownContextMenuActions: readonly IAction[] = [];
+	const contextMenuService = {
+		showContextMenu: (options: { readonly getActions: () => readonly IAction[]; }) => {
+			shownContextMenuActions = options.getActions();
+		},
+	} as unknown as IContextMenuService;
+	services.registerInstance(IContextMenuService, contextMenuService);
 	using quickInput = new TestQuickInputService({
 		instantiationService: services,
 		container: dom.window.document.body,
@@ -459,6 +475,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -470,12 +487,8 @@ test('Chat title and history switching retain conversations and drafts', async (
 		focusView: async () => true,
 		getViewWithId: () => chatView,
 	} as unknown as IViewsService);
-	let shownContextMenuActions: readonly IAction[] = [];
-	const contextMenuService = {
-		showContextMenu: (options: { readonly getActions: () => readonly IAction[]; }) => {
-			shownContextMenuActions = options.getActions();
-		},
-	} as unknown as IContextMenuService;
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(INotificationService, notifications);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
@@ -492,7 +505,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, 'div');
@@ -537,6 +550,23 @@ test('Chat title and history switching retain conversations and drafts', async (
 		['New Chat', '', 'Show Chat History', 'More Actions'],
 	);
 	for (const button of toolbar?.querySelectorAll('button') ?? []) assert.ok(button.querySelector('.ash-icon'));
+	const historyButton = toolbar?.querySelector<HTMLButtonElement>(`[data-action-id="${SHOW_CHAT_HISTORY_COMMAND_ID}"] button`);
+	assert.ok(historyButton);
+	assert.equal(historyButton.getAttribute('aria-haspopup'), 'dialog');
+	for (const anchor of [historyButton, titleButton]) {
+		anchor.focus();
+		anchor.click();
+		await nextTask();
+		const picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.equal(picker.anchor, anchor);
+		assert.equal(picker.anchorPosition, 'below');
+		assert.equal(picker.anchorAlignment, 'right');
+		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
+		await quickInput.cancel();
+		await nextTask();
+		assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+		assert.equal(dom.window.document.activeElement, anchor);
+	}
 	newChatButton.click();
 	const titleDraftId = sessions.activeUntitledSession?.untitledSessionId;
 	assert.ok(titleDraftId);
@@ -548,17 +578,19 @@ test('Chat title and history switching retain conversations and drafts', async (
 		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
-	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.SideBySide);
-	assert.equal(pane.minimumWidth, 300);
-	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
+	assert.equal(configuration.getValue(AGENT_SESSIONS_PRESENTATION_SETTING), AgentSessionsPresentation.List);
+	assert.equal(pane.minimumWidth, 0);
+	await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.List);
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	const sessionsSidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar');
 	assert.equal(sessionsSidebar?.hidden, false);
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), true);
-	assert.deepEqual([...sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? []].map(button => button.title), ['Session session-1', 'Session session-2']);
+	const sessionsTree = await waitForSessionsTree(pane);
+	assert.equal(sessionsTree.getAttribute('role'), 'tree');
 	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
-	sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row')[1]?.click();
+	sessionsTree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+	sessionsTree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 	assert.equal(sessions.active?.session.sessionId, 'session-2');
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
@@ -566,18 +598,21 @@ test('Chat title and history switching retain conversations and drafts', async (
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
-	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
+	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-sidebar-visible'), true);
 	const search = sessionsSidebar?.querySelector<HTMLInputElement>('.ash-agent-sessions-search');
 	assert.ok(search);
 	search.value = 'session-1';
 	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-	assert.deepEqual([...sessionsSidebar?.querySelectorAll<HTMLButtonElement>('.ash-agent-session-row') ?? []].map(button => button.title), ['Session session-1']);
+	await waitForSessionsTree(pane);
+	sessionsTree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+	sessionsTree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
 	search.value = '';
 	search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-chat-sessions-new')?.click();
 	const draftId = sessions.activeUntitledSession?.untitledSessionId;
 	assert.ok(draftId);
-	assert.equal(sessionsSidebar?.querySelector<HTMLElement>('.ash-agent-sessions-group')?.hidden, false);
+	assert.equal(sessions.activeUntitledSession?.untitledSessionId, draftId);
 	const paneHost = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host');
 	assert.ok(paneHost);
 	const activeTab = chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label');
@@ -634,58 +669,21 @@ test('Chat title and history switching retain conversations and drafts', async (
 			},
 		],
 	);
-	assert.deepEqual(menuService.getMenuActions(MenuId.ChatTitle).find(([group]) => group === 'layout')?.[1].map(action => action.label), ['Sessions layout']);
+	assert.deepEqual(menuService.getMenuActions(MenuId.ChatTitle).find(([group]) => group === 'layout')?.[1].map(action => action.label), ['Session display']);
 	const layoutChoices = () => menuService.getMenuActions(Menus.ChatSessionsLayout).flatMap(([, actions]) => actions);
-	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Side by side', false], ['Stacked', true]]);
-	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
-	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
-	assert.deepEqual(layoutChoices().map(action => action.checked), [false, true]);
-	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, 'diagonal'), /Invalid Sessions layout/);
-	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
-	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 600, 600);
-	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
-	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
-	assert.equal(body.classList.contains('sessions-stacked'), false);
-	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sash')?.hidden, false);
-	assert.equal(pane.minimumWidth, 520);
-	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
-	assert.equal(sessionsSidebar?.hidden, false);
-	assert.equal(paneHost.hidden, false);
-	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
-	assert.equal(body.classList.contains('sessions-stacked'), true);
-	assert.equal(paneHost.hidden, false);
-	assert.equal(pane.minimumWidth, 300);
+	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Tabs', false], ['List', true]]);
+	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, 'diagonal'), /Invalid session display mode/);
 	const activeInput = paneHost.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
-	activeInput.value = 'Keep this draft while resizing';
+	activeInput.value = 'Keep this draft while switching display modes';
 	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-	activeInput.focus();
-	// Width and orientation changes must retain the same composer and keyboard focus.
-	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 599, 600);
-	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
-	assert.equal(body.classList.contains('sessions-stacked'), false);
-	assert.equal(sessionsSidebar?.hidden, false);
-	assert.equal(pane.minimumWidth, 520);
-	assert.equal(paneHost.hidden, false);
-	assert.equal(dom.window.document.activeElement, activeInput);
-	assert.equal(activeInput.value, 'Keep this draft while resizing');
-	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 600, 600);
-	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
-	assert.equal(body.classList.contains('sessions-stacked'), true);
-	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationSideBySide');
-	assert.equal(body.classList.contains('sessions-stacked'), false);
-	assert.equal(activeInput.value, 'Keep this draft while resizing');
-	const sash = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sash')!;
-	sash.focus();
-	body.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 599, 600);
-	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.SideBySide);
-	assert.equal(sash.hidden, false);
-	assert.equal(dom.window.document.activeElement, sash);
-	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
-	assert.equal(sash.hidden, true);
-	assert.equal(sessionsSidebar?.contains(dom.window.document.activeElement), true);
-	sessionsSidebar?.querySelector<HTMLButtonElement>('.ash-agent-session-row')?.click();
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationTabs');
+	assert.equal(pane.minimumWidth, 0);
 	assert.equal(sessionsSidebar?.hidden, true);
-	assert.equal(paneHost.hidden, false);
+	assert.equal(chatTitleContent(pane).querySelectorAll('[role=tab]').length, 2);
+	assert.equal(paneHost.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), activeInput);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	assert.equal(activeInput.value, 'Keep this draft while switching display modes');
+	assert.deepEqual(layoutChoices().map(action => action.checked), [false, true]);
 	activeInput.value = '';
 	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	await chatActions[3]?.run();
@@ -693,7 +691,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.ok(settingsInput);
 	settingsInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 	assert.equal(preferencesEditorTarget, 'modalGroup');
-	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
+	assert.ok(!chatTitleContent(pane).querySelector('[role=tab]') || chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-tabs')?.hidden);
 	const panel = pane.element.querySelector('[role=region]');
 	assert.equal(panel?.id, titleButton.getAttribute('aria-controls'));
 	assert.equal(panel?.getAttribute('aria-labelledby'), titleButton.querySelector('span')?.id);
@@ -724,7 +722,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.model.model);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -754,17 +752,20 @@ test('Chat title and history switching retain conversations and drafts', async (
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'), 'false');
 	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
-	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
-	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'Medium', 'High']);
-	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'Medium');
-	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), null);
-	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
+	const effortCard = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-card-configurable');
+	assert.ok(effortCard);
+	assert.equal(effortCard.querySelector('legend')?.textContent, 'Thinking Level');
+	assert.deepEqual([...effortCard.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map(input => input.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
+	assert.equal(effortCard.querySelector('input:checked')?.getAttribute('aria-label'), 'Medium');
+	assert.equal(effortCard.querySelector('input:checked')?.getAttribute('aria-description'), null);
+	effortCard.querySelector<HTMLInputElement>('input[aria-label="High"]')!.click();
 	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: High');
 	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
-	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
+	assert.equal(dom.window.document.querySelector('.ash-chat-model-card-configurable input:checked')?.getAttribute('aria-label'), 'High');
+	dom.window.document.querySelector<HTMLInputElement>('.ash-chat-model-card-configurable input[aria-label="Medium"]')!.click();
 	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: Medium');
+	dom.window.document.querySelector('.ash-chat-model-picker')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(dom.window.document.querySelector('.ash-chat-model-picker'), null);
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
@@ -811,7 +812,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(composerInputs[1]?.value, 'Second draft');
 	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['first.txt']);
 
-	assert.equal(title.querySelector('.ash-tab-close-action'), null);
+	assert.equal(title.querySelector<HTMLElement>('.ash-chat-view-tabs')?.hidden, true);
 	assert.deepEqual(fake.stopRequests, []);
 	const pendingDraft = sessions.createUntitledSession();
 	const draftInput = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) textarea')!;
@@ -1159,8 +1160,8 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		assert.match(content, /暂不支持远程项目/u);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		assert.match(chinese.bundles.ash['chat.sessions.help'], /新聊天和已有对话的输入区都保持可见/u);
-		assert.match(chinese.bundles.ash['chat.sessions.help'], /外层分隔线会停在可容纳两栏的最小宽度/u);
-		assert.match(chinese.bundles.ash['chat.sessions.layout.description'], /调整聊天区域大小时不会切换/u);
+		assert.match(chinese.bundles.ash['chat.sessions.help'], /关闭标签页会保留会话、草稿和运行中的任务/u);
+		assert.match(chinese.bundles.ash['chat.sessions.presentation.description'], /以标签页显示已打开的会话/u);
 	} finally { resetNlsResolver(); }
 });
 
@@ -1380,7 +1381,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
+		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1389,13 +1390,13 @@ test('an empty Session list opens an untitled session and persists it on its fir
 
 	const titleLabel = chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label')!;
 	assert.equal(titleLabel.textContent, 'New Chat');
-	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
+	assert.equal(chatTitleContent(pane).querySelectorAll('[role=tab]').length, 1);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-view-empty')?.hidden, true);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	const untitledPane = pane.element.querySelector<HTMLElement>("[role='region']");
+	const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
 	assert.ok(untitledPane?.dataset.untitledSessionId);
 	const input = untitledPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
@@ -1444,14 +1445,14 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.active?.threadId, 'thread-1');
 
 	assert.equal(
-		pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.sessionId,
+		pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
 		'session-1',
 	);
 	assert.equal(
-		pane.element.querySelector("[role='region']")?.getAttribute(
+		pane.element.querySelector("[role='tabpanel']")?.getAttribute(
 			'aria-labelledby',
 		),
-		titleLabel.id,
+		chatTitleContent(pane).querySelector('[role=tab]')?.id,
 	);
 
 	pane.dispose();
@@ -1508,7 +1509,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
+		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1582,7 +1583,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
+		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1610,9 +1611,9 @@ test('failed first send keeps the untitled session and its input draft', async (
 	assert.equal(sessions.untitledSessions.length, 1);
 	assert.equal(pane.element.querySelector('.ash-chat-input-attachments'), null);
 	assert.equal(input.value, 'failed commit Keep this draft');
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('empty'), true);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('has-conversation'), false);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('empty'), true);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('has-conversation'), false);
 	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-status, .ash-chat-status-summary')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
@@ -1668,7 +1669,7 @@ test('one Session retains one Chat pane while its selected Thread changes', asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
+		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1730,6 +1731,8 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(INotificationService, notifications);
 	await sessions.initialize();
 
 	const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
@@ -1762,6 +1765,84 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		null,
 	);
 });
+
+for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'archive'], ['zh-CN', 'done']] as const) {
+	test(`Chat history More captures the selected branch and separates lifecycle actions (${locale} ${wording})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			const dom = new JSDOM('<!doctype html><body><button>More</button></body>');
+			using domCleanup = toDisposable(() => dom.window.close());
+			using services = new InstantiationService();
+			using configuration = new WorkbenchConfigurationService({ source: JSON.stringify({ 'chat.experimental.sessionArchiveActionWording': wording }) });
+			using storage = createTestStorage();
+			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
+			await sessions.initialize();
+			const draft = sessions.createUntitledSession('Unsent draft');
+			using hidden = new Emitter<void>();
+			using triggered = new Emitter<{ item: IQuickPickItem; button: IQuickPickItemButton; anchor: HTMLElement; }>();
+			const picker: IQuickPick<IQuickPickItem> = {
+				type: QuickInputType.QuickPick, items: [], activeItems: [], selectedItems: [],
+				ariaLabel: '', placeholder: '', value: 'Keep search', valueSelection: { start: 0, end: 0 },
+				sortByLabel: true, canSelectMany: false, filterValue: value => value,
+				onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				onDidAccept: Event.None, onDidChangeValue: Event.None, onDidBlur: Event.None, onDidChangeSelection: Event.None,
+				show() { }, hide() { hidden.fire(); }, focus() { }, accept() { }, toggle() { }, dispose() { },
+				[Symbol.dispose]() { this.dispose(); },
+			};
+			let menu: IContextMenuDelegate | undefined;
+			const calls: { id: string; target: unknown; }[] = [];
+			services.registerInstance(ISessionsManagementService, sessions);
+			services.registerInstance(IConfigurationService, configuration);
+			services.registerInstance(IStorageService, storage);
+			services.registerInstance(IViewsService, {} as IViewsService);
+			services.registerInstance(INotificationService, notifications);
+			services.registerInstance(IQuickInputService, {
+				...quickInputServiceTestControls, input: async () => undefined,
+				createQuickPick: <T extends IQuickPickItem>() => picker as IQuickPick<T>,
+			});
+			services.registerInstance(ICommandService, {
+				onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+				executeCommand: async <T>(id: string, target: unknown): Promise<T> => { calls.push({ id, target }); return undefined as T; },
+			});
+			services.registerInstance(IContextMenuService, {
+				contextMenuStyle: 'system', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+				showContextMenu: delegate => { menu = delegate as IContextMenuDelegate; }, hideContextMenu() { },
+			});
+			using commands = new CommandService(services);
+			const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+			const items = picker.items.filter((item): item is IQuickPickItem => !('type' in item));
+			const source = items.find(item => item.label === 'Session source')!;
+			const openMenu = (item: IQuickPickItem): readonly IAction[] => {
+				triggered.fire({ item, button: item.buttons!.find(button => button.id === 'more')!, anchor: dom.window.document.querySelector('button')! });
+				assert.ok(menu);
+				return menu.getActions();
+			};
+			const actions = openMenu(source);
+			assert.deepEqual(actions.map(action => action.id), ['rename', 'fork', Separator.ID, 'archive', 'delete']);
+			assert.deepEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), locale === 'en'
+				? ['Rename', 'Fork', wording === 'archive' ? 'Archive' : 'Mark as Done', 'Delete'] : ['重命名', '分叉', wording === 'archive' ? '归档' : '标记为完成', '删除']);
+			sessions.selectThread('other', 'foreground');
+			for (const action of actions.filter(action => !(action instanceof Separator))) {
+				menu!.onHide?.(false);
+				await action.run();
+			}
+			assert.deepEqual(calls, [
+				{ id: 'agentSession.rename', target: 'source' },
+				{ id: ForkConversationActionId, target: { sessionId: 'source', threadId: 'branch' } },
+				{ id: 'agentSession.archive', target: 'source' },
+				{ id: 'agentSession.delete', target: 'source' },
+			]);
+			const draftActions = openMenu(items.find(item => item.label === draft.title)!);
+			assert.equal(draftActions.find(action => action.id === 'fork')?.enabled, false);
+			menu!.onHide?.(false);
+			await draftActions.find(action => action.id === 'delete')!.run();
+			assert.deepEqual(calls.at(-1), { id: 'agentSession.delete', target: { kind: 'untitled', session: draft } });
+			assert.equal(picker.value, 'Keep search');
+			picker.hide();
+			await picking;
+		} finally { resetNlsResolver(); }
+	});
+}
 
 test('ViewsService resolves, opens, and focuses contributed views', async () => {
 	const registry = ViewsRegistry;
@@ -2303,6 +2384,7 @@ interface FakeOptions {
 	readonly models?: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
+		readonly recommendedFor?: readonly ModelPurpose[];
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null; }[];
 		readonly defaultReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
@@ -2890,7 +2972,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	const discovered = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, display_name: 'Private model', discovered: true,
 		description: 'Private model overview',
-		context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
+		context_window: null, usable_context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
 		auto_compact_token_limit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallel_tool_calls: 'unknown', personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown' },
 		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], default_reasoning_effort: null, default_personality: null,
 	});
@@ -2915,11 +2997,12 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
+		capabilities: { toolCalling: 'supported', agentMode: 'unknown' }, source: undefined, pricing: [], recommendedFor: [],
 		inputModalities: null, retirement: undefined,
-		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
+		contextWindow: null, usableContextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
 		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],
-	};
+	} satisfies ModelCatalogEntry;
 	assert.deepEqual(await discovery, [pickerEntry]);
 	assert.deepEqual(await models.listModelCatalog(), [pickerEntry]);
 	assert.deepEqual(await models.listModels(), []);
@@ -3401,6 +3484,8 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 		visibility.fire({ partId, visible });
 	};
 	const layout: Partial<IWorkbenchLayoutService> = {
+		mainContainerDimension: new Dimension(1440, 900),
+		isAuxiliaryBarMaximized: () => false,
 		getPartSize: () => auxiliaryBarSize,
 		resizePart: (_partId, size) => { auxiliaryBarSize = new Dimension(size.width, size.height); },
 		onDidChangePartVisibility: visibility.event,
@@ -3412,6 +3497,17 @@ function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService 
 	};
 	return layout as IWorkbenchLayoutService;
 }
+
+const testChatPartService = {
+	getPartId: (location: ViewContainerLocation): WorkbenchPartId => {
+		switch (location) {
+			case ViewContainerLocation.Sidebar: return 'sidebar';
+			case ViewContainerLocation.Panel: return 'panel';
+			case ViewContainerLocation.AgentSidebar: return 'agentSidebar';
+			case ViewContainerLocation.AuxiliaryBar: return 'auxiliarybar';
+		}
+	},
+} as IPaneCompositePartService;
 
 function fakeApi(options: FakeOptions = {}): {
 	readonly api: IRendererHost;
@@ -3543,6 +3639,7 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return agentModelCatalog((options.models ?? []).map(entry => createTestModel({
 					model: entry.model, display_name: entry.displayName,
+					recommended_for: [...entry.recommendedFor ?? []],
 					context_window: entry.contextWindow ?? null,
 					default_reasoning_effort: entry.defaultReasoningEffort ?? null,
 					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
@@ -4012,6 +4109,13 @@ function nextTask(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+async function waitForSessionsTree(pane: InstanceType<typeof ChatViewPane>): Promise<HTMLElement> {
+	pane.setVisible(true);
+	const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
+	await waitFor(() => tree.getAttribute('aria-busy') === 'false' && pane.element.querySelector<HTMLElement>('.ash-agent-sessions-empty')!.hidden === true);
+	return tree;
+}
+
 async function waitFor(predicate: () => boolean): Promise<void> {
 	for (let attempt = 0; attempt < 30; attempt += 1) {
 		if (predicate()) return;
@@ -4113,7 +4217,7 @@ test('Selecting a custom Agent in a new Chat creates the Session with its exact 
 test('Advisor command selects a model and the off switch preserves its settings', async () => {
 	const fake = fakeApi({
 		configuredProviders: ['openai'],
-		models: [{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', }],
+		models: [{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', recommendedFor: [ModelPurpose.Advisor] }],
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
@@ -4240,16 +4344,16 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key saved');
 });
 
-test('Advisor model choices include the fixed catalog before connection setup', async () => {
+test('Advisor choices come from recommended catalog rows before connection setup', async () => {
 	const fake = fakeApi({
 		configuredProviders: ['openai'],
 		models: [
-			{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', },
+			{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', recommendedFor: [ModelPurpose.Advisor] },
 			{ model: { provider: 'google', model: 'flash' }, displayName: 'Flash', },
 		],
 	});
 	using chat = createChatService(fake.api);
-	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ['Reviewer', 'Flash']);
+	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ['Reviewer']);
 });
 
 test('Advisor transcript groups the call and renders advice as a disclosure', () => {
@@ -4793,22 +4897,27 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const sessions = resources.add(new SessionsManagementService(api));
 	if (initialization) sessions.initialize = () => initialization;
 	const contextKeys = resources.add(new ContextKeyService());
-	resources.add(new TestViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry: ViewsRegistry }, contextKeys));
 	const commandServices = resources.add(new InstantiationService());
+	commandServices.registerInstance(IViewDescriptorService, descriptors);
+	commandServices.registerInstance(IPaneCompositePartService, testChatPartService);
+	commandServices.registerInstance(IContextKeyService, contextKeys);
 	const configuration = resources.add(new WorkbenchConfigurationService({ source: configurationSource }));
 	commandServices.registerInstance(IConfigurationService, configuration);
 	const commands = resources.add(new CommandService(commandServices));
 	const menu = new MenuService(commands, contextKeys);
-	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+	const contextMenus = { showContextMenu: () => { }, hideContextMenu: () => { } } as unknown as IContextMenuService;
 	const chat = resources.add(createChatService(api, configuration));
 	const inputServices = createInputServices(contextView, chat, menu, contextMenus);
 	const storage = restoredStorage ?? inputResources.add(createTestStorage());
 	const layout = testLayoutService();
+	commandServices.registerInstance(IWorkbenchLayoutService, layout);
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menu, contextMenus, contextView, commands, layout, configurationFiles ?? configuration.fileService, unavailableAccessibleViewService, notifications,
-		inputServices, configuration, storage, userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, auxiliaryWindows));
+		inputServices, configuration, storage, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, auxiliaryWindows, contextKeys));
 	resources.add(auxiliaryWindows);
 	inputServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
+	commandServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
 	dom.window.document.body.append(pane.element);
 	if (!initialization) await sessions.initialize();
 	await nextTask();
@@ -5023,51 +5132,504 @@ test('Chat live-update recovery reloads retained content and keeps repeated fail
 	assert.deepEqual({ reads, status: model.historyStatus, blocked: model.inputState.inputBlocked, phase: model.state, sent: fake.turnStartRequests.length }, { reads: 3, status: undefined, blocked: false, phase: 'ready', sent: 0 });
 });
 
+test('Chat tabs retain independent drafts and closing only removes the opened presentation', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, sessions, dom, input, fake } = fixture;
+	const title = chatTitleContent(pane);
+	assert.equal(pane.partTitleProjection.hideContainerSelector, true);
+	assert.equal(title.querySelectorAll('[role=tab]').length, 1);
+	assert.ok(title.querySelector('.ash-workbench-tabs-control'));
+	typeChatText(dom.window, input, 'Keep the first draft');
+	await pane.captureActiveDraft();
+	const draft = sessions.createUntitledSession();
+	const second = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+	typeChatText(dom.window, second, 'Keep the second draft');
+	await pane.captureActiveDraft();
+	assert.equal(title.querySelectorAll('[role=tab]').length, 2);
+	title.querySelector<HTMLButtonElement>('.ash-tab-label')!.click();
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
+	assert.equal(input.value, 'Keep the first draft');
+	const closedTab = title.querySelectorAll<HTMLButtonElement>('.ash-tab-label')[1]!;
+	closedTab.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+	await waitFor(() => title.querySelectorAll('[role=tab]').length === 1);
+	assert.equal(sessions.untitledSessions[0]?.untitledSessionId, draft.untitledSessionId);
+	assert.equal(sessions.sessions[0]?.status, 'active');
+	assert.equal(fake.turnStartRequests.length, 0);
+	sessions.selectUntitledSession(draft.untitledSessionId);
+	await waitFor(() => pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')?.value === 'Keep the second draft');
+	assert.equal(title.querySelectorAll('[role=tab]').length, 2);
+	assert.equal(pane.element.querySelector('.ash-chat:not([hidden])')?.getAttribute('aria-labelledby'), title.querySelector('[role=tab][aria-selected=true]')?.id);
+});
+
+for (const kind of ['session', 'untitled'] as const) {
+	for (const trigger of ['click', 'Delete'] as const) {
+		test(`Closing the last ${kind} Chat tab by ${trigger} hides the side bar and retains its draft`, async () => {
+			await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
+			const fixture = await createNavigationInputPane();
+			using resources = fixture.resources;
+			const { pane, sessions, dom, fake, layout, commandServices } = fixture;
+			const title = chatTitleContent(pane);
+			if (kind === 'untitled') {
+				sessions.createUntitledSession();
+				title.querySelector<HTMLButtonElement>('.ash-tab-label')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+				await waitFor(() => title.querySelectorAll('[role=tab]').length === 1);
+			}
+			const editor = dom.window.document.createElement('button');
+			dom.window.document.body.append(editor);
+			layout.showPart('editor');
+			layout.hasFocus = partId => partId === 'auxiliarybar' && title.contains(dom.window.document.activeElement);
+			commandServices.registerInstance(IEditorGroupsService, { activeGroup: { focus: () => editor.focus() } } as IEditorGroupsService);
+			const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+			typeChatText(dom.window, input, 'Keep the final chat draft');
+			const selection = { active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length };
+			const label = title.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+			label.focus();
+			if (trigger === 'click') {
+				title.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.click();
+			} else {
+				label.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+			}
+			await waitFor(() => !layout.isPartVisible('auxiliarybar'));
+			assert.equal(dom.window.document.activeElement, editor);
+			assert.deepEqual({ active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length }, selection);
+			assert.equal(title.querySelectorAll('[role=tab]').length, 1);
+			assert.equal(fake.archiveRequests.length, 0);
+			assert.equal(fake.stopRequests.length, 0);
+			assert.equal(fake.turnStartRequests.length, 0);
+			layout.showPart('auxiliarybar');
+			assert.equal(pane.element.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep the final chat draft');
+		});
+	}
+}
+
+test('Chat restores opened tabs and leaves closed sessions available in the catalog', async () => {
+	using storage = createTestStorage();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
+	const { pane, sessions, dom } = fixture;
+	const draft = sessions.createUntitledSession();
+	const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+	typeChatText(dom.window, input, 'Restore this open draft');
+	await pane.captureActiveDraft();
+	const tabs = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>('.ash-tab-label');
+	tabs[0]!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+	await waitFor(() => chatTitleContent(pane).querySelectorAll('[role=tab]').length === 1);
+	const saved = JSON.parse(storage.get('chat.viewState', StorageScope.WORKSPACE)!);
+	assert.deepEqual(saved.opened, [`untitled:${draft.untitledSessionId}`]);
+	fixture.resources.dispose();
+	const reopened = await createNavigationInputPane('{}', undefined, {}, storage);
+	using resources = reopened.resources;
+	await waitFor(() => reopened.pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')?.value === 'Restore this open draft');
+	assert.equal(chatTitleContent(reopened.pane).querySelectorAll('[role=tab]').length, 1);
+	assert.equal(reopened.sessions.sessions[0]?.sessionId, 'session-1');
+	reopened.sessions.selectThread('session-1', 'thread-1');
+	assert.equal(chatTitleContent(reopened.pane).querySelectorAll('[role=tab]').length, 2);
+});
+
+test('Chat restores the selected fork of an inactive session tab', async () => {
+	using storage = createTestStorage();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
+	fixture.sessions.selectThread('session-1', 'thread-2');
+	const draft = fixture.sessions.createUntitledSession();
+	await fixture.pane.captureActiveDraft();
+	const saved = JSON.parse(storage.get('chat.viewState', StorageScope.WORKSPACE)!);
+	assert.equal(saved.threads['session:session-1'], 'thread-2');
+	fixture.resources.dispose();
+	const reopened = await createNavigationInputPane('{}', undefined, {}, storage);
+	using resources = reopened.resources;
+	assert.equal(reopened.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
+	chatTitleContent(reopened.pane).querySelector<HTMLButtonElement>('.ash-tab-label')!.click();
+	assert.equal(reopened.sessions.active?.threadId, 'thread-2');
+});
+
 test('Sessions layout is explicit, persists across recreation and starts with full Chat', async () => {
 	const fixture = await createNavigationInputPane();
 	using resources = fixture.resources;
 	const { pane, commands, configuration } = fixture;
 	const sidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
 	assert.equal(sidebar.hidden, true);
-	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.SideBySide);
-	await commands.executeCommand('workbench.action.chat.setAgentSessionsOrientationStacked');
+	assert.equal(configuration.getValue(AGENT_SESSIONS_PRESENTATION_SETTING), AgentSessionsPresentation.Tabs);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
 	assert.equal(sidebar.hidden, true);
 	const snapshot = await configuration.read();
 	resources.dispose();
 	const reopened = await createNavigationInputPane(snapshot.source);
 	using reopenedResources = reopened.resources;
-	assert.equal(reopened.configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
+	assert.equal(reopened.configuration.getValue(AGENT_SESSIONS_PRESENTATION_SETTING), AgentSessionsPresentation.List);
 	assert.equal(reopened.pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, true);
 	reopened.pane.toggleSessionsSidebar();
-	assert.equal(reopened.pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), true);
+	assert.equal(reopened.pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-sidebar-visible'), true);
+});
+
+for (const presentation of [AgentSessionsPresentation.Tabs, AgentSessionsPresentation.List]) {
+	for (const width of [380, 720]) {
+		test(`Sessions button waits for its layout setting before revealing ${presentation} at ${width}px`, async () => {
+			const fixture = await createNavigationInputPane(JSON.stringify({
+				[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,
+				[ChatConfiguration.ChatViewSessionsOrientation]: 'stacked',
+			}));
+			using resources = fixture.resources;
+			const { pane, commands, configuration, layout, input, dom } = fixture;
+			pane.layout(600, 0, width);
+			const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+			const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+			const wasHidden = sidebar.hidden;
+			input.value = 'Keep this draft while saving';
+			input.focus();
+			const saving = new DeferredPromise<void>();
+			const releaseSave = new DeferredPromise<void>();
+			const updateValue = configuration.updateValue.bind(configuration);
+			configuration.updateValue = async (key, value) => {
+				assert.equal(key, ChatConfiguration.ChatViewSessionsOrientation);
+				await saving.complete();
+				await releaseSave.p;
+				await updateValue(key, value);
+			};
+			const resize = layout.resizePart.bind(layout);
+			const requests: WorkbenchPartId[] = [];
+			layout.resizePart = (part, size) => {
+				requests.push(part);
+				resize(part, size);
+				pane.layout(size.height, 0, size.width);
+			};
+			const opening = commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+			await saving.p;
+			try {
+				assert.equal(sidebar.hidden, wasHidden);
+				assert.equal(body.classList.contains('sessions-side-by-side'), false);
+				assert.equal(dom.window.document.activeElement, input);
+				assert.deepEqual(requests, []);
+			} finally {
+				await releaseSave.complete();
+				await opening;
+			}
+			assert.equal(sidebar.hidden, false);
+			assert.equal(body.classList.contains('sessions-side-by-side'), true);
+			assert.equal(sidebar.contains(dom.window.document.activeElement), true);
+			assert.equal(body.querySelector('.ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep this draft while saving');
+		});
+	}
+
+	test(`Sessions button widens its host from ${presentation} without replacing the draft`, async () => {
+		const fixture = await createNavigationInputPane(JSON.stringify({
+			[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,
+			[ChatConfiguration.ChatViewSessionsOrientation]: 'stacked',
+		}));
+		using resources = fixture.resources;
+		const { pane, commands, configuration, layout, input, dom } = fixture;
+		pane.layout(600, 0, 380);
+		input.value = 'Keep this draft';
+		input.focus();
+		const resize = layout.resizePart.bind(layout);
+		const requests: WorkbenchPartId[] = [];
+		layout.resizePart = (part, size) => {
+			requests.push(part);
+			resize(part, size);
+			pane.layout(size.height, 0, size.width);
+		};
+		await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+		const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+		const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+		assert.deepEqual(requests, ['auxiliarybar']);
+		assert.equal(layout.getPartSize('auxiliarybar').width, 720);
+		assert.equal(body.classList.contains('sessions-side-by-side'), true);
+		assert.equal(sidebar.hidden, false);
+		assert.equal(configuration.getValue(AGENT_SESSIONS_PRESENTATION_SETTING), presentation);
+		assert.equal(configuration.getValue(ChatConfiguration.ChatViewSessionsOrientation), 'sideBySide');
+		assert.equal(body.querySelector('.ash-chat-textarea-input'), input);
+		assert.equal(input.value, 'Keep this draft');
+		assert.equal(sidebar.contains(dom.window.document.activeElement), true);
+		await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+		assert.equal(sidebar.hidden, true);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(layout.getPartSize('auxiliarybar').width, 380);
+		assert.deepEqual(requests, ['auxiliarybar', 'auxiliarybar']);
+	});
+}
+
+test('Sessions button docks an already visible stacked list and restores its normal host width', async () => {
+	const fixture = await createNavigationInputPane(JSON.stringify({ [AGENT_SESSIONS_PRESENTATION_SETTING]: AgentSessionsPresentation.List }));
+	using resources = fixture.resources;
+	const { pane, commands, layout, input } = fixture;
+	const resize = layout.resizePart.bind(layout);
+	layout.resizePart = (part, size) => {
+		resize(part, size);
+		pane.layout(size.height, 0, size.width);
+	};
+	layout.resizePart('auxiliarybar', new Dimension(720, 600));
+	layout.resizePart('auxiliarybar', new Dimension(380, 600));
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	assert.equal(sidebar.hidden, false);
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	assert.equal(fixture.commandServices.get(IContextKeyService).getValue('agentSessionsViewerOrientation'), AgentSessionsViewerOrientation.Stacked);
+	input.value = 'Keep the stacked draft';
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.equal(body.classList.contains('sessions-side-by-side'), true);
+	assert.equal(sidebar.hidden, false);
+	assert.equal(fixture.commandServices.get(IContextKeyService).getValue('agentSessionsViewerOrientation'), AgentSessionsViewerOrientation.SideBySide);
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.equal(layout.getPartSize('auxiliarybar').width, 380);
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	assert.equal(body.querySelector('.ash-chat-textarea-input'), input);
+	assert.equal(input.value, 'Keep the stacked draft');
+});
+
+test('Sessions expansion maximizes a constrained Auxiliary Bar and keeps the original composer', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, commands, layout, input } = fixture;
+	pane.layout(600, 0, 380);
+	let size = new Dimension(380, 600);
+	layout.getPartSize = () => size;
+	layout.resizePart = (_part, requested) => {
+		size = new Dimension(Math.min(580, requested.width), requested.height);
+		pane.layout(size.height, 0, size.width);
+	};
+	const maximized: boolean[] = [];
+	layout.setAuxiliaryBarMaximized = value => {
+		maximized.push(value);
+		size = new Dimension(1000, 600);
+		pane.layout(size.height, 0, size.width);
+		return true;
+	};
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.deepEqual(maximized, [true]);
+	assert.equal(pane.element.querySelector('.ash-chat-body')!.classList.contains('sessions-side-by-side'), true);
+	assert.equal(pane.element.querySelector('.ash-chat-textarea-input'), input);
+});
+
+test('Sessions expansion follows a moved Chat and leaves horizontal Panel sizing to the Workbench', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, commands, layout, commandServices } = fixture;
+	const descriptors = commandServices.get(IViewDescriptorService);
+	descriptors.getViewContainerLocation = () => ViewContainerLocation.Sidebar;
+	pane.layout(600, 0, 380);
+	const requests: WorkbenchPartId[] = [];
+	const resize = layout.resizePart.bind(layout);
+	layout.resizePart = (part, size) => {
+		requests.push(part);
+		resize(part, size);
+		pane.layout(size.height, 0, size.width);
+	};
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.deepEqual(requests, ['sidebar']);
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	descriptors.getViewContainerLocation = () => ViewContainerLocation.Panel;
+	layout.getPanelPosition = () => Position.BOTTOM;
+	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+	assert.deepEqual(requests, ['sidebar', 'sidebar']);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!.hidden, false);
+	assert.equal(pane.element.querySelector('.ash-chat-body')!.classList.contains('sessions-side-by-side'), false);
+});
+
+test('List mode opens a right sidebar at the width boundary without replacing the composer or stealing focus', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, configuration, input, dom, sessions } = fixture;
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	typeChatText(dom.window, input, 'Keep this draft while changing width');
+	input.focus();
+	// Chat has no intrinsic minimum; the hosting auxiliary Part supplies its 170px floor.
+	assert.equal(pane.minimumWidth, 0);
+	pane.layout(600, 0, 170);
+	assert.equal(sidebar.hidden, true);
+	pane.layout(600, 0, 599);
+	await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.List);
+	assert.equal(sidebar.hidden, true);
+	pane.layout(600, 0, 600);
+	assert.equal(body.classList.contains('sessions-side-by-side'), true);
+	assert.equal(sidebar.hidden, false);
+	assert.equal(dom.window.document.activeElement, input);
+	assert.equal(body.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), input);
+	const tree = await waitForSessionsTree(pane);
+	tree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+	tree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.equal(sidebar.hidden, false);
+	assert.equal(dom.window.document.activeElement, input);
+	pane.layout(600, 0, 599);
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	assert.equal(sidebar.hidden, false);
+	tree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+	tree.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.equal(sidebar.hidden, true);
+	assert.equal(input.value, 'Keep this draft while changing width');
+	pane.layout(600, 0, 720);
+	assert.equal(sidebar.hidden, false);
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
+	assert.equal(dom.window.document.activeElement, input);
+});
+
+test('Sessions separator resizes with the keyboard, keeps its preferred width and restores it with the view', async () => {
+	using storage = createTestStorage();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
+	const { pane, commands, dom, input } = fixture;
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	const sash = body.querySelector<HTMLElement>('[role=separator]')!;
+	assert.equal(sash.hidden, true);
+	assert.equal(sash.tabIndex, -1);
+	pane.layout(600, 0, 900);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	assert.equal(sash.hidden, false);
+	assert.equal(sash.getAttribute('aria-controls'), sidebar.id);
+	sash.focus();
+	sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+	assert.equal(sidebar.style.flexBasis, '310px');
+	assert.equal(sash.getAttribute('aria-valuenow'), '310');
+	assert.equal(dom.window.document.activeElement, sash);
+	pane.layout(600, 0, 600);
+	assert.equal(sidebar.style.flexBasis, '300px');
+	pane.layout(600, 0, 900);
+	assert.equal(sidebar.style.flexBasis, '310px');
+	pane.layout(600, 0, 599);
+	assert.equal(sash.hidden, true);
+	assert.equal(sash.tabIndex, -1);
+	assert.equal(sidebar.style.flexBasis, '');
+	assert.equal(dom.window.document.activeElement, input);
+	fixture.resources.dispose();
+	const restored = await createNavigationInputPane(JSON.stringify({ [AGENT_SESSIONS_PRESENTATION_SETTING]: AgentSessionsPresentation.List }), undefined, {}, storage);
+	using resources = restored.resources;
+	restored.pane.layout(600, 0, 900);
+	const restoredSidebar = restored.pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	assert.equal(restoredSidebar.style.flexBasis, '310px');
+	const restoredSash = restored.pane.element.querySelector<HTMLElement>('.ash-chat-body > [role=separator]')!;
+	restoredSash.dispatchEvent(new restored.dom.window.MouseEvent('dblclick', { bubbles: true }));
+	assert.equal(restoredSidebar.style.flexBasis, '300px');
+	assert.equal(JSON.parse(storage.get('chat.viewState', StorageScope.WORKSPACE)!).sessionsSidebarWidth, 300);
+});
+
+test('Sessions separator constrains both columns and gives focus back when collapsed', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, commands, dom, input } = fixture;
+	pane.layout(600, 0, 720);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	const sash = pane.element.querySelector<HTMLElement>('.ash-chat-body > [role=separator]')!;
+	const sidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	for (const [key, width, position] of [['ArrowLeft', '420px', '420'], ['ArrowRight', '200px', '200']]) {
+		for (let step = 0; step < 50; step++) sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true }));
+		assert.equal(sidebar.style.flexBasis, width);
+		assert.equal(sash.getAttribute('aria-valuenow'), position);
+	}
+	input.focus();
+	pane.toggleSessionsSidebar();
+	pane.toggleSessionsSidebar();
+	sash.focus();
+	sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(sidebar.hidden, true);
+	assert.equal(sash.hidden, true);
+	assert.equal(dom.window.document.activeElement, input);
+});
+
+test('dragging Sessions past the snap threshold persists stacked layout without replacing the composer', async () => {
+	using storage = createTestStorage();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
+	using resources = fixture.resources;
+	const { pane, commands, dom, input, configuration } = fixture;
+	pane.layout(600, 0, 900);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	const sash = body.querySelector<HTMLElement>('[role=separator]')!;
+	typeChatText(dom.window, input, 'Keep the stacked draft');
+	sash.focus();
+	sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 0, bubbles: true }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 200 }));
+	assert.equal(body.classList.contains('sessions-side-by-side'), true);
+	assert.equal(sidebar.style.flexBasis, '200px');
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 201 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 250 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup'));
+	await waitFor(() => configuration.getValue(ChatConfiguration.ChatViewSessionsOrientation) === 'stacked');
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	assert.equal(sidebar.hidden, false);
+	assert.equal(sash.hidden, true);
+	assert.equal(dom.window.document.activeElement, input);
+	assert.equal(body.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), input);
+	assert.equal(input.value, 'Keep the stacked draft');
+	pane.layout(600, 0, 580);
+	pane.layout(600, 0, 950);
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	const snapshot = await configuration.read();
+	await commands.executeCommand('agentSessions.showAgentSessionsSidebar');
+	assert.equal(body.classList.contains('sessions-side-by-side'), true);
+	assert.equal(sash.hidden, false);
+	await commands.executeCommand('agentSessions.hideAgentSessionsSidebar');
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	await assert.rejects(configuration.updateValue(ChatConfiguration.ChatViewSessionsOrientation, 'diagonal'), /Invalid session list orientation/);
+	resources.dispose();
+	const restored = await createNavigationInputPane(snapshot.source, undefined, {}, storage);
+	using restoredResources = restored.resources;
+	restored.pane.layout(600, 0, 950);
+	assert.equal(restored.pane.element.querySelector('.ash-chat-body')!.classList.contains('sessions-side-by-side'), false);
+});
+
+test('automatic layout respects manual collapse and Tabs require an explicit sidebar open', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, commands } = fixture;
+	const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+	const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+	pane.layout(600, 0, 720);
+	assert.equal(sidebar.hidden, true);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	assert.equal(sidebar.hidden, false);
+	pane.toggleSessionsSidebar();
+	assert.equal(sidebar.hidden, true);
+	pane.layout(600, 0, 599);
+	pane.layout(600, 0, 900);
+	assert.equal(sidebar.hidden, true);
+	pane.toggleSessionsSidebar();
+	assert.equal(sidebar.hidden, false);
+	sidebar.querySelector<HTMLButtonElement>('.ash-chat-sessions-new')!.click();
+	assert.equal(sidebar.hidden, false);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationTabs');
+	assert.equal(sidebar.hidden, true);
+	assert.equal(body.classList.contains('sessions-side-by-side'), false);
+	pane.toggleSessionsSidebar();
+	assert.equal(sidebar.hidden, false);
+	assert.equal(body.classList.contains('sessions-side-by-side'), true);
+	await commands.executeCommand('workbench.action.chat.setAgentSessionsPresentationList');
+	assert.equal(sidebar.hidden, false);
+	sidebar.querySelector<HTMLInputElement>('.ash-agent-sessions-search')!.focus();
+	body.dispatchEvent(new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(sidebar.hidden, true);
+	pane.layout(600, 0, 950);
+	assert.equal(sidebar.hidden, true);
 });
 
 test('Sessions migrates legacy automatic layout once while preserving profile comments and other settings', async () => {
 	const source = '{\n // Keep this comment\n "chat.viewSessions.orientation": "auto",\n "editor.wordWrap": "on",\n}';
-	const fixture = await createNavigationInputPane(source);
-	using resources = fixture.resources;
-	const snapshot = await fixture.configuration.read();
+	using files = new TestConfigurationFiles(source);
+	using configuration = new WorkbenchConfigurationService({ files });
+	await configuration.reloadConfiguration();
+	const snapshot = await configuration.read();
 	assert.ok(snapshot.source.includes('// Keep this comment'));
 	assert.ok(snapshot.source.includes('"editor.wordWrap": "on"'));
-	assert.deepEqual(parseJsonDocument(snapshot.source, { allowComments: true, allowTrailingComma: true }).value, { [AGENT_SESSIONS_ORIENTATION_SETTING]: AgentSessionsOrientation.SideBySide, 'editor.wordWrap': 'on' });
-	resources.dispose();
-	const reopened = await createNavigationInputPane(snapshot.source);
-	using reopenedResources = reopened.resources;
-	assert.equal((await reopened.configuration.read()).source, snapshot.source);
+	assert.deepEqual(parseJsonDocument(snapshot.source, { allowComments: true, allowTrailingComma: true }).value, { [AGENT_SESSIONS_PRESENTATION_SETTING]: AgentSessionsPresentation.List, 'editor.wordWrap': 'on' });
+	await configuration.reloadConfiguration();
+	assert.equal((await configuration.read()).source, snapshot.source);
 });
 
-test('Sessions migration yields to a newer explicit preference', async () => {
-	let writes = 0;
-	using files = new class extends TestConfigurationFiles {
-		override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): Promise<never> {
-			writes++;
-			throw new FileRevisionConflictError(args[0].resource);
+test('Sessions migration preserves stacked and side-by-side preferences and an explicit Tabs choice', async () => {
+	for (const orientation of ['stacked', 'sideBySide']) {
+		for (const presentation of [undefined, AgentSessionsPresentation.Tabs]) {
+			using files = new TestConfigurationFiles(JSON.stringify({ [ChatConfiguration.ChatViewSessionsOrientation]: orientation, [AGENT_SESSIONS_PRESENTATION_SETTING]: presentation }));
+			using configuration = new WorkbenchConfigurationService({ files });
+			await configuration.reloadConfiguration();
+			assert.equal(configuration.getValue(ChatConfiguration.ChatViewSessionsOrientation), orientation);
+			assert.equal(configuration.getValue(AGENT_SESSIONS_PRESENTATION_SETTING), presentation ?? AgentSessionsPresentation.List);
+			const snapshot = await configuration.read();
+			assert.equal(JSON.parse(snapshot.source)[ChatConfiguration.ChatViewSessionsOrientation], orientation);
+			await configuration.reloadConfiguration();
+			assert.equal((await configuration.read()).source, snapshot.source);
 		}
-	}(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"auto"}`);
-	const fixture = await createNavigationInputPane(`{"${AGENT_SESSIONS_ORIENTATION_SETTING}":"stacked"}`, files);
-	using resources = fixture.resources;
-	assert.equal(writes, 1);
-	assert.equal(fixture.configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.Stacked);
+	}
 });
 
 for (const text of ['', 'Private request for A']) {
@@ -5149,7 +5711,7 @@ test('composer navigation keeps the first untitled materialization in the same i
 	using chat = createChatService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	using commands = new CommandService(new InstantiationService());
-	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+	const contextMenus = { showContextMenu: () => { }, hideContextMenu: () => { } } as unknown as IContextMenuService;
 	const services = createInputServices(contextView, chat, undefined, contextMenus);
 	using widget = services.createInstance(ChatWidget, dom.window.document.body, 'materialization-fixture', model, () => { }, contextMenus, contextView, commands, unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined);
 	widget.setVisible(true);
@@ -5303,11 +5865,11 @@ for (const navigate of [false, true]) {
 		resources.add(new TestViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
 		const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
 		const menu = new MenuService(commands, contextKeys);
-		const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
+		const contextMenus = { showContextMenu: () => { }, hideContextMenu: () => { } } as unknown as IContextMenuService;
 		const chat = resources.add(createChatService(fake.api));
 		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
@@ -5449,6 +6011,7 @@ test('AI preference blocks direct dispatch, including a pending permission read,
 	for (const request of [
 		() => chat.startTurn(options), () => chat.queueTurn(options), () => chat.steerTurn({ ...options, turnId: 'turn-1' }),
 		() => chat.consultAdvisor({ ...options, question: 'Synthetic question' }), () => chat.compactContext(options),
+		() => chat.startReview({ ...options, target: { type: 'uncommittedChanges' } }),
 		() => chat.generateTurnChangeMessage('session-1', 'thread-1', 'change-1', 1),
 	]) await assert.rejects(request(), /AI features are disabled/);
 	assert.equal(fake.turnStartRequests.length + fake.queuedRequests.length + fake.turnSteerRequests.length + fake.consultRequests.length + fake.turnCompactRequests.length, 0);
@@ -5548,6 +6111,30 @@ for (const kind of ['Chat', 'Cowork']) {
 	});
 }
 
+test('Chat review reports only accepted reviewer submissions', async () => {
+	const fake = fakeApi();
+	const requests: SessionOperationInput<'startReview'>[] = [];
+	let reject = false;
+	using chat = createChatService({
+		...fake.api, turn: {
+			...fake.api.turn, startReview: async params => {
+				if (reject) throw new Error('Controlled rejected review');
+				requests.push(params);
+				return { turnId: 'review-turn', sequence: 2 };
+			}
+		}
+	});
+	const submissions: unknown[] = [];
+	using listener = chat.onDidSubmitRequest(value => submissions.push(value));
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, target: { type: 'stagedChanges' as const } };
+	await chat.startReview(options);
+	assert.deepEqual(requests.map(({ commandId, ...request }) => { assert.ok(commandId); return request; }), [options]);
+	assert.deepEqual(submissions, [{ sessionId: 'session-1', threadId: 'thread-1', isNewSession: true, requestSequence: 1 }]);
+	reject = true;
+	await assert.rejects(chat.startReview(options), /Controlled rejected review/);
+	assert.equal(submissions.length, 1);
+});
+
 test('Chat accepted-request notifications follow backend success and exclude rejected or retired dispatches', async () => {
 	const fake = fakeApi();
 	const accepted = new DeferredPromise<Awaited<ReturnType<typeof fake.api.turn.start>>>();
@@ -5618,7 +6205,7 @@ test('IDE item organization retains the background composer and never submits it
 	assert.ok(original.isConnected);
 	assert.equal(original.querySelector<HTMLTextAreaElement>('textarea')!.value, originalInput);
 	assert.equal(f.fake.turnStartRequests.length, 0);
-	assert.equal(f.pane.element.querySelectorAll('[data-section="pinned"] .ash-agent-session-row').length, 1);
+	assert.equal(f.storage.getBoolean('sessions.list.pinned.created', StorageScope.PROFILE, false), true);
 	f.sessions.selectThread('created', 'created-thread');
 	await nextTask();
 	assert.deepEqual((await f.pane.captureActiveDraft())!.draft, originalDraft);
@@ -5649,8 +6236,13 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	f.auxiliaryWindows.opening = ready.p;
 	let menu: import('../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
 	f.contextMenus.showContextMenu = value => { menu = value as import('../../../base/browser/contextmenu.js').IContextMenuDelegate; };
-	f.pane.element.querySelector<HTMLButtonElement>('[data-section="drafts"] .ash-agent-session-more')!.click();
+	f.pane.toggleSessionsSidebar();
+	const tree = await waitForSessionsTree(f.pane);
+	tree.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+	tree.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+	tree.dispatchEvent(new f.dom.window.KeyboardEvent('keyup', { key: 'F10', shiftKey: true, bubbles: true }));
 	const opening = menu!.getActions().find(action => action.id === 'sessions.openInNewWindow')!.run();
+	menu!.onHide?.(false);
 	const duplicate = f.pane.openInNewWindow({ kind: 'untitled', session: draft });
 	await ready.complete(); await Promise.all([opening, duplicate]);
 	assert.equal(f.auxiliaryWindows.openCount, 1);

@@ -10,7 +10,7 @@ import { FileKind, IFileService } from '../../../../../platform/files/common/fil
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
-import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from '../../../../../platform/list/browser/listService.js';
+import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncDataTreeOptions, type ResourceOpenEvent, type TreeExpandMode } from '../../../../../platform/list/browser/listService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
@@ -48,6 +48,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly editorService: IEditorService;
 	private readonly explorerService: IExplorerService;
 	private readonly tree: WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>;
+	private readonly find: ExplorerFindProvider;
 	private readonly scrollContent: HTMLDivElement;
 	private statusDomNode: HTMLDivElement | undefined;
 	private root: ExplorerItem | undefined;
@@ -108,7 +109,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.contentElement.append(this.scrollContent);
 		const sorter = instantiationService.createInstance(FileSorter);
 		const dataSource = this._register(instantiationService.createInstance(ExplorerDataSource, sorter));
-		this.tree = this._register(new WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollContent, dataSource, {
+		this.tree = this._register(instantiationService.createInstance(WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>, this.scrollContent, dataSource, {
 			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
 			multipleSelectionSupport: true,
 			dnd: this._register(instantiationService.createInstance(FileDragAndDrop, (error: unknown) => {
@@ -121,7 +122,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				return items.map(item => item === focused && segment ? segment : item);
 			})),
 			scrolling: 'managed',
-			configurationService,
 			getHeight: () => 22,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
@@ -143,7 +143,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					twistie.append(loading);
 				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 			},
-		}));
+		} satisfies WorkbenchCompressibleAsyncDataTreeOptions<ExplorerItem>));
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Without folder icons, a file icon occupies the same column as a folder arrow.
@@ -160,7 +160,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
+		this.find = this._register(new ExplorerFindProvider(this.tree, this.headerElement));
 		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
 		this.scopedContext.setContext('view', options.id);
 		this.titleMenu = this._register(menuService.createMenu(MenuId.for('ViewTitle'), this.scopedContext));
@@ -419,6 +419,12 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public collapseAll(): void {
 		this.tree.collapseAll();
+	}
+
+	/** Selects an always available filter without exposing the tree's owned input DOM. */
+	public setFindPresentation(presentation: 'inline' | 'overlay'): void {
+		this.contentElement.classList.toggle('inline-find', presentation === 'inline');
+		this.find.setPresentation(presentation === 'inline' ? this.contentElement : this.headerElement, presentation);
 	}
 
 	public async refresh(recursive: boolean, item?: ExplorerItem): Promise<void> {

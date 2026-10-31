@@ -1,11 +1,244 @@
 use super::*;
 use ash_core::RecordToolCallRequest;
+use ash_core::StartGoalTurnRequest;
 use ash_core::StartTurnRequest;
+use ash_core::ThreadEventBatch;
+use ash_core::ThreadStore;
 use ash_protocol::ToolName;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 use core_api::SequenceExpectation;
 use core_api::StartThreadRequest;
+use std::time::Instant;
+
+#[test]
+fn legacy_goal_failure_does_not_block_startup_or_other_goal_recovery() {
+    struct RecoveryModel(std::sync::atomic::AtomicUsize);
+    impl OperationClient for RecoveryModel {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            panic!("unexpected non-streaming request: {}", request.url());
+        }
+
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            assert_eq!(request.url(), "http://localhost:11434/v1/chat/completions");
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            sink.emit(b"data: {\"id\":\"recovered\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"recovered answer\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"recovered\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\ndata: [DONE]\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let mut provider = ModelProviderConfig::new(ProviderId::new("ollama").unwrap());
+    provider.model_context.insert(
+        ModelId::new("recovery-fixture").unwrap(),
+        ModelContextConfig {
+            context_window: Some(32_000),
+            long_context: None,
+            auto_compact_token_limit: None,
+        },
+    );
+    runtime
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("recovery-model-config").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureConnection {
+                connection: provider.connection.clone(),
+                config: provider,
+            },
+        })
+        .unwrap();
+
+    let initial = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(runtime.clone())
+            .with_codex_home(profile.path().join("codex"))
+            .with_dir_root(directory.path())
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut created_threads = Vec::new();
+    for name in ["first-recovered-goal", "second-recovered-goal"] {
+        created_threads.push(
+            initial
+                .start_thread(StartThreadRequest {
+                    agent_id: None,
+                    agent: None,
+                    command_id: CommandId::new(name).unwrap(),
+                    title: name.into(),
+                    branch_name: None,
+                    execution_target: None,
+                })
+                .unwrap(),
+        );
+    }
+    // Use the production directory provisioning and place the broken task first in recovery.
+    created_threads.sort_by(|left, right| left.thread_id.cmp(&right.thread_id));
+    let mut recovered_turns = Vec::new();
+    for (index, created) in created_threads.into_iter().enumerate() {
+        let thread_id = created.thread_id;
+        let legacy_advisor = (index == 0)
+            .then(|| serde_json::from_value(serde_json::json!({"enabled":true})).unwrap());
+        let source_store = Arc::new(ash_core::InMemoryThreadStore::default());
+        source_store
+            .append_batch(&ThreadEventBatch {
+                history_index: None,
+                history_prefixes: Vec::new(),
+                batch_id: format!("copy-{thread_id}"),
+                thread_id: thread_id.clone(),
+                expected_sequence: 0,
+                events: runtime.history.load(&thread_id).unwrap(),
+                catalog: runtime.threads.thread_catalog_record(&thread_id).unwrap(),
+            })
+            .unwrap();
+        let source = ThreadController::with_store(source_store.clone());
+        source
+            .create_goal(&thread_id, "finish recovered work".into(), Some(1))
+            .unwrap();
+        let turn_id = source
+            .start_goal_turn(
+                &thread_id,
+                StartGoalTurnRequest {
+                    context_policy: Default::default(),
+                    mode: Default::default(),
+                    advisor: None,
+                    instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                    command_id: CommandId::new("recovered-goal-turn").unwrap(),
+                    model: Some(ModelRef::new(
+                        ProviderId::new("ollama").unwrap(),
+                        ModelId::new("recovery-fixture").unwrap(),
+                    )),
+                    reasoning_effort: None,
+                    policy_revision: "test".into(),
+                    approval_mode: ash_protocol::ApprovalMode::Manual,
+                    tool_mode: ash_protocol::ToolMode::Direct,
+                    tool_profile: None,
+                },
+            )
+            .unwrap()
+            .unwrap()
+            .turn_id;
+        source
+            .record_tool_call(
+                &thread_id,
+                &turn_id,
+                RecordToolCallRequest {
+                    tool_call_id: None,
+                    name: ToolName::new("sleep").unwrap(),
+                    arguments_json: r#"{"duration_ms":1}"#.into(),
+                    binding: None,
+                },
+            )
+            .unwrap();
+        let mut events: Vec<_> = source_store
+            .events()
+            .into_iter()
+            .filter(|event| event.sequence > created.sequence)
+            .collect();
+        // Seed the journal shape written before Goal admission froze inherited Advisors.
+        for event in &mut events {
+            if let ash_protocol::ThreadEvent::TurnAccepted { advisor, .. } = &mut event.event {
+                *advisor = legacy_advisor.clone();
+                let ash_protocol::ThreadCommand::StartTurn {
+                    advisor: command_advisor,
+                    ..
+                } = &mut event.command.as_mut().unwrap().command
+                else {
+                    unreachable!();
+                };
+                *command_advisor = advisor.clone();
+            }
+        }
+        runtime
+            .history
+            .append_batch(&ThreadEventBatch {
+                history_index: None,
+                history_prefixes: Vec::new(),
+                batch_id: format!("seed-{thread_id}"),
+                thread_id: thread_id.clone(),
+                expected_sequence: created.sequence,
+                events,
+                catalog: source.thread_catalog_record(&thread_id).unwrap(),
+            })
+            .unwrap();
+        recovered_turns.push((thread_id, turn_id));
+    }
+    drop(initial);
+    drop(runtime);
+    let client = Arc::new(RecoveryModel(std::sync::atomic::AtomicUsize::new(0)));
+    let open = || {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_codex_home(profile.path().join("codex"))
+                .with_dir_root(directory.path())
+                .with_model_operation_client(client.clone())
+                .without_built_in_skills(),
+            ash_app_server_diff::compute,
+        )
+        .expect("one failed recovery must not block App Server startup")
+    };
+    let server = open();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":1, "method":"initialize",
+            "params":{"clientInfo":{"name":"goal-recovery-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let (legacy_thread, legacy_turn) = &recovered_turns[0];
+    let failed = server.threads().read_thread(legacy_thread).unwrap();
+    assert_eq!(failed.turns[0].turn_id, *legacy_turn);
+    assert_eq!(failed.turns[0].status, TurnStatus::Failed);
+    assert_eq!(
+        failed.turns[0].failure,
+        Some(ash_protocol::StableTurnError::model_invocation_failed())
+    );
+    assert_eq!(
+        failed.goal.unwrap().status,
+        ash_protocol::ThreadGoalStatus::Blocked
+    );
+    let (healthy_thread, healthy_turn) = &recovered_turns[1];
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let healthy = server.threads().read_thread(healthy_thread).unwrap();
+        assert_eq!(healthy.turns[0].turn_id, *healthy_turn);
+        assert_ne!(
+            healthy.turns[0].status,
+            TurnStatus::Failed,
+            "healthy recovery failed: {:?}",
+            healthy.turns[0].failure
+        );
+        if healthy.turns[0].status == TurnStatus::Completed {
+            assert_eq!(
+                healthy.goal.unwrap().status,
+                ash_protocol::ThreadGoalStatus::BudgetLimited
+            );
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "healthy Goal did not recover: {:?}",
+            healthy.turns[0].status
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    server.close_connection(connection);
+    drop(server);
+    let restarted = open();
+    let persisted = restarted.threads().read_thread(legacy_thread).unwrap();
+    assert_eq!(persisted.sequence, failed.sequence);
+    assert_eq!(persisted.turns[0].status, TurnStatus::Failed);
+    assert_eq!(client.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
 
 #[test]
 fn model_provider_migration_keeps_idle_history_lazy_across_directory_hosts() {
@@ -70,7 +303,7 @@ fn model_provider_migration_keeps_idle_history_lazy_across_directory_hosts() {
     assert_eq!(loaded.len(), 1);
     assert!(
         matches!(&loaded[0].advisor, ash_protocol::AdvisorSelection::Model { config }
-        if config.model.provider.as_str() == "glm")
+        if config.model.as_ref().is_some_and(|model| model.provider.as_str() == "glm"))
     );
 }
 

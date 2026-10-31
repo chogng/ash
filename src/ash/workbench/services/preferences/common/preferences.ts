@@ -8,6 +8,31 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import { localize } from '../../../../nls.js';
 import { URI } from '../../../../base/common/uri.js';
 
+/** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
+export interface SettingsSectionModel {
+	/** Null renders a standalone section with its title above the card. */
+	readonly groupId?: string | null;
+	readonly groupTitle?: string;
+	readonly itemId?: string;
+	readonly keywords?: readonly string[];
+	readonly settingIds?: readonly string[];
+	readonly categoryId: string;
+	readonly title: string;
+	readonly description: string;
+	readonly help: string;
+	readonly onDidChange: Event<void>;
+	/** Field IDs and kinds remain stable for this section’s lifetime; values and actions may change. */
+	readonly fields: readonly SettingsSectionField[];
+	setVisible(visible: boolean): void;
+}
+
+export type SettingsSectionField = { readonly description?: string; } & (
+	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
+	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
+	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });
+
 export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'stringMap' | 'complex';
 export type SettingsPresentation = 'editor' | 'general';
 

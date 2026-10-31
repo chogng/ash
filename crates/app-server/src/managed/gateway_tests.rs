@@ -368,7 +368,14 @@ impl Drop for TestGateway {
 fn stalled_gateway(timeout: std::time::Duration) -> TestGateway {
     gateway_with_ssh(timeout, |marker| {
         format!(
-            "IFS= read -r initialize\nprintf '%s' $$ > '{}'\nwhile IFS= read -r request; do :; done\n",
+            concat!(
+                "for expected in ConnectTimeout=30 ServerAliveInterval=15 ServerAliveCountMax=3; do\n",
+                "  found=0\n",
+                "  for argument; do [ \"$argument\" != \"$expected\" ] || found=1; done\n",
+                "  [ \"$found\" = 1 ] || exit 97\n",
+                "done\n",
+                "IFS= read -r initialize\nprintf '%s' $$ > '{}'\nwhile IFS= read -r request; do :; done\n",
+            ),
             marker.display()
         )
     })

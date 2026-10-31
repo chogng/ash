@@ -374,6 +374,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
         catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![ModelCatalogEntry {
+            recommended_for: Vec::new(),
             source: None,
             pricing: Vec::new(),
             retirement: None,
@@ -391,6 +392,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
             available_context_window: None,
+            usable_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
@@ -474,7 +476,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     assert!(choices.models.actions.values().any(|action| matches!(
         action,
         ConfigSelectionAction::SetAdvisor(Some(advisor))
-            if advisor.model == other_model && !advisor.enabled && advisor.max_calls == 3
+            if advisor.model.as_ref() == Some(&other_model) && !advisor.enabled && advisor.max_calls == 3
     )));
     let mut unselected = config;
     unselected.advisor = None;

@@ -15,12 +15,12 @@ export const AgentSessionsSidebarVisibleContext = new RawContextKey<boolean>(
 	'agentSessionsSidebarVisible',
 	false,
 );
-export const AGENT_SESSIONS_ORIENTATION_SETTING = 'chat.viewSessions.orientation';
-export enum AgentSessionsOrientation {
-	SideBySide = 'sideBySide',
-	Stacked = 'stacked',
+export const AGENT_SESSIONS_PRESENTATION_SETTING = 'chat.viewSessions.presentation';
+export enum AgentSessionsPresentation {
+	Tabs = 'tabs',
+	List = 'list',
 }
-export const AgentSessionsOrientationContext = new RawContextKey<AgentSessionsOrientation>('agentSessionsOrientation', AgentSessionsOrientation.SideBySide);
+export const AgentSessionsPresentationContext = new RawContextKey<AgentSessionsPresentation>('agentSessionsPresentation', AgentSessionsPresentation.Tabs);
 export const OPEN_CHAT_BROWSER_COMMAND_ID =
 	'workbench.action.chat.openBrowser';
 export const MOVE_CHAT_TO_EDITOR_COMMAND_ID =

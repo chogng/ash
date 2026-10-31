@@ -688,7 +688,7 @@ test('CodeEditorWidget exposes editor-owned scroll geometry', () => {
 
 	assert.equal(editor.getScrollTop(), 40);
 	assert.equal(editor.getDomNode().scrollTop, 0);
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ':scope > .ash-smooth-scrollable').scrollTop, 40);
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ':scope > .ash-smooth-scrollable').scrollTop, 0);
 	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.margin').parentElement, editor.getDomNode());
 	assert.equal(editor.getContentHeight(), 100);
 	assert.equal(editor.hasPendingScrollAnimation(), false);

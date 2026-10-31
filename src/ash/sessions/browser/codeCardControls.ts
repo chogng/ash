@@ -10,12 +10,10 @@ import { addDisposableListener, Dimension, h } from '../../base/browser/dom.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { status } from '../../base/browser/ui/aria/aria.js';
 import { Direction } from '../../base/browser/ui/grid/grid.js';
-import { Separator, SubmenuAction, type IAction } from '../../base/common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import type { Icon } from '../../base/common/icon.js';
 import { localize } from '../../nls.js';
-import { IContextMenuService } from '../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import {
@@ -23,6 +21,10 @@ import {
 	type IAuxiliaryWindow,
 } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { CodeCardId, CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
+import { CommandsRegistry } from '../../platform/commands/common/commands.js';
+import { MenusRegistry } from '../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 import './media/codeCards.css';
 
 /** Card chrome moves retained DOM; no terminal, explorer or chat model is copied into a popup. */
@@ -39,9 +41,9 @@ export class CodeCardControls extends Disposable {
 		private readonly layout: ICodeCardLayout,
 		private readonly cards: ReadonlyMap<CodeCardTarget, ICodeCardPresentation>,
 		@IAuxiliaryWindowService private readonly windows: IAuxiliaryWindowService,
-		@IContextMenuService private readonly menus: IContextMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 		for (const [id, card] of cards) {
@@ -49,6 +51,11 @@ export class CodeCardControls extends Disposable {
 			const element = card.domNode;
 			const header = card.header!;
 			element.dataset.codeCard = id;
+			if (card.layoutMenuId) {
+				this.registerLayoutMenu(id, card);
+				this._register(addDisposableListener<PointerEvent>(header, 'pointerdown', event => this.startDrag(id, event)));
+				continue;
+			}
 			header.classList.add('ash-code-card-draggable');
 			const controls = h(header.ownerDocument, 'div', { className: 'ash-code-card-controls' });
 			header.append(controls);
@@ -59,13 +66,6 @@ export class CodeCardControls extends Disposable {
 					header.classList.remove('ash-code-card-draggable');
 				}),
 			);
-			const arrange = this.button(
-				controls,
-				Lxicon.ellipsis,
-				localize('sessions.cards.arrange', 'Arrange card'),
-				() => this.arrange(id, arrange.domNode),
-			);
-			arrange.domNode.dataset.cardAction = 'arrange';
 			this.button(controls, Lxicon.linkExternal, localize('sessions.cards.popout', 'Open in new window'), () => {
 				void this.popout(id).catch(error => this.notifications.error(String(error)));
 			}).domNode.dataset.cardAction = 'popout';
@@ -95,7 +95,14 @@ export class CodeCardControls extends Disposable {
 				type: AccessibleViewType.Help,
 				priority: 100,
 				getProvider: () => {
-					const control = [...this.controls.values()].find(element =>
+					const controls = [...this.controls.values()];
+					for (const card of this.cards.values()) {
+						if (!card.layoutMenuId) { continue; }
+						const focused = card.domNode.ownerDocument.activeElement;
+						const header = focused?.closest<HTMLElement>('.ash-editor-group-header');
+						if (header && card.domNode.contains(header)) { controls.push(header); }
+					}
+					const control = controls.find(element =>
 						element.contains(element.ownerDocument.activeElement),
 					);
 					if (!control) return undefined;
@@ -106,7 +113,7 @@ export class CodeCardControls extends Disposable {
 						() =>
 							localize(
 								'sessions.cards.help',
-								'Use Tab to reach Arrange card, Open in new window, Expand and Close. Arrange offers keyboard movement to each edge of another card and width or height adjustments. You can also drag the header; Escape cancels dragging. Separators resize neighboring cards. Expanding preserves the original layout. Closing a separate window returns the same content to its previous slot. Closing a card keeps its content and terminal sessions for the next time it is shown.',
+								'Use Tab and arrow keys to reach editor actions and Open in new window, Expand and Close. Drag the header to move a card; Escape cancels dragging. Separators resize neighboring cards. Expanding preserves the original layout. Closing a separate window returns the same content to its previous slot. Closing a card keeps its content and terminal sessions for the next time it is shown.',
 							),
 						() => focused.isConnected && focused.focus(),
 						AccessibilityVerbositySettingId.Chat,
@@ -126,6 +133,59 @@ export class CodeCardControls extends Disposable {
 	private element(id: CodeCardTarget): HTMLElement {
 		return this.cards.get(id)!.domNode;
 	}
+	/** The editor group's header renders these commands; card chrome only supplies layout operations. */
+	private registerLayoutMenu(id: CodeCardId, card: ICodeCardPresentation): void {
+		const visible = new RawContextKey<boolean>('sessions.filesCardLayoutActive', false).bindTo(this.contextKeys);
+		const expanded = new RawContextKey<boolean>('sessions.filesCardExpanded', false).bindTo(this.contextKeys);
+		const update = (): void => {
+			visible.set(this.layout.active);
+			expanded.set(this.layout.expandedCard === id || this.popouts.has(id));
+		};
+		this._register(this.layout.onDidChangeCards(update));
+		this._register(toDisposable(() => { visible.reset(); expanded.reset(); }));
+		update();
+		const actions = [
+			{
+				name: 'popout',
+				title: localize('sessions.cards.popout', 'Open in new window'),
+				icon: Lxicon.linkExternal,
+				run: () => this.popout(id).catch(error => this.notifications.error(String(error))),
+			},
+			{
+				name: 'expand',
+				title: localize('sessions.cards.expand', 'Expand card'),
+				icon: Lxicon.screenFull,
+				run: () => {
+					if (this.popouts.has(id)) { this.popouts.get(id)!.window.close(); }
+					else { this.layout.expandCard(id); }
+				},
+			},
+			{
+				name: 'close',
+				title: localize('sessions.cards.close', 'Close card'),
+				icon: Lxicon.close,
+				run: () => {
+					this.popouts.get(id)?.window.close();
+					this.layout.closeCard(id);
+				},
+			},
+		];
+		for (const [order, action] of actions.entries()) {
+			const commandId = `sessions.cards.${id}.${action.name}`;
+			this._register(CommandsRegistry.register(commandId, action.run));
+			this._register(MenusRegistry.appendMenuItem(card.layoutMenuId!, {
+				command: {
+					id: commandId, title: action.title, icon: action.icon,
+					toggled: action.name === 'expand' ? {
+						condition: ContextKeyExpr.equals('sessions.filesCardExpanded', true),
+						icon: Lxicon.screenNormal,
+						title: localize('sessions.cards.restore', 'Restore card size'),
+					} : undefined,
+				},
+				when: ContextKeyExpr.equals('sessions.filesCardLayoutActive', true), group: 'navigation', order,
+			}));
+		}
+	}
 	private button(parent: HTMLElement, icon: Icon, label: string, onClick: () => void): Button {
 		return this._register(
 			new Button(parent, {
@@ -140,6 +200,11 @@ export class CodeCardControls extends Disposable {
 		);
 	}
 	private render(): void {
+		for (const [id, card] of this.cards) {
+			if (id !== 'sessions' && card.layoutMenuId && this.popouts.has(id) && (!this.layout.active || !this.layout.isCardVisible(id))) {
+				this.popouts.get(id)!.window.close();
+			}
+		}
 		for (const [id, controls] of this.controls) {
 			if (controls.parentElement?.lastElementChild !== controls) { controls.parentElement?.append(controls); }
 			controls.hidden = !this.layout.active;
@@ -158,55 +223,6 @@ export class CodeCardControls extends Disposable {
 		}
 	}
 
-	private arrange(id: CodeCardId, anchor: HTMLElement): void {
-		if (this.popouts.has(id)) {
-			this.popouts.get(id)!.window.close();
-			return;
-		}
-		const labels = Object.fromEntries([...this.cards].map(([id, card]) => [id, card.title]));
-		const directions: readonly [Direction, string][] = [
-			[Direction.Left, localize('sessions.cards.left', 'Move to the left of {0}', '{0}')],
-			[Direction.Right, localize('sessions.cards.right', 'Move to the right of {0}', '{0}')],
-			[Direction.Up, localize('sessions.cards.above', 'Move above {0}', '{0}')],
-			[Direction.Down, localize('sessions.cards.below', 'Move below {0}', '{0}')],
-		];
-		const action = (key: string, label: string, run: () => void): IAction => ({
-			id: key,
-			label,
-			tooltip: '',
-			enabled: true,
-			run,
-		});
-		const actions: IAction[] = this.targets(id).map(
-			target =>
-				new SubmenuAction(
-					target,
-					labels[target],
-					directions.map(([direction, label]) =>
-						action(Direction[direction].toLowerCase(), label.replace('{0}', labels[target]), () => {
-							this.layout.moveCard(id, target, direction);
-							anchor.focus();
-							status(localize('sessions.cards.moved', '{0} moved', labels[id]));
-						}),
-					),
-				),
-		);
-		actions.push(new Separator());
-		for (const [key, label, width, height] of [
-			['wider', localize('sessions.cards.wider', 'Increase width'), 48, 0],
-			['narrower', localize('sessions.cards.narrower', 'Decrease width'), -48, 0],
-			['taller', localize('sessions.cards.taller', 'Increase height'), 0, 48],
-			['shorter', localize('sessions.cards.shorter', 'Decrease height'), 0, -48],
-		] as const)
-			actions.push(
-				action(key, label, () => {
-					this.layout.resizeCard(id, width, height);
-					anchor.focus();
-				}),
-			);
-		this.menus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
-	}
-
 	private targets(id: CodeCardId): CodeCardTarget[] {
 		return [...this.cards.keys()].filter(
 			target =>
@@ -219,6 +235,7 @@ export class CodeCardControls extends Disposable {
 	private startDrag(id: CodeCardId, event: PointerEvent): void {
 		if (event.button !== 0 || !this.layout.active || this.popouts.has(id)) return;
 		const target = event.target as HTMLElement;
+		if (this.cards.get(id)?.layoutMenuId && !target.closest('.ash-editor-group-header, .ash-editor-tabs-and-actions')) return;
 		if (target.closest('button, input, a, [role="tab"], [role="separator"]')) return;
 		const document = target.ownerDocument;
 		const resources = new DisposableStore();
@@ -388,7 +405,10 @@ export class CodeCardControls extends Disposable {
 					element.style.removeProperty('height');
 					this.layout.detachCard(id, false);
 					popup.dispose();
-					if (!this.disposed) this.expandedButtons.get(id)?.domNode.focus();
+					if (!this.disposed) {
+						const button = this.expandedButtons.get(id)?.domNode ?? element.querySelector<HTMLElement>(`[data-action-id="sessions.cards.${id}.expand"]`);
+						button?.focus();
+					}
 				}),
 			);
 			lifetime.add(popup.onDidLayout(size));

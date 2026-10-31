@@ -694,6 +694,7 @@ mod graph;
 pub use graph::GitGraph;
 pub use graph::GitGraphCursor;
 pub use graph::GitReference;
+pub use graph::GitReferenceCommit;
 pub use graph::GitReferenceKind;
 pub use summary::GitCommitSummary;
 mod summary;

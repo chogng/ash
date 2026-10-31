@@ -3,6 +3,7 @@ use crate::ThreadController;
 use crate::ThreadSnapshot;
 use crate::TurnExecutionBackend;
 use crate::TurnExecutor;
+use crate::turn::recover_dispatch;
 use ash_protocol::AgentId;
 use ash_protocol::CommandId;
 use ash_protocol::InteractionCancelReason;
@@ -696,13 +697,16 @@ impl AgentRuntime for Runtime<'_> {
                         && turn.status == TurnStatus::Running
                         && !child.has_resumable_tool_continuation(&turn.turn_id)
                 }) {
-                    self.dispatch(
+                    if recover_dispatch(
+                        self.threads,
+                        self.updates.as_ref(),
                         &spawned.child_thread_id,
                         &spawned.child_turn_id,
                         self.backend
                             .start(&spawned.child_thread_id, &spawned.child_turn_id),
-                    )?;
-                    count += 1;
+                    )? {
+                        count += 1;
+                    }
                 }
             }
         }

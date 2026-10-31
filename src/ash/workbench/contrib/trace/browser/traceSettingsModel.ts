@@ -4,7 +4,7 @@ import { localize } from '../../../../nls.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ITraceSettingsService, type TraceSettingsSnapshot } from '../../../../platform/trace/common/traceSettingsService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 
 /** Keeps only an unsaved draft; the connected backend owns configuration and recording state. */
 export class TraceSettingsModel extends Disposable implements SettingsSectionModel {

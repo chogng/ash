@@ -3,7 +3,7 @@ use std::io::Read;
 use std::io::Write;
 use std::time::Instant;
 
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 #[cfg(unix)]
 use rustix::event::PollFd;
 #[cfg(unix)]
@@ -15,13 +15,13 @@ use rustix::event::poll;
 
 /// Applies one request deadline without Unix socket timeout options, which macOS can reject.
 pub struct DeadlineStream {
-    stream: UnixStream,
+    stream: IpcStream,
     deadline: Option<Instant>,
 }
 
 impl DeadlineStream {
     /// Wraps a local connection with an absolute read and write deadline.
-    pub fn new(stream: UnixStream, deadline: Instant) -> io::Result<Self> {
+    pub fn new(stream: IpcStream, deadline: Instant) -> io::Result<Self> {
         configure_deadline(&stream, deadline)?;
         Ok(Self {
             stream,
@@ -37,8 +37,18 @@ impl DeadlineStream {
     }
 
     /// Clones the underlying connection for independent shutdown ownership.
-    pub fn try_clone(&self) -> io::Result<UnixStream> {
+    pub fn try_clone(&self) -> io::Result<IpcStream> {
         self.stream.try_clone()
+    }
+
+    #[cfg(windows)]
+    fn wait_for_ready(&self, readers: &[&IpcStream], writers: &[&IpcStream]) -> io::Result<()> {
+        let remaining = self
+            .deadline
+            .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(deadline_elapsed)?;
+        ash_uds::wait_for_ipc_activity(None, readers, writers, remaining)
     }
 
     #[cfg(unix)]
@@ -94,7 +104,17 @@ impl Read for DeadlineStream {
             }
         }
         #[cfg(windows)]
-        self.stream.read(buffer)
+        loop {
+            self.wait_for_ready(&[&self.stream], &[])?;
+            match self.stream.read(buffer) {
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                    ) => {}
+                result => return result,
+            }
+        }
     }
 }
 
@@ -113,7 +133,17 @@ impl Write for DeadlineStream {
             }
         }
         #[cfg(windows)]
-        self.stream.write(buffer)
+        loop {
+            self.wait_for_ready(&[], &[&self.stream])?;
+            match self.stream.write(buffer) {
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+                    ) => {}
+                result => return result,
+            }
+        }
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -126,30 +156,12 @@ impl Write for DeadlineStream {
     }
 }
 
-#[cfg(unix)]
-fn configure_deadline(stream: &UnixStream, _deadline: Instant) -> io::Result<()> {
+fn configure_deadline(stream: &IpcStream, _deadline: Instant) -> io::Result<()> {
     stream.set_nonblocking(true)
 }
 
-#[cfg(windows)]
-fn configure_deadline(stream: &UnixStream, deadline: Instant) -> io::Result<()> {
-    let remaining = deadline
-        .checked_duration_since(Instant::now())
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(deadline_elapsed)?;
-    stream.set_read_timeout(Some(remaining))?;
-    stream.set_write_timeout(Some(remaining))
-}
-
-#[cfg(unix)]
-fn clear_deadline(stream: &UnixStream) -> io::Result<()> {
+fn clear_deadline(stream: &IpcStream) -> io::Result<()> {
     stream.set_nonblocking(false)
-}
-
-#[cfg(windows)]
-fn clear_deadline(stream: &UnixStream) -> io::Result<()> {
-    stream.set_read_timeout(None)?;
-    stream.set_write_timeout(None)
 }
 
 fn deadline_elapsed() -> io::Error {

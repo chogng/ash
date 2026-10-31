@@ -1,6 +1,6 @@
 import { ActiveAuxiliaryContext } from '../../../../workbench/common/contextkeys.js';
 import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
@@ -30,6 +30,21 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		@IEditorPart editor: IEditorPart,
 	) {
 		super();
+		// Existing editor contributions keep their menu identity; Desktop groups consume its live projection.
+		const mirrored = this._register(new DisposableStore());
+		const layoutCommands = new Set(['ash.sessions.toggleDetails', 'ash.sessions.hideEditor', 'ash.sessions.showEditor', 'workbench.action.splitEditor']);
+		const updateEditorMenu = (): void => {
+			mirrored.clear();
+			for (const item of MenusRegistry.getMenuItems(MenuId.EditorTitle)) {
+				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
+				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
+				mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, layoutItem ? { ...item, group: '9_layout' } : item));
+			}
+		};
+		this._register(MenusRegistry.onDidChangeMenu(event => {
+			if (event.has(MenuId.EditorTitle)) { updateEditorMenu(); }
+		}));
+		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
@@ -148,16 +163,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							icon: Lxicon.diffChanges,
 						},
 						when: codeWhen, group: 'navigation', order: 4,
-					},
-				},
-				{
-					id: MenuId.EditorTitle,
-					item: {
-						title: localize2({ bundle: 'ash', key: 'sessions.layout.addTab' }, 'Add tab'),
-						submenu: Menus.CodeAddTab,
-						when: codeWhen,
-						group: 'navigation',
-						order: 89,
 					},
 				},
 				{

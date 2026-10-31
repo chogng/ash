@@ -170,6 +170,7 @@ enum ModelContextBudget {
     Ready {
         budget: ContextBudget,
         available_input: u32,
+        usable_input: u32,
     },
 }
 
@@ -202,6 +203,17 @@ impl ModelContext {
             .max_output_tokens
             .or(definition.defaults.max_output_tokens)
             .unwrap_or(DEFAULT_OUTPUT_TOKENS);
+        // Sol's selected 95% usable-window policy is separate from the compaction threshold.
+        // Explicit output reservations still take precedence when they need more headroom.
+        let safety_margin = if config.custom.is_none()
+            && entry.model().provider.as_str() == "openai"
+            && entry.model().model.as_str() == "gpt-6.1-sol"
+        {
+            let usable = (u64::from(window) * 95 / 100) as u32;
+            CONTEXT_SAFETY_MARGIN_TOKENS.max((window - usable).saturating_sub(output))
+        } else {
+            CONTEXT_SAFETY_MARGIN_TOKENS
+        };
         let compaction = info
             .auto_compact_token_limit
             .map_or(ContextCompactionLimit::ContextWindow, |tokens| {
@@ -210,13 +222,14 @@ impl ModelContext {
         let budget = ContextBudget::core_managed(
             ContextTokenCount::new(window),
             ContextTokenCount::new(output),
-            ContextTokenCount::new(CONTEXT_SAFETY_MARGIN_TOKENS),
+            ContextTokenCount::new(safety_margin),
             compaction,
         );
         let budget = match budget.resolve() {
             Ok(ResolvedContextBudget::CoreManaged(limits)) => ModelContextBudget::Ready {
                 budget,
                 available_input: limits.maximum_input().get(),
+                usable_input: limits.hard_maximum_input().get(),
             },
             Ok(ResolvedContextBudget::ProviderManaged) => {
                 unreachable!("explicit allocations are Core-managed")
@@ -235,6 +248,13 @@ impl ModelContext {
             ModelContextBudget::Ready {
                 available_input, ..
             } => Some(available_input),
+            ModelContextBudget::MissingWindow | ModelContextBudget::InvalidAllocations => None,
+        }
+    }
+
+    pub(super) fn usable_input(&self) -> Option<u32> {
+        match self.budget {
+            ModelContextBudget::Ready { usable_input, .. } => Some(usable_input),
             ModelContextBudget::MissingWindow | ModelContextBudget::InvalidAllocations => None,
         }
     }

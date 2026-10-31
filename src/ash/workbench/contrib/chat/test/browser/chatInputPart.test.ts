@@ -68,6 +68,8 @@ import type { IFileSearchService } from '../../../../../platform/search/common/f
 import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
@@ -75,6 +77,7 @@ import type { ChatContextAttachment } from '../../../../services/chat/common/cha
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -155,7 +158,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		listModels: async () => [],
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => [],
 		listCustomModelProviders: async () => [],
@@ -184,9 +187,10 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const agents = new Promise<readonly ChatAgent[]>(resolve => { finishListing = resolve; });
 	let finishSelection!: (agent: ChatAgent | undefined) => void;
 	const selection = new Promise<ChatAgent | undefined>(resolve => { finishSelection = resolve; });
+	const selectedAgents: (ChatAgent | undefined)[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', {
 		listAgents: () => agents,
-		selectAgent: selected => finishSelection(selected),
+		selectAgent: selected => { selectedAgents.push(selected); finishSelection(selected); },
 	});
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
@@ -207,12 +211,21 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const choices = Array.from(widget.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
 	assert.deepEqual(choices.map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [
 		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Multitask', 'false'], ['Ask', 'false'],
-		['Default Agent', 'true'], ['Reviewer', 'false'],
+		['Reviewer', 'false'],
 	]);
-	choices[6]!.click();
+	choices[5]!.click();
 	assert.deepEqual(await selection, agent);
 	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true, selectedAgent: agent });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const reopenedChoices = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
+	assert.equal(reopenedChoices[0]!.getAttribute('aria-checked'), 'false');
+	assert.equal(reopenedChoices[5]!.getAttribute('aria-checked'), 'true');
+	reopenedChoices[0]!.click();
+	assert.deepEqual(selectedAgents, [agent, undefined]);
+	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 });
 
 test('Session option loading retires with the input and can reopen for the next visible lifetime', async () => {
@@ -236,7 +249,7 @@ test('Session option loading retires with the input and can reopen for the next 
 	trigger().click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
-	assert.equal(options.length, 7);
+	assert.equal(options.length, 6);
 	options.find(option => option.getAttribute('aria-label') === agent.name)!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(selected, [agent]);
@@ -3315,7 +3328,7 @@ suite('chatInput browser component', () => {
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 			const search = picker.locator('input[role=combobox]');
 			const width = await picker.evaluate(element => element.getBoundingClientRect().width);
-			expect(width).toBeGreaterThan(320);
+			expect(width).toBe(240);
 			expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
 			await expect(search).toHaveCSS('outline-style', 'none');
 			await expect(search).toHaveCSS('border-top-width', '0px');
@@ -3589,12 +3602,12 @@ suite('chatInput browser component', () => {
 			await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({}));
 			const announced = locale === 'zh-CN' ? '即将退役' : 'Retiring soon';
-			await expect(row.locator('.ash-menu-badge')).toHaveText(announced);
+			await expect(row).toHaveText('Test Model');
 			await expect(row).toHaveAttribute('aria-description', new RegExp(announced));
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
 			const scheduled = locale === 'zh-CN' ? '将于 2027-01-31 退役' : 'Retires on 2027-01-31';
-			await expect(row.locator('.ash-menu-badge')).toHaveText(scheduled);
-			expect(await row.locator('.ash-menu-badge').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(28);
+			await expect(row).toHaveText('Test Model');
+			await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
 			await expect(row).toHaveAttribute('aria-description', new RegExp(scheduled));
 			await page.setViewportSize({ width: 280, height: 600 });
 			expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -3608,7 +3621,7 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
 			await search.press('ArrowDown');
 			await expect(row).toBeFocused();
-			expect(await row.evaluate(element => getComputedStyle(element.querySelector('.ash-menu-badge')!).color === getComputedStyle(element).color)).toBe(true);
+			await expect(row).toHaveText('Test Model');
 			await row.press('Enter');
 			await expect(menu).toHaveCount(0);
 			await expect(trigger).toBeFocused();

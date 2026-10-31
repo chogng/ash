@@ -29,7 +29,8 @@ export interface InputBoxOptions<Flexible extends boolean = false> {
 	readonly flexibleMaxHeight?: number;
 	readonly placeholder?: string;
 	readonly type?: 'text' | 'number' | 'password' | 'search';
-	readonly presentation?: 'default' | 'field' | 'compact';
+	/** Filter shares its containing surface and keeps a field boundary only in high contrast. */
+	readonly presentation?: 'default' | 'field' | 'compact' | 'filter';
 	readonly readOnly?: boolean;
 	readonly enabled?: boolean;
 	/** Select the entire value when focus enters; subsequent clicks retain native caret placement. Defaults to false. */
@@ -82,8 +83,9 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 				if (value !== undefined) this.element.style.setProperty(property, value);
 			}
 		}
-		if (options.presentation === 'field' || options.presentation === 'compact') this.element.classList.add('ash-input-box-field');
-		if (options.presentation === 'compact') this.element.classList.add('ash-input-box-compact');
+		if (options.presentation === 'field' || options.presentation === 'compact' || options.presentation === 'filter') this.element.classList.add('ash-input-box-field');
+		if (options.presentation === 'compact' || options.presentation === 'filter') this.element.classList.add('ash-input-box-compact');
+		if (options.presentation === 'filter') this.element.classList.add('ash-input-box-filter');
 		this._register(toDisposable(() => this.element.remove()));
 
 		this.maxHeight = Math.max(24, options.flexibleMaxHeight ?? 134);

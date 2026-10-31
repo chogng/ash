@@ -72,7 +72,7 @@ export function getThemeColorReferences(
 }
 
 type PreviewWindow = 'workbench' | 'sessions';
-type PreviewScene = 'interface' | 'code' | 'diff';
+type PreviewScene = 'interface' | 'code' | 'diff' | 'scm';
 
 /** One retained document owns its channel and reported state until the editor closes. */
 class ThemePreviewFrame extends Disposable {
@@ -263,6 +263,12 @@ export class ThemePreview extends Disposable {
 						tabId: 'theme-scene-diff',
 						label: localize('themeEditor.diffPreview', 'Diff'),
 					},
+					...(value === 'workbench' ? [{
+						id: 'scm',
+						value: 'scm' as const,
+						tabId: 'theme-scene-scm',
+						label: localize('themeEditor.scmScene', 'SCM History'),
+					}] : []),
 				],
 				scene,
 			);

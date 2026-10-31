@@ -10,7 +10,8 @@ import { ScreenshotCommandId } from '../../chat/common/constants.js';
 import { SettingsLayout } from './settingsLayout.js';
 import { SettingsPageRenderer } from './settingsRenderers.js';
 import { SettingsSectionRenderer } from './settingsSectionRenderer.js';
-import type { SettingsSectionField, SettingsSectionReference, SettingsSectionModel, SettingsTreeNode } from './settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 import './media/snapshotSettings.css';
 
 /** Preferences owns grouping and shortcut links; the extension owns setting schemas and values. */

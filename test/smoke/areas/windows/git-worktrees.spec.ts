@@ -64,7 +64,7 @@ test('Changes title open worktree menu switches to the resolved workspace on bot
 	if (target.kind === 'electron') {
 		const permission = page.getByRole('dialog', { name: 'Ash', exact: true });
 		await expect(permission).toBeVisible();
-		await permission.getByRole('button', { name: 'Open Read-Only', exact: true }).click();
+		await permission.getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 		await expect.poll(async () => {
 			const workspace = await page.evaluate(() => {
 				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;

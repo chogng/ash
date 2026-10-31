@@ -3,7 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAgentExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import type { SettingsSectionField, SettingsSectionModel } from './settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 
 /** Edits command defaults in the backend profile; grants and effective policy stay backend-owned. */
 export class SandboxSettingsModel extends Disposable implements SettingsSectionModel {

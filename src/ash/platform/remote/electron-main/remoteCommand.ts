@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { normalizeRemoteWorkspacePath } from '../common/remote.js';
@@ -39,8 +40,32 @@ export function isCanonicalAbsoluteRemotePath(value: string): boolean {
 
 export function runRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver): Promise<RemoteCommandResult> {
 	if (observer?.signal) throwIfCancelled(observer.signal, 'Remote command cancelled');
-	const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: 'pipe' });
+	// The helper can own SSH children while the Remote host downloads a package.
+	// Give cancellation authority over that operation's process tree, not just the helper.
+	const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: 'pipe', detached: process.platform !== 'win32' });
 	child.stdin.end();
+	const terminate = (): void => {
+		if (child.exitCode !== null || child.signalCode !== null) return;
+		if (child.pid === undefined) {
+			child.kill();
+			return;
+		}
+		if (process.platform === 'win32') {
+			const killer = spawn(
+				join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe'),
+				['/PID', String(child.pid), '/T', '/F'],
+				{ stdio: 'ignore', windowsHide: true },
+			);
+			killer.once('error', () => child.kill());
+			killer.once('exit', code => { if (code !== 0) child.kill(); });
+		} else {
+			try {
+				process.kill(-child.pid, 'SIGTERM');
+			} catch {
+				child.kill();
+			}
+		}
+	};
 	return new Promise((resolve, reject) => {
 		let stdout = '';
 		let stderr = '';
@@ -51,7 +76,7 @@ export function runRemoteCommand(executable: string, args: readonly string[], en
 		const removeAbortListener = (): void => signal?.removeEventListener('abort', abort);
 		const abort = (): void => {
 			cancelled = true;
-			child.kill();
+			terminate();
 		};
 		signal?.addEventListener('abort', abort, { once: true });
 		if (signal?.aborted) abort();
@@ -66,7 +91,7 @@ export function runRemoteCommand(executable: string, args: readonly string[], en
 				} catch (error) {
 					observerFailed = true;
 					observerFailure = error;
-					child.kill();
+					terminate();
 				}
 			}
 			stderr = appendBounded(stderr, text);

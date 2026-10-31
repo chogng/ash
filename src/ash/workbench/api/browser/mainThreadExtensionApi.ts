@@ -49,7 +49,7 @@ import { IConfigurationService, ConfigurationTarget } from '../../../platform/co
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { IBulkEditService, ResourceTextEdit } from '../../../editor/browser/services/bulkEditService.js';
-import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickPickFocus, type IQuickPickSeparator } from '../../../platform/quickinput/common/quickInput.js';
 import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
@@ -347,8 +347,15 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private showQuickPick(items: readonly ExtensionQuickPickItem[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
-		if (!Array.isArray(items) || typeof placeholder !== 'string' || items.some(item => !item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string')) { throw new TypeError('Invalid Quick Pick request'); }
+		if (!Array.isArray(items) || typeof placeholder !== 'string' || items.some(item =>
+			!item || typeof item.label !== 'string'
+			|| item.description !== undefined && typeof item.description !== 'string'
+			|| item.detail !== undefined && typeof item.detail !== 'string'
+			|| item.separator !== undefined && typeof item.separator !== 'string'
+			|| item.alwaysShow !== undefined && typeof item.alwaysShow !== 'boolean'
+		)) { throw new TypeError('Invalid Quick Pick request'); }
 		const pick = this.quickInput.createQuickPick<ExtensionQuickPickItem & { index: number; }>();
+		const entries = items.map(({ label, description, detail, separator, alwaysShow }, index) => ({ label, description, detail, separator, alwaysShow, index }));
 		const listeners = new DisposableStore();
 		return new Promise<ExtensionClientResult>((resolve, reject) => {
 			const finish = (index: number | null): void => resolve({ result: 'selection', index });
@@ -361,7 +368,20 @@ export class MainThreadExtensionApi extends Disposable {
 			listeners.add(pick.onDidHide(() => finish(null)));
 			signal.addEventListener('abort', cancel, { once: true });
 			listeners.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
-			pick.items = items.map(({ label, description, detail }, index) => ({ label, description, detail, index }));
+			// Group headings are not selectable and must not change the extension's indices.
+			pick.sortByLabel = !items.some(item => item.separator !== undefined);
+			const updateItems = (): void => {
+				// Keep creation actions available after the filtered results, where they cannot steal Enter.
+				const actions = entries.filter(item => item.alwaysShow);
+				const ordered = pick.value ? [...entries.filter(item => !item.alwaysShow), ...actions] : entries;
+				pick.items = ordered.flatMap<(ExtensionQuickPickItem & { index: number; }) | IQuickPickSeparator>(item => {
+					const separator = pick.value && item === actions[0] ? '' : item.separator;
+					return separator === undefined ? [item] : [{ type: 'separator', label: separator }, item];
+				});
+				pick.focus(QuickPickFocus.First);
+			};
+			listeners.add(pick.onDidChangeValue(updateItems));
+			updateItems();
 			pick.ariaLabel = placeholder;
 			pick.placeholder = placeholder;
 			pick.show();

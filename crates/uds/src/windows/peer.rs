@@ -1,17 +1,11 @@
 // Adapted from OpenAI Codex (dafb6781ee), Apache-2.0. See ../../NOTICE and ../../LICENSE-APACHE.
-//! Authenticate implicitly discovered Windows socket peers before sending data.
-//! The socket's kernel-reported PID, rather than a PID file, identifies the token.
+//! Authenticate implicitly discovered Windows named-pipe peers before sending data.
+//! The pipe's kernel-reported PID, rather than a PID file, identifies the token.
 
 use std::io;
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::io::OwnedHandle;
-use std::os::windows::io::RawSocket;
-use std::ptr;
 
-use windows_sys::Win32::Networking::WinSock::SIO_AF_UNIX_GETPEERPID;
-use windows_sys::Win32::Networking::WinSock::SOCKET_ERROR;
-use windows_sys::Win32::Networking::WinSock::WSAGetLastError;
-use windows_sys::Win32::Networking::WinSock::WSAIoctl;
 use windows_sys::Win32::Security::EqualSid;
 use windows_sys::Win32::Security::GetTokenInformation;
 use windows_sys::Win32::Security::TOKEN_ELEVATION;
@@ -23,30 +17,28 @@ use windows_sys::Win32::System::Threading::OpenProcess;
 use windows_sys::Win32::System::Threading::OpenProcessToken;
 use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
 
-pub(super) fn peer_identity(socket: RawSocket) -> io::Result<crate::PeerIdentity> {
+pub(super) fn peer_identity(
+    handle: windows_sys::Win32::Foundation::HANDLE,
+    side: super::pipe::Side,
+) -> io::Result<crate::PeerIdentity> {
     let mut pid = 0u32;
-    let mut returned = 0;
-    if unsafe {
-        WSAIoctl(
-            socket as _,
-            SIO_AF_UNIX_GETPEERPID,
-            ptr::null(),
-            /*cbinbuffer*/ 0,
-            ptr::addr_of_mut!(pid).cast(),
-            std::mem::size_of_val(&pid) as u32,
-            &mut returned,
-            ptr::null_mut(),
-            /*lpcompletionroutine*/ None,
-        )
-    } == SOCKET_ERROR
-    {
-        return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() }));
+    let success = unsafe {
+        match side {
+            super::pipe::Side::Server => {
+                windows_sys::Win32::System::Pipes::GetNamedPipeClientProcessId(handle, &mut pid)
+            }
+            super::pipe::Side::Client => {
+                windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId(handle, &mut pid)
+            }
+        }
+    };
+    if success == 0 {
+        return Err(io::Error::last_os_error());
     }
-    // Older Windows versions can return a valid PID with zero bytes reported.
     if pid == 0 {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "socket peer PID unavailable",
+            "named pipe peer PID unavailable",
         ));
     }
     let process = unsafe {

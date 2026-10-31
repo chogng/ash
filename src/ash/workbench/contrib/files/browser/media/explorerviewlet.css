@@ -37,6 +37,10 @@
 	overflow: hidden;
 }
 
+.ash-explorer.inline-find {
+	flex-direction: column;
+}
+
 .ash-explorer-scroll-content > .ash-scrollable-element {
 	min-width: 0;
 	min-height: 0;

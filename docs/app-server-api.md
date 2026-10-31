@@ -1520,7 +1520,7 @@ PR 文件最多 3000 个，达到上限的结果设置 `limitReached`，不能�
 
 ## Advisor
 
-此契约由生成协议指纹绑定，客户端与后端必须匹配。
+此契约由生成协议指纹绑定，客户端与后端必须匹配。工具调用时机、上下文范围和模块归属见 [Advisor](../crates/ext/advisor/README.md)。
 
 `session/request` 提供两种顾问操作：
 
@@ -1537,13 +1537,19 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 `consultAdvisor` 创建 `kind:"advisor"` 的 Turn，经正常工具权限与取消流程直接执行一次顾问调用，不调用工作模型，也不触发目标自动续跑。普通 Coding Turn 在启用顾问时可以调用 `advisor({question})`。关闭时目录中不提供该工具。
 
-顾问没有可用工具。Core 固定一次读取的对话序列，剔除未完成的工具调用，保留已完成调用与结果的配对，沿用已有压缩记录。上下文仍超过顾问窗口时明确返回错误。调用过程中固定供应商配置，不会在失败后切换模型。
+顾问没有可用工具。`advisor` 的唯一参数是 `question`，模型由当前 Turn 的 `AdvisorConfig.model`（`provider` 与模型 ID）确定。Core 固定一次读取的对话序列，带入有效历史、当前任务约束、顾问角色指令和咨询问题；剔除未完成的工具调用，保留已完成调用与结果的配对，沿用已有压缩记录及通用工具结果长度限制。上下文仍超过顾问窗口时明确返回错误。调用过程中固定供应商配置，不会在失败后切换模型。
 
 顾问输出作为普通 ToolResult 持久化，成功 JSON 包含 `status:"reviewed"|"declined"`、`model`、`question`、`advice`、`sourceSequence`、`checkpoint`、`elapsedMs`、`usage` 和 `stopReason`；次数超限为 `status:"limitReached"`，模型错误为 `status:"failed"`。权限拒绝及恢复中的结果未知状态使用 Core 的普通工具错误文本。
 
 每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
 
-桌面端和 TUI 的 `/advisor` 打开模型配置，`/advisor <provider/model>` 选择并启用模型，`/advisor off` 关闭顾问但保留选择，`/advisor clear` 清除选择；其他 `/advisor <question>` 参数直接提交一次咨询。`off`、`clear` 和不含空白的 `<provider/model>` 优先按配置命令解析。TUI 在“配置 → 通用 → 顾问”中分别设置启用开关和顾问模型；“提供商”只管理供应商。首次在配置页选择模型时保持关闭，须显式开启。界面从 `model/list` 获取模型；所有端统一请求固定目录 `{}`，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以全局配置为准；只选择模型不创建会话。普通提问中要求“先咨询 Advisor”时，由工作模型决定是否调用 `advisor({question})`。
+桌面端和 TUI 的 `/advisor` 打开模型配置，`/advisor <provider/model>` 选择并启用模型，`/advisor off` 关闭顾问但保留选择，`/advisor clear` 清除选择；其他 `/advisor <question>` 参数直接提交一次咨询。`off`、`clear` 和不含空白的 `<provider/model>` 优先按配置命令解析。
+
+桌面端在 Agents 设置中使用单个选择器：选择模型即启用，Off 关闭并保留模型和预算；命令面板的“配置顾问”（`workbench.action.chat.configureAdvisor`）打开同一功能的快捷选择。候选来自统一目录的 `recommended_for: ["advisor"]` 标记，并遵循模型显示状态；已保存的选择继续保留。设置页和聊天命令切换模型时保留调用及输出预算，推理档位按目标模型支持情况处理。
+
+TUI 在“配置 → 通用 → 顾问”中分别设置启用开关和顾问模型；“提供商”只管理供应商。首次在配置页选择模型时保持关闭，须显式开启。
+
+界面从 `model/list` 获取模型；所有端统一请求固定目录 `{}`，通过 `config/read.advisor` 显示当前选择，再通过 `config/update.advisor` 保存。直接咨询使用 `consultAdvisor` 和全局顾问模型，即使旧会话保存了单独的关闭或模型选择也以全局配置为准；只选择模型不创建会话。普通提问中要求“先咨询 Advisor”时，由工作模型决定是否调用 `advisor({question})`。
 
 ## 可用语言服务器
 

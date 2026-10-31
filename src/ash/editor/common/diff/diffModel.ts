@@ -64,6 +64,8 @@ export class DiffModel extends Disposable {
 		});
 		this._register(options.original.onDidChangeContent(() => this.refresh()));
 		this._register(options.modified.onDidChangeContent(() => this.refresh()));
+		// Language-specific policy is resolved by the host through updateOptions;
+		// a language change alone does not change this text comparison.
 		this._register(options.original.onWillDispose(() => this.dispose()));
 		this._register(options.modified.onWillDispose(() => this.dispose()));
 		this._register(options.diffProvider.onDidChange(() => this.refresh()));

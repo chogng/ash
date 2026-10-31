@@ -25,16 +25,6 @@
 	flex: 1 1 auto;
 }
 
-.ash-chat-input-model-icon {
-	display: inline-flex;
-	flex: 0 0 auto;
-	align-items: center;
-}
-
-.ash-chat-input-model-icon > .ash-icon {
-	font-size: var(--ash-lxiconFontSize-compact);
-}
-
 .ash-chat-model-picker-control > .ash-chat-input-configuration-action {
 	max-width: 96px;
 	flex: 0 0 auto;
@@ -105,6 +95,10 @@
 
 .ash-chat-model-picker-footer {
 	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	/* Clip the footer menu's background without clipping the popup's details flyout. */
+	border-radius: 0 0 var(--ash-cornerRadius-large)
+		var(--ash-cornerRadius-large);
+	overflow: hidden;
 }
 
 .ash-chat-model-picker-details-menu {

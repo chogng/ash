@@ -56,13 +56,13 @@ suite('Desktop update download cleanup', () => {
 				onDidChangeIsConnectionMetered: Event.None,
 				whenConnectionStateInitialized: Promise.resolve(),
 			});
-			using update = services.createInstance(UpdateMainService, async () => {}, {
+			using update = services.createInstance(UpdateMainService, async () => { }, {
 				isPackaged: true,
 				getPath: () => directory,
 				getVersion: () => '1.2.4',
 				getAppPath: () => directory,
-				quit: () => {},
-				relaunch: () => {},
+				quit: () => { },
+				relaunch: () => { },
 			});
 			assert.equal(await update.checkAutomatically('latest'), undefined);
 			await assert.rejects(readFile(join(updates, 'release-owned', 'download.exe')), { code: 'ENOENT' });

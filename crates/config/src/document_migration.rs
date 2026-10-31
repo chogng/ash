@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 11;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 12;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -80,6 +80,8 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 9);
     let migrate_context = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 10);
     let migrate_grants = !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 11);
+    let migrate_commit_messages =
+        !matches!(version.as_ref(), Some(toml::Value::Integer(v)) if *v >= 12);
     let obsolete_selection = root.remove("activeConnections").is_some();
     let rewrite_required = (match version {
         None => {
@@ -140,6 +142,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
     if migrate_grants {
         migrate_directory_grants(root)?;
     }
+    if migrate_commit_messages {
+        migrate_commit_message_enablement(root)?;
+    }
     let mut document = value
         .try_into::<UserConfigDocument>()
         .map_err(|error| ConfigError(error.to_string()))?;
@@ -151,6 +156,29 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         document,
         rewrite_required,
     })
+}
+
+/// Schema 12 separates automatic generation from the optional model override. Older documents
+/// without a model stay disabled; an existing explicit enablement must agree before migration.
+fn migrate_commit_message_enablement(
+    root: &mut toml::map::Map<String, toml::Value>,
+) -> Result<(), ConfigError> {
+    let agent = root
+        .entry("agent")
+        .or_insert_with(|| toml::Value::Table(Default::default()))
+        .as_table_mut()
+        .ok_or_else(|| ConfigError("agent must be a table".into()))?;
+    let enabled = agent.contains_key("commitMessageModel");
+    if let Some(existing) = agent.get("commitMessageEnabled") {
+        if existing.as_bool() != Some(enabled) {
+            return Err(ConfigError(
+                "legacy commit-message model conflicts with explicit enablement".into(),
+            ));
+        }
+    } else {
+        agent.insert("commitMessageEnabled".into(), toml::Value::Boolean(enabled));
+    }
+    Ok(())
 }
 
 /// Schema 11 retires the old directory contract before normal decoding. Current documents
@@ -401,11 +429,19 @@ fn migrate_subscription_models(document: &mut UserConfigDocument) {
     {
         migrate(model);
     }
+    if let Some(model) = &mut document.agent.code_review_model {
+        migrate(model);
+    }
     if let Some(model) = &mut document.agent.commit_message_model {
         migrate(model);
     }
-    if let Some(advisor) = &mut document.agent.advisor {
-        migrate(&mut advisor.model);
+    if let Some(model) = document
+        .agent
+        .advisor
+        .as_mut()
+        .and_then(|advisor| advisor.model.as_mut())
+    {
+        migrate(model);
     }
     if let Some(models) = &mut document.codebase.models {
         migrate(&mut models.embedding_model);

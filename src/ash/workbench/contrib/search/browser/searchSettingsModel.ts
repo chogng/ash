@@ -6,7 +6,7 @@ import { Extensions, type IConfigurationRegistry } from '../../../../platform/co
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { IContentSearchConfigurationService, type ContentSearchConfiguration, type ContentSearchEngine } from '../../../../platform/search/common/search.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ContentSearchSettings,

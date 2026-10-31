@@ -61,3 +61,21 @@
 .ash-models-settings-provider-title {
 	width: 100%;
 }
+
+.ash-models-settings-subscription-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-models-settings-subscription-row > :last-child {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-models-settings-subscription-empty {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}

@@ -11,8 +11,11 @@ name = "ash_uds"
 path = "src/lib.rs"
 
 [target.'cfg(windows)'.dependencies]
-uds_windows = { workspace = true }
-windows-sys-052 = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_SystemServices", "Win32_Networking_WinSock", "Win32_System_IO"] }
+futures = { workspace = true }
+futures-lite = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+sha2 = { workspace = true }
+windows-sys-052 = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_SystemServices", "Win32_System_IO", "Win32_System_Pipes"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

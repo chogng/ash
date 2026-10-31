@@ -58,8 +58,6 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly ariaDescription: string | undefined;
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly keybinding: ResolvedKeybinding | undefined;
-	private readonly actionRunner: IActionRunner | undefined;
-	private readonly actionContext: unknown;
 	private readonly checkedActionRepresentation: 'radio' | 'checkbox';
 
 	constructor(
@@ -70,8 +68,6 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 		this.ariaDescription = options.ariaDescription;
 		this.onDidSelect = options.onDidSelect;
 		this.keybinding = options.keybinding;
-		this.actionRunner = options.actionRunner;
-		this.actionContext = options.actionContext;
 		this.checkedActionRepresentation = options.checkedActionRepresentation ?? 'checkbox';
 	}
 
@@ -130,8 +126,6 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly getKeybinding:
 		| ((action: IAction) => ResolvedKeybinding | undefined)
 		| undefined;
-	private readonly actionRunner: IActionRunner | undefined;
-	private readonly actionContext: unknown;
 	private readonly onWillOpenSubmenu: ((item: ActionViewItem) => void) | undefined;
 	private readonly openImmediatelyOnHover: boolean;
 	private readonly showScheduler = this._register(new RunOnceScheduler(() => {
@@ -157,8 +151,6 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.submenuLayer = options.submenuLayer ?? 20;
 		this.contextViewContainer = options.contextViewContainer;
 		this.getKeybinding = options.getKeybinding;
-		this.actionRunner = options.actionRunner;
-		this.actionContext = options.actionContext;
 		this.onWillOpenSubmenu = options.onWillOpenSubmenu;
 		this.openImmediatelyOnHover = options.openSubmenusImmediatelyOnHover ?? false;
 	}

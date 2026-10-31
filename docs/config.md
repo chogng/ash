@@ -128,7 +128,7 @@ directory = "/absolute/path/to/recordings"
 
 ## 供应商默认模型
 
-主 Agent 使用 `[agent.model]` 中的 `provider`、`model` 选择模型；可选的 `[agent] modelReasoningEffort` 指定推理强度，缺失时使用模型目录默认值。审批审查和提交说明分别使用独立的 `approvalReviewModel`、`commitMessageModel`。
+主 Agent 使用 `[agent.model]` 中的 `provider`、`model` 选择模型；可选的 `[agent] modelReasoningEffort` 指定推理强度，缺失时使用模型目录默认值。代码审查使用可选的 `[agent.codeReviewModel]`（`provider`、`model`）；缺失时跟随当前 Thread 的模型，仅在启动审查 Turn 时应用，不改变聊天默认模型。审批审查和提交说明分别使用独立的 `approvalReviewModel`、`commitMessageModel`。
 
 `approvalReviewModel` 可独立指定 `connection`、`model` 和 `reasoningEffort`。自动选择时，ChatGPT 订阅
 使用 `codex-auto-review`，OpenAI API 使用 `gpt-6-luna`，均使用 `low`；不继承主模型的推理强度。

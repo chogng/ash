@@ -7,66 +7,17 @@
 	display: none;
 }
 
-.ash-chat-models-catalog > .ash-input-box {
+.ash-models-settings-search-row {
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-models-settings-search-row > .ash-input-box {
 	width: 100%;
-	margin-bottom: var(--ash-spacing-size80);
-}
-
-.ash-chat-models-catalog > .ash-button {
-	margin-bottom: var(--ash-spacing-size80);
-}
-
-.ash-chat-models-filters {
-	margin-bottom: var(--ash-spacing-size80);
-}
-
-.ash-chat-models-filters > summary {
-	cursor: pointer;
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-chat-models-filters > summary:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: -1px;
-}
-
-.ash-chat-models-filter-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size40);
-	padding: var(--ash-spacing-size80) 0;
-}
-
-.ash-chat-models-provider {
-	display: flex;
-	align-items: center;
-	gap: var(--ash-spacing-size80);
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
-}
-
-.ash-chat-models-provider > .ash-button:first-child {
-	flex: 1;
-	min-width: 0;
-	justify-content: flex-start;
-}
-
-.ash-chat-models-catalog .ash-chat-models-provider > .ash-switch {
-	width: auto;
-	flex: 0 0 auto;
 }
 
 .ash-chat-models-catalog .ash-models-settings-model-row {
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
-}
-
-.ash-chat-models-catalog.is-grouped .ash-models-settings-model-row {
-	padding-inline-start: var(--ash-spacing-size320);
-}
-
-.ash-chat-models-catalog .ash-switch {
-	width: 100%;
 }
 
 .ash-chat-models-catalog .ash-models-settings-model-copy {
@@ -82,36 +33,117 @@
 	text-overflow: ellipsis;
 }
 
+.ash-model-context-inline > .ash-models-settings-model-content {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-model-context-inline .ash-models-settings-model-copy {
+	flex: 1;
+}
+
+.ash-chat-models-catalog .ash-model-context-inline > .ash-switch {
+	flex: 0 0 auto;
+	width: auto;
+}
+
+.ash-button.ash-model-context-button {
+	flex: 0 0 auto;
+	min-height: var(--ash-toolbar-actionSize);
+	padding: 0 var(--ash-spacing-size60);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-model-context-button:not(:disabled):hover {
+	background: var(--ash-toolbar-hoverBackground);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-model-context-values {
+	display: grid;
+	text-align: center;
+	perspective: 160px;
+}
+
+.ash-model-context-values > span {
+	grid-area: 1 / 1;
+	backface-visibility: hidden;
+	transition:
+		transform var(--ash-animation-durationNormal) ease-out,
+		opacity var(--ash-animation-durationNormal) ease-out,
+		visibility var(--ash-animation-durationNormal);
+}
+
+.ash-model-context-default {
+	transform: translateY(0) rotateX(0);
+	opacity: 1;
+	visibility: visible;
+}
+
+.ash-model-context-extended {
+	transform: translateY(50%) rotateX(-90deg);
+	opacity: 0;
+	visibility: hidden;
+}
+
+.ash-model-context-button[aria-pressed="true"] .ash-model-context-default {
+	transform: translateY(-50%) rotateX(90deg);
+	opacity: 0;
+	visibility: hidden;
+}
+
+.ash-model-context-button[aria-pressed="true"] .ash-model-context-extended {
+	transform: translateY(0) rotateX(0);
+	opacity: 1;
+	visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-model-context-values > span {
+		transition: none;
+	}
+}
+
 .ash-chat-models-catalog .ash-models-settings-empty {
 	margin: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	color: var(--ash-description-foreground);
 }
 
 .ash-chat-models-catalog .ash-models-settings-status {
-	margin: var(--ash-spacing-size120) 0 0;
+	margin: 0;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
 	color: var(--ash-error-foreground);
-}
-
-.ash-chat-models-catalog .ash-models-settings-expand {
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
-}
-
-.ash-chat-models-catalog .ash-models-settings-expand .ash-button {
-	width: 100%;
-}
-
-.ash-chat-models-selection-actions {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size80);
-	margin-bottom: var(--ash-spacing-size80);
 }
 
 .ash-chat-models-catalog .ash-models-settings-model-row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
+}
+
+.ash-model-details {
+	flex-basis: 100%;
+	min-width: 0;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120);
+	padding-bottom: var(--ash-spacing-size40);
+}
+
+.ash-model-details > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-model-details > .ash-button {
+	justify-self: start;
+	grid-column: 1 / -1;
 }
 
 .ash-models-settings-model-row > .ash-models-settings-model-content {
@@ -120,22 +152,6 @@
 	width: auto;
 }
 
-.ash-models-settings-model-content > .ash-switch {
-	width: 100%;
-}
-
-.ash-chat-models-provider > .ash-button:not(:first-child) {
-	flex: 0 0 auto;
-}
-
-.ash-chat-models-catalog .ash-models-catalog-connection-status {
-	margin: 0 var(--ash-spacing-size160) var(--ash-spacing-size80)
-		var(--ash-spacing-size320);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-models-settings-model-row > .ash-checkbox,
 .ash-models-settings-model-row > .ash-button {
 	flex: 0 0 auto;
 }
@@ -149,7 +165,7 @@
 	overflow-y: auto;
 	border: var(--ash-strokeThickness) solid var(--ash-input-border);
 	background: var(--ash-editor-background);
-	margin-bottom: var(--ash-spacing-size80);
+	margin-top: var(--ash-spacing-size80);
 }
 
 .ash-model-search-completions > div {

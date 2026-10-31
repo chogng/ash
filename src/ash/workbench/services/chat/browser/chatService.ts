@@ -1,7 +1,7 @@
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions } from '../common/chatService.js';
+import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions, StartReviewOptions } from '../common/chatService.js';
 import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
@@ -317,6 +317,15 @@ export class ChatService extends Disposable implements IChatService {
 			}
 		}
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
+	}
+
+	async startReview(options: StartReviewOptions): Promise<void> {
+		this.assertAIEnabled();
+		const epoch = this.connectionEpoch;
+		await this.turnApi.startReview({ ...options, commandId: commandId('review') });
+		if (!this.isDisposed && epoch === this.connectionEpoch) {
+			this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: true, requestSequence: options.expectedSequence });
+		}
 	}
 
 	async queueTurn(options: StartTurnOptions): Promise<void> {

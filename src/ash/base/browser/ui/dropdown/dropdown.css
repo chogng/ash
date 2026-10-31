@@ -91,6 +91,13 @@
 	padding: 0;
 }
 
+.ash-toolbar
+	.ash-split-action-primary.icon
+	> .ash-button:where(:not(.ash-button-primary))
+	.ash-icon-label-container {
+	display: none;
+}
+
 .ash-toolbar .ash-split-action-primary.icon > .ash-button-primary {
 	width: auto;
 	padding-inline: var(--ash-spacing-size80);

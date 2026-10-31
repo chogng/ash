@@ -32,6 +32,68 @@ test.describe('Git blame live documents', () => {
 test.describe('Git repository operations', () => {
 	test.use({ gitRepository: true });
 
+	test('checkout picker shows commit details for branches and tags and switches by keyboard', { tag: ['@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }, info) => {
+		test.slow();
+		const cwd = testWorkspace.directory;
+		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
+		const date = `${Math.floor(Date.now() / 1000) - 7320} +0000`;
+		await run('git', ['-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--author=Picker $(cloud) <picker@example.invalid>', '-m', 'Branch picker $(tag) commit'], { cwd, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+		const hash = (await git('rev-parse', 'HEAD')).slice(0, 7);
+		await git('branch', 'picker-topic');
+		await git('update-ref', 'refs/remotes/origin/picker-topic', 'HEAD');
+		await git('-c', 'tag.gpgsign=false', 'tag', '-a', 'picker-tag', '-m', 'Tag annotation is not the commit subject');
+		await workbench.quickaccess.runCommand('git.refresh');
+		const detail = `Picker $(cloud) · ${hash} · Branch picker $(tag) commit`;
+		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
+			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+			await workbench.quickaccess.select(theme);
+			await workbench.quickaccess.runCommand('git.switchBranch');
+			const picker = workbench.quickaccess;
+			await expect(picker.input).toBeFocused();
+			for (const name of ['main', 'picker-topic', 'origin/picker-topic', 'picker-tag']) {
+				const option = picker.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }) });
+				await expect(option.locator('.ash-quick-pick-row-description')).toContainText('2 hours ago');
+				await expect(option.locator('.ash-quick-pick-row-detail')).toHaveText(detail);
+				await expect(option).toHaveAccessibleName(new RegExp(`Picker \\$\\(cloud\\).*${hash}`, 'u'));
+				const geometry = await option.evaluate(element => {
+					const label = element.querySelector('.ash-quick-pick-row-label')!.getBoundingClientRect();
+					const detail = element.querySelector('.ash-quick-pick-row-detail')!.getBoundingClientRect();
+					return { secondLine: detail.top >= label.bottom, contained: detail.bottom <= element.getBoundingClientRect().bottom };
+				});
+				expect(geometry).toEqual({ secondLine: true, contained: true });
+			}
+			await info.attach(`checkout-${theme}`, { body: await picker.element.screenshot(), contentType: 'image/png' });
+			await picker.close();
+		}
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.element.getByRole('searchbox').fill('git.showReferenceDetails');
+		const toggle = workbench.settingsEditor.element.locator('[data-settings-item-id="git.showReferenceDetails"]').getByRole('switch');
+		await toggle.press('Space');
+		await expect(toggle).toHaveAttribute('aria-checked', 'false');
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('git.switchBranch');
+		await expect(workbench.quickaccess.element.locator('.ash-quick-pick-row-detail')).toHaveCount(0);
+		await expect(workbench.quickaccess.element.locator('.ash-quick-pick-row-description').filter({ hasText: `Current · ${hash}` })).toBeVisible();
+		await workbench.quickaccess.close();
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.element.getByRole('searchbox').fill('git.showReferenceDetails');
+		await toggle.press('Space');
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+		await language.fill('简体中文');
+		await language.press('Enter');
+		({ workbench } = await restartWorkbench());
+		await workbench.quickaccess.runCommand('git.switchBranch');
+		await expect(workbench.quickaccess.input).toHaveAttribute('placeholder', '选择要检出的分支或标签');
+		await expect(workbench.quickaccess.element.locator('.ash-quick-pick-row-description').filter({ hasText: '当前分支 · 2 小时前' })).toBeVisible();
+		await info.attach('checkout-zh-CN', { body: await workbench.quickaccess.element.screenshot(), contentType: 'image/png' });
+		await workbench.quickaccess.input.fill('picker-topic');
+		await workbench.quickaccess.input.press('Enter');
+		await expect.poll(() => git('branch', '--show-current')).toBe('picker-topic');
+	});
+
 	test('Go to File reveals the staged file when returning to Explorer', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		const path = 'z-source/inner/target.ts';
@@ -387,7 +449,7 @@ test.describe('SCM commit authorization', () => {
 		}
 	});
 
-	test('SCM read-only folder authorization rejects commit before staging', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	test('SCM restricted folder authorization rejects commit before staging', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		if (!('windows' in application)) return;
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -400,11 +462,11 @@ test.describe('SCM commit authorization', () => {
 		}, cwd);
 		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read-Only', exact: true }).click();
+		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 		await workbench.waitForReady();
-		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Restricted');
 		const banner = page.locator('[data-part="banner"]');
-		await expect(banner).toContainText('This workspace is read-only');
+		await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
 		await banner.getByRole('button', { name: 'Close Banner', exact: true }).click();
 		await expect(banner).toBeHidden();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toBeVisible();

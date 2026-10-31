@@ -10,7 +10,7 @@
   },
   "patch": {
     "file": "ash-runtime.patch",
-    "sha256": "1a70ad10fa9f2ecd202e95b150353f2003a8aaa43098e4b67ce04cf13c83dfd4"
+    "sha256": "3f49e8f9df325ec22d90c84cc7ed91e8f3673ba3c96d80dc5d28d2f4125a80d4"
   },
   "targets": [
     "aarch64-apple-darwin",

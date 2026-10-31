@@ -142,6 +142,10 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                         and dependency in server_packages
                     )
                     or (
+                        start == "ash-app-server-runtime"
+                        and dependency == "ash-build-identity"
+                    )
+                    or (
                         start in {"ash-core-api", "ash-hooks"}
                         and dependency in server_packages | {"ash-core"}
                     )

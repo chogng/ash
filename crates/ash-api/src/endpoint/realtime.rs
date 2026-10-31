@@ -32,6 +32,8 @@ pub enum RealtimeTurnDetection {
 pub struct RealtimeConfig {
     pub instructions: String,
     pub output: RealtimeOutput,
+    /// Per-response GA output limit (1–4096), including tool calls; `None` leaves it unchanged.
+    pub max_output_tokens: Option<u32>,
     pub turn_detection: RealtimeTurnDetection,
     pub tools: Vec<ToolDefinition>,
 }
@@ -40,6 +42,7 @@ impl Default for RealtimeConfig {
         Self {
             instructions: String::new(),
             output: RealtimeOutput::Text,
+            max_output_tokens: None,
             turn_detection: RealtimeTurnDetection::Manual,
             tools: Vec::new(),
         }
@@ -471,7 +474,18 @@ impl RealtimeSession {
 
 fn session_update(config: &RealtimeConfig) -> Result<Value, ApiError> {
     crate::requests::openai_tools::validate_tools(&config.tools)?;
+    if config
+        .max_output_tokens
+        .is_some_and(|limit| !(1..=4096).contains(&limit))
+    {
+        return Err(ApiError::InvalidRequest(
+            "Realtime max_output_tokens must be between 1 and 4096".into(),
+        ));
+    }
     let mut session = json!({"type":"realtime","instructions":config.instructions,"output_modalities":[match &config.output { RealtimeOutput::Text => "text", RealtimeOutput::Audio { .. } => "audio" }],"tools":config.tools.iter().map(|tool| json!({"type":"function","name":tool.name,"description":tool.description,"parameters":tool.parameters})).collect::<Vec<_>>(),"tool_choice":if config.tools.is_empty(){"none"}else{"auto"},"audio":{"input":{"format":{"type":"audio/pcm","rate":24000},"turn_detection":match config.turn_detection { RealtimeTurnDetection::Manual => Value::Null, RealtimeTurnDetection::ServerVad => json!({"type":"server_vad","create_response":true,"interrupt_response":true}) }}}});
+    if let Some(limit) = config.max_output_tokens {
+        session["max_output_tokens"] = json!(limit);
+    }
     if let RealtimeOutput::Audio { voice } = &config.output {
         session["audio"]["output"] =
             json!({"format":{"type":"audio/pcm","rate":24000},"voice":voice});

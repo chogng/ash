@@ -19,3 +19,7 @@
 	text-align: center;
 	overflow-wrap: anywhere;
 }
+
+.ash-sessions-files-view .ash-explorer-title {
+	text-transform: none;
+}

@@ -735,7 +735,9 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 advisor: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
@@ -1821,6 +1823,21 @@ fn history_refresh_reads_metadata_without_scanning_or_replacing_working_tree_sta
             .any(|reference| reference.name == "new-label")
     );
     assert_eq!(graph.commits[0].subject, "second");
+    let tag = refs
+        .references
+        .iter()
+        .find(|reference| reference.name == "new-label")
+        .unwrap();
+    let details = tag
+        .commit_details
+        .as_ref()
+        .expect("reference metadata reaches the protocol");
+    assert_eq!(details.subject, "second");
+    assert!(!details.author_name.is_empty());
+    assert_eq!(
+        serde_json::to_value(tag).unwrap()["commitDetails"]["timestampSeconds"].as_i64(),
+        Some(details.timestamp_seconds)
+    );
     assert!(!timings.records.is_empty());
     assert!(
         timings
@@ -2900,7 +2917,9 @@ fn stopping_watchers_cancels_an_active_automatic_fetch_before_joining_refresh() 
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 advisor: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,

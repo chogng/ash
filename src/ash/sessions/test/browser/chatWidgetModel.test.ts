@@ -59,7 +59,10 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 		subscribe: async ({ threadId }: { threadId: string; }) => subscribe ? subscribe(threadId) : { ...snapshot(threadId, 1, waiting), updates: [] }, unsubscribe: async () => { }, readContext: async () => ({ context: { estimatedTokens: 0, categories: [] } }),
 	};
 	const modelApi = { readAdvisorDefault: async (): Promise<AdvisorConfig | null> => ({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 }) } as IAgentModelsService;
-	const turnApi = { start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { status: 'pending' as const }; }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 }) } as IAgentTurnService;
+	const turnApi = {
+		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
+		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { status: 'pending' as const }; }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
+	} as IAgentTurnService;
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } };
 	const appServer = { get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
 	const changeApi = { list: async () => ({ changeSets: [] }), summary: async () => ({ sequence: 1, revision: 'initial', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }) } as unknown as ITurnChangesApi;
@@ -823,5 +826,22 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		assert.equal(f.routedChat.getInteractionOffer('session', 'A'), emitted);
 		f.reconnect();
 		assert.equal(f.routedChat.getInteractionOffer('session', 'A'), undefined);
+	});
+}
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} advisor command preserves budgets across model changes and Off`, async () => {
+		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
+		const old: AdvisorConfig = { model: { provider: 'test', model: 'old' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: 'high' };
+		let saved: AdvisorConfig | null = old;
+		f.modelApi.readAdvisorDefault = async () => saved;
+		f.modelApi.setAdvisorDefault = async ({ advisor }) => { saved = advisor; };
+		f.models.listAdvisorModels = async () => [{ model: { provider: 'test', model: 'next' }, displayName: 'Next', longContext: null, supportedReasoningEfforts: [{ effort: 'medium', description: 'Medium' }] }];
+		await f.model.executeServerCommand('advisor', 'test/next');
+		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
+		await f.model.executeServerCommand('advisor', 'off');
+		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: false, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
+		await f.model.executeServerCommand('advisor', 'clear');
+		assert.equal(saved, null);
 	});
 }

@@ -228,7 +228,7 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseAllEditorsCommandId,
-			title: localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs'),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All'),
 			f1: true,
 			precondition: ContextKeyExpr.or(EditorsVisibleContext.isEqualTo(true), MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true)),
 			menu: [

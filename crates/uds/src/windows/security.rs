@@ -23,35 +23,7 @@ use windows_sys::Win32::System::Threading::GetCurrentProcess;
 use windows_sys::Win32::System::Threading::OpenProcessToken;
 
 pub(crate) fn create_private_directory(path: &Path) -> io::Result<()> {
-    let user = current_user()?;
-    let user_sid = unsafe { (*(user.as_ptr().cast::<TOKEN_USER>())).User.Sid };
-    let mut sid_string = ptr::null_mut();
-    if unsafe { ConvertSidToStringSidW(user_sid, &mut sid_string) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    let mut sid_length = 0;
-    while unsafe { *sid_string.add(sid_length) } != 0 {
-        sid_length += 1;
-    }
-    let sid =
-        String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(sid_string, sid_length) });
-    unsafe { LocalFree(sid_string as _) };
-    let sddl: Vec<u16> = format!("O:{sid}D:P(A;OICI;FA;;;{sid})")
-        .encode_utf16()
-        .chain(Some(0))
-        .collect();
-    let mut descriptor = ptr::null_mut();
-    if unsafe {
-        ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl.as_ptr(),
-            /*stringsdrevision*/ 1,
-            &mut descriptor,
-            ptr::null_mut(),
-        )
-    } == 0
-    {
-        return Err(io::Error::last_os_error());
-    }
+    let security = PrivateSecurity::new(SecuredObject::Directory)?;
     let result = (|| {
         // Canonicalize only the parent: this supplies Win32's extended-length
         // prefix without following a reparse point at the directory being secured.
@@ -72,17 +44,12 @@ pub(crate) fn create_private_directory(path: &Path) -> io::Result<()> {
                 "socket directory path contains NUL",
             ));
         }
-        let attributes = SECURITY_ATTRIBUTES {
-            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: descriptor,
-            bInheritHandle: 0,
-        };
+        let attributes = security.attributes();
         if unsafe { CreateDirectoryW(path_wide.as_ptr(), &attributes) } != 0 {
             return Ok(());
         }
         Err(io::Error::last_os_error())
     })();
-    unsafe { LocalFree(descriptor as _) };
     result
 }
 
@@ -125,4 +92,65 @@ pub(super) fn token_user(token: HANDLE) -> io::Result<Vec<usize>> {
         return Err(io::Error::last_os_error());
     }
     Ok(user)
+}
+
+pub(super) enum SecuredObject {
+    Directory,
+    Pipe,
+}
+
+/// Owns the descriptor backing SECURITY_ATTRIBUTES through the object creation call.
+pub(super) struct PrivateSecurity(windows_sys::Win32::Security::PSECURITY_DESCRIPTOR);
+
+impl PrivateSecurity {
+    pub(super) fn new(object: SecuredObject) -> io::Result<Self> {
+        let user = current_user()?;
+        let user_sid = unsafe { (*(user.as_ptr().cast::<TOKEN_USER>())).User.Sid };
+        let mut sid_string = ptr::null_mut();
+        if unsafe { ConvertSidToStringSidW(user_sid, &mut sid_string) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let mut sid_length = 0;
+        while unsafe { *sid_string.add(sid_length) } != 0 {
+            sid_length += 1;
+        }
+        let sid =
+            String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(sid_string, sid_length) });
+        unsafe { LocalFree(sid_string as _) };
+        let inheritance = match object {
+            SecuredObject::Directory => "OICI",
+            SecuredObject::Pipe => "",
+        };
+        let sddl: Vec<u16> = format!("O:{sid}D:P(A;{inheritance};FA;;;{sid})")
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let mut descriptor = ptr::null_mut();
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                sddl.as_ptr(),
+                /*stringsdrevision*/ 1,
+                &mut descriptor,
+                ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(Self(descriptor))
+    }
+    pub(super) fn attributes(&self) -> SECURITY_ATTRIBUTES {
+        SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: self.0,
+            bInheritHandle: 0,
+        }
+    }
+}
+
+impl Drop for PrivateSecurity {
+    fn drop(&mut self) {
+        unsafe { LocalFree(self.0 as _) };
+    }
 }

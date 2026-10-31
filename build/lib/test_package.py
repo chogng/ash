@@ -599,7 +599,7 @@ class PackageTests(unittest.TestCase):
                 "ash-github-extension", github_manifest["ashRuntime"]["entrypoint"]
             )
             self.assertEqual(
-                ["github.api.v1"], github_manifest["ashRuntime"]["capabilities"]
+                ["github.api.v2"], github_manifest["ashRuntime"]["capabilities"]
             )
             self.assertFalse((github_extension / "src").exists())
             self.assertFalse((github_extension / "Cargo.toml").exists())

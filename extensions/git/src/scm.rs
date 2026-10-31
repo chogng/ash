@@ -30,7 +30,7 @@ fn action(api: &Api, id: &str, key: &str, icon: &str, enabled: bool) -> Value {
     let label = api.text(key, &[]);
     json!({"id":id,"label":label,"tooltip":label,"icon":icon,"enabled":enabled})
 }
-pub fn decoration(api: &Api, change: &Change, staged: bool) -> Value {
+pub fn decoration(api: &Api, repository: &Repository, change: &Change, staged: bool) -> Value {
     let status = if change.conflicted {
         "unmerged"
     } else if staged {
@@ -47,7 +47,28 @@ pub fn decoration(api: &Api, change: &Change, staged: bool) -> Value {
         "unmerged" => ("!", "git.status.conflicted", "conflicting"),
         _ => ("M", "git.status.modified", "modified"),
     };
-    json!({"badge":badge,"tooltip":api.text(key,&[]),"kind":kind})
+    let tooltip = api.text(key, &[]);
+    if let Some(status) = repository.incoming_change(&change.path) {
+        let incoming = incoming_decoration(api, status);
+        json!({
+            "badge":format!("{}, {badge}", incoming["badge"].as_str().unwrap_or_default()),
+            "tooltip":api.text("git.incomingAndLocalChanges", &[incoming["tooltip"].as_str().unwrap_or_default(), &tooltip]),
+            "kind":kind,
+        })
+    } else {
+        json!({"badge":badge,"tooltip":tooltip,"kind":kind})
+    }
+}
+
+pub fn incoming_decoration(api: &Api, status: &str) -> Value {
+    let (badge, key) = match status {
+        "added" => ("↓A", "git.incoming.added"),
+        "deleted" => ("↓D", "git.incoming.deleted"),
+        "renamed" => ("↓R", "git.incoming.renamed"),
+        "modified" => ("↓M", "git.incoming.modified"),
+        _ => ("↓~", "git.incoming.other"),
+    };
+    json!({"badge":badge,"tooltip":api.text(key,&[])})
 }
 pub fn snapshot(
     api: &Api,
@@ -56,6 +77,8 @@ pub fn snapshot(
     selection_revision: u64,
 ) -> Result<Value, external_ext_sdk::ExtensionError> {
     let configuration = &repository.configuration;
+    let in_progress = repository.is_running();
+    let synchronizing = repository.is_synchronizing();
     let changes = repository
         .status
         .as_ref()
@@ -129,8 +152,13 @@ pub fn snapshot(
             if !change.conflicted && change.worktree_status != "unmodified" { actions.push(action(api,&action_id("discard"),"git.discardChanges","discard",!repository.is_busy())); }
             if !staged { actions.push(action(api,&action_id("stage"),"git.stageChanges","add",!repository.is_busy())); }
             if staged { actions.push(action(api,&action_id("unstage"),"git.unstageChanges","remove",!repository.is_busy())); }
+            let decorations = decoration(api, repository, change, staged);
+            let mut open_label = api.text("git.openChangePath", &[&change.path, &api.text(key, &[])]);
+            if repository.incoming_change(&change.path).is_some() {
+                open_label = api.text("git.openChangeWithStatus", &[&open_label, decorations["tooltip"].as_str().unwrap_or_default()]);
+            }
             Ok(json!({"id":format!("{group}:{}",change.path),"sourceUri":change.path.resolve(&repository.root_uri)?,
-                "path":change.path,"originalPath":change.original_path,"decorations":decoration(api,change,staged),"openLabel":api.text("git.openChangePath",&[&change.path,&api.text(key,&[])]),"actions":actions}))
+                "path":change.path,"originalPath":change.original_path,"decorations":decorations,"openLabel":open_label,"actions":actions}))
         }).collect::<Result<_, external_ext_sdk::ExtensionError>>()?;
         if resources.is_empty()
             && !(group == "staged"
@@ -245,18 +273,15 @@ pub fn snapshot(
                     &[&upstream.behind.to_string(), &upstream.ahead.to_string()],
                 );
                 (
-                    if upstream.ahead + upstream.behind > 0 {
-                        if repository
-                            .catalog
-                            .as_ref()
-                            .is_some_and(|catalog| catalog.upstream_read_only)
-                        {
-                            format!("{}↓", upstream.behind)
-                        } else {
-                            format!("{}↓ {}↑", upstream.behind, upstream.ahead)
+                    {
+                        let mut directions = Vec::new();
+                        if upstream.behind > 0 {
+                            directions.push(format!("{}↓", upstream.behind));
                         }
-                    } else {
-                        String::new()
+                        if !read_only && upstream.ahead > 0 {
+                            directions.push(format!("{}↑", upstream.ahead));
+                        }
+                        directions.join(" ")
                     },
                     if read_only {
                         api.text(
@@ -295,21 +320,16 @@ pub fn snapshot(
                 let label = api.text("git.status.noBranch", &[]);
                 (String::new(), label.clone(), label, "sync")
             };
-            let busy_label = repository
-                .operation
-                .filter(|operation| *operation != crate::model::RepositoryOperation::Preparing)
-                .map(|operation| {
-                    api.text(
-                        if operation == crate::model::RepositoryOperation::Synchronize {
-                            "git.status.synchronizing"
-                        } else {
-                            "git.operationProgress"
-                        },
-                        &[],
-                    )
-                });
-            let synchronizing =
-                repository.operation == Some(crate::model::RepositoryOperation::Synchronize);
+            let busy_label = in_progress.then(|| {
+                api.text(
+                    if synchronizing {
+                        "git.status.synchronizing"
+                    } else {
+                        "git.operationProgress"
+                    },
+                    &[],
+                )
+            });
             statusbar.push(json!({"id":"ash.status.git.sync","text":text,"ariaLabel":busy_label.as_deref().unwrap_or(&aria),"tooltip":busy_label.as_deref().unwrap_or(&tooltip),"priority":800,"compactGroup":"ash.status.git","icon":if synchronizing {"sync"} else {icon},"showProgress":synchronizing,"enabled":!repository.is_busy() && matches!(head,Head::Branch{..})}));
         }
     }
@@ -331,8 +351,15 @@ pub fn snapshot(
                 },
                 &[&behind, &ahead],
             );
+            let mut directions = Vec::new();
+            if upstream.behind > 0 {
+                directions.push(format!("↓{behind}"));
+            }
+            if upstream.ahead > 0 {
+                directions.push(format!("↑{ahead}"));
+            }
             (
-                api.text("git.syncButton", &[&behind, &ahead]),
+                api.text("git.syncButton", &[&directions.join(" ")]),
                 api.text("git.status.sync", &[&counts]),
             )
         }
@@ -378,10 +405,7 @@ pub fn snapshot(
         format!(
             "$({}) {label}",
             match primary {
-                "sync" | "publish"
-                    if repository.operation
-                        == Some(crate::model::RepositoryOperation::Synchronize) =>
-                {
+                "sync" | "publish" if synchronizing => {
                     "sync~spin"
                 }
                 "sync" => "sync",
@@ -400,7 +424,7 @@ pub fn snapshot(
     };
     let status_message = if limit_reached && !configuration.boolean("ignoreLimitWarning", false) {
         api.text("git.limitReached", &[])
-    } else if repository.is_busy() && configuration.boolean("showProgress", true) {
+    } else if in_progress && configuration.boolean("showProgress", true) {
         api.text("git.operationProgress", &[])
     } else if !repository.error.is_empty() {
         repository.error.clone()
@@ -424,7 +448,7 @@ pub fn snapshot(
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":can_accept,"buttonLabel":label,"buttonTooltip":tooltip},
         "actionButton":{"command":primary_command,"secondaryCommands":secondary_commands,"enabled":can_accept && !repository.is_busy()},
-        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
+        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":in_progress,"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
         "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,
         "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyChangeSilent":repository.status.as_ref().is_some_and(|status|status.history_change_silent),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,

@@ -121,6 +121,12 @@ export const SettingsNavigation = [
 				presentation: 'general',
 				groups: [
 					{
+						id: 'style',
+						label: localize('settings.workbench.style.label', 'Workbench Style'),
+						description: localize('settings.workbench.style.description', 'Choose the appearance of Workbench regions, borders, spacing, and lists.'),
+						settings: ['workbench.layoutStyle'],
+					},
+					{
 						id: 'theme',
 						label: 'Color theme',
 						description: 'Choose the colors used by the Workbench.',
@@ -158,7 +164,6 @@ export const SettingsNavigation = [
 						label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
 						description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
 						settings: [
-							'workbench.layoutStyle',
 							'workbench.activityBar.location',
 							'workbench.activityBar.autoHide',
 							'workbench.activityBar.badges',
@@ -170,6 +175,7 @@ export const SettingsNavigation = [
 							'workbench.notifications.position',
 							'workbench.notifications.showInTitleBar',
 							'workbench.view.alwaysShowHeaderActions',
+							'chat.viewSessions.presentation',
 							'chat.viewSessions.orientation',
 							'chat.experimental.sessionArchiveActionWording',
 							'window.title',
@@ -624,8 +630,8 @@ export const SettingsNavigation = [
 			{
 				id: 'agents',
 				label: localize({ bundle: 'ash.settings', key: 'categories.agents.label' }, 'Agents'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.agents.description' }, 'Configure agents and the Advisor used for second opinions.'),
-				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion'],
+				description: '',
+				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
 				groups: [],
 			},
@@ -751,25 +757,31 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 	for (const [id, entries] of extensions) {
 		const source = entries[0].configuration.source!;
 		const label = source.displayName ?? id;
+		const sections = new Map<ISetting['configuration']['section'], ISetting[]>();
+		for (const setting of entries) {
+			const section = setting.configuration.section;
+			const matches = sections.get(section) ?? [];
+			matches.push(setting);
+			sections.set(section, matches);
+		}
+		const groups: ISettingsGroup[] = [...sections].map(([section, settings]) => ({
+			id: section?.id ?? (section?.title ? settings[0].id : 'settings'),
+			title: section?.title ?? label,
+			description: '',
+			settings: settings.map(setting => ({ ...setting, presentation: 'general' })),
+		}));
 		const descriptor: SettingsCategoryDescriptor = {
 			id: `extension.${id}`,
 			label,
 			description: '',
 			keywords: [id],
 			presentation: 'general',
-			groups: [],
+			groups: groups.map(group => ({ id: group.id, label: group.title, description: group.description, settings: group.settings.map(setting => setting.id) })),
 		};
 		categories.push({
 			id: descriptor.id,
 			descriptor,
-			groups: [
-				{
-					id: 'settings',
-					title: label,
-					description: '',
-					settings: entries.map(setting => ({ ...setting, presentation: descriptor.presentation })),
-				},
-			],
+			groups,
 		});
 	}
 	return categories;

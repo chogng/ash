@@ -160,14 +160,14 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		}
 	}
 
-	for (const label of ['Find', 'Replace']) {
+	for (const label of ['Find', 'Replace'] as const) {
 		for (const useAlias of [false, true]) {
 			test(`${inputKind} ${useAlias ? 'aliased' : 'public'} history commands undo and redo ${label} input`, async ({ page }) => {
 				if (inputKind === 'textarea') {
 					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
 				}
 				await page.goto('/standalone.html');
-				await page.evaluate(() => window.ashStandaloneIntegration.prepareInputHistory());
+				await page.evaluate(label => window.ashStandaloneIntegration.prepareInputHistory(label), label);
 				const input = page.locator(`#caller input[aria-label="${label}"]`);
 				await input.fill('');
 				await input.pressSequentially('needle');
@@ -256,6 +256,16 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		const findWidget = page.locator('#caller .stanza-editor-find-widget');
 		const sash = findWidget.getByRole('separator', { name: 'Resize find widget' });
 		await expect(sash).toBeVisible();
+		await expect(findWidget.getByRole('textbox', { name: 'Replace' })).toBeHidden();
+		await findWidget.getByRole('button', { name: 'Toggle replace' }).click();
+		await expect(findWidget.getByRole('textbox', { name: 'Replace' })).toBeVisible();
+		const fields = findWidget.locator('.stanza-editor-find-field');
+		const fieldBounds = await fields.evaluateAll(nodes => nodes.map(node => {
+			const { x, width } = node.getBoundingClientRect();
+			return { x, width };
+		}));
+		expect(fieldBounds[0]).toEqual(fieldBounds[1]);
+		await expect(findWidget.getByRole('button', { name: 'Replace current match' }).locator('.ash-icon')).toHaveCount(1);
 		const findIcons = findWidget.locator('.ash-icon[data-ash-icon-id^="find-"]');
 		await expect(findIcons).toHaveCount(5);
 		await expectIconFontLoaded(findIcons.first());
@@ -277,6 +287,14 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 
 		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(420));
 		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBeLessThan(480);
+		await expect(findWidget).toHaveClass(/compact/);
+		expect(await findWidget.evaluate(node => {
+			const overlay = node.getBoundingClientRect();
+			return [...node.querySelectorAll('input, button')].every(control => {
+				const bounds = control.getBoundingClientRect();
+				return bounds.left >= overlay.left && bounds.right <= overlay.right;
+			});
+		})).toBe(true);
 		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(640));
 		await expect.poll(() => findWidget.evaluate(node => Math.round(node.getBoundingClientRect().width))).toBe(Math.round(initial!.width) + 16);
 

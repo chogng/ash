@@ -4,7 +4,7 @@ use ash_app_server_protocol::schema_hash;
 use ash_app_server_transport::LocalSocketAccept;
 use ash_app_server_transport::LocalStream;
 use ash_app_server_transport::PollingLocalListener;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use std::collections::VecDeque;
 use std::io;
 use std::io::BufRead;
@@ -24,6 +24,7 @@ use std::time::Instant;
 use crate::ConnectionOptions;
 use crate::ManagedConnectionContract;
 use crate::endpoint::EndpointPaths;
+#[cfg(unix)]
 use crate::endpoint::SocketCleanup;
 use crate::process::ProcessRecord;
 use crate::process::ProcessRecordGuard;
@@ -50,6 +51,7 @@ pub struct ManagedConnection {
 /// Application services and background work remain owned by the executable using this endpoint.
 pub struct ManagedEndpoint {
     listener: PollingLocalListener,
+    #[cfg(unix)]
     _socket_cleanup: SocketCleanup,
     _record_guard: ProcessRecordGuard,
     endpoint: EndpointPaths,
@@ -63,7 +65,7 @@ pub struct ManagedEndpoint {
 }
 
 struct PendingConnection {
-    reader: BufReader<UnixStream>,
+    reader: BufReader<IpcStream>,
     deadline: Instant,
     line: Vec<u8>,
     response: Option<(Vec<u8>, usize)>,
@@ -76,7 +78,7 @@ enum PreludeProgress {
 }
 
 impl PendingConnection {
-    fn new(stream: UnixStream) -> io::Result<Self> {
+    fn new(stream: IpcStream) -> io::Result<Self> {
         stream.set_nonblocking(true)?;
         Ok(Self {
             reader: BufReader::new(stream),
@@ -193,11 +195,13 @@ impl ManagedEndpoint {
         let endpoint = EndpointPaths::prepare(profile_root)?;
         let listener = PollingLocalListener::new(endpoint.bind_listener()?)
             .map_err(|error| error.to_string())?;
+        #[cfg(unix)]
         let socket_cleanup = SocketCleanup::new(endpoint.socket.clone());
         let record = ProcessRecord::current(&endpoint)?;
         let record_guard = ProcessRecordGuard::publish(&endpoint.pid, &record)?;
         let mut managed = Self {
             listener,
+            #[cfg(unix)]
             _socket_cleanup: socket_cleanup,
             _record_guard: record_guard,
             endpoint,

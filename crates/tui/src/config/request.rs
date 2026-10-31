@@ -140,7 +140,7 @@ fn select_advisor<T: JsonRpcTransport>(
             })?;
         let mut advisor = config
             .advisor
-            .filter(|advisor| advisor.model == model)
+            .filter(|advisor| advisor.model.as_ref() == Some(&model))
             .unwrap_or_else(|| ash_protocol::AdvisorConfig::new(model));
         advisor.enabled = true;
         Some(advisor)
@@ -170,7 +170,9 @@ fn set_advisor<T: JsonRpcTransport>(
         features: Patch::Missing,
         model: Patch::Missing,
         model_reasoning_effort: Patch::Missing,
+        code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
+        commit_message_enabled: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
@@ -217,7 +219,9 @@ fn set_memories<T: JsonRpcTransport>(
         model: Patch::Missing,
         model_reasoning_effort: Patch::Missing,
         approval_review_model: Patch::Missing,
+        code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
+        commit_message_enabled: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
         git: Patch::Missing,
@@ -274,7 +278,9 @@ fn set_git_settings<T: JsonRpcTransport>(
         model: Patch::Missing,
         model_reasoning_effort: Patch::Missing,
         approval_review_model: Patch::Missing,
+        code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
+        commit_message_enabled: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
         git: Patch::Value(edit.server_config.git),
@@ -449,7 +455,9 @@ where
         model: Patch::Missing,
         model_reasoning_effort: Patch::Missing,
         approval_review_model: Patch::Missing,
+        code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
+        commit_message_enabled: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,
         git: Patch::Missing,

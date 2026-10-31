@@ -31,6 +31,7 @@ pub(crate) fn run(
     profile_root: PathBuf,
     product_services: Option<PathBuf>,
     diff_handler: crate::DiffRequestHandler,
+    build_info: build_info::BuildInfo,
 ) -> Result<(), String> {
     let startup_trace = ash_app_server_daemon::startup_trace::StartupTrace::from_environment();
     let _trace = ash_app_server_daemon::startup_trace::StartupTrace::enter(startup_trace);
@@ -53,6 +54,7 @@ pub(crate) fn run(
             ),
             diff_handler,
             Some(std::env::current_exe().map_err(|error| error.to_string())?),
+            build_info,
         )?)),
     };
     drop(history);

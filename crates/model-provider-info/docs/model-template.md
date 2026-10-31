@@ -1,6 +1,8 @@
 # GPT、Claude、Gemini、GLM、Kimi、Grok 通用模型声明规范
 
-通用模板可以覆盖这六家，但必须同时描述**模型规格、参数约束和接入差异**。统一字段名后，还要知道它适用于哪个型号、哪个协议、什么条件，以及如何编码成请求。每个模型都使用同一套结构，按官方证据填写；字段多或提示词长，都不能单独证明完整性。
+通用模板可以覆盖这六家，但必须同时描述**模型规格、参数约束和接入差异**。统一字段名后，还要知道它适用于哪个型号、哪个协议、什么条件，以及如何编码成请求。每个模型使用同一套 Ash 结构：外部事实依据厂商或所选接入的证据填写，内部元数据和执行策略注明 Ash 的赋值与解释规则；字段多或提示词长，都不能单独证明完整性。
+
+字段归属、Ash 内部赋予的模型属性和适配器的发送边界统一见 [Ash 模型字段](../../../docs/models/model-fields.md)。
 
 本文供维护模型目录、请求构造器和模型设置界面的开发者使用。官方文档核对日期为 **2026-10-05**。下面的完整字段结构是设计建议，不代表 Rust 协议和请求构造器已支持所有字段。服务等级的 ID、名称、说明及默认值，以及服务等级／速度／高速型号三种加速声明，已经通过 `settings.service_tiers`、`default_service_tier`、`acceleration` 接入当前目录、请求和模型设置卡。模型简介、带说明的推理档位和从实际解析声明生成的 JSON Schema 也已接入；当前可解析字段和已有调用链见 [crate README](../README.md#统一静态模型清单)。
 
@@ -12,15 +14,18 @@
 
 `models/<provider>.json` 放在 `model-provider-info` 合理：模型规格、完整基础提示词、参数支持声明属于共享数据。`models-manager` 负责目录来源、刷新、合并和选择。通用规范不要求把端点、认证和全部厂商请求 JSON 塞进模型条目。
 
-| 内容           | 维护位置与职责                                                         | 例子                                                     |
-| -------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| 模型事实       | `model-provider-info/models/<provider>.json`，以准确厂商＋模型 ID 为键 | 上下文、模态、型号级推理档位、生命周期                   |
-| 接入声明       | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定             | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制 |
-| 请求编码       | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用            | `reasoning.effort` 与 `output_config.effort` 的不同结构  |
-| 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验          | 模型会看图，但所选接入没有图像输入协议                   |
-| Ash 执行策略   | 模型条目的独立 `host_policy` 部分；Core 和宿主执行                     | 执行上下文预算、压缩阈值、工具结果截断预算               |
-| 基础提示词     | 模型条目的 `model_messages.system_instructions`，完整正文              | 工作原则、工具使用和结果报告                             |
-| 运行时事实     | 账户、凭据、会话与调用记录的各自负责方                                 | 账户权限、实际服务等级、缓存命中、token 用量             |
+| 内容           | 维护位置与职责                                                                                        | 例子                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 模型事实       | `model-provider-info/models/<provider>.json`，以准确厂商＋模型 ID 为键                                | 上下文、模态、型号级推理档位、生命周期                                                     |
+| 接入声明       | `model-provider-info` 的接入定义；约束按模型＋接入协议绑定                                            | 地址、协议版本、生成/计数/流式操作、必需请求头、接入限制                                   |
+| 请求编码       | `ash-api` 定义协议类型和编解码，`model-provider` 选择并调用                                           | `reasoning.effort` 与 `output_config.effort` 的不同结构                                    |
+| 目录与有效能力 | `models-manager` 合并有来源的规格；调用方结合已选接入进行校验                                         | 模型会看图，但所选接入没有图像输入协议                                                     |
+| 任务模型偏好   | `config` 的 `[agent.codeReviewModel]` 等配置；App Server 在对应 Turn 启动时选择，未配置时沿用当前模型 | 各 provider 复用现有 `ModelRef` 与有效接入，不新增厂商请求参数；代码审查与权限审批模型独立 |
+| Ash 执行策略   | 模型条目的独立 `host_policy` 部分；Core 和宿主执行                                                    | 执行上下文预算、压缩阈值、工具结果截断预算                                                 |
+| 基础提示词     | 模型条目的 `model_messages.system_instructions`，完整正文                                             | 工作原则、工具使用和结果报告                                                               |
+| 运行时事实     | 账户、凭据、会话与调用记录的各自负责方                                                                | 账户权限、实际服务等级、缓存命中、token 用量                                               |
+
+提交信息的模型选择同样是 Ash 的任务偏好：GPT、Claude、Gemini、GLM、Kimi、Grok 均沿用原有 `ModelRef` 和接入解析，不添加厂商请求参数。`agent.commitMessageModel` 为空时继承产生改动的原始 Turn 模型；`agent.commitMessageEnabled` 独立控制自动生成，关闭后保留覆盖选择。该路径不会用后续对话或用户默认模型替换缺失的历史模型，调用前仍须匹配目录授权中的实际模型与接入配置。
 
 有效能力必须同时满足模型声明、所选接入协议和 Ash 已实现的调用能力；账户权限在运行时确认。API、订阅代理和第三方托管接入分别声明，不能从厂商公共 API 继承全部能力。
 
@@ -45,6 +50,8 @@
 Gemini 已推荐 Interactions，GenerateContent 仍受支持。Ash 当前 Google 生成接入使用 OpenAI 兼容 Chat Completions，因此还要独立描述它的 `messages`、`reasoning_effort` 和兼容接口约束；上表的两套 Google 字段不能直接送到该接入。[官方接口选择](https://ai.google.dev/gemini-api/docs/interactions-overview)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)
 
 JSON 对象输出和按 JSON Schema 约束输出是两种能力。参数 schema、响应 schema 的支持子集也要分别记录；“支持 JSON”不能推出支持任意 schema。Claude 官方明确区分响应格式约束与工具 `strict`，并列出 schema 限制。[Claude 结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+
+公共 Realtime GA 使用 `session.max_output_tokens` 限制每次响应（含工具调用），数值范围为 1–4096，初始默认 `inf`。Ash 的 `RealtimeConfig::max_output_tokens: Option<u32>` 已接入数值上限，`None` 不修改会话已有值；此字段只属于公共 GA，不改变上表其他协议或订阅接入的约束。[Realtime client events](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update)（2026-10-30 核对）
 
 ### 2.2 思考模式、深度、预算和返回内容
 
@@ -289,6 +296,7 @@ Chat Debug／Agent Debug Logs 逐次显示客户端计时；`rollout-trace` 统�
 | 范围           | 当前状态                                                                       | 规范要求补充                                                         |
 | -------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词；冻结版本由正文摘要生成             | 字段级来源、适用型号/接入版本与复核状态                              |
+| 推荐用途       | `recommended_for` 显式维护 `advisor`、`review`、`commit`，供对应选择器筛选     | 新用途在接入实际消费者时扩展；不从型号名称或推理能力推断             |
 | 上下文         | 已有容量、执行预算选项、压缩阈值                                               | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组         |
 | 模态           | `ModelSettings` 有 text/image/audio 输入列表；前端图片附件消费该字段           | video/document、输出模态、组合、媒体限制与操作范围                   |
 | 推理           | 已有带可选说明的支持档位与默认档位                                             | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则               |
@@ -301,6 +309,12 @@ Chat Debug／Agent Debug Logs 逐次显示客户端计时；`rollout-trace` 统�
 Chat 输入从所选模型的 `settings.input_modalities` 判断图片入口和发送条件：明确的列表不含 image 时禁用；省略或 null 表示未知，保留现有入口，不从厂商或型号名称推断。自动选择模型时没有确定型号，也按未知处理。上传、剪贴板和截图共用浏览器解码、最长边 2048 像素的缩放及原始字节去重；20 MB 输入限额属于 Ash 的前端资源限制，不替代接入层的媒体规格校验。
 
 完整性的检查单位是“实际能否按正确条件构造请求并解析结果”。Codex 的展示顺序、升级提示、搜索工具选择等还包含自身产品策略；这些字段要有 Ash 的明确负责方和调用用途，不能为了增加行数照抄。
+
+`recommended_for` 是 Ash 维护的用途推荐，不是厂商请求字段、能力声明或账户权益。GPT、Claude、Gemini、GLM、Kimi、Grok、DeepSeek、Meta 采用相同格式；推荐按准确模型条目维护，不按厂商或型号前缀推断。省略或空数组表示没有推荐用途，重复或未知用途会在目录边界被拒绝。远端发现可以更新模型能力与可用状态，但不会覆盖此推荐。
+
+客户端通过 `recommendedFor` 读取该字段，三个设置入口共用用途筛选与 SelectBox。隐藏状态继续约束候选项，Off 与继承对话模型由对应设置提供。推荐变化只更新候选项；已保存的模型仍保留显示，不能自动改选或仅因推荐被撤下就将其判为不可用。初始 Advisor 标记迁移原精选名单，Review 和 Commit 保留现有内置模型范围；这些标记不参与模型请求编码或执行权限判断。
+
+Advisor 设置在模型前提供“继承聊天设置”和“禁用”，模型选项携带目录声明的推理档位；配置省略 `agent.advisor.model`（RPC 可省略或传 `null`）时，继承发起聊天的模型与推理强度，Core 在每轮开始时冻结为明确选择。未配置 `agent.advisor` 仍表示禁用；切换继承、模型或禁用均保留调用次数和输出预算。
 
 ## 8. Codex 字段与 Ash 的对应关系
 
@@ -337,7 +351,7 @@ Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_m
 | `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                              | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位                                     |
 | `used_fallback_model_metadata`                                                                              | Codex 内部解析标记                                                              | 不属于 JSON 型号声明，也不写入 Ash 目录                                                  |
 
-当前 GPT 长上下文声明使用默认 `272000`、最大 `872000`；与相邻 Codex 目录一致的旧型号 `gpt-5.5` 保持默认和最大均为 `272000`。容量按具体型号声明，不能给整个 provider 统一开启长上下文。`long_context = true` 使用所选连接的最大容量，`false` 使用默认容量；最大容量不高于默认容量时不提供开关。
+GPT-6.1 Sol 的默认窗口为 `500000`、最大窗口为 `872000`，本次选定的可用窗口策略为 95%，正常输出预留下分别提供 `475000` 和 `828400` 个输入 token；显式输出预留较大时仍以实际预算为限。其他 GPT 型号保留现有目录声明，旧型号 `gpt-5.5` 的默认和最大窗口仍均为 `272000`。容量和策略按具体型号及连接处理，不能给整个 provider 统一套用。Models 设置中所有支持上下文切换的模型都使用容量文字按钮，并读取 App Server 的 `usable_context_window`（前端领域字段 `usableContextWindow`），对应执行层扣除输出、安全预留后的硬输入容量；`available_context_window` 继续表示受自动压缩阈值约束的输入预算，两者分开。切换只更新既有 `long_context` 偏好，前端不另算比例；`true` 使用所选连接的最大窗口，`false` 使用默认窗口，最大窗口不高于默认窗口时不提供切换。
 
 `comp_hash` 若要成为 Ash 的跨 provider 契约，需要同时接入目录合并、压缩历史保存、恢复和切换模型时的兼容性判断。兼容性必须包含 provider 和连接来源，不能因为两个厂商都返回 `3000` 就认定它们的历史可互用。审批模型与专用型号的限制则由各自的执行策略负责；目录中的 `null` 不能代替这些调用链。
 

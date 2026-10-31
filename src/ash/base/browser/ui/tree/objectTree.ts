@@ -1,6 +1,8 @@
+import type { ListAccessibilityProvider } from '../list/list.js';
 import type { IFindWidgetStyles } from './abstractTree.js';
 import type { IListStyles } from '../list/listWidget.js';
-import { Emitter, type Event } from '../../../common/event.js';
+import { Emitter, Event } from '../../../common/event.js';
+import type { TreeContextMenuEvent } from './tree.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
 import { AbstractTree } from './abstractTree.js';
@@ -12,6 +14,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly styles?: IListStyles;
 	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<TNode>, 'getAriaLabel'>;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
@@ -99,6 +102,7 @@ export class ObjectTree<TNode> extends Disposable {
 	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 
 	readonly onPointer: Event<ObjectTreePointerEvent<TNode>> = this._onPointer.event;
+	readonly onContextMenu: Event<TreeContextMenuEvent<TNode>>;
 	readonly onDidDoubleClick: Event<ObjectTreePointerEvent<TNode>> = this._onDidDoubleClick.event;
 	readonly onDidAccept: Event<ObjectTreeAcceptEvent<TNode>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<ObjectTreeFocusChangeEvent<TNode>> = this._onDidChangeFocus.event;
@@ -122,6 +126,7 @@ export class ObjectTree<TNode> extends Disposable {
 			styles: options.styles,
 			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
+			accessibilityProvider: options.accessibilityProvider,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
@@ -148,6 +153,7 @@ export class ObjectTree<TNode> extends Disposable {
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this.onDidScroll = this.tree.onDidScroll;
+		this.onContextMenu = Event.map(this.tree.onContextMenu, ({ element, ...event }) => ({ ...event, element: element?.element }));
 		this._register(this.model.onDidChange(({ kind, node, visibleSplice }) => {
 			if (kind === 'rerender' && node) {
 				this.onWillRender?.();
@@ -225,6 +231,8 @@ export class ObjectTree<TNode> extends Disposable {
 	}
 	isCollapsed(id: string): boolean | undefined { return this.model.getNode(id)?.collapsed; }
 
+	public layout(height: number, width?: number): void { this.tree.layout(height, width); }
+
 	get focus(): TNode | undefined {
 		return this.tree.focus?.element;
 	}
@@ -297,6 +305,7 @@ export interface CompressibleObjectTreeOptions<T> {
 	readonly reuseRows?: boolean;
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly ariaLabel?: string;
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<T>, 'getAriaLabel'>;
 	readonly multipleSelectionSupport?: boolean;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
@@ -346,6 +355,8 @@ export interface CompressibleTreeSelectionChangeEvent<T> {
 
 /** Object tree widget whose rows represent maximal compressible single-child chains. */
 export class CompressibleObjectTree<T> extends Disposable {
+	readonly onContextMenu: Event<TreeContextMenuEvent<T>>;
+	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent; } | undefined;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly model: CompressibleObjectTreeModel<T>;
@@ -376,6 +387,7 @@ export class CompressibleObjectTree<T> extends Disposable {
 			styles: options.styles,
 			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
+			accessibilityProvider: { getAriaLabel: node => options.accessibilityProvider?.getAriaLabel?.(node.elements.at(-1)!) },
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
@@ -399,16 +411,20 @@ export class CompressibleObjectTree<T> extends Disposable {
 		this.element = this.tree.element;
 		this.domNode = this.tree.domNode;
 		this._register(this.model.onDidChange(() => this.render()));
-		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: undefined })));
+		this.onContextMenu = Event.map(this.tree.onContextMenu, ({ element, ...event }) => ({ ...event, element: element ? lastCompressedElement(element.element.elements) : undefined }));
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined })));
 		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
 		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
 		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, browserEvent })));
 		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node ? lastCompressedElement(node.element.elements) : undefined, elements: node?.element.elements ?? [], browserEvent })));
 		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map((node) => lastCompressedElement(node.element.elements)), compressedElements: nodes.map((node) => node.element.elements), browserEvent })));
-		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded }) => {
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
 			const element = lastCompressedElement(node.element.elements);
-			if (expanded) this.model.expand(element);
-			else this.model.collapse(element);
+			this.collapseBrowserEvent = { id: node.id, event: browserEvent };
+			try {
+				if (expanded) this.model.expand(element);
+				else this.model.collapse(element);
+			} finally { this.collapseBrowserEvent = undefined; }
 		}));
 		this.render();
 	}
@@ -425,6 +441,8 @@ export class CompressibleObjectTree<T> extends Disposable {
 	findNext(): T | undefined { return this.tree.findNext()?.element.elements.at(-1); }
 	findPrevious(): T | undefined { return this.tree.findPrevious()?.element.elements.at(-1); }
 	clearFind(): void { this.tree.clearFind(); }
+	public layout(height: number, width?: number): void { this.tree.layout(height, width); }
+
 	get focus(): T | undefined { return this.tree.focus ? lastCompressedElement(this.tree.focus.element.elements) : undefined; }
 	get selection(): readonly T[] { return this.tree.selection.map((node) => lastCompressedElement(node.element.elements)); }
 	getVisibleElements(): readonly T[] { return this.model.visibleNodes.map((node) => lastCompressedElement(node.element.elements)); }

@@ -11,7 +11,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IAccountPolicyService } from '../../../services/policies/common/accountPolicyService.js';
 import { IManagedSettingsUpdateService } from '../../../services/policies/common/managedSettingsUpdate.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 import { IGitHubReviewModel } from './githubReviewModel.js';
 
 /** Read-only account snapshots and transient repository checks; no credentials or cloud settings are copied. */

@@ -35,7 +35,7 @@ const INSTALL_USAGE: &str = concat!(
     "usage: ash-remote install --host <ssh-host> --archive <ash-package.tar.gz> ",
     "--version <version> --target <target> --archive-size <bytes> ",
     "--unpacked-size <bytes> --sha256 <digest> [--ssh <openssh-path>] ",
-    "[--install-root <absolute-remote-path>] [--progress json-lines]"
+    "[--install-root <absolute-remote-path>] [--download-url <https-artifact>] [--progress json-lines]"
 );
 const FETCH_USAGE: &str = concat!(
     "usage: ash-remote fetch-runtime --catalog-url <https-catalog.json> ",
@@ -132,6 +132,7 @@ pub(crate) struct RemoteInstallOptions {
     pub(crate) host: SshHost,
     pub(crate) ssh_executable: Option<PathBuf>,
     pub(crate) install_root: Option<RemoteRuntimeInstallRoot>,
+    pub(crate) download_url: Option<String>,
     pub(crate) artifact: RemoteRuntimeArtifact,
     pub(crate) progress: RemoteInstallProgressFormat,
 }
@@ -341,6 +342,7 @@ fn parse_install(arguments: &[String]) -> Result<RemoteCommand, String> {
     let mut host = None;
     let mut ssh_executable = None;
     let mut install_root = None;
+    let mut download_url = None;
     let mut archive = None;
     let mut version = None;
     let mut platform = None;
@@ -361,6 +363,7 @@ fn parse_install(arguments: &[String]) -> Result<RemoteCommand, String> {
             name,
         ),
         "--archive" => assign_once(&mut archive, PathBuf::from(value), name),
+        "--download-url" => assign_once(&mut download_url, value.to_owned(), name),
         "--version" => assign_once(
             &mut version,
             RemoteRuntimeVersion::parse(value).map_err(string_error)?,
@@ -403,6 +406,7 @@ fn parse_install(arguments: &[String]) -> Result<RemoteCommand, String> {
         host: host.ok_or_else(|| required("--host"))?,
         ssh_executable,
         install_root,
+        download_url,
         artifact,
         progress: progress.unwrap_or(RemoteInstallProgressFormat::ExecutableOnly),
     }))

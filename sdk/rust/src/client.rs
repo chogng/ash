@@ -475,6 +475,7 @@ impl Client {
                     label,
                     description: None,
                     detail: None,
+                    ..Default::default()
                 })
                 .collect(),
             placeholder,

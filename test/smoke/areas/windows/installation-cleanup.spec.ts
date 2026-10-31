@@ -24,7 +24,7 @@ const run = promisify(execFile);
 // This exercises the production Inno script with its real maintenance binary.
 // A unique product identity and shortcut name isolate native OS registration;
 // unlike release-package, it is also safe on a developer's Windows account.
-test('native installer upgrades and removes isolated installations without losing user or shared data', async ({}, testInfo) => {
+test('native installer upgrades and removes isolated installations without losing user or shared data', async ({ }, testInfo) => {
 	test.skip(process.platform !== 'win32', 'Windows native installer');
 	assert(process.env.ISCC_PATH, 'ISCC_PATH must point to the Inno Setup compiler');
 	assert(

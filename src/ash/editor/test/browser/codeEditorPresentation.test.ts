@@ -246,7 +246,7 @@ suite('textModel browser component', () => {
 		await expect(editor.locator('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide')).toHaveCount(0);
 	});
 
-	test('physical scroll offsets follow model clamping, resizing and browser scroll events', async function () {
+	test('editor scroll projection follows model clamping, resizing and browser reveal deltas', async function () {
 		const { page } = browserTests;
 
 		await openEditor(page);
@@ -261,7 +261,7 @@ suite('textModel browser component', () => {
 			await expect.poll(() => viewport.evaluate(node => {
 				const control = window.ashTextModelIntegration.getControl();
 				return { left: node.scrollLeft, top: node.scrollTop, modelLeft: control.getScrollLeft(), modelTop: control.getScrollTop() };
-			})).toEqual({ left, top, modelLeft: left, modelTop: top });
+			})).toEqual({ left: 0, top: 0, modelLeft: left, modelTop: top });
 		};
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().setScrollPosition({ scrollLeft: 400, scrollTop: 500 }));
 		await expectPosition(400, 500);
@@ -274,9 +274,9 @@ suite('textModel browser component', () => {
 		});
 		await expectPosition(300, 600);
 		await viewport.evaluate(node => { node.scrollLeft = 80; node.scrollTop = 200; });
-		await expectPosition(80, 200);
+		await expectPosition(380, 800);
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().layout({ width: 300, height: 10000 }));
-		await expectPosition(80, 0);
+		await expectPosition(380, 0);
 		await page.evaluate(() => {
 			const control = window.ashTextModelIntegration.getControl();
 			control.layout({ width: 500, height: 300 });
@@ -323,8 +323,9 @@ suite('textModel browser component', () => {
 			await page.mouse.up();
 			await expect.poll(() => editor.evaluate(root => {
 				const viewport = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
-				return { remaining: viewport.scrollWidth - viewport.clientWidth - viewport.scrollLeft, delta: window.ashTextModelIntegration.getControl().getScrollLeft() - viewport.scrollLeft };
-			})).toEqual({ remaining: 0, delta: 0 });
+				const control = window.ashTextModelIntegration.getControl();
+				return { remaining: control.getContentWidth() - control.getLayoutInfo().width - control.getScrollLeft(), nativeLeft: viewport.scrollLeft };
+			})).toEqual({ remaining: 0, nativeLeft: 0 });
 		}
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ lineNumbers: 'off', glyphMargin: false }));
 		await expect.poll(() => editor.evaluate(root => {
@@ -1200,7 +1201,7 @@ suite('textModel browser component', () => {
 
 		await page.evaluate(() => window.ashTextModelIntegration.setValue(`fn main() {\n  answer();\n}\n${Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n')}`));
 		const editor = page.locator('.stanza-editor');
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollHeight)).toBeGreaterThan(geometry.clientHeight);
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getContentHeight())).toBeGreaterThan(geometry.clientHeight);
 		const sliderBox = await slider.boundingBox();
 		const minimapBox = await minimap.boundingBox();
 		assertBox(sliderBox, 'minimap slider');
@@ -1210,10 +1211,10 @@ suite('textModel browser component', () => {
 		await expect(minimap).toHaveClass(/stanza-editor-minimap-dragging/u);
 		await expect(slider).toHaveCSS('background-color', 'rgb(7, 8, 9)');
 		await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height / 2, { steps: 5 });
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(0);
 		await expect.poll(() => slider.evaluate(element => Number.parseFloat(getComputedStyle(element).top))).toBeGreaterThan(0);
 		await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height - 1, { steps: 5 });
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
+		await expect.poll(() => page.evaluate(() => { const editor = window.ashTextModelIntegration.getControl(); return editor.getScrollTop() === editor.getContentHeight() - editor.getLayoutInfo().height; })).toBe(true);
 		await page.mouse.up();
 		await expect(minimap).not.toHaveClass(/stanza-editor-minimap-dragging/u);
 	});
@@ -1238,7 +1239,7 @@ suite('textModel browser component', () => {
 		await vertical.focus();
 		await expect(vertical).toHaveCSS('opacity', '1');
 		await vertical.press('ArrowDown');
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(40);
 		await expect(vertical).toHaveAttribute('aria-valuenow', '40');
 		await vertical.evaluate(element => element.blur());
 		await expect(vertical).toHaveCSS('opacity', '0');
@@ -1252,8 +1253,8 @@ suite('textModel browser component', () => {
 		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 80, { steps: 5 });
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(40);
-		await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(160);
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(40);
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollLeft())).toBe(160);
 		await page.mouse.up();
 		const remainingTracks = await editor.evaluate(element => {
 			window.ashTextModelIntegration.setScrollLeft(200);
@@ -1300,6 +1301,56 @@ suite('textModel browser component', () => {
 		await expect.poll(() => overview.evaluate((canvas: HTMLCanvasElement) => Array.from(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data))).toEqual([18, 52, 86, 255]);
 	});
 
+	test('overview ruler stays on the scrollbar after horizontal and vertical scrolling', async function () {
+		const { page } = browserTests;
+
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
+			editor.updateOptions({ wordWrap: 'off', smoothScrolling: false });
+		});
+		const editor = page.locator('.stanza-editor');
+		const overview = editor.locator('.decorationsOverviewRuler');
+		await expect(overview).toHaveAttribute('aria-hidden', 'true');
+		for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+			await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+			for (const side of ['disabled', 'left', 'right'] as const) {
+				await page.evaluate(side => {
+					const control = window.ashTextModelIntegration.getControl();
+					control.updateOptions({ minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' } });
+					control.setScrollPosition({ scrollLeft: 0, scrollTop: 0 });
+				}, side);
+				await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+				for (const position of [
+					{ scrollLeft: 160, scrollTop: 0 },
+					{ scrollLeft: 160, scrollTop: 640 },
+					{ scrollLeft: 0, scrollTop: 640 },
+					{ scrollLeft: 0, scrollTop: 0 },
+				]) {
+					await page.evaluate(position => window.ashTextModelIntegration.getControl().setScrollPosition(position), position);
+					await expect.poll(() => editor.evaluate(element => {
+						const ruler = element.querySelector('.decorationsOverviewRuler')!.getBoundingClientRect();
+						const track = element.querySelector('.ash-scrollbar-track-vertical')!.getBoundingClientRect();
+						const control = window.ashTextModelIntegration.getControl();
+						return {
+							scrollLeft: control.getScrollLeft(),
+							scrollTop: control.getScrollTop(),
+							leftOffset: ruler.left - track.left,
+							rightOffset: ruler.right - track.right,
+							topOffset: ruler.top - track.top,
+						};
+					}), { message: `ruler follows the track for ${theme}, minimap=${side}, scroll=${JSON.stringify(position)}` }).toEqual({
+						...position,
+						leftOffset: 0,
+						rightOffset: 0,
+						topOffset: 0,
+					});
+				}
+			}
+		}
+	});
+
 	test('editor scrollbar track colors follow theme overrides in all color schemes', async function () {
 		const { page } = browserTests;
 
@@ -1341,18 +1392,18 @@ suite('textModel browser component', () => {
 		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 		for (const [deltaY, expected] of [[12, 12], [0.2, 13], [-0.2, 12]]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(expected);
+			expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(expected);
 		}
 		await editor.dispatchEvent('wheel', { deltaX: 0.2, deltaY: 0.2, deltaMode: 0 });
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 1, top: 13 });
+		expect(await page.evaluate(() => { const editor = window.ashTextModelIntegration.getControl(); return { left: editor.getScrollLeft(), top: editor.getScrollTop() }; })).toEqual({ left: 1, top: 13 });
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ mouseWheelScrollSensitivity: 0.1 }));
 		await editor.dispatchEvent('wheel', { deltaY: 1, deltaMode: 0 });
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(14);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(14);
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ mouseWheelScrollSensitivity: 1 }));
 		await editor.dispatchEvent('wheel', { deltaY: 5, deltaMode: 1 });
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(14);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(14);
 		await page.clock.runFor(160);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(94);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(94);
 	});
 
 	test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async function () {
@@ -1368,45 +1419,45 @@ suite('textModel browser component', () => {
 		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(160);
-		const forward = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const forward = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		expect(forward).toBeGreaterThan(12);
 		await editor.dispatchEvent('wheel', { deltaY: -8, deltaMode: 0 });
 		await page.clock.runFor(80);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeLessThan(forward - 8);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeLessThan(forward - 8);
 		await editor.dispatchEvent('keydown', { key: 'Escape' });
-		const interrupted = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const interrupted = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(200);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(interrupted);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(interrupted);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: false }));
-		const disabled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const disabled = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(disabled);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled + 12);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(disabled + 12);
 		await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: true }));
 		await editor.dispatchEvent('wheel', { deltaY: 3, deltaMode: 1 });
-		const discrete = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const discrete = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(discrete);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(discrete);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(1500);
-		const settled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const settled = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(settled);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(settled);
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.setValue('short\nshort\nshort'));
 		await page.clock.runFor(500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(0);
 		await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'line').join('\n')));
 		await page.clock.runFor(32);
 		await editor.getByRole('scrollbar', { name: 'Vertical scrollbar' }).dispatchEvent('keydown', { key: 'End' });
 		await page.clock.runFor(32);
-		const bottom = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const bottom = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
 		await page.clock.runFor(1500);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(bottom);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(bottom);
 		await editor.dispatchEvent('wheel', { deltaY: -12, deltaMode: 0 });
 		await page.evaluate(() => window.ashTextModelIntegration.dispose());
 		await page.clock.runFor(1500);
@@ -1427,37 +1478,37 @@ suite('textModel browser component', () => {
 		// At the top edge the same unconsumed event reaches both wheel listeners.
 		await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });
 		await editor.dispatchEvent('wheel', { deltaY: 120, deltaMode: 0 });
-		const edgeInput = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const edgeInput = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(32);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(edgeInput);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(edgeInput);
 		// Large integer pixel deltas remain continuous when their step varies.
 		for (const deltaY of [134, 83, 62, 72, 101]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+			const immediate = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 			await page.clock.runFor(32);
-			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(immediate);
+			expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(immediate);
 		}
 		await editor.dispatchEvent('keydown', { key: 'Escape' });
 		await page.clock.runFor(150);
 		for (const deltaY of [40, 80, 160, 40]) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+			const immediate = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 			await page.clock.runFor(80);
-			expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(immediate);
+			expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(immediate);
 		}
 		// Fractional notch sizes become discrete after the repeated step is observed.
 		for (const [index, deltaY] of [60, 60, 120, 120, 60].entries()) {
 			await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
-			const immediate = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+			const immediate = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 			await page.clock.runFor(32);
 			if (index > 0) {
-				expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(immediate);
+				expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(immediate);
 			}
 		}
 		await editor.dispatchEvent('wheel', { deltaY: 47, deltaX: 9, deltaMode: 0 });
-		const switched = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+		const switched = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 		await page.clock.runFor(32);
-		expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(switched);
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(switched);
 	});
 
 	test('editor surface and diagnostic colors follow the current Ash theme', async function () {

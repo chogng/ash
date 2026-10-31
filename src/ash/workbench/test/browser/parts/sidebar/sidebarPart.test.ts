@@ -1,5 +1,5 @@
-import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
+import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';

@@ -55,7 +55,9 @@ import { Event } from '../../../../base/common/event.js';
 import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
-import { AdvisorSettingsRenderer } from './advisorSettingsRenderer.js';
+import { getSettingsSections } from '../../../services/preferences/browser/settingsSections.js';
+import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
+import { AgentRolesSettingsRenderer } from './agentRolesSettingsRenderer.js';
 import { ModelSettingsRenderer } from './modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from './dictationSettingsRenderer.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
@@ -93,6 +95,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private languageServerSettings!: LanguageServerSettingsRenderer;
 	private readonly contents: SettingsPageRenderer[] = [];
 	private settingsTree!: SettingsTree<ISetting | SettingsSectionReference>;
+	private settingsRenderer!: SettingsRenderer;
 	private tocTree!: TOCTree;
 	private treeModel!: SettingsTreeModel<ISetting | SettingsSectionReference>;
 	private activeCategory!: SettingsCategoryDescriptor;
@@ -115,6 +118,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			configurationOverrides: {},
 			onStatus: (message, isError) => this.settingsModel.reportStatus(message, isError),
 			onOpenSettings: key => this.openSettingsJson(key),
+			onRevealSetting: key => this.revealSetting(key),
 		};
 
 	constructor(
@@ -155,6 +159,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
 		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, this.widgetOptions));
+		this.settingsRenderer = settingsRenderer;
 
 		const ownerDocument = container.ownerDocument;
 		const rootDomNode = h(ownerDocument, 'div');
@@ -263,6 +268,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(AgentRolesSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SnapshotSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
@@ -270,7 +276,13 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
-			this._register(this.instantiationService.createInstance(AdvisorSettingsRenderer, settingsContent)),
+			...getSettingsSections().map(section => this._register(this.instantiationService.createInstance(
+				SettingsSectionRenderer, settingsContent,
+				this._register(this.instantiationService.createInstance(section.model)),
+				section.accessibleViewProviderId, section.accessibilityVerbositySettingId,
+			))),
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'codeReviewModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
+			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'commitMessageModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(modelServices.createInstance(ModelSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, {
@@ -530,6 +542,16 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.sectionToReveal = undefined;
 	}
 
+	private revealSetting(key: string): void {
+		for (const category of this.settingsLayout) {
+			const group = category.groups.find(group => group.settings.some(setting => setting.id === key));
+			if (!group) continue;
+			this.setOptions({ section: `${category.id}.group.${group.id}`, focusSearch: false });
+			this.settingsRenderer.focusSetting(key);
+			return;
+		}
+	}
+
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
 		if (query.isEmpty) {
@@ -626,7 +648,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const searching = this.treeModel.isSearching;
 		this.contentHeading.textContent = searching ? this.localized('chrome.searchResults', 'Search results') : this.localizedCategoryLabel(this.activeCategory);
 		this.contentDescription.textContent = searching ? '' : this.localizedCategoryDescription(this.activeCategory);
-		this.contentDescription.hidden = searching;
+		this.contentDescription.hidden = !this.contentDescription.textContent;
 		this.contentEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.contentEmpty.hidden = !searching || this.treeModel.visibleItems.some(item => !('rendererId' in item.value) || !item.value.hidden);
 		this.tocTree.refresh();

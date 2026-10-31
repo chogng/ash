@@ -74,6 +74,7 @@ test('network provisioner fetches the authenticated target before invoking the s
 		archiveSize: 2048,
 		unpackedSize: 8192,
 		sha256: 'b'.repeat(64),
+		downloadUrl: 'https://releases.example/ash/runtime.tar.gz',
 	};
 	const provisioner = new RemoteRuntimeProvisioner({
 		source: {
@@ -109,6 +110,9 @@ test('network provisioner fetches the authenticated target before invoking the s
 		'--progress', 'json-lines',
 	]);
 	assert.deepEqual(invocations[2].slice(0, 5), ['install', '--host', 'build-linux', '--archive', artifact.archivePath]);
+	const urlOption = invocations[2].indexOf('--download-url');
+	assert.ok(urlOption > 0);
+	assert.equal(invocations[2][urlOption + 1], artifact.downloadUrl);
 	assert.deepEqual(progress, [
 		{ phase: 'downloadingArtifact', transferredBytes: 1024, totalBytes: 2048 },
 		{ phase: 'downloadComplete', disposition: 'downloaded' },

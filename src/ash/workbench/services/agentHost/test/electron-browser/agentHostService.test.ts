@@ -325,9 +325,16 @@ suite('Desktop Workbench Agent Host selection', () => {
 			}, mainProcess);
 			const readStarted = new DeferredPromise<void>();
 			const releaseRead = new DeferredPromise<void>();
+			const preparing = new DeferredPromise<void>();
+			using preparation = renderer.appServer.recovery!.onDidChange(() => {
+				if (renderer.appServer.recovery!.phase === 'workspace') void preparing.complete();
+			});
 			beforeWorkspaceRead = async () => { await readStarted.complete(); await releaseRead.p; };
 			restart('ash:app-server:restart');
 			await readStarted.p;
+			await preparing.p;
+			assert.equal(await renderer.appServer.getConnectionState(), 'ready');
+			assert.equal(renderer.appServer.recovery!.phase, 'workspace');
 			const restored = new DeferredPromise<void>();
 			using restoration = renderer.appServer.recovery!.onDidChange(() => {
 				if (renderer.appServer.recovery!.status === 'idle') void restored.complete();
@@ -343,12 +350,14 @@ suite('Desktop Workbench Agent Host selection', () => {
 			await releaseRead.complete();
 			assert.deepEqual(await completed.p, { nonce: 'replace-workspace', result: { dirs: next.map(folder => ({ id: folder.id, path: folder.path, permissions: [] })) } });
 			await restored.p;
+			const originalPath = kind === 'local' ? URI.file('/workspace').fsPath : '/workspace';
 			assert.deepEqual(directoryBindings.map(binding => binding.dirs), [
-				[{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
-				[{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
+				[{ id: 'workspace-folder', path: originalPath, grant: { type: 'config' } }],
+				[{ id: 'workspace-folder', path: originalPath, grant: { type: 'config' } }],
 				next,
 			]);
 			assert.equal(renderer.appServer.recovery!.status, 'idle');
+			assert.equal(renderer.appServer.recovery!.phase, 'connection');
 		});
 	}
 

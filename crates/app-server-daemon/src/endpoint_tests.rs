@@ -3,6 +3,56 @@ use std::time::Duration;
 
 use super::EndpointPaths;
 
+#[cfg(windows)]
+#[test]
+fn long_profile_directories_use_bounded_private_endpoints_and_remain_isolated() {
+    use std::io::Read;
+    use std::io::Write;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let parent = temporary.path().join("long-profile-component-".repeat(5));
+    let mut runtime_directories = Vec::new();
+    for name in ["first", "second"] {
+        let profile = parent.join(name);
+        let endpoint = EndpointPaths::prepare(&profile).unwrap();
+        assert!(endpoint.socket.as_os_str().as_encoded_bytes().len() > 108);
+        assert!(
+            endpoint
+                .socket
+                .starts_with(&std::fs::canonicalize(&profile).unwrap())
+        );
+        assert_eq!(
+            EndpointPaths::prepare(&profile).unwrap().socket,
+            endpoint.socket
+        );
+        let other = parent.join(if name == "first" { "second" } else { "first" });
+        assert_ne!(
+            EndpointPaths::prepare(&other).unwrap().socket,
+            endpoint.socket
+        );
+        let listener = endpoint.bind_listener().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut peer, _) = listener.accept().unwrap();
+            ash_app_server_transport::validate_local_peer(&peer).unwrap();
+            peer.write_all(b"ok").unwrap();
+        });
+        let mut client = super::connect_existing(&endpoint.socket).unwrap().unwrap();
+        ash_app_server_transport::validate_local_peer(&client).unwrap();
+        let mut reply = [0; 2];
+        client.read_exact(&mut reply).unwrap();
+        assert_eq!(&reply, b"ok");
+        drop(client);
+        server.join().unwrap();
+        assert!(!endpoint.socket.exists());
+        let runtime = endpoint.socket.parent().unwrap().to_owned();
+        drop(endpoint);
+        runtime_directories.push(runtime);
+    }
+    for runtime in runtime_directories {
+        std::fs::remove_dir(runtime).unwrap();
+    }
+}
+
 #[test]
 fn diagnostic_process_logs_include_only_the_selected_profile_and_numeric_rotations() {
     let profile = tempfile::tempdir().unwrap();
@@ -122,7 +172,10 @@ fn ordinary_file_at_endpoint_is_not_removed_or_replaced() {
     let profile = tempfile::tempdir().unwrap();
     let endpoint = EndpointPaths::prepare(profile.path()).unwrap();
     std::fs::write(&endpoint.socket, "keep").unwrap();
+    #[cfg(unix)]
     assert!(endpoint.bind_listener().is_err());
+    #[cfg(windows)]
+    let _listener = endpoint.bind_listener().unwrap();
     assert_eq!(std::fs::read_to_string(&endpoint.socket).unwrap(), "keep");
 }
 

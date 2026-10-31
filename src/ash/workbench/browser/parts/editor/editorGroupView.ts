@@ -28,7 +28,7 @@ import type { EditorCloseOptions } from '../../../services/editor/common/editorG
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { extractSelection } from '../../../../platform/opener/common/opener.js';
-import type { IEditorGroupView } from './editor.js';
+import type { IEditorGroupView, IEditorGroupViewOptions } from './editor.js';
 import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 
@@ -49,7 +49,8 @@ import type { EditorHeaderActions } from './editorHeaderControl.js';
 import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
 import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
-import type { IContextKeyService, IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
@@ -65,7 +66,7 @@ import { ActiveEditorGroupLockedContext } from '../../../common/contextkeys.js';
 import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Construction inputs for one independently navigable EditorGroup. */
-export interface EditorGroupOptions {
+export interface EditorGroupOptions extends IEditorGroupViewOptions {
 	readonly id?: EditorGroupId;
 	/** Ash extension: a single-content host replaces its item even when pinned; VS Code groups normally retain multiple tabs. */
 	readonly editorLimit?: 1;
@@ -130,6 +131,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	readonly domNode: HTMLElement;
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorGroupChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent> = this.editorChangeEmitter.event;
+	private readonly sizeChangeEmitter = this._register(new Emitter<void>());
+	readonly onDidChange: Event<void> = this.sizeChangeEmitter.event;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly titleControl: EditorTitleControl;
 	private readonly watermark: EditorGroupWatermark | undefined;
@@ -199,7 +202,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.textFileService = options.textFileService;
 		this.languageResolver = options.languageResolver;
 		this.diffService = options.diffService;
-		this.instantiationService = instantiationService;
 		this.accessibilityService = options.accessibilityService;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
 		this.documentCollaborationApi = options.documentCollaborationApi;
@@ -246,6 +248,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.scopedContextKeyService = options.contextKeyService
 			? this._register(options.contextKeyService.createScoped(this.domNode))
 			: undefined;
+		// Pane dependencies share the group's context with its title and file actions.
+		this.instantiationService = this.scopedContextKeyService
+			? this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, this.scopedContextKeyService])))
+			: instantiationService;
 		if (this.scopedContextKeyService && this.configurationService) {
 			const context = this.scopedContextKeyService;
 			const configuration = this.configurationService;
@@ -286,6 +292,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			options.breadcrumbsService,
 			options.languageFeaturesService,
 			options.showBreadcrumbSymbolPicker,
+			options,
 		));
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';
@@ -308,7 +315,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				options.onDidActivate?.();
 			}));
 		}
-		this._register(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
+		this._register(this.titleControl.onDidChangeHeight(() => {
+			this.layout(this.groupDimension);
+			// Sibling views reserve space below the title and need its new height too.
+			this.sizeChangeEmitter.fire();
+		}));
 		this._register(this.registry.onDidChange(() => this.renderChrome()));
 		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
@@ -877,7 +888,8 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	public get titleHeight(): { readonly offset: number; readonly total: number; } {
 		const height = this.titleVisible ? this.titleControl.height : 0;
-		return { offset: height, total: height };
+		// Details begins below the tabs; breadcrumbs occupy only the editor column.
+		return { offset: this.titleVisible ? this.titleControl.tabsHeight : 0, total: height };
 	}
 
 	public setTitleVisible(visible: boolean): void {
@@ -895,6 +907,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.contentRightInset = inset;
 		this.contentDomNode.style.width = `calc(100% - ${inset}px)`;
+		this.titleControl.domNode.style.setProperty('--ash-editor-content-right-inset', `${inset}px`);
 		// EditorPart applies insets before its Grid commits the final group dimensions.
 	}
 

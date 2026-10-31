@@ -26,6 +26,11 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 显式停用和输入 EOF 都先取消调用，并释放 `Client` / `Services` 的等待者，再等待扩展任务退出。
 已经发送的客户端请求保留有界关联以接收迟到回包；共享 token 的并发请求按 call ID 顺序发送。
 
+`Client::show_quick_pick_items` 的 `QuickPickItem::separator` 在该选项前插入分组标题；
+标题不可选择，也不改变返回的选项索引，含分组的列表保留作者顺序。
+`always_show` 让创建等操作在搜索时仍然可用，并排列在搜索结果之后。标签支持 `$(icon-id)`；用户文本中的
+同形内容须转义为 `\$(icon-id)`，避免被当成图标。
+
 调用截止时间在 SDK 请求边界转换为平台 `SystemTime`；超出可表示范围时返回
 `InvalidRequest`，不执行回调，进程继续处理后续请求。可表示但已过期的时间仍返回
 `DeadlineExceeded`，不将溢出时间截断或改成无限等待。

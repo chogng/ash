@@ -5,6 +5,13 @@ export interface ModelRef {
 	readonly model: string;
 }
 
+/** Curated picker uses, independent of model capabilities and connection access. */
+export enum ModelPurpose {
+	Advisor = 'advisor',
+	Review = 'review',
+	Commit = 'commit',
+}
+
 export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 
 export interface ModelReasoningEffortOption {
@@ -50,6 +57,7 @@ export interface ModelTokenPricing {
 }
 
 export interface ModelCatalogEntry {
+	readonly recommendedFor?: readonly ModelPurpose[];
 	readonly capabilities?: { readonly toolCalling: ModelCapabilitySupport; readonly agentMode: ModelCapabilitySupport; };
 	readonly source?: ModelCatalogSource;
 	readonly pricing?: readonly ModelTokenPricing[];
@@ -62,6 +70,8 @@ export interface ModelCatalogEntry {
 	readonly discovered?: boolean;
 	readonly retirement?: ModelRetirement;
 	readonly contextWindow?: number | null;
+	/** Usable input capacity after output and safety reservations, independent of compaction. */
+	readonly usableContextWindow?: number | null;
 	readonly defaultContextWindow?: number | null;
 	readonly maximumContextWindow?: number | null;
 	readonly accelerationOptions?: readonly ModelAccelerationOption[];
@@ -71,7 +81,8 @@ export interface ModelCatalogEntry {
 }
 
 export interface AdvisorConfig {
-	readonly model: ModelRef;
+	/** An absent model inherits the initiating chat's model and reasoning effort. */
+	readonly model?: ModelRef | null;
 	readonly enabled: boolean;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly maxCalls: number;
@@ -148,12 +159,20 @@ export type ApprovalReviewModelSelection =
 
 /** Backend execution defaults. Null means no configured model, not an executable automatic selection. */
 export interface AgentModelDefaults {
+	/** Null inherits the model of the Turn that produced the changes. */
+	readonly commitMessageModel: ModelRef | null;
+	readonly commitMessageEnabled: boolean;
+	/** Null follows the reviewing Thread's current model. */
+	readonly codeReviewModel: ModelRef | null;
 	readonly revision: number;
 	readonly model: ModelRef | null;
 	readonly reasoningEffort: ModelReasoningEffort | null;
 }
 
 export interface AgentModelDefaultsUpdate {
+	readonly commitMessageModel?: ModelRef | null;
+	readonly commitMessageEnabled?: boolean;
+	readonly codeReviewModel?: ModelRef | null;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 }

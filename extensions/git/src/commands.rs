@@ -30,6 +30,21 @@ use external_ext_sdk::client::ConfigurationTarget;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CheckoutMode {
+    Switch,
+    Detached,
+    CreateBranchFrom,
+}
+
+enum CheckoutAction {
+    CreateBranch,
+    CreateBranchFrom,
+    CheckoutDetached,
+}
 
 impl GitRuntime {
     pub(crate) fn command(
@@ -189,6 +204,7 @@ impl GitRuntime {
             .lock()
             .map_err(|_| invalid("Git operation state failed"))?;
         token.check_cancelled()?;
+        let repository = self.repository(Some(&repository.descriptor.id))?;
         if let Some(repository) = self.lock().repositories.get_mut(&repository.descriptor.id) {
             repository.operation = Some(
                 if matches!(
@@ -202,6 +218,8 @@ impl GitRuntime {
                         | "git.pushForce"
                         | "ash.git.push"
                         | "git.publish"
+                        | "git.fetch"
+                        | "git.fetchAll"
                 ) {
                     crate::model::RepositoryOperation::Preparing
                 } else {
@@ -211,12 +229,14 @@ impl GitRuntime {
             repository.error.clear();
             repository.notice.clear();
         }
-        self.publish()?;
-        let outcome = if context["type"] == "historyItemViewModel" {
-            self.graph_action(&repository, command, context, token)
-        } else {
-            self.run_command(command, arguments, &repository, token)
-        };
+        let outcome = (|| {
+            self.publish()?;
+            if context["type"] == "historyItemViewModel" {
+                self.graph_action(&repository, command, context, token)
+            } else {
+                self.run_command(command, arguments, &repository, token)
+            }
+        })();
         // A failed or cancelled Git operation can still update refs, the index or
         // integration state. Refresh independently of its cancelled invocation token.
         if outcome.is_err() {
@@ -225,21 +245,7 @@ impl GitRuntime {
             }
         }
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-            if matches!(
-                current.operation,
-                Some(
-                    crate::model::RepositoryOperation::Preparing
-                        | crate::model::RepositoryOperation::Synchronize
-                )
-            ) || matches!(command, "git.fetch" | "git.fetchAll")
-            {
-                current.history_operation_revision = current
-                    .history_operation_revision
-                    .checked_add(1)
-                    .expect("Git history operation revision overflowed");
-            }
-            current.operation = None;
-            current.pending_paths = None;
+            current.finish_operation();
             if let Err(error) = &outcome {
                 if error.code != external_ext_sdk::HostErrorCode::Cancelled {
                     current.error = error.message.clone();
@@ -1012,14 +1018,13 @@ impl GitRuntime {
         } else {
             FetchMode::Default
         };
-        let result = self.api.transport(
+        let result = self.run_transport(
             repository,
             TransportOperation::Fetch(mode),
             &transport,
             false,
             token,
         )?;
-        self.accept_status(result.status.clone());
         Ok(json!(result))
     }
     fn remote(
@@ -1031,6 +1036,7 @@ impl GitRuntime {
         if matches!(command, "git.fetch" | "git.fetchAll") {
             return self.fetch(repository, command, token);
         }
+        self.await_remote_input(repository)?;
         let config = &repository.configuration;
         let before = self.api.status(repository, Some(token))?;
         let mut transport = self.transport(repository);
@@ -1123,7 +1129,8 @@ impl GitRuntime {
             }
         }
         if sync && sync_catalog["upstreamReadOnly"] != true && config.boolean("confirmSync", true) {
-            let choice = self.api.editor(
+            let choice = self.remote_prompt(
+                repository,
                 json!({"method":"prompt", "severity":"warning",
                     "message":self.api.text("git.syncConfirm", &[&before.head.upstream().expect("sync has upstream").name]),
                     "buttons":[self.api.text("git.syncConfirm.ok", &[]), self.api.text("git.syncConfirm.neverAgain", &[])]}),
@@ -1149,9 +1156,8 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.commitHeadChanged", &[])));
         }
-        self.start_remote_operation(repository)?;
         let result = if matches!(command, "git.push" | "ash.git.push" | "git.pushForce") {
-            self.api.transport(
+            self.run_transport(
                 repository,
                 TransportOperation::Push {
                     expected_head: &before.head,
@@ -1162,7 +1168,7 @@ impl GitRuntime {
             )?
         } else {
             if config.boolean("fetchOnPull", false) {
-                self.api.transport(
+                self.run_transport(
                     repository,
                     TransportOperation::Fetch(FetchMode::All),
                     &transport,
@@ -1173,7 +1179,7 @@ impl GitRuntime {
             if !config.boolean("ignoreRebaseWarning", false) {
                 let upstream_rewritten = self.api.upstream_rewritten(repository, token)?;
                 if upstream_rewritten {
-                    let choice = self.api.editor(json!({"method":"prompt", "severity":"warning",
+                    let choice = self.remote_prompt(repository, json!({"method":"prompt", "severity":"warning",
                         "message":self.api.text("git.rewrittenPullConfirm", &[]),
                         "buttons":[self.api.text("git.rewrittenPull.always", &[]), self.api.text("git.rewrittenPull.once", &[])]}), Some(token))?;
                     match choice["selection"].as_u64() {
@@ -1198,7 +1204,7 @@ impl GitRuntime {
                 PullMode::Configured
             };
             let expected_head = sync.then_some(&before.head);
-            let mut pulled = self.api.transport(
+            let mut pulled = self.run_transport(
                 repository,
                 TransportOperation::Pull {
                     mode,
@@ -1209,12 +1215,11 @@ impl GitRuntime {
                 token,
             )?;
             if let TransportOutcome::TagConflict { tags } = &pulled.outcome {
-                self.accept_status(pulled.status.clone());
                 let message = self.api.text("git.tagConflict", &[&tags.join(", ")]);
                 if config.boolean("replaceTagsWhenPull", false) {
                     return Err(invalid(&message));
                 }
-                let choice = self.api.editor(json!({"method":"prompt", "severity":"error", "message":message,
+                let choice = self.remote_prompt(repository, json!({"method":"prompt", "severity":"error", "message":message,
                     "buttons":[self.api.text("git.tagConflict.replace", &[]), self.api.text("git.tagConflict.always", &[])]}), Some(token))?;
                 match choice["selection"].as_u64() {
                     Some(0) => {}
@@ -1228,7 +1233,7 @@ impl GitRuntime {
                     _ => return Err(invalid("Invalid Git tag conflict selection")),
                 }
                 transport.replace_tags = true;
-                pulled = self.api.transport(
+                pulled = self.run_transport(
                     repository,
                     TransportOperation::Pull {
                         mode,
@@ -1242,7 +1247,6 @@ impl GitRuntime {
                     return Err(invalid(&message));
                 }
             }
-            self.accept_status(pulled.status.clone());
             if sync {
                 let status = &pulled.status;
                 if status.head.name() != before.head.name()
@@ -1258,7 +1262,7 @@ impl GitRuntime {
                     return Ok(json!(pulled));
                 }
                 transport.follow_tags = config.boolean("followTagsWhenSync", false);
-                self.api.transport(
+                self.run_transport(
                     repository,
                     TransportOperation::Push {
                         expected_head: &status.head,
@@ -1271,7 +1275,6 @@ impl GitRuntime {
                 pulled
             }
         };
-        self.accept_status(result.status.clone());
         if matches!(
             command,
             "git.push" | "ash.git.push" | "git.pushForce" | "git.sync" | "git.syncRebase"
@@ -1280,9 +1283,52 @@ impl GitRuntime {
         }
         Ok(json!(result))
     }
+    fn run_transport(
+        &self,
+        repository: &Repository,
+        operation: TransportOperation<'_>,
+        options: &TransportOptions,
+        synchronizing: bool,
+        token: &CancellationToken,
+    ) -> Result<crate::model::TransportResult, ExtensionError> {
+        token.check_cancelled()?;
+        self.start_remote_operation(repository)?;
+        let result = self
+            .api
+            .transport(repository, operation, options, synchronizing, token)?;
+        self.accept_status(result.status.clone());
+        Ok(result)
+    }
+    fn await_remote_input(&self, repository: &Repository) -> Result<(), ExtensionError> {
+        let changed =
+            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                let previous = current.operation;
+                current.await_remote_input();
+                current.operation != previous
+            } else {
+                false
+            };
+        if changed {
+            self.publish()?;
+        }
+        Ok(())
+    }
+    fn remote_prompt(
+        &self,
+        repository: &Repository,
+        prompt: Value,
+        token: Option<&CancellationToken>,
+    ) -> Result<Value, ExtensionError> {
+        // Keep the operation reservation and any completed transport work while
+        // suspending all progress until the next transport actually starts.
+        self.await_remote_input(repository)?;
+        self.api.editor(prompt, token)
+    }
     fn start_remote_operation(&self, repository: &Repository) -> Result<(), ExtensionError> {
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-            current.operation = Some(crate::model::RepositoryOperation::Synchronize);
+            current.operation = Some(crate::model::RepositoryOperation::Synchronize {
+                phase: crate::model::RemoteOperationPhase::Running,
+            });
         }
         self.publish()
     }
@@ -1334,55 +1380,65 @@ impl GitRuntime {
             token,
         )
     }
+    fn prompt_branch_name(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<Option<String>, ExtensionError> {
+        let config = &repository.configuration;
+        let prefix = config.text("branchPrefix", "");
+        let random = if config.boolean("branchRandomName.enable", false) {
+            random_branch(config)?
+        } else {
+            String::new()
+        };
+        let pattern = config.text("branchValidationRegex", "");
+        let expression = if pattern.is_empty() {
+            None
+        } else {
+            Some(
+                regex::Regex::new(pattern)
+                    .map_err(|_| invalid(&self.api.text("git.invalidBranchRegex", &[])))?,
+            )
+        };
+        let mut value = format!("{prefix}{random}");
+        let mut validation: Option<String> = None;
+        let name = loop {
+            token.check_cancelled()?;
+            let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.createBranchCommandTitle",&[]),"placeHolder":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
+            let Some(entered) = entered.as_str() else {
+                return Ok(None);
+            };
+            let entered = entered
+                .trim()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(config.text("branchWhitespaceChar", "-"));
+            value = if entered.starts_with(prefix) {
+                entered
+            } else {
+                format!("{prefix}{entered}")
+            };
+            if expression
+                .as_ref()
+                .is_some_and(|expression| !expression.is_match(&value))
+            {
+                validation = Some(self.api.text("git.branchNameDoesNotMatch", &[]));
+                continue;
+            }
+            break value;
+        };
+        Ok(Some(name))
+    }
     pub(crate) fn branch(
         &self,
         repository: &Repository,
         command: &str,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        let config = &repository.configuration;
         if command == "git.branch" || command == "git.branchForCommit" {
-            let prefix = config.text("branchPrefix", "");
-            let random = if config.boolean("branchRandomName.enable", false) {
-                random_branch(config)?
-            } else {
-                String::new()
-            };
-            let pattern = config.text("branchValidationRegex", "");
-            let expression = if pattern.is_empty() {
-                None
-            } else {
-                Some(
-                    regex::Regex::new(pattern)
-                        .map_err(|_| invalid(&self.api.text("git.invalidBranchRegex", &[])))?,
-                )
-            };
-            let mut value = format!("{prefix}{random}");
-            let mut validation: Option<String> = None;
-            let name = loop {
-                token.check_cancelled()?;
-                let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.createBranchCommandTitle",&[]),"placeHolder":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
-                let Some(entered) = entered.as_str() else {
-                    return Ok(json!(false));
-                };
-                let entered = entered
-                    .trim()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(config.text("branchWhitespaceChar", "-"));
-                value = if entered.starts_with(prefix) {
-                    entered
-                } else {
-                    format!("{prefix}{entered}")
-                };
-                if expression
-                    .as_ref()
-                    .is_some_and(|expression| !expression.is_match(&value))
-                {
-                    validation = Some(self.api.text("git.branchNameDoesNotMatch", &[]));
-                    continue;
-                }
-                break value;
+            let Some(name) = self.prompt_branch_name(repository, token)? else {
+                return Ok(json!(false));
             };
             self.api.create_branch(repository, &name, token)?;
             if command == "git.branchForCommit" {
@@ -1439,129 +1495,308 @@ impl GitRuntime {
                 )
                 .map(|result| json!(result))
         } else {
-            let graph = json!(self.api.history_refs(repository, Some(token))?);
-            let types = if config.strings("checkoutType").is_empty() {
-                vec!["local".into(), "remote".into(), "tags".into()]
-            } else {
-                config.strings("checkoutType")
-            };
-            let mut refs: Vec<_> = graph["references"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|reference| {
-                    types.iter().any(|kind| {
-                        kind == match reference["kind"].as_str().unwrap_or_default() {
-                            "localBranch" => "local",
-                            "remoteBranch" => "remote",
-                            _ => "tags",
-                        }
-                    })
-                })
-                .cloned()
-                .collect();
-            if config.text("branchSortOrder", "committerdate") == "alphabetically" {
-                refs.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
-            }
-            let branches = graph["branches"].as_array().cloned().unwrap_or_default();
-            let items = refs
-                .iter()
-                .map(|reference| {
-                    let branch = branches
-                        .iter()
-                        .find(|branch| branch["name"] == reference["name"]);
-                    let description = if reference["current"] == true {
-                        Some(self.api.text("git.currentBranch", &[]))
-                    } else {
-                        branch.and_then(|branch| branch["upstream"].as_str().map(str::to_owned))
-                    };
-                    let detail =
-                        if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
-                            Some(self.api.text("git.branchWorktreeOccupancy", &[]))
-                        } else {
-                            config
-                                .boolean("showReferenceDetails", true)
-                                .then(|| {
-                                    reference["objectId"]
-                                        .as_str()
-                                        .unwrap_or_default()
-                                        .chars()
-                                        .take(config.number("commitShortHashLength", 7) as usize)
-                                        .collect()
-                                })
-                                .filter(|detail: &String| !detail.is_empty())
-                        };
-                    external_ext_sdk::client::QuickPickItem {
-                        label: reference["name"].as_str().unwrap_or_default().into(),
-                        description,
-                        detail,
+            self.checkout(repository, CheckoutMode::Switch, token)
+        }
+    }
+
+    fn reference_age(&self, timestamp_seconds: i64, now: u64) -> String {
+        let elapsed = (now as i64).saturating_sub(timestamp_seconds);
+        if elapsed < 60 {
+            return self.api.text("git.referenceAge.now", &[]);
+        }
+        let (unit, count) = if elapsed < 3600 {
+            ("minute", elapsed / 60)
+        } else if elapsed < 86_400 {
+            ("hour", elapsed / 3600)
+        } else if elapsed < 604_800 {
+            ("day", elapsed / 86_400)
+        } else if elapsed < 2_592_000 {
+            ("week", elapsed / 604_800)
+        } else if elapsed < 31_536_000 {
+            ("month", elapsed / 2_592_000)
+        } else {
+            ("year", elapsed / 31_536_000)
+        };
+        let plural = if count == 1 { "" } else { "s" };
+        self.api.text(
+            &format!("git.referenceAge.{unit}{plural}"),
+            &[&count.to_string()],
+        )
+    }
+
+    fn checkout(
+        &self,
+        repository: &Repository,
+        mode: CheckoutMode,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        let config = &repository.configuration;
+        let graph = json!(self.api.history_refs(repository, Some(token))?);
+        let types = if mode == CheckoutMode::CreateBranchFrom
+            || config.strings("checkoutType").is_empty()
+        {
+            vec!["local".into(), "remote".into(), "tags".into()]
+        } else {
+            config.strings("checkoutType")
+        };
+        let mut refs: Vec<_> = graph["references"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|reference| {
+                if mode == CheckoutMode::Detached && reference["kind"] == "tag" {
+                    return false;
+                }
+                types.iter().any(|kind| {
+                    kind == match reference["kind"].as_str().unwrap_or_default() {
+                        "localBranch" => "local",
+                        "remoteBranch" => "remote",
+                        _ => "tags",
                     }
                 })
-                .collect();
-            let Some(index) = self.api.client.show_quick_pick_items(
-                items,
-                self.api.text("git.selectBranch", &[]),
-                token,
-            )?
-            else {
-                return Ok(Value::Null);
-            };
-            let reference = &refs[index];
-            if reference["current"] == true {
-                return Ok(Value::Null);
-            }
-            if let Some(branch) = branches
+            })
+            .cloned()
+            .collect();
+        if config.text("branchSortOrder", "committerdate") == "alphabetically" {
+            refs.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
+        }
+        // Keep the configured ordering within each reference kind, then form stable groups.
+        refs.sort_by_key(|reference| match reference["kind"].as_str() {
+            Some("localBranch") => 0,
+            Some("remoteBranch") => 1,
+            _ => 2,
+        });
+        let branches = graph["branches"].as_array().cloned().unwrap_or_default();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let actions = if mode == CheckoutMode::Switch {
+            vec![
+                (CheckoutAction::CreateBranch, "git.createBranchPick", "add"),
+                (
+                    CheckoutAction::CreateBranchFrom,
+                    "git.createBranchFromPick",
+                    "add",
+                ),
+                (
+                    CheckoutAction::CheckoutDetached,
+                    "git.checkoutDetachedPick",
+                    "debug-disconnect",
+                ),
+            ]
+        } else {
+            Vec::new()
+        };
+        let mut items: Vec<_> = actions
+            .iter()
+            .map(|(_, key, icon)| external_ext_sdk::client::QuickPickItem {
+                label: format!("$({icon}) {}", self.api.text(key, &[])),
+                always_show: Some(true),
+                ..Default::default()
+            })
+            .collect();
+        items.extend(refs.iter().enumerate().map(|(index, reference)| {
+            let branch = branches
                 .iter()
-                .find(|branch| branch["name"] == reference["name"])
-                && self.explain_branch_occupancy(branch, token)?
-            {
-                return Ok(Value::Null);
-            }
-            match reference["kind"].as_str() {
-                Some("localBranch") => {
-                    let result = match self
-                        .api
-                        .switch_branch(
-                            repository,
-                            &decode::<String>(reference["name"].clone())?,
-                            token,
-                        )
-                        .map(|result| json!(result))
-                    {
-                        Ok(result) => result,
-                        Err(_) => {
-                            token.check_cancelled()?;
-                            self.api
-                                .warning("git.switchBranchRejected", &[], Some(token))?;
-                            return Ok(Value::Null);
+                .find(|branch| branch["name"] == reference["name"]);
+            let state = if reference["current"] == true {
+                Some(self.api.text("git.currentBranch", &[]))
+            } else {
+                branch.and_then(|branch| {
+                    branch["upstream"]
+                        .as_str()
+                        .map(|name| name.replace("$(", "\\$("))
+                })
+            };
+            let short_commit: String = reference["objectId"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(config.number("commitShortHashLength", 7) as usize)
+                .collect();
+            let metadata = config
+                .boolean("showReferenceDetails", true)
+                .then_some(&reference["commitDetails"])
+                .filter(|details| !details.is_null());
+            let commit = metadata
+                .and_then(|details| details["timestampSeconds"].as_i64())
+                .map(|timestamp| self.reference_age(timestamp, now))
+                .or_else(|| {
+                    Some(match reference["kind"].as_str() {
+                        Some("remoteBranch") => {
+                            self.api.text("git.remoteBranchAt", &[&short_commit])
                         }
-                    };
-                    self.accept_status(decode(result["status"].clone())?);
-                    Ok(result)
+                        Some("tag") => self.api.text("git.tagAt", &[&short_commit]),
+                        _ => short_commit.clone(),
+                    })
+                })
+                .filter(|_| !short_commit.is_empty());
+            let description = match (state, commit) {
+                (Some(state), Some(commit)) => Some(
+                    self.api
+                        .text("git.referenceDescription", &[&state, &commit]),
+                ),
+                (state, commit) => state.or(commit),
+            };
+            let mut details = Vec::new();
+            if let Some(metadata) = metadata {
+                // Authors and subjects are user content, just like ref names.
+                // Escape icon tokens so commit text cannot turn into UI glyphs.
+                let author = metadata["authorName"].as_str().unwrap_or_default();
+                let subject = metadata["subject"].as_str().unwrap_or_default();
+                if !author.is_empty() && !subject.is_empty() {
+                    details.push(format!(
+                        "{} · {short_commit} · {}",
+                        author.replace("$(", "\\$("),
+                        subject.replace("$(", "\\$(")
+                    ));
                 }
-                Some("remoteBranch") => {
-                    let name = reference["name"].as_str().unwrap_or_default();
-                    let remote = reference["remoteName"].as_str().unwrap_or_default();
-                    self.execute(
-                        repository,
-                        RepositoryCommand::CheckoutRemoteBranch {
-                            reference: name.into(),
-                            name: name
-                                .strip_prefix(&format!("{remote}/"))
-                                .unwrap_or(name)
-                                .into(),
-                        },
-                        token,
-                    )
+            }
+            if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
+                details.push(self.api.text("git.branchWorktreeOccupancy", &[]));
+            }
+            let detail = (!details.is_empty()).then(|| details.join(" · "));
+            let icon = match reference["kind"].as_str() {
+                Some("remoteBranch") => "cloud",
+                Some("tag") => "tag",
+                _ => "git-branch",
+            };
+            // Ref names are user content; only the leading token is an icon.
+            let name = reference["name"]
+                .as_str()
+                .unwrap_or_default()
+                .replace("$(", "\\$(");
+            external_ext_sdk::client::QuickPickItem {
+                label: format!("$({icon}) {name}"),
+                description,
+                detail,
+                separator: (index == 0 || refs[index - 1]["kind"] != reference["kind"]).then(
+                    || {
+                        self.api.text(
+                            match reference["kind"].as_str() {
+                                Some("localBranch") => "git.branchGroup",
+                                Some("remoteBranch") => "git.remoteBranchGroup",
+                                _ => "git.tagGroup",
+                            },
+                            &[],
+                        )
+                    },
+                ),
+                ..Default::default()
+            }
+        }));
+        let Some(index) = self.api.client.show_quick_pick_items(
+            items,
+            self.api.text(
+                match mode {
+                    CheckoutMode::Switch => "git.selectCheckoutReference",
+                    CheckoutMode::Detached => "git.selectDetachedReference",
+                    CheckoutMode::CreateBranchFrom => "git.selectBranchStartPoint",
+                },
+                &[],
+            ),
+            token,
+        )?
+        else {
+            return Ok(Value::Null);
+        };
+        if let Some((action, _, _)) = actions.get(index) {
+            return match action {
+                CheckoutAction::CreateBranch => {
+                    self.branch(repository, "git.branchForCommit", token)
                 }
-                _ => self.execute(
+                CheckoutAction::CreateBranchFrom => {
+                    self.checkout(repository, CheckoutMode::CreateBranchFrom, token)
+                }
+                CheckoutAction::CheckoutDetached => {
+                    self.checkout(repository, CheckoutMode::Detached, token)
+                }
+            };
+        }
+        let reference = &refs[index - actions.len()];
+        match mode {
+            CheckoutMode::Detached => {
+                return self.execute(
                     repository,
                     RepositoryCommand::CheckoutDetached {
                         object_id: decode(reference["objectId"].clone())?,
                     },
                     token,
-                ),
+                );
             }
+            CheckoutMode::CreateBranchFrom => {
+                let Some(name) = self.prompt_branch_name(repository, token)? else {
+                    return Ok(Value::Null);
+                };
+                self.execute(
+                    repository,
+                    RepositoryCommand::CreateBranchAt {
+                        name: name.clone(),
+                        object_id: decode(reference["objectId"].clone())?,
+                    },
+                    token,
+                )?;
+                let result = self.api.switch_branch(repository, &name, token)?;
+                self.accept_status(result.status.clone());
+                return Ok(json!(result));
+            }
+            CheckoutMode::Switch => {}
+        }
+        if reference["current"] == true {
+            return Ok(Value::Null);
+        }
+        if let Some(branch) = branches
+            .iter()
+            .find(|branch| branch["name"] == reference["name"])
+            && self.explain_branch_occupancy(branch, token)?
+        {
+            return Ok(Value::Null);
+        }
+        match reference["kind"].as_str() {
+            Some("localBranch") => {
+                let result = match self
+                    .api
+                    .switch_branch(
+                        repository,
+                        &decode::<String>(reference["name"].clone())?,
+                        token,
+                    )
+                    .map(|result| json!(result))
+                {
+                    Ok(result) => result,
+                    Err(_) => {
+                        token.check_cancelled()?;
+                        self.api
+                            .warning("git.switchBranchRejected", &[], Some(token))?;
+                        return Ok(Value::Null);
+                    }
+                };
+                self.accept_status(decode(result["status"].clone())?);
+                Ok(result)
+            }
+            Some("remoteBranch") => {
+                let name = reference["name"].as_str().unwrap_or_default();
+                let remote = reference["remoteName"].as_str().unwrap_or_default();
+                self.execute(
+                    repository,
+                    RepositoryCommand::CheckoutRemoteBranch {
+                        reference: name.into(),
+                        name: name
+                            .strip_prefix(&format!("{remote}/"))
+                            .unwrap_or(name)
+                            .into(),
+                    },
+                    token,
+                )
+            }
+            _ => self.execute(
+                repository,
+                RepositoryCommand::CheckoutDetached {
+                    object_id: decode(reference["objectId"].clone())?,
+                },
+                token,
+            ),
         }
     }
     fn explain_branch_occupancy(

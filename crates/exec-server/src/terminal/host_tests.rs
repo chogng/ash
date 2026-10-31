@@ -24,7 +24,6 @@ impl Peer {
         let temporary = tempfile::tempdir().unwrap();
         let directory = SocketDirectory::create(&temporary.path().join("socket")).unwrap();
         let listener = directory.bind(Path::new(SOCKET)).unwrap();
-        listener.set_nonblocking(true).unwrap();
         let stream = connect(&directory).unwrap();
         let (accepted, _) = listener.accept().unwrap();
         validate_peer(&accepted).unwrap();
@@ -637,6 +636,7 @@ fn lost_mutation_responses_are_not_replayed_but_configuration_can_reconnect() {
         assert_eq!(environment.get("HOST_TEST").unwrap(), "ready");
         drop(client);
         worker.join().unwrap();
+        #[cfg(unix)]
         socket_directory.remove_socket(Path::new(SOCKET)).unwrap();
         std::fs::remove_file(socket_directory.path().join("startup.lock")).unwrap();
         let path = socket_directory.path().to_path_buf();

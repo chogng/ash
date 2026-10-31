@@ -1222,6 +1222,43 @@ test('macOS sidebar toggle starts at the window control safe area', { tag: ['@el
 	expect(gap).toBeLessThanOrEqual(4);
 });
 
+test('macOS titlebar keeps its window control safe area with docked DevTools', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron');
+	const page = workbench.page;
+	const toggle = page.locator('.ash-electron-titlebar [data-action-id="workbench.action.toggleSideBar"] button');
+	const initial = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+	const windowHandle = await application.browserWindow(page);
+	try {
+		for (const mode of ['right', 'bottom'] as const) {
+			await windowHandle.evaluate(window => window.webContents.closeDevTools());
+			await windowHandle.evaluate((window, mode) => window.webContents.openDevTools({ mode, activate: false }), mode);
+			// Docking shrinks the renderer viewport while the native titlebar keeps its window geometry.
+			await expect.poll(() => page.evaluate(mode => mode === 'right' ? innerWidth : innerHeight, mode))
+				.toBeLessThan(mode === 'right' ? initial.width : initial.height);
+			await expect.poll(() => toggle.evaluate(button => {
+				const probe = document.createElement('div');
+				probe.style.width = 'env(titlebar-area-x, 0px)';
+				document.body.append(probe);
+				const safeArea = probe.getBoundingClientRect().width;
+				probe.remove();
+				return { reserved: safeArea > 0, outsideControls: button.getBoundingClientRect().left >= safeArea };
+			})).toEqual({ reserved: true, outsideControls: true });
+			const bounds = await toggle.boundingBox();
+			expect(bounds).not.toBeNull();
+			expect(await toggle.evaluate(button => {
+				const bounds = button.getBoundingClientRect();
+				return button.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2));
+			})).toBe(true);
+		}
+	} finally {
+		await windowHandle.evaluate(window => window.webContents.closeDevTools());
+		await windowHandle.dispose();
+	}
+	await expect.poll(() => page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(initial);
+	await toggle.focus();
+	await expect(toggle).toBeFocused();
+});
+
 test(
 	'macOS titlebar icons stay anchored during continuous native resize',
 	{ tag: ['@electron-ui', '@electron-app-server', '@darwin'] },

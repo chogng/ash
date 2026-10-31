@@ -114,6 +114,25 @@ test('DiffModel cancels stale work when computation options change', async () =>
 	assert.equal(model.diff?.rows.get(0)?.kind, 'unchanged');
 });
 
+test('DiffModel retains its result across language changes until comparison policy changes', async () => {
+	using original = new TextModel('word');
+	using modified = new TextModel('word ');
+	using diffProvider = new ControlledDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider, diffOptions });
+	diffProvider.takeRequest().resolve(createModifiedDiff());
+	await waitForReady(model);
+	const ready = model.state;
+	original.setLanguage('typescript');
+	modified.setLanguage('javascript');
+	assert.equal(model.state, ready);
+	model.updateOptions({ ...diffOptions, ignoreTrimWhitespace: true });
+	const request = diffProvider.takeRequest();
+	assert.equal(request.options.ignoreTrimWhitespace, true);
+	request.resolve({ identical: false, quitEarly: false, changes: [], moves: [] });
+	await waitForReady(model);
+	assert.equal(model.diff?.hunks.length, 0);
+});
+
 interface ControlledRequest {
 	readonly original: ITextModel;
 	readonly modified: ITextModel;

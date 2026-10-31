@@ -111,7 +111,8 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
             thread_id: event.thread_id.clone(),
             turn_id: event.turn_id.clone(),
             repositories,
-            commit_message_configured: self.commit_message_configured(),
+            commit_message_configured: self
+                .commit_message_configured(&event.thread_id, &event.turn_id),
             opaque_dependencies: matches!(
                 event.kind,
                 TurnExecutionKind::Shell | TurnExecutionKind::Tool

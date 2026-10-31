@@ -5,6 +5,7 @@ import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
 import { Event } from '../../../../base/common/event.js';
+import { ActionRunner } from '../../../../base/common/actions.js';
 import type { INotificationService } from '../../../notification/common/notification.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
@@ -126,6 +127,42 @@ test('toolbar submenu items retain toolbar button semantics', async () => {
 	item.dispose();
 	dom.window.close();
 	Reflect.deleteProperty(globalThis, 'window');
+});
+
+test('split toolbar representations propagate replaced runners and context to both triggers', async () => {
+	const [{ ToolBar }, { DropdownWithPrimaryActionViewItem }, { DropdownWithDefaultActionViewItem }, { MenuId, SubmenuItemAction }] = await Promise.all([
+		import('../../../../base/browser/ui/toolbar/toolbar.js'),
+		import('../../browser/dropdownWithPrimaryActionViewItem.js'),
+		import('../../browser/menuEntryActionViewItem.js'),
+		import('../../common/actions.js'),
+	]);
+	for (const split of ['primary', 'default'] as const) {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using runner = new ActionRunner();
+			const calls: unknown[] = [];
+			const primary = { ...testAction('primary'), run(context: unknown) { calls.push(context); } };
+			const secondary = { ...testAction('secondary'), run(context: unknown) { calls.push(context); } };
+			let menu: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+			const provider = { showContextMenu(delegate: NonNullable<typeof menu>) { menu = delegate; } };
+			const submenu = new SubmenuItemAction({ title: 'Split', submenu: MenuId.for(`split-${split}`) }, [primary, secondary]);
+			using toolbar = new ToolBar(dom.window.document.body, {
+				contextMenuProvider: provider,
+				actionViewItemProvider: () => split === 'primary'
+					? new DropdownWithPrimaryActionViewItem(primary, testAction('menu'), [secondary], provider)
+					: new DropdownWithDefaultActionViewItem(submenu, provider),
+			});
+			toolbar.setActions([split === 'primary' ? primary : submenu]);
+			toolbar.actionRunner = runner;
+			toolbar.context = 'shared';
+			toolbar.element.querySelector<HTMLButtonElement>('button')!.click();
+			toolbar.element.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click();
+			assert.equal(menu!.actionRunner, runner);
+			await menu!.actionRunner!.run(secondary, menu!.getActionsContext?.());
+			assert.deepEqual(calls, ['shared', 'shared']);
+			menu!.onHide?.(true);
+		} finally { dom.window.close(); }
+	}
 });
 
 test('menu entry actions switch to their alternative while Alt is held', async () => {

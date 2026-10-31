@@ -57,7 +57,7 @@
 	font-family: "Ash UI Icons";
 	font-size: var(--ash-lxiconFontSize-compact, 12px);
 	line-height: 1;
-	color: var(--ash-accentForeground);
+	color: var(--ash-accent-foreground);
 }
 
 .workspace-trust-overview {
@@ -87,7 +87,7 @@
 	content: "\e0b1";
 	font-family: "Ash UI Icons";
 	font-size: var(--ash-lxiconFontSize, 16px);
-	color: var(--ash-warningForeground, #cca700);
+	color: var(--ash-warning-foreground);
 }
 
 .ash-workspace-trust-editor[data-trust-state="trusted"]
@@ -96,7 +96,7 @@
 	content: "\e110";
 	font-family: "Ash UI Icons";
 	font-size: var(--ash-lxiconFontSize, 16px);
-	color: var(--ash-successForeground, #89d185);
+	color: var(--ash-success-foreground);
 }
 
 .ash-workspace-trust-editor[data-trust-state="custom"]
@@ -105,7 +105,7 @@
 	content: "\e0b1";
 	font-family: "Ash UI Icons";
 	font-size: var(--ash-lxiconFontSize, 16px);
-	color: var(--ash-accentForeground);
+	color: var(--ash-accent-foreground);
 }
 
 .workspace-trust-overview > p {
@@ -180,7 +180,7 @@
 .workspace-trust-folder-path {
 	display: inline-block;
 	color: var(--ash-description-foreground);
-	font-family: var(--ash-editor-fontFamily, monospace);
+	font-family: var(--ash-font-family-monospace);
 	font-size: var(--ash-fontSize-label2);
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	background: var(--ash-text-codeBlockBackground, rgba(0, 0, 0, 0.05));
@@ -215,7 +215,7 @@
 
 .workspace-trust-note {
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-	border-inline-start: 3px solid var(--ash-warningForeground);
+	border-inline-start: 3px solid var(--ash-warning-foreground);
 	border-radius: var(--ash-cornerRadius-small);
 	background: var(--ash-editor-widgetBackground);
 	color: var(--ash-description-foreground);

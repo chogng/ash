@@ -20,7 +20,7 @@ import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
-import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -41,7 +41,7 @@ import type { IDocumentCollaborationApi } from '../../../../platform/collab/comm
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { Part } from '../../part.js';
 import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from './editorGroupView.js';
-import type { IEditorGroupView } from './editor.js';
+import type { IEditorGroupView, IEditorGroupViewOptions } from './editor.js';
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from './editorConfiguration.js';
 import type { FileElement } from './breadcrumbsModel.js';
 import type { IBreadcrumbsService } from './breadcrumbs.js';
@@ -959,10 +959,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return replacement;
 	}
 
+	protected getGroupViewOptions(): IEditorGroupViewOptions {
+		return {};
+	}
+
 	private createGroup(id?: EditorGroupId): EditorGroupHost {
 		let group: EditorGroupView;
 		group = this.instantiationService.createInstance(EditorGroupView, this.contentDomNode, {
 			...this.groupOptions,
+			...this.getGroupViewOptions(),
 			...(id !== undefined ? { id } : {}),
 			onDidActivate: () => {
 				this.setActiveGroup(group);
@@ -975,10 +980,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				end: () => this.tabDragAndDrop.end(),
 			},
 		} satisfies EditorGroupOptions);
-		const host = new EditorGroupHost(group, group.onDidChangeEditors(event => {
+		const listeners = new DisposableStore();
+		listeners.add(group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));
 		}));
+		listeners.add(group.onDidChange(() => this.layoutEmitter.fire(this.dimension)));
+		const host = new EditorGroupHost(group, listeners);
 		if (this.groupHosts.has(group.id)) {
 			host.dispose();
 			throw new Error(`Duplicate editor group ID: ${group.id}`);

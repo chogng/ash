@@ -28,6 +28,7 @@ import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.j
 import type { IEditorPaneDescriptor } from '../../editor.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IEditorGroupViewOptions } from './editor.js';
 
 /** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
@@ -58,6 +59,7 @@ export class EditorTitleControl extends Disposable {
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		languageFeatures: ILanguageFeaturesService | undefined,
 		showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		private readonly viewOptions: IEditorGroupViewOptions = {},
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
@@ -81,6 +83,7 @@ export class EditorTitleControl extends Disposable {
 			breadcrumbsService,
 			languageFeatures,
 			showSymbolPicker,
+			viewOptions,
 		));
 		this.lockIndicator = h(ownerDocument, 'span');
 		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
@@ -97,14 +100,21 @@ export class EditorTitleControl extends Disposable {
 				}
 			}));
 		}
-		this.domNode.hidden = model.editorLimit !== 1;
+		this.domNode.hidden = model.editorLimit !== 1 && !viewOptions.showHeader;
 		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(toDisposable(() => this.tabsAndActionsDomNode.remove()));
 	}
 
 	get height(): number {
 		if (this.domNode.hidden) return 0;
+		return this.tabsHeight + this.header.height;
+	}
+
+	get tabsHeight(): number {
+		if (this.domNode.hidden) return 0;
 		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
-		return EditorTitleControl.HEIGHT * rows + this.header.height;
+		const rowHeight = this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT;
+		return rowHeight * rows;
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
@@ -122,6 +132,7 @@ export class EditorTitleControl extends Disposable {
 		activePane?: IEditorPane,
 		selectedIds?: ReadonlySet<string>,
 	): void {
+		const previousHeight = this.height;
 		const wasHidden = this.domNode.hidden;
 		this.editors = editors;
 		this.selectedIds = selectedIds;
@@ -129,14 +140,16 @@ export class EditorTitleControl extends Disposable {
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
 		// Single-content hosts retain their group controls even without an editor.
-		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0)
+		this.domNode.hidden = (!this.viewOptions.showHeader && this.model.editorLimit !== 1 && editors.length === 0)
 			|| (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
-		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
+		this.tabsAndActionsDomNode.hidden = this.domNode.hidden;
+		this.domNode.style.setProperty('--ash-editor-tab-rows', this.tabsAndActionsDomNode.hidden ? '0' : String(this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1));
+		if (this.domNode.hidden !== wasHidden || this.height !== previousHeight) this.heightEmitter.fire();
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
 		this.tabsAndActionsDomNode.classList.toggle('multiple', mode === 'multiple');
-		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-title-actions');
+		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-header-primary, :scope > .ash-editor-title-actions');
 		const control = mode === 'single'
 			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
 			: mode === 'none'

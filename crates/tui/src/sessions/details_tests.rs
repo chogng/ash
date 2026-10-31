@@ -23,6 +23,7 @@ fn response() -> SessionResult {
             thread_id: ThreadId::new(id).unwrap(),
             title: title.into(),
             created_at_unix_ms: 0,
+            last_activity_at_unix_ms: Some(0),
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
             usage: Default::default(),

@@ -10,7 +10,7 @@ import { URI } from '../../../../base/common/uri.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IWorkspaceContextApi } from '../../../workspace/common/workspaceIpc.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type WorkspaceTrustPermission } from '../../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type IWorkspaceTrustApi, type WorkspaceTrustPermission } from '../../../workspace/common/workspaceTrust.js';
 
 suite('workspace trust during directory opening', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -84,14 +84,14 @@ suite('workspace trust during directory opening', () => {
 		}]);
 	});
 
-	for (const choice of ['readOnly', 'development'] as const) {
+	for (const choice of ['restricted', 'development'] as const) {
 		test(`new ${choice} authorization uses only the explicitly selected capabilities`, async () => {
 			const grants: WorkspaceTrustPermission[][] = [];
 			const requests: unknown[] = [];
 			const prompts: string[] = [];
 			const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async (_method: unknown, params: unknown) => { requests.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
 			await host.initializeWorkspace(client, { requestDirectoryPermissions: async path => { prompts.push(path); return choice; } }, trustApi(new Map(), grants), workspace(['/new']));
-			const permissions = choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
+			const permissions = choice === 'restricted' ? RESTRICTED_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
 			assert.deepEqual(prompts, [URI.file('/new').fsPath]);
 			assert.deepEqual(grants, [permissions]);
 			assert.deepEqual(requests, [
@@ -127,7 +127,7 @@ suite('workspace trust during directory opening', () => {
 				requestDirectoryPermissions: async (_path, signal) => {
 					assert.ok(signal);
 					assert.equal(signal.aborted, false);
-					prompts++; await wait('choice'); return 'readOnly';
+					prompts++; await wait('choice'); return 'restricted';
 				},
 			}, {
 				...original,
@@ -154,7 +154,7 @@ suite('workspace trust during directory opening', () => {
 
 	test('retired directory setup observes a late prompt rejection without granting or writing directories', async () => {
 		const entered = new DeferredPromise<void>();
-		const choice = new DeferredPromise<'readOnly'>();
+		const choice = new DeferredPromise<'restricted'>();
 		using changes = new Emitter<'ready' | 'stopped'>();
 		const grants: WorkspaceTrustPermission[][] = [];
 		let writes = 0;
@@ -183,7 +183,7 @@ suite('workspace trust during directory opening', () => {
 		const api = trustApi(new Map(), []);
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => ({ dirs: [] }) } as unknown as AppServerProtocolClient;
 		await host.initializeWorkspaceDirectories(client, {
-			requestDirectoryPermissions: async label => { labels.push(label); return 'readOnly'; },
+			requestDirectoryPermissions: async label => { labels.push(label); return 'restricted'; },
 		}, {
 			...api,
 			createGrant: (path, permissions) => { paths.push(path); return api.createGrant(path, permissions); },
@@ -204,9 +204,9 @@ suite('workspace trust during directory opening', () => {
 		const failure = new Error('Revision conflict');
 		let writes = 0;
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { writes++; throw failure; } } as unknown as AppServerProtocolClient;
-		await assert.rejects(host.initializeWorkspace(client, { requestDirectoryPermissions: async () => 'readOnly' }, trustApi(new Map(), grants), workspace(['/new'])), error => error === failure);
+		await assert.rejects(host.initializeWorkspace(client, { requestDirectoryPermissions: async () => 'restricted' }, trustApi(new Map(), grants), workspace(['/new'])), error => error === failure);
 		assert.equal(writes, 1);
-		assert.deepEqual(grants, [READ_DIR_PERMISSIONS]);
+		assert.deepEqual(grants, [RESTRICTED_DIR_PERMISSIONS]);
 	});
 
 	test('the IPC boundary rejects unknown capabilities before creating a grant and releases its route', async () => {

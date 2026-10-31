@@ -11,7 +11,7 @@ use std::time::Instant;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use serde_json::Value;
 use serde_json::json;
 
@@ -800,14 +800,14 @@ fn probe_app_server(
     }))
 }
 
-fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
+fn proxy_stdio(mut stream: IpcStream, options: &ConnectionOptions) -> io::Result<()> {
     let prelude = crate::startup_trace::StartupTrace::span("connection-prelude");
     write_json_line(&mut stream, &ConnectionPrelude::from_options(options))?;
     drop(prelude);
     relay_stdio(stream)
 }
 
-fn relay_stdio(stream: UnixStream) -> io::Result<()> {
+fn relay_stdio(stream: IpcStream) -> io::Result<()> {
     let mut socket_writer = stream.try_clone()?;
     let input = thread::Builder::new()
         .name("ash-local-app-server-stdin".into())

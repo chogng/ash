@@ -48,8 +48,8 @@ export class UpdateMainService extends AbstractDisposable {
 		super();
 		this.cleanup = application.isPackaged
 			? this.cleanupStaleDownloads().catch(error =>
-					console.error('Could not clean up previous Ash downloads', error),
-				)
+				console.error('Could not clean up previous Ash downloads', error),
+			)
 			: Promise.resolve();
 		if (application.isPackaged && process.platform === 'darwin') {
 			void this.cleanupPreviousMacUpdate().catch(error =>
@@ -202,7 +202,7 @@ export class UpdateMainService extends AbstractDisposable {
 		command: 'check' | 'download',
 		policy: 'latest' | 'stable',
 		stagingDirectory?: string,
-	): Promise<{ executable: string; request: object }> {
+	): Promise<{ executable: string; request: object; }> {
 		if (process.platform !== 'win32' && process.platform !== 'darwin') {
 			throw new Error('Desktop updates are unavailable on this platform');
 		}
@@ -220,17 +220,17 @@ export class UpdateMainService extends AbstractDisposable {
 		}
 		const executable = this.application.isPackaged
 			? join(
-					process.resourcesPath,
-					'bin',
-					process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host',
-				)
+				process.resourcesPath,
+				'bin',
+				process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host',
+			)
 			: join(
-					this.application.getAppPath(),
-					'.build',
-					'cargo',
-					'debug',
-					process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host',
-				);
+				this.application.getAppPath(),
+				'.build',
+				'cargo',
+				'debug',
+				process.platform === 'win32' ? 'ash-update-host.exe' : 'ash-update-host',
+			);
 		return {
 			executable,
 			request: {
@@ -351,7 +351,7 @@ export class UpdateMainService extends AbstractDisposable {
 
 	private async cleanupPreviousMacUpdate(): Promise<void> {
 		const marker = join(this.application.getPath('userData'), 'updates', 'mac-cleanup.json');
-		let record: { current: string; previous: string };
+		let record: { current: string; previous: string; };
 		try {
 			record = JSON.parse(await readFile(marker, 'utf8'));
 		} catch (error) {

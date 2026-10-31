@@ -1,4 +1,4 @@
-# Inputs are quoted by the trusted host; stdin contains only the verified archive.
+# Inputs are bound by the trusted host; archives arrive over HTTPS or binary stdin.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
@@ -23,6 +23,43 @@ function Report($kind) {
     [Console]::WriteLine('__ASH_REMOTE_RUNTIME_' + $kind + '__:' + $digest + ':' + $executable.Replace('\', '/'))
 }
 
+function DownloadArchive($url, $path) {
+    $uri = [Uri]$url
+    for ($hop = 0; $hop -lt 2; $hop++) {
+        $request = [Net.HttpWebRequest]::Create($uri)
+        $request.AllowAutoRedirect = $false
+        $request.Timeout = 30000
+        $request.ReadWriteTimeout = 60000
+        $response = $request.GetResponse()
+        try {
+            $status = [int]$response.StatusCode
+            if ($status -in @(301, 302, 303, 307, 308)) {
+                $next = [Uri]$response.Headers['Location']
+                if ($hop -ne 0 -or $uri.Host -ne 'github.com' -or $uri.Port -ne 443 -or
+                    $uri.AbsolutePath -notmatch '^/[^/]+/[^/]+/releases/download/[^/]+/[^/]+$' -or
+                    $next.Scheme -ne 'https' -or $next.Host -ne 'release-assets.githubusercontent.com' -or
+                    $next.Port -ne 443 -or $next.UserInfo -or $next.Fragment) { throw 'Invalid release redirect' }
+                $uri = $next
+                continue
+            }
+            if ($status -ne 200) { throw 'Runtime download HTTP status was not 200' }
+            $stream = $response.GetResponseStream()
+            $output = [IO.File]::Open($path, 'CreateNew', 'Write', 'None')
+            try {
+                $buffer = New-Object byte[] 65536
+                $size = 0L
+                while (($count = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $size += $count
+                    if ($size -gt $expectedSize) { Fail 'archive-size-mismatch' 65 }
+                    $output.Write($buffer, 0, $count)
+                }
+                return $size
+            } finally { $output.Dispose(); $stream.Dispose() }
+        } finally { $response.Dispose() }
+    }
+    throw 'Too many release redirects'
+}
+
 try {
     if (!$root) {
         if (!$env:LOCALAPPDATA) { Fail 'install-root-unavailable' }
@@ -33,7 +70,9 @@ try {
     [IO.Directory]::CreateDirectory($parent) | Out-Null
     $runtime = Join-Path $parent $digest
     $executable = Join-Path $runtime 'bin\ash-remote-server.exe'
-    $receipt = Join-Path $runtime '.ash-remote-runtime-sha256'
+    # Installation state must not add files to the immutable package manifest.
+    $receipt = $runtime + '.sha256'
+    $legacyReceipt = Join-Path $runtime '.ash-remote-runtime-sha256'
     $lockPath = $runtime + '.installing'
     CheckPath $lockPath
     try { $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
@@ -41,6 +80,12 @@ try {
     # Keep the lock file: deleting it after releasing the handle races a new installer.
     CheckPath $executable
     CheckPath $receipt
+    CheckPath $legacyReceipt
+    if ((Test-Path -LiteralPath $legacyReceipt -PathType Leaf) -and
+        [IO.File]::ReadAllText($legacyReceipt).Trim() -ceq $digest) {
+        [IO.File]::WriteAllText($receipt, $digest, (New-Object Text.UTF8Encoding($false)))
+        [IO.File]::Delete($legacyReceipt)
+    }
     if ((Test-Path -LiteralPath $executable -PathType Leaf) -and
         (Test-Path -LiteralPath $receipt -PathType Leaf) -and
         [IO.File]::ReadAllText($receipt).Trim() -ceq $digest) {
@@ -48,7 +93,10 @@ try {
         exit 0
     }
     if (Test-Path -LiteralPath $runtime) { Fail 'incomplete-runtime' }
-    if (!(Get-Command tar.exe -CommandType Application -ErrorAction SilentlyContinue)) { Fail 'tar-unavailable' 69 }
+    # Git/MSYS tar can interpret a drive letter as a remote archive host. The
+    # Windows inbox tar accepts native drive/UNC paths independent of PATH order.
+    $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (!(Test-Path -LiteralPath $tar -PathType Leaf)) { Fail 'tar-unavailable' 69 }
     $staging = Join-Path $parent ('.staging-' + [Guid]::NewGuid().ToString('N'))
     [IO.Directory]::CreateDirectory($staging) | Out-Null
     # Match POSIX umask 077 for new content, including caller-selected install roots.
@@ -64,10 +112,14 @@ try {
     $archive = Join-Path $staging 'package.tar.gz'
     $package = Join-Path $staging 'package'
     [IO.Directory]::CreateDirectory($package) | Out-Null
-    # ConsoleStream can deadlock on OpenSSH's stdin pipe once its window fills.
-    # Use a FileStream over the borrowed handle, as PowerShell's SSH remoting does.
-    # https://github.com/PowerShell/PowerShell/issues/14478
-    Add-Type -TypeDefinition @'
+    if ($downloadUrl) {
+        try { $size = DownloadArchive $downloadUrl $archive }
+        catch { Fail 'download-failed' 69 }
+    } else {
+        # ConsoleStream can deadlock on OpenSSH's stdin pipe once its window fills.
+        # Use a FileStream over the borrowed handle, as PowerShell's SSH remoting does.
+        # https://github.com/PowerShell/PowerShell/issues/14478
+        Add-Type -TypeDefinition @'
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -83,29 +135,40 @@ public static class AshRemoteInput {
     }
 }
 '@
-    $inputBytes = [AshRemoteInput]::Open()
-    $output = [IO.File]::Open($archive, 'CreateNew', 'Write', 'None')
-    try {
-        $buffer = New-Object byte[] 65536
-        $size = 0L
-        while (($count = $inputBytes.Read($buffer, 0, $buffer.Length)) -gt 0) {
-            $size += $count
-            if ($size -gt $expectedSize) { Fail 'archive-size-mismatch' 65 }
-            $output.Write($buffer, 0, $count)
-        }
-    } finally { $output.Dispose(); $inputBytes.Dispose() }
+        $inputBytes = [AshRemoteInput]::Open()
+        $output = [IO.File]::Open($archive, 'CreateNew', 'Write', 'None')
+        try {
+            $buffer = New-Object byte[] 65536
+            $size = 0L
+            while (($count = $inputBytes.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $size += $count
+                if ($size -gt $expectedSize) { Fail 'archive-size-mismatch' 65 }
+                $output.Write($buffer, 0, $count)
+            }
+        } finally { $output.Dispose(); $inputBytes.Dispose() }
+    }
     if ($size -ne $expectedSize) { Fail 'archive-size-mismatch' 65 }
     $hash = [Security.Cryptography.SHA256]::Create()
     $file = [IO.File]::OpenRead($archive)
     try { $observed = [BitConverter]::ToString($hash.ComputeHash($file)).Replace('-', '').ToLowerInvariant() }
     finally { $file.Dispose(); $hash.Dispose() }
     if ($observed -cne $digest) { Fail 'archive-sha256-mismatch' 65 }
-    & tar.exe -xzf $archive -C $package
-    if ($LASTEXITCODE -ne 0) { Fail 'archive-extraction-failed' 65 }
+    # Inbox tar can convert Unicode command-line paths through the ANSI code page.
+    # CreateProcess receives its working directory as UTF-16; fixed relative
+    # arguments keep native extraction independent of that argument conversion.
+    $extract = New-Object Diagnostics.ProcessStartInfo
+    $extract.FileName = $tar
+    $extract.Arguments = '-xzf package.tar.gz -C package'
+    $extract.WorkingDirectory = $staging
+    $extract.UseShellExecute = $false
+    $process = [Diagnostics.Process]::Start($extract)
+    try { $process.WaitForExit(); $extractExit = $process.ExitCode }
+    finally { $process.Dispose() }
+    if ($extractExit -ne 0) { Fail 'archive-extraction-failed' 65 }
     foreach ($relative in @('ash-package.json', 'bin/ash-remote-server.exe', 'bin/ash-app-server.exe', 'bin/ash-app-server-daemon.exe', 'ash-path/rg.exe', 'ash-resources/tgrep/tgrep.exe', 'ash-resources/node/bin/node.exe')) {
         if (!(Test-Path -LiteralPath (Join-Path $package $relative) -PathType Leaf)) { Fail 'package-entrypoint-missing' 65 }
     }
-    [IO.File]::WriteAllText((Join-Path $package '.ash-remote-runtime-sha256'), $digest, (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($receipt, $digest, (New-Object Text.UTF8Encoding($false)))
     [IO.Directory]::Move($package, $runtime)
     Report 'INSTALLED'
 } catch {

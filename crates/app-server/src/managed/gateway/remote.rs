@@ -395,7 +395,11 @@ fn run(
                     "-o",
                     "BatchMode=yes",
                     "-o",
-                    "ConnectTimeout=10",
+                    "ConnectTimeout=30",
+                    "-o",
+                    "ServerAliveInterval=15",
+                    "-o",
+                    "ServerAliveCountMax=3",
                     profile.target().host().as_str(),
                 ])
                 .arg(remote_app_server_command(profile));

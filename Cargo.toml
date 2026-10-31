@@ -373,6 +373,7 @@ ec4rs = "1.2.0"
 getrandom = "0.2"
 jsonwebtoken = { version = "10.4.0", default-features = false, features = ["aws_lc_rs"] }
 futures = "0.3"
+futures-lite = "2.6.1"
 sse-stream = "0.2"
 fs2 = "0.4.3"
 image = { version = "0.25.10", default-features = false }
@@ -470,7 +471,6 @@ tree-sitter = "0.26.11"
 ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "1b0906dd92167820aad912a6c4a509e2b58bc661" }
 unicode-segmentation = "1"
 unicode-width = "0.2"
-uds_windows = "1.2.1"
 zbus = { version = "6", default-features = false }
 url = "2"
 urlencoding = "2"

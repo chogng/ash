@@ -136,7 +136,7 @@ import { electronRemoteWindowMainHost } from '../../platform/remote/electron-mai
 import { RemoteWindowMainContext } from '../../platform/remote/electron-main/remoteWindowMainContext.js';
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from '../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from '../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WORKSPACE_EDIT_CHANNEL, WORKSPACE_EDIT_ERROR_CHANNEL, validateWorkspaceEdit, WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL, validateWorkspaceConfigurationRequest } from '../../platform/workspace/common/workspaceIpc.js';
@@ -2437,8 +2437,8 @@ export class AshApplication extends Disposable {
 		if (persisted !== undefined) return { type: 'config' };
 		const choice = await workspaceHost.selectPermissions(path);
 		if (choice === 'cancel') return undefined;
-		if (choice !== 'development' && choice !== 'readOnly') throw new Error('Invalid directory permission selection');
-		return workspaceHost.createGrant(path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : READ_DIR_PERMISSIONS);
+		if (choice !== 'development' && choice !== 'restricted') throw new Error('Invalid directory permission selection');
+		return workspaceHost.createGrant(path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS);
 	}
 
 	private directoryPermissionPrompt(path: string): DialogRequest {
@@ -2446,12 +2446,12 @@ export class AshApplication extends Disposable {
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,
-			primaryButton: translate('workspaceTrust.readOnly', localize2('workspaceTrust.readOnly', 'Open Read-Only').original),
+			primaryButton: translate('workspaceTrust.restricted', localize2('workspaceTrust.restricted', 'Open in Restricted Mode').original),
 			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder').original),
 			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
 			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
 			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files and run commands. Open read-only to browse and search without making changes.').original),
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
 				{ '0': path },
 			),
 		};

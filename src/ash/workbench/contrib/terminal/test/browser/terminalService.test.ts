@@ -59,12 +59,55 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { TerminalStatus } from '../../browser/terminalStatusList.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, RESTRICTED_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 
 const DEFAULT_PROFILE = {
 	profileId: 'command-prompt',
 	title: 'Command Prompt',
 	isDefault: true,
 } as const;
+
+for (const decision of [true, false, undefined]) {
+	test(`terminal creation waits for trust before profile discovery and respects decision ${decision}`, async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace]));
+		const initialized = deferred<void>();
+		const requested = deferred<void>();
+		const response = deferred<boolean | undefined>();
+		using trust = Object.assign(new TestWorkspaceTrustManagementService(), {
+			workspaceTrustInitialized: initialized.promise,
+			getUriTrustInfo: async (uri: URI) => ({ uri, trusted: false, permissions: RESTRICTED_DIR_PERMISSIONS }),
+		});
+		services.registerInstance(IWorkspaceTrustManagementService, trust);
+		services.registerInstance(IWorkspaceTrustRequestService, {
+			onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+			requestWorkspaceTrust: async () => { requested.resolve(); return response.promise; },
+			requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
+		});
+		registerTestTerminalCreationServices(services);
+		services.registerInstance(ITerminalContributionService, { ...Disposable.None, terminalProfiles: [], onDidChangeTerminalProfiles: Event.None });
+		services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (_environment, _folder, value) => value } as IConfigurationResolverService);
+		services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
+		services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
+		let discoveries = 0;
+		const profiles = services.get(ITerminalProfileService);
+		const refresh = profiles.refreshAvailableProfiles.bind(profiles);
+		profiles.refreshAvailableProfiles = async dirId => { discoveries++; await refresh(dirId); };
+		const terminals = services.get(ITerminalService);
+		const creation = terminals.createTerminal({ deferStart: true });
+		const outcome = decision === true ? creation : assert.rejects(creation, isCancellationError);
+		assert.equal(discoveries, 0);
+		initialized.resolve();
+		await requested.promise;
+		assert.deepEqual([discoveries, processes.createCalls.length, terminals.instances.length], [0, 0, 0]);
+		response.resolve(decision);
+		await outcome;
+		assert.equal(processes.createCalls.length, decision === true ? 1 : 0);
+		assert.equal(terminals.instances.length, decision === true ? 1 : 0);
+	});
+}
 
 test('resolved hover launch metadata is immutable and stays out of native process requests after relaunch', async () => {
 	const processes = new TestTerminalProcessService([]);
@@ -1392,6 +1435,7 @@ suite('TerminalService lifecycle', () => {
 		using listener = service.onDidCreateInstance(instance => created.push(instance));
 		await service.whenConnected;
 		const pending = service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		await waitFor(() => processService.createCalls.length === 1);
 		services.dispose();
 		creation.resolve();
 		await assert.rejects(pending, isCancellationError);
@@ -1881,6 +1925,7 @@ suite('TerminalService lifecycle', () => {
 		const service = services.get(ITerminalService);
 		await service.whenConnected;
 		const cancelled = assert.rejects(service.createTerminal({ dirId: 'second', dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } }), isCancellationError);
+		await waitFor(() => processService.createCalls.length === 1);
 		workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
 		services.dispose();
 		creation.resolve();
@@ -2641,6 +2686,30 @@ test('configured shell titles use the executable unless overrideName explicitly 
 	assert.ok(fixed instanceof TerminalInstance);
 	assert.equal(fixed.title, 'Fixed Work Shell');
 	assert.equal(fixed.customTitle, 'Fixed Work Shell');
+});
+
+test('resetting a terminal icon preserves its launch profile, color, name and process', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const terminal = await terminals.createTerminal({
+		profile: { type: 'default' },
+		icon: { id: 'terminal-powershell' },
+		color: 'terminal.ansiGreen',
+	});
+	const profile = terminal.profile;
+	const resource = terminal.resource;
+	await terminal.rename!('My shell');
+	await terminal.changeIcon!({ id: 'terminal-git-bash' });
+	assert.equal(terminal.profile.icon?.id, 'terminal-git-bash');
+	await terminal.changeIcon!(undefined);
+	assert.equal(terminal.profile, profile);
+	assert.equal(terminal.profile.icon?.id, 'terminal-powershell');
+	assert.equal(terminal.profile.color, 'terminal.ansiGreen');
+	assert.equal(terminal.title, 'My shell');
+	assert.equal(terminal.resource, resource);
+	assert.equal(terminal.state, 'running');
+	assert.equal(processes.createCalls.length, 1);
 });
 
 test('terminal title and icon editing survive process replacement and reset through the original owner', async () => {

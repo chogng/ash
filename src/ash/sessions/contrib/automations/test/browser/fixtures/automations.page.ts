@@ -5,6 +5,7 @@ import type { IRendererAgentHostConnection, IRendererAgentHost } from '../../../
 import { BrowserLayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { QuickInputService } from '../../../../../../platform/quickinput/browser/quickInputService.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
@@ -341,6 +342,10 @@ if (parameters.has('hosts')) {
 	services.registerInstance(IFileService, resources.add(new FileService()));
 	const files = resources.add(new AgentHostFileSystemProvider({ api: renderer.fs, resourceApi: renderer.resource }));
 	services.registerInstance(IAgentHostFileSystemService, resources.add(services.createInstance(AgentHostFileSystemService, files, undefined)));
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+		showContextMenu() { throw new Error('Unexpected Quick Input context menu'); }, hideContextMenu() { },
+	});
 	services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 	services.registerInstance(IRemoteConnectionApi, {
 		available: true, list: async () => hostTargets,

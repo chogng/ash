@@ -1304,6 +1304,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
                 thread_id: root_id.clone(),
                 title: "Main".into(),
                 created_at_unix_ms: 1,
+                last_activity_at_unix_ms: Some(1),
                 completed_turn_duration_ms: 1_000,
                 active_turn_started_at_unix_ms: None,
                 usage: Default::default(),
@@ -1316,6 +1317,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
                 thread_id: ThreadId::new("child").unwrap(),
                 title: "Child".into(),
                 created_at_unix_ms: 2,
+                last_activity_at_unix_ms: Some(2),
                 completed_turn_duration_ms: 2_000,
                 active_turn_started_at_unix_ms: None,
                 usage: Default::default(),
@@ -2164,6 +2166,7 @@ fn manager_session(
             thread_id: ThreadId::new(id).unwrap(),
             title: "main".into(),
             created_at_unix_ms: 0,
+            last_activity_at_unix_ms: Some(0),
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
             usage: Default::default(),
@@ -2604,6 +2607,7 @@ fn configured_model_summary() -> ModelSummary {
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -2624,6 +2628,7 @@ fn configured_model_summary() -> ModelSummary {
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![
@@ -2743,6 +2748,7 @@ fn custom_model_choices(
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -2763,6 +2769,7 @@ fn custom_model_choices(
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],

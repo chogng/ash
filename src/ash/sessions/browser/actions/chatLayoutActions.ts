@@ -12,70 +12,97 @@ import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.j
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+import { AdvisorConfigurationPicker } from '../../../workbench/contrib/advisor/browser/advisor.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AgentSessionsViewerOrientation } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
 import { ChatViewPane } from '../chatViewPane.js';
 import { Menus } from '../menus.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
+import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
+import { Dimension } from '../../../base/browser/dom.js';
+import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../workbench/common/views.js';
+import { IPaneCompositePartService } from '../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { IWorkbenchLayoutService, isHorizontal } from '../../../workbench/services/layout/browser/layoutService.js';
 
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsOrientation>({
-	key: AGENT_SESSIONS_ORIENTATION_SETTING,
-	defaultValue: AgentSessionsOrientation.SideBySide,
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
+	key: AGENT_SESSIONS_PRESENTATION_SETTING,
+	defaultValue: AgentSessionsPresentation.Tabs,
 	scope: ConfigurationScope.WINDOW,
-	schema: { type: 'string', enum: Object.values(AgentSessionsOrientation) },
-	parse(value: unknown): AgentSessionsOrientation {
-		switch (value) {
-			// Decode old profiles until Chat migrates the persisted value to a fixed layout.
-			case 'auto': return AgentSessionsOrientation.SideBySide;
-			case AgentSessionsOrientation.SideBySide:
-			case AgentSessionsOrientation.Stacked: return value;
-			default: throw new TypeError(localize('chat.sessions.layout.invalid', 'Invalid Sessions layout.'));
-		}
+	schema: { type: 'string', enum: Object.values(AgentSessionsPresentation) },
+	parse(value: unknown): AgentSessionsPresentation {
+		if (value === AgentSessionsPresentation.Tabs || value === AgentSessionsPresentation.List) return value;
+		throw new TypeError(localize('chat.sessions.presentation.invalid', 'Invalid session display mode.'));
 	},
 	setting: {
-		title: localize('chat.sessions.layout.title', 'Sessions layout'),
-		description: localize('chat.sessions.layout.description', 'Choose Side by side or Stacked for the Sessions list. Your choice is remembered and does not change when you resize Chat. Use the Sessions button to open or close the list.'),
+		title: localize('chat.sessions.presentation.title', 'Session display'),
+		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list. The list opens beside Chat when there is enough width.'),
 		valueType: 'select',
 		options: [
-			{ value: AgentSessionsOrientation.SideBySide, label: localize('chat.sessions.layout.sideBySide', 'Side by side') },
-			{ value: AgentSessionsOrientation.Stacked, label: localize('chat.sessions.layout.stacked', 'Stacked') },
+			{ value: AgentSessionsPresentation.Tabs, label: localize('chat.sessions.presentation.tabs', 'Tabs') },
+			{ value: AgentSessionsPresentation.List, label: localize('chat.sessions.presentation.list', 'List') },
 		],
 	},
 });
 
 MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
 	submenu: Menus.ChatSessionsLayout,
-	title: localize2('chat.sessions.layout.title', 'Sessions layout'),
+	title: localize2('chat.sessions.presentation.title', 'Session display'),
 	group: 'layout',
 	order: 1,
 });
 
-for (const [orientation, title, id] of [
-	[AgentSessionsOrientation.SideBySide, localize2('chat.sessions.layout.sideBySide', 'Side by side'), 'workbench.action.chat.setAgentSessionsOrientationSideBySide'],
-	[AgentSessionsOrientation.Stacked, localize2('chat.sessions.layout.stacked', 'Stacked'), 'workbench.action.chat.setAgentSessionsOrientationStacked'],
+for (const [presentation, title, id] of [
+	[AgentSessionsPresentation.Tabs, localize2('chat.sessions.presentation.tabs', 'Tabs'), 'workbench.action.chat.setAgentSessionsPresentationTabs'],
+	[AgentSessionsPresentation.List, localize2('chat.sessions.presentation.list', 'List'), 'workbench.action.chat.setAgentSessionsPresentationList'],
 ] as const) {
 	registerAction2(class extends Action2 {
 		constructor() {
 			super({
 				id,
 				title,
-				toggled: AgentSessionsOrientationContext.isEqualTo(orientation),
-				menu: { id: Menus.ChatSessionsLayout, group: 'navigation' },
+				toggled: AgentSessionsPresentationContext.isEqualTo(presentation),
+				menu: { id: Menus.ChatSessionsLayout, group: 'navigation', order: presentation === AgentSessionsPresentation.Tabs ? 1 : 2 },
 				f1: true,
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, orientation, ConfigurationTarget.USER_LOCAL);
+			await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, presentation, ConfigurationTarget.USER_LOCAL);
 		}
 	});
 }
 
 const ChatBrowserAvailable = ContextKeyExpr.equals('chatBrowserAvailable', true);
+
+for (const [orientation, id, title] of [
+	['stacked', 'agentSessions.hideAgentSessionsSidebar', localize2('chat.sessions.orientation.stackCommand', 'Stack Agent Sessions Above Chat')],
+	['sideBySide', 'agentSessions.showAgentSessionsSidebar', localize2('chat.sessions.orientation.sidebarCommand', 'Show Agent Sessions Sidebar')],
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({ id, title, precondition: AgentSessionsPresentationContext.isEqualTo(AgentSessionsPresentation.List), f1: true });
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID, false);
+			if (!(view instanceof ChatViewPane)) {
+				return;
+			}
+			const target = orientation === 'sideBySide' ? AgentSessionsViewerOrientation.SideBySide : AgentSessionsViewerOrientation.Stacked;
+			const previousDimensions = view.getLastDimensions(target);
+			await accessor.get(IConfigurationService).updateValue(ChatConfiguration.ChatViewSessionsOrientation, orientation, ConfigurationTarget.USER_LOCAL);
+			if (target === AgentSessionsViewerOrientation.SideBySide && view.getSessionsViewerOrientation() !== target) {
+				view.toggleSessionsSidebar();
+			}
+			resizeChatForSessions(accessor, view, target, previousDimensions?.width);
+		}
+	});
+}
 
 
 registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
@@ -86,7 +113,7 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 			tooltip: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
 			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
-				condition: AgentSessionsSidebarVisibleContext.isEqualTo(true),
+				condition: ChatContextKeys.agentSessionsViewerOrientation.isEqualTo(AgentSessionsViewerOrientation.SideBySide),
 				title: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 				tooltip: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 				icon: Lxicon.layoutSidebarRight1,
@@ -103,10 +130,65 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID);
-		if (view instanceof ChatViewPane) view.toggleSessionsSidebar();
+		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID, false);
+		if (!(view instanceof ChatViewPane)) {
+			return;
+		}
+		const target = view.getSessionsViewerOrientation() === AgentSessionsViewerOrientation.SideBySide
+			? AgentSessionsViewerOrientation.Stacked : AgentSessionsViewerOrientation.SideBySide;
+		// Capture the target's last geometry before visibility or configuration can relayout it.
+		const previousDimensions = view.getLastDimensions(target);
+		if (target === AgentSessionsViewerOrientation.SideBySide) {
+			await accessor.get(IConfigurationService).updateValue(ChatConfiguration.ChatViewSessionsOrientation, 'sideBySide', ConfigurationTarget.USER_LOCAL);
+		}
+		// Reveal and resize together so a settings write cannot expose the stacked layout.
+		view.toggleSessionsSidebar({ visible: target === AgentSessionsViewerOrientation.SideBySide });
+		resizeChatForSessions(accessor, view, target, previousDimensions?.width);
 	}
 });
+
+function resizeChatForSessions(accessor: ServicesAccessor, view: ChatViewPane, orientation: AgentSessionsViewerOrientation, previousContentWidth: number | undefined): void {
+	if (accessor.get(IContextKeyService).getValue<boolean>('chatInEditor')) {
+		return;
+	}
+	const descriptors = accessor.get(IViewDescriptorService);
+	const container = descriptors.getViewContainerForView(CHAT_VIEW_ID);
+	const location = container ? descriptors.getViewContainerLocation(container) : null;
+	if (location === null) {
+		return;
+	}
+	const layout = accessor.get(IWorkbenchLayoutService);
+	// A horizontal Panel shares its width with the editor and cannot be widened independently.
+	if (location === ViewContainerLocation.Panel && isHorizontal(layout.getPanelPosition())) {
+		return;
+	}
+	const part = accessor.get(IPaneCompositePartService).getPartId(location);
+	let size = layout.getPartSize(part);
+	const paneWidth = view.element.getBoundingClientRect().width;
+	const frameWidth = paneWidth > 0 ? Math.max(0, size.width - paneWidth) : 0;
+	// The view owns its preferred content width; the Part adds its frame insets.
+	const sideBySide = orientation === AgentSessionsViewerOrientation.SideBySide;
+	const minimumWidth = view.getOptimalWidth() + frameWidth + 1;
+	if (sideBySide && size.width >= minimumWidth) {
+		return;
+	}
+	// Maximization belongs to the Workbench; closing the inner sidebar keeps that state.
+	if (!sideBySide && part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
+		return;
+	}
+	if (part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
+		layout.setAuxiliaryBarMaximized(false);
+		size = layout.getPartSize(part);
+	}
+	const previousWidth = previousContentWidth === undefined ? undefined : previousContentWidth + frameWidth;
+	const width = sideBySide
+		? Math.max(minimumWidth, previousWidth ?? layout.mainContainerDimension.width / 2)
+		: previousWidth ?? Math.max(view.getOptimalWidth() + frameWidth, size.width - view.getOptimalWidth());
+	layout.resizePart(part, new Dimension(width, size.height));
+	if (sideBySide && part === 'auxiliarybar' && layout.getPartSize(part).width < minimumWidth) {
+		layout.setAuxiliaryBarMaximized(true);
+	}
+}
 
 registerAction2(class OpenChatBrowserAction extends Action2 {
 	constructor() {
@@ -212,66 +294,14 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const chat = accessor.get(IChatService);
+		const preferences = accessor.get(IPreferencesService);
+		const languageModels = accessor.get(ILanguageModelsService);
 		const quickInput = accessor.get(IQuickInputService);
-		const [current, models] = await Promise.all([chat.readAdvisorDefault(), accessor.get(ILanguageModelsService).listAdvisorModels()]);
-		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true; };
-		const picker = quickInput.createQuickPick<Setting>();
-		const disposables = new DisposableStore();
-		disposables.add(picker);
-		picker.ariaLabel = localize('chat.settings.advisorAria', 'Chat settings and advisor model');
-		picker.placeholder = models.length
-			? localize('chat.settings.advisorPlaceholder', 'Choose an advisor model or open all settings')
-			: localize('chat.settings.advisorProviderRequired', 'Configure a provider in Chat Settings to choose an advisor model');
-		picker.items = [
-			{ label: localize('chat.settings.openAll', 'Open all settings'), openSettings: true },
-			{ label: localize('chat.providerKeys.manage', 'Manage Model Connections'), manageProviderKeys: true },
-			...(current ? [{
-				label: current.enabled ? localize('chat.settings.advisorDisable', 'Turn Advisor off') : localize('chat.settings.advisorEnable', 'Turn Advisor on'),
-				description: `${current.model.provider}/${current.model.model}`,
-				model: { ...current, enabled: !current.enabled },
-			}, {
-				label: localize('chat.settings.advisorClear', 'Clear saved Advisor model'),
-				clearModel: true as const,
-			}] : []),
-			...models.map(entry => ({
-				label: entry.displayName,
-				description: current?.model.provider === entry.model.provider && current.model.model === entry.model.model ? localize('chat.settings.current', 'Current') : `${entry.model.provider}/${entry.model.model}`,
-				model: current?.model.provider === entry.model.provider && current.model.model === entry.model.model
-					? { ...current, enabled: true }
-					: { model: entry.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
-			})),
-		];
-		disposables.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-
-			if (item.openSettings) {
-				picker.hide();
-				void accessor.get(IPreferencesService).openSettings();
-				return;
-			}
-			if (item.manageProviderKeys) {
-				picker.hide();
-				void showModelProviderKeys(accessor.get(ILanguageModelsService), quickInput, accessor.get(IDialogService));
-				return;
-			}
-			if (item.clearModel) {
-				void chat.saveAdvisorDefault(null).then(
-					() => picker.hide(),
-					error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
-				);
-				return;
-			}
-			if (!item.model) return;
-			void chat.saveAdvisorDefault(item.model).then(
-				() => picker.hide(),
-				error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
-			);
-
-		}));
-		disposables.add(picker.onDidHide(() => disposables.dispose()));
-		picker.show();
+		const dialogs = accessor.get(IDialogService);
+		await accessor.get(IInstantiationService).createInstance(AdvisorConfigurationPicker).show([
+			{ label: localize('chat.settings.openAll', 'Open all settings'), run: () => preferences.openSettings() },
+			{ label: localize('chat.providerKeys.manage', 'Manage Model Connections'), run: () => showModelProviderKeys(languageModels, quickInput, dialogs) },
+		]);
 	}
 });
 

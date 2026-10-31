@@ -5,7 +5,7 @@ import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { getViewport } from '../../../base/browser/geometry.js';
-import { AnchorPosition, layout2d } from '../../../base/common/layout.js';
+import { AnchorAlignment, AnchorPosition, layout2d } from '../../../base/common/layout.js';
 import {
 	setAriaAttribute,
 	setRole,
@@ -30,6 +30,7 @@ import { QuickInputList } from './quickInputList.js';
 import { QuickInputType, QuickPickFocus } from '../common/quickInput.js';
 import { localize } from '../../../nls.js';
 import { RawContextKey } from '../../contextkey/common/contextkey.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 export const inQuickInputContext = new RawContextKey<boolean>('inQuickInput', false);
 export const quickInputTypeContextKey = new RawContextKey<string>('quickInputType', '');
@@ -58,6 +59,9 @@ export class QuickPick<TItem extends IQuickPickItem>
 	public readonly type = QuickInputType.QuickPick;
 	public anchor?: unknown;
 	public anchorPosition?: 'above' | 'below';
+	public anchorAlignment?: 'left' | 'right';
+	public width?: number;
+	public ignoreFocusOut = false;
 	private readonly inputBox: InputBox;
 	private readonly inputActions: ActionBar;
 	private readonly list: QuickInputList<TItem>;
@@ -112,7 +116,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
-	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>());
+	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>());
 	private readonly options: BrowserQuickInputHostOptions;
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
@@ -133,7 +137,11 @@ export class QuickPick<TItem extends IQuickPickItem>
 	public set selectedItems(items: readonly TItem[]) { this.list.selectedItems = items; }
 	public get onDidChangeSelection(): Event<readonly TItem[]> { return this.list.onDidChangeSelection; }
 
-	constructor(private readonly host: HTMLElement, options: BrowserQuickInputHostOptions) {
+	constructor(
+		private readonly host: HTMLElement,
+		options: BrowserQuickInputHostOptions,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super();
 		this.options = options;
 		const ownerDocument = host.ownerDocument;
@@ -141,7 +149,13 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.element.className = 'ash-quick-pick';
 		setRole(this.element, 'dialog');
 		setAriaAttribute(this.element, 'label', this._ariaLabel);
-		this.list = this._register(new QuickInputList<TItem>(this.element));
+		try {
+			this.list = this._register(instantiationService.createInstance(QuickInputList<TItem>, this.element, 'quickPick'));
+		} catch (error) {
+			// A missing list dependency must also release this picker's initialized emitters.
+			this.dispose();
+			throw error;
+		}
 		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
 			inputBoxStyles: defaultInputBoxStyles,
@@ -300,7 +314,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 				width: Math.max(0, viewport.width - margin * 2), height: Math.max(0, viewport.height - margin * 2),
 			};
 			const anchor = this.anchor.getBoundingClientRect();
-			this.element.style.width = `${Math.min(380, bounds.width)}px`;
+			this.element.style.width = `${Math.min(this.width ?? 380, bounds.width)}px`;
 			const style = ownerWindow.getComputedStyle(this.element);
 			const listStyle = ownerWindow.getComputedStyle(this.list.element);
 			const reservedHeight = this.inputBox.element.getBoundingClientRect().height
@@ -316,6 +330,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 			const picker = this.element.getBoundingClientRect();
 			const position = layout2d(bounds, picker, anchor, {
 				anchorPosition: this.anchorPosition === 'below' ? AnchorPosition.Below : AnchorPosition.Above,
+				anchorAlignment: this.anchorAlignment === 'right' ? AnchorAlignment.Right : AnchorAlignment.Left,
 				gap,
 			});
 			this.element.style.left = `${position.left}px`;

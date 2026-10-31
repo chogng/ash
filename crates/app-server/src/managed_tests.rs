@@ -13,6 +13,7 @@ fn invalid_profile_config_is_rejected_before_daemon_socket_is_bound() {
         profile.path().to_path_buf(),
         None,
         ash_app_server_diff::compute,
+        build_info::BuildInfo::new(None, None),
     )
     .unwrap_err();
 
@@ -42,11 +43,11 @@ fn peer_disconnects_are_normal_transport_shutdowns() {
 #[cfg(any(unix, windows))]
 fn connection_workers_close_sockets_and_release_services_before_returning() {
     use ash_app_server_transport::LocalConnections;
-    use ash_uds::UnixStream;
+    use ash_uds::IpcStream;
     use std::io::Read;
     use std::sync::Arc;
 
-    let (mut stream, _peer) = UnixStream::pair().unwrap();
+    let (mut stream, _peer) = IpcStream::pair().unwrap();
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(2)))
         .unwrap();
@@ -87,7 +88,7 @@ fn connection_workers_close_sockets_and_release_services_before_returning() {
 #[cfg(any(unix, windows))]
 fn managed_stop_returns_after_connections_and_services_are_released() {
     use ash_app_server_daemon::daemon_endpoint_path;
-    use ash_uds::UnixStream;
+    use ash_uds::IpcStream;
     use std::io::BufRead;
     use std::io::BufReader;
     use std::io::Write;
@@ -120,7 +121,7 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     let endpoint = daemon_endpoint_path(profile.path()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(15);
     let mut stream = loop {
-        if let Ok(stream) = UnixStream::connect(&endpoint) {
+        if let Ok(stream) = IpcStream::connect(&endpoint) {
             break stream;
         }
         assert!(
@@ -160,7 +161,7 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     let response: serde_json::Value = serde_json::from_str(&response).unwrap();
     assert!(response["result"].is_object());
 
-    let mut control = UnixStream::connect(&endpoint).unwrap();
+    let mut control = IpcStream::connect(&endpoint).unwrap();
     control
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
@@ -193,5 +194,5 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     );
     assert!(!endpoint.exists());
     assert!(!endpoint.with_extension("pid.json").exists());
-    assert!(UnixStream::connect(endpoint).is_err());
+    assert!(IpcStream::connect(endpoint).is_err());
 }

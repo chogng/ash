@@ -1,6 +1,5 @@
 import { getActiveDocument, h } from '../../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../../base/browser/ui/button/button.js';
-import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import type { IModelPickerDestination } from './modelPickerTabs.js';
@@ -13,7 +12,6 @@ export class ModelPickerWelcome extends DisposableStore {
 		super();
 		this.element = h(document, 'div');
 		this.element.className = 'ash-chat-model-picker-empty';
-		appendIcon(destination.icon, this.element);
 		this.add(toDisposable(() => this.element.remove()));
 		for (const placeholder of destination.placeholders) {
 			const title = h(document, 'div');

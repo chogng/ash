@@ -37,4 +37,4 @@ workspace = true
 
 [package.metadata.cargo-shear]
 # tests/host.rs compiles the product consumer adapter by path against the real executable.
-ignored = ["ash-external-ext", "external-ext-protocol", "ash-utils-path", "sha2"]
+ignored = ["ash-external-ext", "external-ext-protocol", "ash-utils-path"]

@@ -7,6 +7,7 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
 import { ScmAgentReviewViewPane } from './scmAgentReviewViewPane.js';
+import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
 import { SCMHistoryViewPane } from './scmHistoryViewPane.js';
 import { SCMActiveRepositoryController, ScmStatusContribution } from './activity.js';
 import { ScmViewPane } from './scmViewPane.js';
@@ -298,6 +299,19 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 export const SCM_AGENT_REVIEW_VIEW_ID = 'ash.gitAgentReview';
 export const SCM_HISTORY_VIEW_ID = 'ash.gitGraph';
 
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.Help,
+	priority: 100,
+	name: 'scmAgentReview',
+	when: FocusedViewContext.isEqualTo(SCM_AGENT_REVIEW_VIEW_ID),
+	getProvider: accessor => {
+		const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement as HTMLElement;
+		return new AccessibleContentProvider(AccessibleViewProviderId.Scm, { type: AccessibleViewType.Help },
+			() => localize('scm.review.help', 'Agent Review checks the selected repository. Find Issues always reviews all current staged, unstaged and untracked changes. Tab reaches Choose Review Scope; Down Arrow opens the menu. Choose current changes, staged changes only, or branch changes and press Enter to start. Branch review first asks for a base branch. Custom Review asks for a focus such as concurrency, security or tests, then reviews current changes. Escape cancels a picker or closes the menu and returns focus. Each review opens a separate Chat, preserving existing drafts. Read results and stop running reviews in that Chat. Choosing a scope never changes the Find Issues default.'),
+			() => restoreFocus(focused), AccessibilityVerbositySettingId.Scm);
+	},
+});
+
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
 
 registerAction2(class SCMHistoryRefreshAction extends Action2 {
@@ -410,7 +424,7 @@ export function registerSCMViews(
 			title: 'Agent Review',
 			localizationKey: { bundle: 'ash.views', key: 'agentReview' },
 			order: 2,
-			when: ContextKeyExpr.greater('scm.providerCount', 0),
+			when: ContextKeyExpr.and(ContextKeyExpr.greater('scm.providerCount', 0), ChatContextKeys.enabled.isEqualTo(true)),
 			collapsed: true,
 			canToggleVisibility: true,
 			canMoveView: true,

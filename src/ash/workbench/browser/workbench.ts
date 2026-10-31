@@ -725,6 +725,7 @@ export class Workbench extends Disposable {
 			api: api.fs,
 			resourceApi: api.resource,
 			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
+			isConnectionReady: () => !api.appServer.recovery || api.appServer.recovery.status === 'idle',
 			onDidChange: listener => {
 				const subscriptions = new DisposableStore();
 				const subscription = api.events.subscribe(event => {

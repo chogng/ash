@@ -1,8 +1,6 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelProviderCredentialStatus } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
-import type { Icon } from '../../../../../../../base/common/icon.js';
-import { getProviderIconForIdentity } from './modelProviderIcons.js';
 
 export interface IModelPickerProviderPlaceholder {
 	readonly vendor: string;
@@ -15,7 +13,6 @@ export interface IModelPickerDestination {
 	readonly id: string;
 	readonly label: string;
 	readonly models: readonly ModelCatalogEntry[];
-	readonly icon: Icon;
 	readonly placeholders: readonly IModelPickerProviderPlaceholder[];
 }
 
@@ -47,12 +44,11 @@ export function buildModelPickerDestinations(
 		if (!groups.has(placeholder.vendor)) { groups.set(placeholder.vendor, []); }
 	}
 	if (groups.size === 0) {
-		return [{ id: '', label: localize('chat.modelPicker.models', 'Models'), icon: getProviderIconForIdentity(''), models: [], placeholders: [] }];
+		return [{ id: '', label: localize('chat.modelPicker.models', 'Models'), models: [], placeholders: [] }];
 	}
 	return [...groups].map(([id, entries]) => ({
 		id,
 		label: providerLabels[id] ?? labels.get(id) ?? placeholders.find(placeholder => placeholder.vendor === id)?.label ?? id,
-		icon: getProviderIconForIdentity(id),
 		models: entries,
 		placeholders: entries.length ? [] : placeholders.filter(placeholder => placeholder.vendor === id),
 	}));

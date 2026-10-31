@@ -7,7 +7,6 @@ import { ImageEditorService } from '../../../workbench/services/imageEditor/brow
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
@@ -138,7 +137,6 @@ test('opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		new UserDataProfileService(),
 		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService),
 	);
 
@@ -254,7 +252,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,
@@ -279,6 +277,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,
+		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
 		startTurn: () => pending as Promise<void>,
 		queueTurn: () => pending as Promise<void>,
 		queuedMessageCount: () => pending as Promise<number>,

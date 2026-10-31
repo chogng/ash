@@ -8,7 +8,7 @@ import { isMacintosh, isWeb } from '../../base/common/platform.js';
 import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from '../../platform/window/common/window.js';
 
 export type WorkbenchLayoutStyle = 'modern' | 'flat';
-export type ModernUIEditorTabStyle = 'standard' | 'connected' | 'pill';
+export type ModernUIEditorTabStyle = 'connected' | 'pill';
 export const enum ActivityBarPosition {
 	DEFAULT = 'default',
 	TOP = 'top',
@@ -197,30 +197,31 @@ export const WorkbenchConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'select',
-			title: 'Layout style',
-			description: 'Choose floating Modern surfaces or edge-to-edge Flat Workbench regions.',
-			options: [
-				{ value: 'modern', label: 'Modern' },
-				{ value: 'flat', label: 'Flat' },
-			],
+			get title() { return localize('workbench.layoutStyle.title', 'Workbench Style'); },
+			get description() { return localize('workbench.layoutStyle.description', 'Choose rounded Modern surfaces or edge-to-edge Flat regions. Changes apply immediately.'); },
+			get options() {
+				return [
+					{ value: 'modern', label: localize('workbench.layoutStyle.modern', 'Modern') },
+					{ value: 'flat', label: localize('workbench.layoutStyle.flat', 'Flat') },
+				] as const;
+			},
 		},
 	}),
 	modernUIEditorTabStyle: configurationRegistry.registerConfiguration<ModernUIEditorTabStyle>({
 		key: 'workbench.experimental.modernUIEditorTabStyle',
-		defaultValue: 'standard',
+		defaultValue: 'connected',
 		scope: ConfigurationScope.WINDOW,
-		schema: { type: 'string', enum: ['standard', 'connected', 'pill'] },
+		schema: { type: 'string', enum: ['connected', 'pill'] },
 		parse(value: unknown): ModernUIEditorTabStyle {
-			if (value === 'standard' || value === 'connected' || value === 'pill') return value;
-			throw new TypeError(localize('workbench.editor.tabStyle.invalid', 'Invalid editor tab style. Use standard, connected, or pill.'));
+			if (value === 'connected' || value === 'pill') return value;
+			throw new TypeError(localize('workbench.editor.tabStyle.invalid', 'Invalid editor tab style. Use connected or pill.'));
 		},
 		setting: {
 			valueType: 'select',
 			get title() { return localize('workbench.editor.tabStyle.title', 'Editor Tab Style'); },
-			get description() { return localize('workbench.editor.tabStyle.description', 'Choose full-height VS Code standard tabs, connected tabs, or separate rounded tabs. Connected and rounded tabs apply in the Modern layout. Each tab includes space for its status and close button.'); },
+			get description() { return localize('workbench.editor.tabStyle.description', 'Choose full-height connected tabs or separate rounded tabs. Pill tabs only take effect when {0} is Modern. Each tab includes space for its status and close button.', '`#workbench.layoutStyle#`'); },
 			get options() {
 				return [
-					{ value: 'standard', label: localize('workbench.editor.tabStyle.standard', 'VS Code Standard') },
 					{ value: 'connected', label: localize('workbench.editor.tabStyle.connected', 'Connected') },
 					{ value: 'pill', label: localize('workbench.editor.tabStyle.pill', 'Pill') },
 				] as const;

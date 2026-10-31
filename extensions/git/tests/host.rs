@@ -45,6 +45,7 @@ struct Client {
     shared_configuration: Mutex<Value>,
     snapshots: Mutex<Vec<Value>>,
     requests: Mutex<Vec<(String, Value)>>,
+    status_override: Mutex<Option<Value>>,
 }
 impl Client {
     fn git(&self, args: &[&str]) -> String {
@@ -62,6 +63,9 @@ impl Client {
         String::from_utf8(output.stdout).unwrap().trim().to_owned()
     }
     fn status(&self) -> Value {
+        if let Some(status) = self.status_override.lock().unwrap().as_ref() {
+            return status.clone();
+        }
         if self.binary_comparison.load(Ordering::Acquire) {
             return json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":self.git(&["rev-parse","HEAD"]),"upstream":null},"changes":[{"path":"image.bin","indexStatus":"modified","worktreeStatus":"modified","conflicted":self.conflict_comparison.load(Ordering::Acquire),"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}}]});
         }
@@ -441,6 +445,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             ),
             snapshots: Mutex::new(Vec::new()),
             requests: Mutex::new(Vec::new()),
+            status_override: Mutex::new(None),
         });
         let (supervisor, authority) = product_supervisor(directory.path());
         let binding = Arc::clone(&client);
@@ -520,6 +525,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             &client,
             invocation("ash.scm", "scm", json!({"method":"initialize"})),
         );
+        verify_sync_confirmation(&supervisor, &client, language);
         // Both public refresh entries must publish busy state before reading disk.
         // Holding the status response here makes progress observable without timing Git.
         for (request, fail) in [
@@ -799,6 +805,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         assert_eq!(client.git(&["rev-parse", "HEAD^"]), parent);
         assert!(client.git(&["status", "--porcelain"]).is_empty());
         verify_history_references(&supervisor, &client);
+        verify_checkout_picker(&supervisor, &client, language);
         verify_workspace_comparisons(&supervisor, &client, language);
         verify_binary_comparisons(&supervisor, &client);
         for cancellable in [false, true] {
@@ -879,6 +886,413 @@ fn finish_helper(mut child: std::process::Child) -> std::process::Output {
     }
     child.wait_with_output().unwrap()
 }
+fn verify_sync_confirmation(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    language: &str,
+) {
+    let mut status = client.status();
+    status["changes"] = json!([]);
+    status["head"]["upstream"] = json!({"name":"origin/main","ahead":1,"behind":0});
+    // The foreground request and background watcher must observe the same facts.
+    *client.status_override.lock().unwrap() = Some(status.clone());
+    let confirmation = if language == "zh-CN" {
+        "此操作将从“origin/main”拉取提交并向其推送提交。"
+    } else {
+        "This action will pull and push commits from and to \"origin/main\"."
+    };
+    // Seed the public SCM snapshot with an outstanding sync action.
+    supervisor
+        .begin_invoke(invocation(
+            "git.refresh",
+            "execute",
+            json!({"arguments":["root"]}),
+        ))
+        .unwrap()
+        .wait_with_client(|operation, _, _| match operation {
+            Operation::BackendRequest { ref method, .. } if method == "status" => {
+                Ok(ResultValue::Value {
+                    value: status.clone(),
+                })
+            }
+            operation => client.request(operation),
+        })
+        .unwrap();
+
+    for command in ["git.sync", "git.syncRebase"] {
+        for selection in [None, Some(0), Some(1)] {
+            let before = wait_for_sync_snapshot(client, false, true);
+            let mut prompts = 0;
+            let mut transports = Vec::new();
+            supervisor
+                .begin_invoke(invocation(
+                    command,
+                    "execute",
+                    json!({"arguments":["root"]}),
+                ))
+                .unwrap()
+                .wait_with_client(|operation, _, _| match operation {
+                    Operation::EditorOperation { payload } if payload["method"] == "prompt" => {
+                        prompts += 1;
+                        assert_eq!(payload["message"], confirmation);
+                        let preparing = wait_for_sync_snapshot(client, false, false);
+                        assert_eq!(
+                            preparing["historyOperationRevision"],
+                            before["historyOperationRevision"]
+                        );
+                        assert!(
+                            !preparing["actionButton"]["command"]["title"]
+                                .as_str()
+                                .unwrap()
+                                .contains("~spin")
+                        );
+                        assert_eq!(preparing["statusMessage"], before["statusMessage"]);
+                        assert!(
+                            transports.is_empty(),
+                            "confirmation must precede all transport"
+                        );
+                        Ok(ResultValue::Value {
+                            value: json!({"selection":selection}),
+                        })
+                    }
+                    Operation::BackendRequest { method, params, .. }
+                        if method == "runTransport" =>
+                    {
+                        assert_eq!(prompts, 1);
+                        assert!(selection.is_some(), "cancelling must not run transport");
+                        let running = wait_for_sync_snapshot(client, true, false);
+                        assert_ne!(running["statusMessage"], before["statusMessage"]);
+                        assert!(
+                            running["actionButton"]["command"]["title"]
+                                .as_str()
+                                .unwrap()
+                                .contains("~spin")
+                        );
+                        transports.push(params["operation"]["kind"].as_str().unwrap().to_owned());
+                        Ok(ResultValue::Value {
+                            value: json!({"status":status,"outcome":{"kind":"completed"}}),
+                        })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "status" => {
+                        Ok(ResultValue::Value {
+                            value: status.clone(),
+                        })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "pullPreflight" => {
+                        Ok(ResultValue::Value {
+                            value: json!({"upstreamRewritten":false}),
+                        })
+                    }
+                    Operation::UpdateConfiguration { section, value, .. } => {
+                        assert_eq!(selection, Some(1));
+                        assert_eq!(section, "git.confirmSync");
+                        assert_eq!(value, json!(false));
+                        Ok(ResultValue::Done)
+                    }
+                    operation => client.request(operation),
+                })
+                .unwrap();
+            assert_eq!(prompts, 1);
+            assert_eq!(
+                transports,
+                if selection.is_some() {
+                    vec!["pull", "push"]
+                } else {
+                    vec![]
+                }
+            );
+            let settled = wait_for_sync_snapshot(client, false, true);
+            assert_eq!(
+                settled["historyOperationRevision"].as_u64().unwrap(),
+                before["historyOperationRevision"].as_u64().unwrap()
+                    + u64::from(selection.is_some())
+            );
+        }
+    }
+    verify_sync_followup_prompts(supervisor, client, &status, &confirmation);
+    verify_cancelled_remote_picker(supervisor, client, status);
+    *client.status_override.lock().unwrap() = None;
+}
+
+fn verify_cancelled_remote_picker(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    mut status: Value,
+) {
+    status["head"]["upstream"] = Value::Null;
+    *client.status_override.lock().unwrap() = Some(status);
+    execute(
+        supervisor,
+        client,
+        invocation("git.refresh", "execute", json!({"arguments":["root"]})),
+    );
+    for command in ["git.fetch", "git.publish", "git.sync", "git.syncRebase"] {
+        let before = wait_for_sync_snapshot(client, false, true);
+        let mut pickers = 0;
+        let request = invocation(command, "execute", json!({"arguments":["root"]}));
+        supervisor
+            .begin_invoke(request)
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                Operation::BackendRequest { ref method, .. } if method == "catalog" => {
+                    Ok(ResultValue::Value {
+                        value: json!({"tags":[],"stashes":[],"remotes":["one","two"],
+                            "upstreamReadOnly":false,"operation":null}),
+                    })
+                }
+                Operation::ShowQuickPick { .. } => {
+                    pickers += 1;
+                    let waiting = wait_for_sync_snapshot(client, false, false);
+                    assert_eq!(
+                        waiting["historyOperationRevision"],
+                        before["historyOperationRevision"]
+                    );
+                    Ok(ResultValue::Selection { index: None })
+                }
+                Operation::BackendRequest { ref method, .. }
+                    if matches!(method.as_str(), "runTransport" | "executeCommand") =>
+                {
+                    panic!("Cancelled remote picker must not execute {command}: {method}")
+                }
+                operation => client.request(operation),
+            })
+            .unwrap();
+        assert_eq!(pickers, 1);
+        let settled = wait_for_sync_snapshot(client, false, true);
+        assert_eq!(
+            settled["historyOperationRevision"],
+            before["historyOperationRevision"]
+        );
+    }
+}
+
+fn verify_sync_followup_prompts(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    status: &Value,
+    confirmation: &str,
+) {
+    #[derive(Clone, Copy, Debug)]
+    enum Scenario {
+        Rewritten { fetch_first: bool },
+        TagConflict,
+        Failure,
+        Cancelled,
+        ReadOnly,
+        NoConfirmation,
+    }
+    let saved_configuration = client.configuration.lock().unwrap().clone();
+    let idle_message = wait_for_sync_snapshot(client, false, true)["statusMessage"].clone();
+    for scenario in [
+        Scenario::Rewritten { fetch_first: false },
+        Scenario::Rewritten { fetch_first: true },
+        Scenario::TagConflict,
+        Scenario::Failure,
+        Scenario::Cancelled,
+        Scenario::ReadOnly,
+        Scenario::NoConfirmation,
+    ] {
+        for selection in [None, Some(0)] {
+            {
+                let mut configuration = client.configuration.lock().unwrap();
+                configuration["fetchOnPull"] = json!(matches!(
+                    scenario,
+                    Scenario::Rewritten { fetch_first: true }
+                ));
+                configuration["confirmSync"] = json!(!matches!(scenario, Scenario::NoConfirmation));
+            }
+            client.configuration_reset.store(true, Ordering::Release);
+            // Re-read scoped policy and restore the synthetic upstream between cases.
+            supervisor
+                .begin_invoke(invocation(
+                    "git.refresh",
+                    "execute",
+                    json!({"arguments":["root"]}),
+                ))
+                .unwrap()
+                .wait_with_client(|operation, _, _| match operation {
+                    Operation::BackendRequest { ref method, .. } if method == "status" => {
+                        Ok(ResultValue::Value {
+                            value: status.clone(),
+                        })
+                    }
+                    operation => client.request(operation),
+                })
+                .unwrap();
+            client.configuration_reset.store(false, Ordering::Release);
+            let before = wait_for_sync_snapshot(client, false, true);
+            let mut transports = Vec::new();
+            let mut followups = 0;
+            let mut confirmations = 0;
+            let request = invocation("git.sync", "execute", json!({"arguments":["root"]}));
+            let result = supervisor.begin_invoke(request)
+                .unwrap().wait_with_client(|operation, _, _| match operation {
+                    Operation::EditorOperation { payload } if payload["method"] == "prompt" => {
+                        let waiting = wait_for_sync_snapshot(client, false, false);
+                        assert_eq!(
+                            waiting["historyOperationRevision"],
+                            before["historyOperationRevision"]
+                        );
+                        assert_eq!(waiting["statusMessage"], idle_message, "{scenario:?}");
+                        assert!(!waiting["actionButton"]["command"]["title"]
+                            .as_str().unwrap().contains("~spin"));
+                        let choice = if payload["message"] == confirmation {
+                            confirmations += 1;
+                            assert!(transports.is_empty());
+                            Some(0)
+                        } else {
+                            followups += 1;
+                            match scenario {
+                                Scenario::Rewritten { fetch_first } => {
+                                    assert_eq!(transports, if fetch_first { vec!["fetch"] } else { vec![] });
+                                }
+                                Scenario::TagConflict => assert_eq!(transports, vec!["pull"]),
+                                Scenario::Failure | Scenario::Cancelled | Scenario::ReadOnly | Scenario::NoConfirmation => {
+                                    panic!("Unexpected follow-up prompt: {scenario:?}")
+                                }
+                            }
+                            selection
+                        };
+                        Ok(ResultValue::Value {
+                            value: json!({"selection":choice}),
+                        })
+                    }
+                    Operation::BackendRequest { method, params, .. } if method == "runTransport" => {
+                        let running = wait_for_sync_snapshot(client, true, false);
+                        assert_eq!(
+                            running["historyOperationRevision"],
+                            before["historyOperationRevision"]
+                        );
+                        let kind = params["operation"]["kind"].as_str().unwrap();
+                        transports.push(kind.to_owned());
+                        let value = match scenario {
+                            Scenario::Failure | Scenario::Cancelled => json!({"backendError":{
+                                "name":if matches!(scenario, Scenario::Cancelled) { "RequestCancelled" } else { "GitOperationFailed" },
+                                "message":"Synthetic transport failure"}}),
+                            Scenario::TagConflict if transports.len() == 1 => {
+                                json!({"status":status,"outcome":{"kind":"tagConflict","tags":["v1"]}})
+                            }
+                            Scenario::Rewritten { .. } | Scenario::TagConflict
+                                | Scenario::ReadOnly | Scenario::NoConfirmation => {
+                                json!({"status":status,"outcome":{"kind":"completed"}})
+                            }
+                        };
+                        Ok(ResultValue::Value { value })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "status" => {
+                        Ok(ResultValue::Value {
+                            value: status.clone(),
+                        })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "catalog" => {
+                        Ok(ResultValue::Value {
+                            value: json!({"tags":[],"stashes":[],"remotes":["origin"],
+                                "upstreamReadOnly":matches!(scenario,Scenario::ReadOnly),"operation":null}),
+                        })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "pullPreflight" => {
+                        Ok(ResultValue::Value {
+                            value: json!({"upstreamRewritten":matches!(scenario, Scenario::Rewritten { .. })}),
+                        })
+                    }
+                    Operation::UpdateConfiguration { section, .. } => {
+                        assert_eq!(selection, Some(0));
+                        assert!(matches!(section.as_str(), "git.ignoreRebaseWarning" | "git.replaceTagsWhenPull"));
+                        Ok(ResultValue::Done)
+                    }
+                    operation => client.request(operation),
+                });
+            if matches!(scenario, Scenario::Failure) {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("Synthetic transport failure")
+                );
+            } else {
+                result.unwrap();
+            }
+            assert_eq!(
+                confirmations,
+                usize::from(!matches!(
+                    scenario,
+                    Scenario::ReadOnly | Scenario::NoConfirmation
+                ))
+            );
+            assert_eq!(
+                followups,
+                usize::from(matches!(
+                    scenario,
+                    Scenario::Rewritten { .. } | Scenario::TagConflict
+                ))
+            );
+            let expected = match scenario {
+                Scenario::Rewritten { fetch_first } => {
+                    let mut expected = if fetch_first { vec!["fetch"] } else { vec![] };
+                    if selection.is_some() {
+                        expected.extend(["pull", "push"]);
+                    }
+                    expected
+                }
+                Scenario::TagConflict => {
+                    if selection.is_some() {
+                        vec!["pull", "pull", "push"]
+                    } else {
+                        vec!["pull"]
+                    }
+                }
+                Scenario::Failure | Scenario::Cancelled | Scenario::ReadOnly => vec!["pull"],
+                Scenario::NoConfirmation => vec!["pull", "push"],
+            };
+            assert_eq!(
+                transports, expected,
+                "{scenario:?}, selection={selection:?}"
+            );
+            let settled = wait_for_sync_snapshot(client, false, true);
+            assert_eq!(
+                settled["historyOperationRevision"].as_u64().unwrap(),
+                before["historyOperationRevision"].as_u64().unwrap()
+                    + u64::from(!transports.is_empty())
+            );
+        }
+    }
+    *client.configuration.lock().unwrap() = saved_configuration;
+    client.configuration_reset.store(true, Ordering::Release);
+    execute(
+        supervisor,
+        client,
+        invocation("git.refresh", "execute", json!({"arguments":["root"]})),
+    );
+    client.configuration_reset.store(false, Ordering::Release);
+}
+
+#[track_caller]
+fn wait_for_sync_snapshot(client: &Client, progress: bool, enabled: bool) -> Value {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(providers) = client.snapshots.lock().unwrap().last() {
+            let provider = &providers[0];
+            if provider["isBusy"] == progress && provider["actionButton"]["enabled"] == enabled {
+                let sync = provider["statusBarCommands"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|command| command["id"] == "ash.status.git.sync")
+                    .unwrap();
+                if sync["showProgress"] == progress {
+                    return provider.clone();
+                }
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "expected sync progress={progress}, action enabled={enabled}; latest={:?}",
+            client.snapshots.lock().unwrap().last()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 fn verify_terminal_helpers(
     supervisor: &host::ExtensionHostSupervisor,
     client: &Client,
@@ -990,6 +1404,184 @@ fn verify_terminal_helpers(
     }
     client.configuration.lock().unwrap()["enabled"] = json!(false);
     assert!(terminal_environment(supervisor, client).is_empty());
+}
+
+fn verify_checkout_picker(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    language: &str,
+) {
+    for (show_details, with_metadata) in [(true, true), (false, true), (true, false)] {
+        client.configuration.lock().unwrap()["showReferenceDetails"] = json!(show_details);
+        client.configuration.lock().unwrap()["commitShortHashLength"] = json!(9);
+        client.configuration_reset.store(true, Ordering::Release);
+        let mut shown = false;
+        let result = supervisor
+            .begin_invoke(invocation(
+                "git.switchBranch",
+                "execute",
+                json!({"arguments":["root"]}),
+            ))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                Operation::BackendRequest { ref method, .. } if method == "historyRefs" => {
+                    let ResultValue::Value { mut value } = client.request(operation)? else {
+                        panic!("Expected reference response");
+                    };
+                    for reference in value["references"].as_array_mut().unwrap() {
+                        reference["objectId"] = json!("0123456789abcdef");
+                        if with_metadata {
+                            reference["commitDetails"] = json!({
+                                "authorName":"Author $(cloud)",
+                                "timestampSeconds":SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 7320,
+                                "subject":if reference["kind"] == "tag" { "" } else { "Commit $(git-branch) subject" }
+                            });
+                        }
+                    }
+                    value["references"].as_array_mut().unwrap().push(json!({
+                        "kind":"localBranch","name":"topic/$(cloud)","objectId":"0123456789abcdef","current":false
+                    }));
+                    value["branches"] = json!([
+                        {"name":"main","objectId":"0123456789abcdef","current":true,"upstream":"origin/main","checkedOutElsewhere":false},
+                        {"name":"topic/$(cloud)","objectId":"0123456789abcdef","current":false,"upstream":null,"checkedOutElsewhere":true}
+                    ]);
+                    Ok(ResultValue::Value { value })
+                }
+                Operation::ShowQuickPick { items, placeholder } => {
+                    shown = true;
+                    let chinese = language == "zh-CN";
+                    assert_eq!(
+                        placeholder,
+                        if chinese {
+                            "选择要检出的分支或标签"
+                        } else {
+                            "Select a branch or tag to checkout"
+                        }
+                    );
+                    assert_eq!(
+                        items[..3].iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+                        if chinese {
+                            ["$(add) 创建新分支...", "$(add) 从指定引用创建新分支...", "$(debug-disconnect) 以分离 HEAD 模式检出..."]
+                        } else {
+                            ["$(add) Create new branch...", "$(add) Create new branch from...", "$(debug-disconnect) Checkout detached..."]
+                        }
+                    );
+                    assert!(items[..3].iter().all(|item| item.always_show == Some(true)));
+                    let items = &items[3..];
+                    assert_eq!(
+                        items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+                        ["$(git-branch) main", "$(git-branch) topic/\\$(cloud)", "$(cloud) origin/main", "$(tag) v1"]
+                    );
+                    assert_eq!(
+                        items.iter().filter_map(|item| item.separator.as_deref()).collect::<Vec<_>>(),
+                        if chinese { ["分支", "远程分支", "标签"] } else { ["branches", "remote branches", "tags"] }
+                    );
+                    let current = if chinese { "当前分支" } else { "Current" };
+                    assert_eq!(
+                        items.iter().map(|item| item.description.clone()).collect::<Vec<_>>(),
+                        if show_details && with_metadata {
+                            vec![
+                                Some(format!("{current} · {}", if chinese { "2 小时前" } else { "2 hours ago" })),
+                                Some("012345678".into()),
+                                Some(if chinese { "2 小时前" } else { "2 hours ago" }.into()),
+                                Some(if chinese { "2 小时前" } else { "2 hours ago" }.into()),
+                            ]
+                        } else {
+                            vec![
+                                Some(format!("{current} · 012345678")),
+                                Some("012345678".into()),
+                                Some(if chinese { "远程分支位于 012345678" } else { "Remote branch at 012345678" }.into()),
+                                Some(if chinese { "标签位于 012345678" } else { "Tag at 012345678" }.into()),
+                            ]
+                        }
+                    );
+                    for index in [0, 2] {
+                        assert_eq!(items[index].detail.as_deref(), (show_details && with_metadata).then_some("Author \\$(cloud) · 012345678 · Commit \\$(git-branch) subject"));
+                    }
+                    assert!(items[3].detail.is_none(), "An empty commit subject must not produce an empty metadata line");
+                    assert!(items[1].detail.as_ref().is_some_and(|detail| !detail.is_empty()));
+                    // Cancel through the real SDK response; no decorated label reaches Git.
+                    Ok(ResultValue::Selection { index: None })
+                }
+                operation => client.request(operation),
+            })
+            .unwrap();
+        assert!(shown);
+        assert_eq!(result.payload, Value::Null);
+    }
+    let mut configuration = client.configuration.lock().unwrap();
+    configuration
+        .as_object_mut()
+        .unwrap()
+        .remove("showReferenceDetails");
+    configuration
+        .as_object_mut()
+        .unwrap()
+        .remove("commitShortHashLength");
+    drop(configuration);
+    client.configuration_reset.store(true, Ordering::Release);
+
+    for action in 0..3 {
+        let mut choices = 0;
+        let mut named = false;
+        let result = supervisor
+            .begin_invoke(invocation(
+                "git.switchBranch",
+                "execute",
+                json!({"arguments":["root"]}),
+            ))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                Operation::ShowQuickPick { items, .. } => {
+                    choices += 1;
+                    if choices == 1 {
+                        return Ok(ResultValue::Selection {
+                            index: Some(action),
+                        });
+                    }
+                    assert!(
+                        items.iter().all(|item| item.always_show != Some(true)),
+                        "Nested reference selection must not repeat the creation actions"
+                    );
+                    if action == 2 {
+                        assert!(
+                            items.iter().all(|item| !item.label.starts_with("$(tag)")),
+                            "Detached checkout offers branches"
+                        );
+                    } else {
+                        assert!(
+                            items.iter().any(|item| item.label == "$(tag) v1"),
+                            "A tag can be the start of a new branch"
+                        );
+                    }
+                    Ok(ResultValue::Selection { index: None })
+                }
+                Operation::EditorOperation { ref payload } if payload["method"] == "input" => {
+                    named = true;
+                    Ok(ResultValue::Value { value: Value::Null })
+                }
+                Operation::BackendRequest { ref method, .. }
+                    if matches!(
+                        method.as_str(),
+                        "createBranch" | "executeCommand" | "switchBranch"
+                    ) =>
+                {
+                    panic!("Cancelled checkout action must not mutate the repository: {method}")
+                }
+                operation => client.request(operation),
+            })
+            .unwrap();
+        assert_eq!(choices, if action == 0 { 1 } else { 2 });
+        assert_eq!(named, action == 0);
+        assert_eq!(
+            result.payload,
+            if action == 0 {
+                json!(false)
+            } else {
+                Value::Null
+            }
+        );
+    }
 }
 
 fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client: &Client) {

@@ -117,15 +117,27 @@ suite('viewpaneLayout browser component', () => {
 		await expect(open).toBeInViewport({ ratio: 1 });
 	});
 
-	test('SCM Agent Review keeps its empty message and action inside the minimum body', async function () {
-		const { page } = browserTests;
+	for (const [parameters, translated] of [['', false], ['&locale=zh-CN', true], ['&dark&locale=zh-CN', true], ['&hc', false], ['&hcLight', false]] as const) {
+		test(`SCM Agent Review keeps compact split buttons and keyboard menu access (${parameters || 'light'})`, async function () {
+			const { page } = browserTests;
 
-		await page.goto('/viewpaneLayout.html?view=review');
-		const body = page.locator('.ash-scm-secondary-pane');
-		await expect(body.locator('.ash-scm-empty')).toBeInViewport({ ratio: 1 });
-		await expect(body.getByRole('button')).toBeInViewport({ ratio: 1 });
-		expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
-	});
+			await page.goto(`/viewpaneLayout.html?view=review${parameters}`);
+			const body = page.locator('.ash-scm-secondary-pane');
+			await expect(body.locator('.ash-scm-empty')).toBeHidden();
+			await expect(body.getByRole('button', { name: translated ? '查找问题' : 'Find Issues', exact: true })).toBeInViewport({ ratio: 1 });
+			const dropdown = body.getByRole('button', { name: translated ? '选择审查范围' : 'Choose Review Scope', exact: true });
+			await expect(dropdown).toBeInViewport({ ratio: 1 });
+			const heights = await body.getByRole('button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height));
+			expect(heights).toEqual([24, 24]);
+			expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+			await dropdown.focus();
+			await dropdown.press('ArrowDown');
+			await expect(page.getByRole('menuitem', { name: translated ? '审查当前改动' : 'Review Current Changes', exact: true })).toBeVisible();
+			await expect(page.getByRole('menuitem', { name: translated ? '自定义审查…' : 'Custom Review...', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(dropdown).toBeFocused();
+		});
+	}
 
 	for (const [locale, theme] of [['en', 'ash-light'], ['zh-CN', 'ash-light'], ['zh-CN', 'ash-dark'], ['zh-CN', 'ash-high-contrast-dark'], ['zh-CN', 'ash-high-contrast-light']]) {
 		test(`Problems keeps compact filters and keyboard menu access (${locale}, ${theme})`, async function () {

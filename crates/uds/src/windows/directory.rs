@@ -9,7 +9,6 @@ use std::os::windows::io::OwnedHandle;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
-
 use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 use windows_sys::Win32::Foundation::LocalFree;
 use windows_sys::Win32::Security::ACCESS_ALLOWED_ACE;
@@ -130,53 +129,4 @@ pub(crate) fn open_private_directory(directory: &Path) -> io::Result<(PathBuf, s
         ));
     }
     Ok((directory, guard.into()))
-}
-
-pub(crate) fn validate_socket(path: &Path) -> io::Result<()> {
-    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_TAG_INFO;
-    use windows_sys::Win32::Storage::FileSystem::FileAttributeTagInfo;
-    use windows_sys::Win32::Storage::FileSystem::GetFileInformationByHandleEx;
-    use windows_sys::Win32::System::SystemServices::IO_REPARSE_TAG_AF_UNIX;
-
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    if wide[..wide.len() - 1].contains(&0) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "socket path contains NUL",
-        ));
-    }
-    let handle = unsafe {
-        CreateFileW(
-            wide.as_ptr(),
-            FILE_READ_ATTRIBUTES,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            ptr::null(),
-            OPEN_EXISTING,
-            FILE_FLAG_OPEN_REPARSE_POINT,
-            0,
-        )
-    };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
-    let _handle = unsafe { OwnedHandle::from_raw_handle(handle as _) };
-    let mut information: FILE_ATTRIBUTE_TAG_INFO = unsafe { std::mem::zeroed() };
-    if unsafe {
-        GetFileInformationByHandleEx(
-            handle,
-            FileAttributeTagInfo,
-            ptr::addr_of_mut!(information).cast(),
-            std::mem::size_of_val(&information) as u32,
-        )
-    } == 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-    if information.ReparseTag != IO_REPARSE_TAG_AF_UNIX {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "endpoint is not an AF_UNIX socket",
-        ));
-    }
-    Ok(())
 }

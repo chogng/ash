@@ -14,22 +14,23 @@ test('Model options combine thinking effort, context size and speed and save pre
 		await auto.press('Space');
 		await expect(auto).not.toHaveAttribute('aria-busy', 'true');
 	}
-	await expect(picker.getByRole('tab', { name: 'GPT', exact: true })).toBeVisible();
-	await expect(picker.getByRole('tab', { name: 'GPT', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-	await picker.getByRole('tab', { name: 'Claude', exact: true }).click();
-	await expect(picker.getByRole('menuitemradio').first()).toHaveAccessibleName(/Claude/);
-	await picker.getByRole('tab', { name: 'GPT', exact: true }).click();
+	await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
+	await expect(picker.getByRole('menuitemradio', { name: 'Claude Sonnet 5.5', exact: true })).toBeVisible();
+	await expect(picker.getByRole('menuitemradio', { name: /^GPT-6[- ]Astra$/ })).toBeVisible();
+	await expect(picker.locator('.ash-action-widget-secondary')).toHaveCount(0);
+	await expect(picker.locator('.ash-action-widget-summary, .ash-menu-badge')).toHaveCount(0);
 	await picker.screenshot({ path: testInfo.outputPath('model-picker-providers.png') });
 	const search = picker.getByRole('combobox');
 	await search.fill('Astra');
 	await search.press('Enter');
 	await expect(model).toHaveText(/^GPT-6[- ]Astra$/);
-	await expect(model.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
+	await expect(model.locator('.ash-icon')).toHaveCount(0);
 	const configuration = page.locator('.ash-chat-input-configuration-action');
 	await expect(configuration).not.toContainText(/\d/u);
 	await configuration.press('ArrowDown');
 	const menu = picker.locator('.ash-chat-model-card-configurable');
-	await expect(menu.locator('h3 .ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
+	await expect(menu.getByRole('heading', { name: /^GPT-6[- ]Astra$/ })).toBeVisible();
+	await expect(menu.locator('h3 .ash-icon')).toHaveCount(0);
 	await expect(menu.locator('legend')).toHaveText(['Thinking Level', 'Context Size', 'Speed']);
 	await picker.screenshot({ path: testInfo.outputPath('model-picker-details.png') });
 	const high = menu.getByRole('radio', { name: 'High', exact: true });
@@ -90,7 +91,6 @@ test('Model visibility changes in Language Models refresh the existing Chat cata
 	await expect(visible).toBeChecked();
 	await page.getByRole('button', { name: 'Close Language Models', exact: true }).click();
 	await selector.press('Enter');
-	await picker.getByRole('tab', { name: 'Gemini', exact: true }).click();
 	await picker.getByRole('combobox').fill('Gemini 3.8 Flash');
 	await picker.getByRole('combobox').press('Enter');
 	await expect(selector).toHaveText('Gemini 3.8 Flash');

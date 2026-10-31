@@ -88,6 +88,76 @@ test('Git presentation settings update the Rust extension without restarting its
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 
+for (const language of ['en', 'zh-CN']) test(`Git incoming file decorations combine upstream and local changes (${language})`, async ({ page }, testInfo) => {
+	const errors = collectErrors(page);
+	await page.goto('/gitExtension.html');
+	try {
+		await page.evaluate(async language => {
+			window.gitIncomingChangesIntegration.configure([
+				{ path: 'one.ts', originalPath: null, status: 'modified' },
+				{ path: 'added.ts', originalPath: null, status: 'added' },
+				{ path: 'deleted.ts', originalPath: null, status: 'deleted' },
+				{ path: 'renamed.ts', originalPath: 'old.ts', status: 'renamed' },
+				{ path: 'other.ts', originalPath: null, status: 'copied' },
+			], language === 'en');
+			await window.gitExtensionIntegration.activate(language);
+			window.gitScmPaneIntegration.mount();
+		}, language);
+		const row = page.locator('#scm-pane .ash-scm-change');
+		const badge = row.locator('.ash-scm-change-status');
+		const tooltip = language === 'zh-CN' ? '传入更改（已修改）；本地更改：已修改' : 'Incoming changes (modified); Local changes: Modified';
+		await expect(badge).toHaveText('↓M, M');
+		await expect(badge).toHaveAttribute('title', tooltip);
+		await expect(row.locator('.ash-scm-change-open')).toHaveAccessibleName(new RegExp(tooltip.replace(/[()]/g, '\\$&')));
+		for (const [path, letter] of [['one.ts', '↓M, M'], ['added.ts', '↓A'], ['deleted.ts', '↓D'], ['old.ts', '↓R'], ['other.ts', '↓~']]) {
+			expect(await page.evaluate(path => window.gitIncomingChangesIntegration.decoration(path), path)).toMatchObject({ letter });
+		}
+		expect(await page.evaluate(() => window.gitIncomingChangesIntegration.decoration('renamed.ts'))).toBeUndefined();
+		const comparisons = await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/compareChanges'));
+		expect(comparisons).toHaveLength(1);
+		expect(comparisons[0].params).toMatchObject({ objectId: 'b'.repeat(40), baseReference: 'a'.repeat(40), mode: 'mergeBase' });
+		await page.evaluate(() => window.gitExtensionIntegration.stage());
+		await expect(badge).toHaveText('↓M, M');
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().calls.filter(call => call.method === 'git/compareChanges').length)).toBe(1);
+		for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			for (const width of [220, 320]) {
+				await page.evaluate(({ theme, width }) => { window.gitScmPaneIntegration.setTheme(theme); window.gitScmPaneIntegration.setWidth(width); }, { theme, width });
+				await row.hover();
+				const actions = row.locator('.ash-scm-change-actions');
+				await expect(actions).toBeVisible();
+				const geometry = await row.evaluate(element => {
+					const status = element.querySelector('.ash-scm-change-status')!;
+					return {
+						actionsRight: element.querySelector('.ash-scm-change-actions')!.getBoundingClientRect().right,
+						statusLeft: status.getBoundingClientRect().left,
+						statusRight: status.getBoundingClientRect().right,
+						rowRight: element.getBoundingClientRect().right,
+						clipped: status.scrollWidth > status.clientWidth,
+					};
+				});
+				expect(geometry.actionsRight).toBeLessThanOrEqual(geometry.statusLeft);
+				expect(geometry.statusRight).toBeLessThanOrEqual(geometry.rowRight);
+				expect(geometry.clipped).toBe(false);
+				await actions.getByRole('button').first().focus();
+				await expect(actions).toBeVisible();
+			}
+		}
+		await page.evaluate(() => { window.gitScmPaneIntegration.setTheme('light'); window.gitScmPaneIntegration.setWidth(320); });
+		await testInfo.attach(`incoming-changes-${language}`, { body: await page.locator('#scm-pane').screenshot(), contentType: 'image/png' });
+		await page.evaluate(() => window.gitScmPaneIntegration.setClean(true));
+		await expect(row).toHaveCount(0);
+		expect(await page.evaluate(() => window.gitIncomingChangesIntegration.decoration('one.ts'))).toMatchObject({ letter: '↓M' });
+		const invalidations = await page.evaluate(() => window.gitIncomingChangesIntegration.invalidations());
+		await page.evaluate(() => window.gitIncomingChangesIntegration.fetch([{ path: 'one.ts', originalPath: null, status: 'deleted' }]));
+		await expect.poll(() => page.evaluate(() => window.gitIncomingChangesIntegration.invalidations())).toBeGreaterThan(invalidations);
+		expect(await page.evaluate(() => window.gitIncomingChangesIntegration.decoration('one.ts'))).toMatchObject({ letter: '↓D' });
+		await page.evaluate(() => window.gitIncomingChangesIntegration.checkout());
+		expect(await page.evaluate(() => window.gitIncomingChangesIntegration.decoration('one.ts'))).toBeUndefined();
+		expect(errors).toEqual([]);
+		expect(await page.evaluate(() => window.gitExtensionIntegration.state().errors)).toEqual([]);
+	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
+});
+
 test('Git presentation policy crosses the Rust boundary and validates the current commit draft', async ({ page }) => {
 	await page.goto('/gitExtension.html');
 	try {
@@ -430,7 +500,17 @@ for (const language of ['en', 'zh-CN']) test(`distributed Rust Git registers SCM
 		expect(history).toMatchObject([{ id: 'a'.repeat(40), subject: 'First commit' }]);
 		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.switchBranch', ['root']));
 		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
-		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({ operation: 'showQuickPick', placeholder: language === 'zh-CN' ? '选择 Git 分支' : 'Select a Git branch', items: [{ label: 'main', description: language === 'zh-CN' ? '当前分支' : 'Current', detail: 'a'.repeat(7) }, { label: 'occupied', description: 'origin/occupied', detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' }] });
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({
+			operation: 'showQuickPick',
+			placeholder: language === 'zh-CN' ? '选择要检出的分支或标签' : 'Select a branch or tag to checkout',
+			items: [
+				{ label: `$(add) ${language === 'zh-CN' ? '创建新分支...' : 'Create new branch...'}`, alwaysShow: true },
+				{ label: `$(add) ${language === 'zh-CN' ? '从指定引用创建新分支...' : 'Create new branch from...'}`, alwaysShow: true },
+				{ label: `$(debug-disconnect) ${language === 'zh-CN' ? '以分离 HEAD 模式检出...' : 'Checkout detached...'}`, alwaysShow: true },
+				{ label: '$(git-branch) main', description: language === 'zh-CN' ? '当前分支 · 2 小时前' : 'Current · 2 hours ago', detail: 'Fixture · aaaaaaa · First commit', separator: language === 'zh-CN' ? '分支' : 'branches' },
+				{ label: '$(git-branch) occupied', description: `origin/occupied · ${language === 'zh-CN' ? '2 小时前' : '2 hours ago'}`, detail: `Fixture · aaaaaaa · First commit · ${language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree'}` },
+			],
+		});
 		await page.evaluate(() => window.gitExtensionIntegration.stage());
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toContain(language === 'zh-CN' ? '暂存的更改' : 'Staged Changes');

@@ -12,7 +12,8 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { agentsWindowGraphicConfiguration, ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
+import { agentsWindowGraphicConfiguration, ChatConfiguration, ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation } from '../common/chat.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -34,6 +35,38 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'stacked' | 'sideBySide'>({
+	key: ChatConfiguration.ChatViewSessionsOrientation,
+	defaultValue: 'sideBySide',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['stacked', 'sideBySide'] },
+	parse(value: unknown): 'stacked' | 'sideBySide' {
+		if (value === 'stacked' || value === 'sideBySide') return value;
+		throw new TypeError(localize('chat.sessions.orientation.invalid', 'Invalid session list orientation.'));
+	},
+	setting: {
+		title: localize('chat.sessions.orientation.title', 'Session list layout'),
+		description: localize('chat.sessions.orientation.description', 'Show the session list above Chat or beside it when there is enough width.'),
+		valueType: 'select',
+		options: [
+			{ value: 'stacked', label: localize('chat.sessions.orientation.stacked', 'Stacked') },
+			{ value: 'sideBySide', label: localize('chat.sessions.orientation.sideBySide', 'Side by Side') },
+		],
+	},
+});
+
+Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMigration).registerConfigurationMigrations([{
+	key: ChatConfiguration.ChatViewSessionsOrientation,
+	migrateFn(value, read) {
+		if (value !== 'auto' && value !== 'stacked' && value !== 'sideBySide') return { value };
+		// The old orientation also selected List mode; retain valid direction choices.
+		const updates: [string, { value: unknown; }][] = [];
+		if (read(AGENT_SESSIONS_PRESENTATION_SETTING) === undefined) updates.push([AGENT_SESSIONS_PRESENTATION_SETTING, { value: AgentSessionsPresentation.List }]);
+		if (value === 'auto') updates.push([ChatConfiguration.ChatViewSessionsOrientation, { value: undefined }]);
+		return updates;
+	},
+}]);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
@@ -88,7 +121,7 @@ configurationRegistry.registerConfiguration<boolean>({
 
 configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
 	key: ChatSessionArchiveActionWordingSettingId,
-	defaultValue: ChatSessionArchiveActionWording.MarkAsDone,
+	defaultValue: ChatSessionArchiveActionWording.Archive,
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: ['archive', 'done'] },
 	parse(value: unknown): ChatSessionArchiveActionWording {

@@ -184,6 +184,7 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
             thread_id: thread_id.clone(),
             title: "Primary".into(),
             created_at_unix_ms: 1,
+            last_activity_at_unix_ms: Some(1),
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
             usage: Default::default(),
@@ -963,6 +964,58 @@ fn sqlite_session_catalog_tracks_model_only_updates() {
 }
 
 #[test]
+fn session_activity_metadata_is_repaired_from_history_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("activity-backfill.sqlite3");
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let session_id = SessionId::new("activity-backfill").unwrap();
+    let thread_id = ThreadId::new(session_id.as_str()).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    let history = store.load(&thread_id).unwrap();
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for table in ["thread_catalog", "session_catalog"] {
+        let json: String = connection
+            .query_row(&format!("SELECT record_json FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let thread = if table == "thread_catalog" {
+            &mut value["thread"]
+        } else {
+            &mut value["threads"][0]
+        };
+        thread
+            .as_object_mut()
+            .unwrap()
+            .remove("lastActivityAtUnixMs");
+        let json = serde_json::to_string(&value).unwrap();
+        connection
+            .execute(
+                &format!("UPDATE {table} SET record_json = ?1, record_digest = ?2"),
+                rusqlite::params![
+                    json,
+                    ash_protocol::ContentDigest::sha256(json.as_bytes()).as_str()
+                ],
+            )
+            .unwrap();
+    }
+    let threads = ThreadController::with_store(store.clone());
+    assert_eq!(
+        threads.list_sessions().unwrap()[0].threads[0].last_activity_at_unix_ms,
+        Some(1)
+    );
+    assert_eq!(store.load(&thread_id).unwrap(), history);
+    drop(threads);
+    let reopened = ThreadController::with_store(store);
+    assert_eq!(
+        reopened.list_sessions().unwrap()[0].threads[0].last_activity_at_unix_ms,
+        Some(1)
+    );
+    assert!(reopened.list_loaded_threads().unwrap().is_empty());
+}
+
+#[test]
 fn sqlite_session_catalog_tracks_target_only_updates() {
     assert_session_catalog_fact_updates(
         None,
@@ -1149,7 +1202,7 @@ fn sqlite_model_provider_migration_backfills_legacy_catalog_once() {
     let threads = ThreadController::with_store(store.clone());
     threads.migrate_model_providers(&mapping).unwrap();
     assert!(matches!(threads.read_thread(&id).unwrap().advisor,
-        ash_protocol::AdvisorSelection::Model { config } if config.model.provider == new));
+        ash_protocol::AdvisorSelection::Model { config } if config.model.as_ref().is_some_and(|model| model.provider == new)));
     let events = store.load(&id).unwrap();
     drop(threads);
     let threads = ThreadController::with_store(store.clone());

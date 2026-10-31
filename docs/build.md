@@ -298,6 +298,10 @@ macOS 和 Windows 发布组包使用同一个准备入口，不再无条件重�
 
 开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
+Docker 缓存单独用 `just prune-docker-cache` 维护，默认固定本机 `desktop-linux` context，拒绝远端 endpoint；其他本机 context 用 `--context` 指定。macOS 执行 `just prune-docker-cache --install` 安装当前用户的每小时 launchd 任务，不依赖宿主机继续构建。任务不启动 Docker Desktop；未运行时记录失败，下一小时重试。卸载时执行 `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.ash.docker-cache.plist` 并删除该 plist。
+
+Docker 维护通过 BuildKit 按最近使用顺序回收超过 8 GB 的构建缓存，保留最近 24 小时使用过的记录，并请求 Docker 内至少 32 GB 可用空间；正在使用的记录由 BuildKit 保留。当前 checkout 的开发容器停止满 24 小时后，其 `.build` 卷内 Cargo 缓存使用同一套租约和 Cargo 锁保护，增量预算为 8 GiB、全部产物预算为 32 GiB；`--empty` 将本次闲置 Cargo 预算降为零。宿主机 checkout 所在卷不足 32 GiB 可用时，闲置 Cargo 预算降为 8 GiB、BuildKit 降为 1 GB。仅删除无任何容器引用的标准 Ash `build-output`、`tool-cache` 卷及已知旧测试缓存卷，不删除容器、镜像、依赖卷或其他业务卷。仍被容器引用的工具缓存卷保留，其中 Bazel disk cache 由 Bazel 在空闲时按 4 GiB、7 天的限制自行回收；Cargo 以外的验证报告和产物不在 Docker 维护任务中删除。日志位于 `~/Library/Caches/ash/docker-maintenance/`。
+
 `scripts/cargo.py` 的普通 check、test、clippy 命令默认使用共享 `ci-test` profile，包括 `just check`、`just test` 和 `just rust-warnings`；显式 `--profile`、`--release` 或 `-r` 优先。`ci-test` 只是编译配置名，不执行 CI 流水线。产品开发程序和协议生成器继续复用 `dev-small`，发布使用 release；普通 build/run 保留 Cargo 默认配置及现有工具的产物路径，保留各自的体积与调试约束。`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
 单次纯类型检查使用锁定的 Bun 1.4.4：Renderer、Common、Protocol、Extensions、Memories、Stanza、构建工具和单元测试运行器工具均通过 `bun check -p <config> --all` 检查。Browser integration、Smoke automation 和 Scenario 的配置也都是 `noEmit`，其准备阶段使用 Bun 检查类型。现有 pnpm 入口继续准备协议、本地化等生成输入；多个检查顺序执行，避免大型 Bun 进程同时争抢 CPU。共享机器可对直接检查添加 `--threads 4`。Bun 不生成 JavaScript 或 `.tsbuildinfo`；对照测量与工具职责见 [构建工具说明](../build/README.md)。
@@ -573,6 +577,18 @@ python -B scripts/check_blob_size.py --head HEAD
 相关文件变更推送到 main 后，性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。具体触发条件和平台分工以工作流为准。
 
 ### 历史测量与适用范围
+
+#### 2026-10-30：App Server 避免无源码变化的重建
+
+macOS 对 `Cargo.lock` 的访问或加锁会产生原生 `change` 通知；监听器原先只在 Windows 过滤访问通知，因此一次后端构建可能通过再次访问锁文件触发下一次构建。现在所有平台按 inode、大小、mtime 和 ctime 去重，继续识别保留大小与 mtime 的真实写入，并处理重命名、删除和不可读输入。真实监听场景中，三次只读 Cargo metadata 命令产生 26 个锁文件通知，未触发后端构建；随后触碰宿主源码时间戳只触发一次构建，没有继续自触发。日志和结果见下述目录中的 `watch-scenario.log` 与 `watch-scenario.json`；下述计时只覆盖身份依赖调整，不包含监听修复的额外收益。
+
+App Server runtime 原先直接依赖 `ash-build-identity`，因此只有 Git commit 更新时也会重编整个 runtime。现在产品宿主通过既有 `BuildInfo` 契约传入身份，独立启动、内嵌服务和 managed 目录共用该身份；版本输出、诊断及反馈继续返回编译时的 provenance。依赖检查禁止 runtime 直接或间接引入 Git 身份包。
+
+在 macOS arm64、Rust 1.99.1、`dev-small`、默认 Cargo 并发和已有缓存下，交替设置两个实际提交的 `ASH_BUILD_COMMIT`，各测三轮真实 Desktop 后端构建与 generation 发布，复用已准备的协议。仅身份变化的中位数为 9.26 → 5.63 秒，减少约 39%；修改前每轮重编 runtime，修改后只重编身份包、App Server 宿主和 Remote Server。无改动重跑为 2.95 → 2.83 秒，均没有编译单元失效，不将这点差异解释为稳定提速。身份变化时最大 RSS 中位数为 1718 → 1398 MiB；这是 `time` 的单进程最大值，不是所有编译进程内存之和。App Server 程序为 236096432 → 236092528 字节。
+
+此结果覆盖 Git 身份更新后的后端准备阶段，不包含协议生成、前端或窗口启动，也不代表真实 Rust 功能编辑或其他平台的提速。未调整优化、LTO、codegen units、增量编译或发布配置。初次复测受到独立后端监听子进程干扰，整组样本已排除；原始日志、Cargo timings、测量脚本及汇总位于 `.build/build-health/app-server-identity-20261030/`，有效对照为 `baseline.json` 与 `isolated.json`。
+
+另以 `just bench-build ash-app-server --profile dev-small --jobs 12 --source crates/app-server-host/src/lib.rs` 对默认功能集执行三轮独立空输出目录构建，新版本冷构建、无改动和宿主源码时间戳触碰的中位数分别为 175.43、2.15 和 3.70 秒。无改动样本为 2.15／1.98／8.36 秒，均没有重编译，保留该波动；触碰样本只重编宿主。旧版这组包级基线采样时，独立后端监听进程未完整暂停，因此不据此给出冷构建提速结论。两组报告分别为 `.build/build-health/ash-app-server-dev-small-wpcc7d5w/report.json` 和 `.build/build-health/ash-app-server-dev-small-93kljy1u/report.json`，临时编译目录已由测量入口清理。
 
 #### 2026-10-29：macOS 开发包避免相同 LiveKit 产物使缓存失效
 

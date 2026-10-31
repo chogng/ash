@@ -13,7 +13,7 @@ const run = promisify(execFile);
 // and its identity within Windows AF_UNIX's 108-byte limit.
 const temporaryRoot = process.platform === 'win32' ? (process.env.RUNNER_TEMP ?? tmpdir()) : tmpdir();
 
-test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({}, testInfo) => {
+test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({ }, testInfo) => {
 	assert(['win32', 'darwin'].includes(process.platform), 'Desktop release requires Windows or macOS');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));
 	const version = required('ASH_RELEASE_VERSION');
@@ -269,7 +269,7 @@ async function assertNoNativeResidue(installation: string): Promise<void> {
 	assert.deepEqual(JSON.parse(result.stdout), { registered: 0, processes: 0, shortcut: false });
 }
 
-test('Windows upgrade and purge protect worktrees, junctions and another product, and reclaim owned system entries', async ({}, testInfo) => {
+test('Windows upgrade and purge protect worktrees, junctions and another product, and reclaim owned system entries', async ({ }, testInfo) => {
 	test.skip(process.platform !== 'win32', 'Windows native installer contract');
 	assert.equal(process.env.CI, 'true', 'System cleanup acceptance requires a disposable CI host');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));

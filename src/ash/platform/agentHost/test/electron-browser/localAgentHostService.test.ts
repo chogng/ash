@@ -15,6 +15,7 @@ import { AppServerCallService } from '../../../call/browser/appServerCallService
 import { createAppServerVoiceCodeTranscriptionBackend } from '../../../renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
 import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
+import { AppServerConnectionStoppedError } from '../../common/appServerError.js';
 
 suite('Local Agent Host connection service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -34,6 +35,7 @@ suite('Local Agent Host connection service', () => {
 	let mismatch: boolean;
 	let failAcquisition: boolean;
 	let pendingAcquisition: (() => Promise<void>) | undefined;
+	let beforeAcquireReply: ((ports: MessageChannel) => Promise<void>) | undefined;
 
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
@@ -75,6 +77,7 @@ suite('Local Agent Host connection service', () => {
 					data: { nonce: (params as { nonce: string; }).nonce },
 					ports: [ports.port1 as unknown as MessagePort],
 				}));
+				await beforeAcquireReply?.(ports);
 				return { enabled: true, byteStream: true, protocolVersion: 1, workspaceId: 'window', workspaceRoot: '/workspace' };
 			},
 		},
@@ -99,6 +102,7 @@ suite('Local Agent Host connection service', () => {
 		enabled = true;
 		mismatch = failAcquisition = false;
 		pendingAcquisition = undefined;
+		beforeAcquireReply = undefined;
 		tracker = new DisposableTracker();
 		tracking = installDisposableTracker(tracker);
 	});
@@ -267,6 +271,66 @@ suite('Local Agent Host connection service', () => {
 		await assert.rejects(service.connect(), /acquisition refused/);
 		assert.equal(entries.length, 1);
 		assert.match((entries[0].error as Error).message, /acquisition refused/);
+	});
+
+	async function closePort(ports: MessageChannel, message: { intentional: true; } | { closed: string; }): Promise<void> {
+		const closed = new Promise<void>(resolve => ports.port2.once('close', resolve));
+		ports.port2.postMessage(message);
+		await closed;
+	}
+
+	for (const phase of ['initial acquisition', 'reacquisition', 'socket lease'] as const) {
+		test(`intentional Main closure during ${phase} stops recovery without logging a failure or retrying`, async () => {
+			mock.timers.enable({ apis: ['setTimeout'] });
+			try {
+				const entries: LogEntry[] = [];
+				using services = new InstantiationService();
+				services.registerInstance(IWebWorkerService, new WebWorkerService());
+				using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+				using service = assemble(services, logger);
+				if (phase === 'reacquisition') { await service.connect(); }
+				const previousInitializations = initialized;
+				if (phase === 'socket lease') {
+					const factories = services.get(IRemoteSocketFactoryService);
+					const connect = factories.connect.bind(factories);
+					const interception = mock.method(factories, 'connect', async (...args: Parameters<typeof connect>) => {
+						await closePort(channels.at(-1)!, { intentional: true });
+						return connect(...args);
+					});
+					try {
+						await assert.rejects(service.connect(), AppServerConnectionStoppedError);
+					} finally { interception.mock.restore(); }
+				} else {
+					beforeAcquireReply = ports => closePort(ports, { intentional: true });
+					await assert.rejects(service.connect(), AppServerConnectionStoppedError);
+				}
+				assert.equal(service.client.state, 'stopped');
+				assert.equal(service.recovery.status, 'unavailable');
+				assert.equal(initialized, previousInitializations);
+				assert.deepEqual(entries.filter(entry => entry.level === 'error'), []);
+				const attempts = acquisitions;
+				mock.timers.tick(10_000);
+				await Promise.resolve();
+				assert.equal(acquisitions, attempts);
+			} finally { mock.timers.reset(); }
+		});
+	}
+
+	test('a port lost before the acquire reply preserves its cause and permits a fresh connection', async () => {
+		beforeAcquireReply = ports => closePort(ports, { closed: 'Carrier exited with code 23' });
+		const entries: LogEntry[] = [];
+		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
+		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+		using service = assemble(services, logger);
+		await assert.rejects(service.connect(), /Carrier exited with code 23/);
+		assert.equal(initialized, 0);
+		const errors = entries.filter(entry => entry.level === 'error');
+		assert.equal(errors.length, 1);
+		assert.match((errors[0].error as Error).message, /Carrier exited with code 23/);
+		beforeAcquireReply = undefined;
+		assert.equal(await service.connect(), true);
+		assert.equal(service.client.state, 'ready');
 	});
 
 	test('disposal cancels pending acquisition and cannot resurrect its socket factory', async () => {
