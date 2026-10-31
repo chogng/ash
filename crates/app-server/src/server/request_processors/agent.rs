@@ -1110,12 +1110,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 ))
             })?
             .mode;
-        let mut normalized_input = self.normalize_input(
-            Some(connection_id),
-            &mutation.session_id,
-            rewrite.input.clone(),
-        )?;
-        self.turn_instruction_selection(&mut normalized_input, mode)?;
+        let mut normalized_input =
+            self.normalize_input(Some(connection_id), &mutation.session_id, rewrite.input)?;
+        let selection = self.turn_instruction_selection(&mut normalized_input, mode)?;
         let rewound = self
             .context
             .agent_runtime()
@@ -1146,7 +1143,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .map_err(core_error)?
         {
             Some(replayed) => turn_start_result(replayed),
-            None => self.start_turn_request(
+            // Normalization releases host snapshot handles. Admit the captured input
+            // directly so rewriting never tries to read those handles a second time.
+            None => self.start_agent_turn_request(
                 ThreadMutation {
                     ide_window_id: None,
                     connection_id: Some(connection_id),
@@ -1157,10 +1156,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 thread_id.clone(),
                 ash_protocol::ApprovalMode::default(),
                 mode,
+                rewrite.tool_mode.map_or(
+                    TurnToolModeSelection::ConfiguredDefault,
+                    TurnToolModeSelection::Explicit,
+                ),
+                normalized_input,
+                ash_protocol::TurnKind::Coding,
+                selection,
                 TurnModelSelection::Current,
                 None,
-                rewrite.tool_mode,
-                rewrite.input,
             )?,
         };
         self.updates.subscribe_session_thread(

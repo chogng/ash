@@ -190,11 +190,16 @@ fn whole_snapshot_deadline_cancels_a_stalled_read_without_a_second_release_timeo
 }
 
 #[test]
-fn session_admission_materializes_context_before_persisting_and_rejects_corruption() {
+fn session_admission_materializes_context_once_and_rejects_corruption() {
     use crate::tests::call;
     use crate::tests::initialize;
     use crate::tests::server;
-    for corrupt in [false, true] {
+    for (operation, corrupt) in [
+        ("startTurn", false),
+        ("startTurn", true),
+        ("rewriteThread", false),
+        ("rewriteThread", true),
+    ] {
         let server = Arc::new(server());
         let mut connection = server.connection();
         initialize(&server, &mut connection);
@@ -213,9 +218,39 @@ fn session_admission_materializes_context_before_persisting_and_rejects_corrupti
             .as_str()
             .unwrap()
             .to_owned();
+        let source_id = ash_protocol::ThreadId::new(thread_id.clone()).unwrap();
+        let original = if operation == "rewriteThread" {
+            let original = call(
+                &server,
+                &mut connection,
+                json!({"jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"original","sessionId":session_id,"request":{"type":"startTurn","threadId":thread_id,"expectedSequence":1,"input":[{"type":"text","text":"original request"}]}}}),
+            );
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while server.threads().read_thread(&source_id).unwrap().turns[0].status
+                != ash_protocol::TurnStatus::Completed
+            {
+                assert!(Instant::now() < deadline, "original request did not finish");
+                std::thread::yield_now();
+            }
+            Some(original["result"]["value"]["turnId"].clone())
+        } else {
+            None
+        };
         let content = "selection-time captured 中文😀";
         let resource = reference(content.as_bytes());
-        let request = json!({"jsonrpc":"2.0","id":4,"method":"session/request","params":{"commandId":"start","sessionId":session_id,"request":{"type":"startTurn","threadId":thread_id,"expectedSequence":1,"input":[{"type":"hostResource","name":"selected.ts","resource":resource}]}}});
+        let input = json!([
+            {"type":"hostResource","name":"selected.ts","resource":resource},
+            {"type":"text","text":"replacement request"}
+        ]);
+        let request = match original.as_ref() {
+            Some(turn_id) => {
+                json!({"type":"rewriteThread","parentThreadId":thread_id,"beforeTurnId":turn_id,"title":"rewritten","input":input})
+            }
+            None => {
+                json!({"type":"startTurn","threadId":thread_id,"expectedSequence":1,"input":input})
+            }
+        };
+        let request = json!({"jsonrpc":"2.0","id":5,"method":"session/request","params":{"commandId":"submit","sessionId":session_id,"request":request}});
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = {
             let server = Arc::clone(&server);
@@ -266,18 +301,43 @@ fn session_admission_materializes_context_before_persisting_and_rejects_corrupti
             std::thread::yield_now();
         };
         worker.join().unwrap();
-        assert_eq!(reads, 1);
-        assert_eq!(releases, 1);
-        let thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
-        let snapshot = server.threads().read_thread(&thread_id).unwrap();
+        assert_eq!(reads, 1, "{operation}");
+        assert_eq!(releases, 1, "{operation}");
         if corrupt {
             assert_eq!(response["error"]["message"], "InvalidParams");
-            assert!(
-                snapshot.turns.is_empty(),
+            assert_eq!(
+                server
+                    .threads()
+                    .read_thread(&source_id)
+                    .unwrap()
+                    .turns
+                    .len(),
+                usize::from(original.is_some()),
                 "invalid snapshots must never admit a Turn"
             );
         } else {
-            assert_eq!(response["result"]["type"], "turn");
+            let admitted_id = if original.is_some() {
+                assert_eq!(response["result"]["type"], "rewrite");
+                let rewritten_id = ash_protocol::ThreadId::new(
+                    response["result"]["value"]["threadId"].as_str().unwrap(),
+                )
+                .unwrap();
+                assert_ne!(rewritten_id, source_id);
+                assert_eq!(
+                    server
+                        .threads()
+                        .read_thread(&source_id)
+                        .unwrap()
+                        .turns
+                        .len(),
+                    1
+                );
+                rewritten_id
+            } else {
+                assert_eq!(response["result"]["type"], "turn");
+                source_id
+            };
+            let snapshot = server.threads().read_thread(&admitted_id).unwrap();
             assert!(snapshot.items.iter().any(|item| matches!(item,
                 ash_protocol::ThreadItem::UserContext { name, content: captured, .. }
                     if name == "selected.ts" && captured == content)));
