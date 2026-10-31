@@ -198,6 +198,14 @@
 	justify-self: end;
 }
 
+.ash-settings-editor .ash-dropdown.ash-select-box {
+	width: fit-content;
+	min-width: min(96px, 100%);
+	max-width: min(240px, 100%);
+	justify-self: end;
+	align-self: flex-end;
+}
+
 .ash-setting-number-controls {
 	display: flex;
 	flex-direction: column;
@@ -210,6 +218,24 @@
 .ash-setting-number-controls > .ash-select-box {
 	width: 100%;
 	min-width: 0;
+}
+
+.ash-setting-font-controls {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-setting-font-controls > input[hidden] {
+	display: none;
+}
+
+.ash-setting-font-controls > input {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
 .ash-general-setting-control:not(.ash-select-box),

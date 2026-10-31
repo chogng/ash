@@ -465,12 +465,38 @@
           },
           "markdown.preview.fontFamily": {
             "type": "string",
+            "format": "font-family",
             "default": "system-ui, \"Segoe UI\", \"Microsoft YaHei\", sans-serif",
             "minLength": 1,
             "maxLength": 1024,
             "scope": "resource",
             "title": "%markdown.preview.fontFamily.title%",
             "description": "%markdown.preview.fontFamily.description%"
+          },
+          "markdown.preview.codeFontFamily": {
+            "type": "string",
+            "format": "font-family",
+            "default": "ui-monospace, Consolas, monospace",
+            "minLength": 1,
+            "maxLength": 1024,
+            "scope": "resource",
+            "title": "%markdown.preview.codeFontFamily.title%",
+            "description": "%markdown.preview.codeFontFamily.description%"
+          },
+          "markdown.preview.blockquoteFontFamily": {
+            "type": "string",
+            "format": "font-family",
+            "default": "",
+            "maxLength": 1024,
+            "scope": "resource",
+            "title": "%markdown.preview.blockquoteFontFamily.title%",
+            "description": "%markdown.preview.blockquoteFontFamily.description%",
+            "ashSetting": {
+              "valueType": "text",
+              "title": "%markdown.preview.blockquoteFontFamily.title%",
+              "description": "%markdown.preview.blockquoteFontFamily.description%",
+              "placeholder": "%markdown.preview.blockquoteFontFamily.default%"
+            }
           },
           "markdown.preview.fontSize": {
             "type": "number",

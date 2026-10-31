@@ -38,6 +38,7 @@ import { createBareFontInfoFromRawSettings } from '../../../../editor/common/con
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { isWindows } from '../../../../base/common/platform.js';
 import { Link } from '../../../../platform/opener/browser/link.js';
 
 interface SettingsSearchWidgetOptions {
@@ -683,6 +684,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 
 class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	private readonly input: HTMLInputElement;
+	private readonly fontMode: SelectBox | undefined;
 
 	constructor(container: HTMLElement, descriptor: ITextSetting, options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
@@ -694,18 +696,59 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		this.input.className = `ash-${this.presentation}-setting-text`;
 		this.input.type = 'text';
 		this.input.dataset.configurationKey = descriptor.configuration.key;
-		this.domNode.append(this.copyDomNode, this.input);
+		this.domNode.append(this.copyDomNode);
+		if (descriptor.configuration.schema?.format === 'font-family') {
+			const controls = h(this.domNode.ownerDocument, 'div');
+			controls.className = 'ash-setting-font-controls';
+			this.domNode.append(controls);
+			this.fontMode = this._register(new SelectBox(controls, {
+				options: [], presentation: 'field', contextViewProvider,
+			}, defaultSelectBoxStyles));
+			controls.append(this.input);
+			this._register(this.fontMode.onDidSelect(({ value }) => {
+				if (value === 'custom') {
+					this.input.hidden = false;
+					this.input.focus();
+					this.input.select();
+				} else {
+					void this.updateSetting(this.model.state.defaultValue);
+				}
+			}));
+		} else {
+			this.domNode.append(this.input);
+		}
 		this.updateControl(descriptor);
-		this.bindState(state => {
-			this.input.value = state.value;
-			this.input.disabled = state.isPending || this.hasPolicyValue;
-		});
+		this.bindState(state => this.renderState(state));
 		this._register(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value)));
 	}
 
 	protected updateControl(descriptor: ITextSetting): void {
 		this.input.placeholder = descriptor.placeholder;
 		this.input.setAttribute('aria-label', descriptor.title);
+		if (this.fontMode) {
+			this.fontMode.setAriaLabel(localize({ bundle: 'ash.settings', key: 'font.source' }, '{0}: Font source', descriptor.title));
+			this.renderState(this.model.state);
+		}
+	}
+
+	private renderState(state: SettingState<string>): void {
+		this.input.value = state.value;
+		this.input.disabled = state.isPending || this.hasPolicyValue;
+		if (!this.fontMode) return;
+		const isDefaultFont = state.value === state.defaultValue;
+		// This is a projection of the CSS family list; the configuration keeps its original value.
+		const firstFamily = state.defaultValue.match(/^(?:"([^"]+)"|'([^']+)'|([^,]+))/u);
+		let family = (firstFamily?.[1] ?? firstFamily?.[2] ?? firstFamily?.[3] ?? '').trim();
+		if (family === 'system-ui') family = isWindows ? 'Segoe UI' : localize({ bundle: 'ash.settings', key: 'font.systemUI' }, 'System UI');
+		if (family === 'ui-monospace') family = localize({ bundle: 'ash.settings', key: 'font.monospace' }, 'Monospace');
+		const choices = [
+			{ value: 'default', label: family ? localize({ bundle: 'ash.settings', key: 'font.system' }, 'System ({0})', family) : this.descriptor.placeholder },
+			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'font.custom' }, 'Custom') },
+		];
+		if (!sameSelectOptions(this.fontMode.options, choices)) this.fontMode.setOptions(choices);
+		this.fontMode.value = isDefaultFont ? 'default' : 'custom';
+		this.fontMode.enabled = !state.isPending && !this.hasPolicyValue;
+		this.input.hidden = isDefaultFont;
 	}
 }
 

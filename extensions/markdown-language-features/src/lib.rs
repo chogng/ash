@@ -143,6 +143,8 @@ impl Extension for MarkdownExtension {
                         editable: false,
                         update: Some(json!({"type":"preview","html":preview(&document.text, &configuration, &messages, &client, &token)?, "configuration": {
                             "fontFamily": configuration.pointer("/preview/fontFamily"),
+                            "codeFontFamily": configuration.pointer("/preview/codeFontFamily"),
+                            "blockquoteFontFamily": configuration.pointer("/preview/blockquoteFontFamily"),
                             "fontSize": configuration.pointer("/preview/fontSize"),
                             "lineHeight": configuration.pointer("/preview/lineHeight"),
                         }})),

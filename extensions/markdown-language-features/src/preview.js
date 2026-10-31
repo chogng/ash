@@ -40,6 +40,8 @@ window.addEventListener('message', event => {
 	const top = scroll.scrollTop;
 	const configuration = event.data.configuration;
 	root.style.setProperty('--ash-markdown-preview-font-family', typeof configuration?.fontFamily === 'string' && CSS.supports('font-family', configuration.fontFamily) ? configuration.fontFamily : '');
+	root.style.setProperty('--ash-markdown-preview-code-font-family', typeof configuration?.codeFontFamily === 'string' && CSS.supports('font-family', configuration.codeFontFamily) ? configuration.codeFontFamily : '');
+	root.style.setProperty('--ash-markdown-preview-blockquote-font-family', typeof configuration?.blockquoteFontFamily === 'string' && CSS.supports('font-family', configuration.blockquoteFontFamily) ? configuration.blockquoteFontFamily : '');
 	root.style.setProperty('--ash-markdown-preview-font-size', typeof configuration?.fontSize === 'number' && Number.isFinite(configuration.fontSize) && configuration.fontSize > 0 ? `${configuration.fontSize}px` : '');
 	root.style.setProperty('--ash-markdown-preview-line-height', typeof configuration?.lineHeight === 'number' && Number.isFinite(configuration.lineHeight) && configuration.lineHeight > 0 ? String(configuration.lineHeight) : '');
 	patch(root, content.content);

@@ -33,9 +33,13 @@ The readonly and input composition behavior stays in the client view.
 Both views update their existing sandbox and retain unchanged DOM. Rich edits use
 versioned UTF-16 ranges; preview heading IDs, metadata and math use the same Markdown
 semantics as language features. Settings groups separate language features, validation
-and preview. `markdown.preview.fontFamily`, `markdown.preview.fontSize` and
+and preview. `markdown.preview.fontFamily` controls body text and headings,
+`markdown.preview.codeFontFamily` controls inline code and code blocks, and
+`markdown.preview.blockquoteFontFamily` controls quoted text (following the body
+font when empty). These fonts, `markdown.preview.fontSize` and
 `markdown.preview.lineHeight` use the existing user/workspace settings and refresh
-open previews when changed.
+open previews when changed. Font controls distinguish system defaults from custom
+families without changing the stored CSS font lists.
 
 A bounded analysis cache shares exact snapshots across
 requests, including their sparse UTF-16 line index. Document observations build a bounded

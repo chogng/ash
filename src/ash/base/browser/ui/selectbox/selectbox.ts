@@ -9,6 +9,7 @@ import { AnchorAlignment, type IContextViewProvider } from '../contextview/conte
 import { Dropdown } from '../dropdown/dropdown.js';
 import { List } from '../list/listWidget.js';
 import { appendIcon } from '../lxicons/lxicon.js';
+import './selectbox.css';
 
 export interface SelectOption {
 	readonly value: string;

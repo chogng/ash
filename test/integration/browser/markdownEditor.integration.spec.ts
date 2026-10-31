@@ -74,7 +74,7 @@ async function openHost(page: Page, locale = 'en', view = 'vscode.markdown.edito
 }
 
 test('Markdown preview applies typography updates through the Rust provider and rejects invalid sandbox styles', async ({ page }) => {
-	const preview: Record<string, unknown> = { fontFamily: 'Georgia, serif', fontSize: 20, lineHeight: 2 };
+	const preview: Record<string, unknown> = { fontFamily: 'Georgia, serif', codeFontFamily: '"Courier New", monospace', blockquoteFontFamily: 'Arial, sans-serif', fontSize: 20, lineHeight: 2 };
 	const runtime = await startMarkdownExtension('en', [], { markdown: { preview } });
 	try {
 		await page.route('**/__markdown_render**', async route => {
@@ -82,24 +82,34 @@ test('Markdown preview applies typography updates through the Rust provider and 
 		});
 		const frame = await openHost(page, 'en', 'vscode.markdown.preview.editor');
 		const main = frame.locator('main');
+		await page.evaluate(() => window.ashMarkdownHost.edit(0, 0, '> Quoted text with `inline code`\n>\n> ```js\n> const quoted = true;\n> ```\n\nBody with `inline code`\n\n```js\nconst body = true;\n```\n\n'));
+		await expect(main.locator('blockquote')).toHaveCSS('font-family', 'Arial, sans-serif');
+		for (const selector of ['blockquote code', 'blockquote pre', 'main > p code', 'main > pre']) {
+			expect(await frame.locator(selector).count()).toBeGreaterThan(0);
+			for (const element of await frame.locator(selector).all()) await expect(element).toHaveCSS('font-family', '"Courier New", monospace');
+		}
 		await expect(main).toHaveCSS('font-family', 'Georgia, serif');
 		await expect(main).toHaveCSS('font-size', '20px');
 		await expect(main).toHaveCSS('line-height', '40px');
 		await expect(main.locator('h1')).toHaveCSS('font-size', '40px');
 		await main.evaluate(element => element.setAttribute('data-retained', 'true'));
-		Object.assign(preview, { fontFamily: 'Arial, sans-serif', fontSize: 18, lineHeight: 1.5 });
+		Object.assign(preview, { fontFamily: 'Arial, sans-serif', codeFontFamily: 'monospace', blockquoteFontFamily: '', fontSize: 18, lineHeight: 1.5 });
 		await page.evaluate(() => window.ashMarkdownHost.edit(0, 0, '# Updated typography\n\n'));
 		await expect(main.getByRole('heading', { name: 'Updated typography', exact: true })).toBeVisible();
 		await expect(main).toHaveCSS('font-family', 'Arial, sans-serif');
+		await expect(main.locator('blockquote')).toHaveCSS('font-family', 'Arial, sans-serif');
+		await expect(main.locator('blockquote code').first()).toHaveCSS('font-family', 'monospace');
 		await expect(main).toHaveCSS('font-size', '18px');
 		await expect(main).toHaveCSS('line-height', '27px');
 		await expect(main).toHaveAttribute('data-retained', 'true');
-		Object.assign(preview, { fontFamily: 'serif; color: red', fontSize: '18px', lineHeight: 0 });
+		Object.assign(preview, { fontFamily: 'serif; color: red', codeFontFamily: 'monospace; color: red', blockquoteFontFamily: 'serif; color: red', fontSize: '18px', lineHeight: 0 });
 		await page.evaluate(() => window.ashMarkdownHost.edit(0, 0, '# Invalid styles\n\n'));
 		await expect(main.getByRole('heading', { name: 'Invalid styles', exact: true })).toBeVisible();
 		await expect(main).toHaveCSS('font-size', '13px');
 		await expect(main).toHaveCSS('line-height', '22.75px');
 		expect(await main.evaluate(element => getComputedStyle(element).fontFamily)).toContain('system-ui');
+		expect(await main.locator('blockquote').evaluate(element => getComputedStyle(element).fontFamily)).toContain('system-ui');
+		await expect(main.locator('blockquote code').first()).toHaveCSS('font-family', 'ui-monospace, Consolas, monospace');
 	} finally {
 		await runtime.dispose();
 	}

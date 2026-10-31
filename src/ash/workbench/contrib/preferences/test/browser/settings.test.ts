@@ -756,12 +756,13 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
 			['extension.ash.git', 103],
-			['extension.ash.markdown-language-features', 16],
+			['extension.ash.markdown-language-features', 18],
 			['extension.ash.media-preview', 2],
 		],
 	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
+	assert.deepEqual(['fontFamily', 'codeFontFamily', 'blockquoteFontFamily'].map(key => defaults.get(`markdown.preview.${key}`).title), ['正文字体', '代码字体', '引用字体']);
 	const markdown = layout.find(category => category.id === 'extension.ash.markdown-language-features')!;
 	assert.deepEqual(markdown.groups.map(group => [group.id, group.title]), [
 		['markdown', '语言功能'],
@@ -787,6 +788,8 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	await configuration.updateValue('markdown.preview.fontFamily', '"Microsoft YaHei", sans-serif');
+	await configuration.updateValue('markdown.preview.codeFontFamily', '"Fira Code", monospace');
+	await configuration.updateValue('markdown.preview.blockquoteFontFamily', 'Georgia, serif');
 	await configuration.updateValue('markdown.preview.fontSize', 20);
 	await configuration.updateValue('markdown.preview.lineHeight', 2);
 	const document = (await configuration.read()).source;
@@ -795,12 +798,18 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		'markdown.validate.enabled': false,
 		'git.untrackedChanges': 'separate',
 		'markdown.preview.fontFamily': '"Microsoft YaHei", sans-serif',
+		'markdown.preview.codeFontFamily': '"Fira Code", monospace',
+		'markdown.preview.blockquoteFontFamily': 'Georgia, serif',
 		'markdown.preview.fontSize': 20,
 		'markdown.preview.lineHeight': 2,
 	});
 	using reopened = new WorkspaceService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 	assert.equal(reopened.getValue('markdown.preview.fontSize'), 20);
+	assert.equal(reopened.getValue('markdown.preview.codeFontFamily'), '"Fira Code", monospace');
+	assert.equal(reopened.getValue('markdown.preview.blockquoteFontFamily'), 'Georgia, serif');
+	await reopened.updateValue('markdown.preview.blockquoteFontFamily', undefined);
+	assert.equal(reopened.getValue('markdown.preview.blockquoteFontFamily'), '');
 	assert.equal(reopened.getValue('markdown.preview.lineHeight'), 2);
 	await assert.rejects(reopened.updateValue('markdown.preview.fontSize', 0), TypeError);
 	await assert.rejects(reopened.updateValue('markdown.preview.lineHeight', 0), TypeError);
@@ -812,6 +821,64 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.equal(reopened.getValue('mediaPreview.video.loop'), false);
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Markdown font controls distinguish system, custom and inherited fonts (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		resources.add(toDisposable(resetNlsResolver));
+		const manifest = JSON.parse(await readFile('extensions/markdown-language-features/package.json', 'utf8'));
+		const messages = JSON.parse(await readFile(`extensions/markdown-language-features/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
+		const registry = new ConfigurationRegistry();
+		registry.updateConfigurations({
+			add: [...parseExtensionManifest(JSON.stringify(localizeManifest(manifest, messages)), {
+				id: 'ash.markdown-language-features', name: manifest.name, publisher: manifest.publisher, version: manifest.version,
+			}).contributes.configuration],
+			remove: [],
+		});
+		const configuration = resources.add(new WorkspaceService({ registry }));
+		const defaults = new DefaultSettings(registry);
+		const root = h(browserEnvironment.window.document, 'div');
+		browserEnvironment.window.document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const contextView = resources.add(new BrowserContextViewService(root));
+		for (const key of ['fontFamily', 'codeFontFamily', 'blockquoteFontFamily']) {
+			const id = `markdown.preview.${key}`;
+			const widget = resources.add(createSettingWidget(resources, root, defaults.get(id), {
+				configurationService: configuration, contextViewProvider: contextView,
+				contextMenuProvider: { showContextMenu() { } },
+				clipboardService: {
+					triggerPaste() { }, read: async () => [],
+					readText: async () => '', writeText: async () => { },
+					readFindText: async () => '', writeFindText: async () => { },
+					readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }),
+					writeResources: async () => { }, hasResources: async () => false,
+				},
+				onStatus(message, error) { if (error) assert.fail(message); },
+			}));
+			root.append(widget.domNode);
+			const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
+			const mode = widget.domNode.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+			assert.ok(mode.textContent?.includes(key === 'blockquoteFontFamily' ? messages['markdown.preview.blockquoteFontFamily.default'] : locale === 'en' ? 'System (' : '系统（'));
+			assert.equal(input.hidden, true);
+			mode.click();
+			const choices = root.ownerDocument.getElementById(mode.getAttribute('aria-controls')!)!;
+			choices.querySelectorAll<HTMLElement>('[role="option"]')[1].click();
+			assert.equal(input.hidden, false);
+			assert.equal(root.ownerDocument.activeElement, input);
+			assert.equal(JSON.parse((await configuration.read()).source)[id], undefined, 'choosing custom only starts an edit');
+			input.value = '"Example Font", serif';
+			input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+			await nextTurn();
+			assert.equal(configuration.getValue(id), '"Example Font", serif');
+			assert.equal(mode.textContent, locale === 'en' ? 'Custom' : '自定义');
+			await configuration.updateValue(id, undefined);
+			assert.equal(input.hidden, true, 'reset returns the control to its system or inherited font');
+		}
+	});
+}
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Rust numeric settings save numbers, automatic values and named modes directly (${locale})`, async () => {
