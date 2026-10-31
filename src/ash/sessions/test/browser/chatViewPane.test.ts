@@ -448,6 +448,13 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
+	let shownContextMenuActions: readonly IAction[] = [];
+	const contextMenuService = {
+		showContextMenu: (options: { readonly getActions: () => readonly IAction[]; }) => {
+			shownContextMenuActions = options.getActions();
+		},
+	} as unknown as IContextMenuService;
+	services.registerInstance(IContextMenuService, contextMenuService);
 	using quickInput = new TestQuickInputService({
 		instantiationService: services,
 		container: dom.window.document.body,
@@ -480,14 +487,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		focusView: async () => true,
 		getViewWithId: () => chatView,
 	} as unknown as IViewsService);
-	let shownContextMenuActions: readonly IAction[] = [];
-	const contextMenuService = {
-		showContextMenu: (options: { readonly getActions: () => readonly IAction[]; }) => {
-			shownContextMenuActions = options.getActions();
-		},
-	} as unknown as IContextMenuService;
 	services.registerInstance(ICommandService, commands);
-	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(INotificationService, notifications);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
@@ -722,7 +722,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.model.model);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -2972,7 +2972,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	const discovered = createTestModel({
 		model: { provider: 'custom-gateway', model: 'private-model' }, display_name: 'Private model', discovered: true,
 		description: 'Private model overview',
-		context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
+		context_window: null, usable_context_window: null, default_context_window: null, maximum_context_window: null, long_context: null, selected_acceleration: null, acceleration_options: [],
 		auto_compact_token_limit: null, capabilities: { tools: 'supported', reasoning: 'unknown', parallel_tool_calls: 'unknown', personality: 'unknown', image_detail_original: 'unknown', fast_mode: 'unknown' },
 		supported_reasoning_efforts: [{ effort: 'low', description: 'Quick tasks' }], default_reasoning_effort: null, default_personality: null,
 	});
@@ -2999,7 +2999,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
 		capabilities: { toolCalling: 'supported', agentMode: 'unknown' }, source: undefined, pricing: [], recommendedFor: [],
 		inputModalities: null, retirement: undefined,
-		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
+		contextWindow: null, usableContextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
 		supportedReasoningEfforts: [{ effort: 'low', description: 'Quick tasks' }],
 	} satisfies ModelCatalogEntry;
