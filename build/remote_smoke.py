@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import argparse
+from contextlib import contextmanager
 import http.server
 import json
 import os
@@ -14,6 +15,26 @@ import sys
 import tempfile
 import threading
 import time
+
+
+@contextmanager
+def remote_fixture_directory(*, prefix: str):
+    """Keep cleanup strict while Windows releases stopped executable mappings."""
+    temporary = tempfile.TemporaryDirectory(prefix=prefix)
+    try:
+        yield temporary.name
+    finally:
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                temporary.cleanup()
+                break
+            except PermissionError:
+                # A stopped process or virus scanner can retain its image mapping
+                # briefly. A persistent lock still fails this fixture's cleanup.
+                if os.name != "nt" or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.1)
 
 
 class Model(http.server.BaseHTTPRequestHandler):
@@ -68,8 +89,7 @@ def verify(
             mode = "managed" if managed else "stdio"
             start_calls = len(Model.calls)
             with (
-                # Windows AF_UNIX endpoints include the profile path plus a digest.
-                tempfile.TemporaryDirectory(
+                remote_fixture_directory(
                     prefix="ash-rm-" if os.name == "nt" else "ash-release-remote-"
                 ) as temp,
                 (base / f"{mode}.stderr.log").open("w") as errors,

@@ -13,13 +13,12 @@ import shlex
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from build.remote_smoke import verify  # noqa: E402
+from build.remote_smoke import remote_fixture_directory, verify  # noqa: E402
 
 
 @contextmanager
@@ -138,7 +137,7 @@ def accept(
     )
     assert not (package / "ash-resources/capabilities").exists()
     report.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(
+    with remote_fixture_directory(
         prefix="arr-" if os.name == "nt" else "ash-release-ssh-"
     ) as temporary:
         root = Path(temporary).resolve()
