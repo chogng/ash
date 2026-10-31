@@ -40,22 +40,18 @@ fn slow_reader_receives_large_frames_without_repeated_bytes() -> io::Result<()> 
 
 #[test]
 fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<()> {
-    let (mut server, peer) = IpcStream::pair()?;
-    server.set_nonblocking(true)?;
-    let payload = [0u8; 4096];
-    loop {
-        match server.write(&payload) {
-            Ok(_) => continue,
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
-            Err(error) => return Err(error),
-        }
-    }
+    let (server, peer) = IpcStream::pair()?;
     let (reader, mut server) = crate::LocalStream::pair(server)?;
     let mut reader = std::io::BufReader::new(reader);
     let (ended, completion) = std::sync::mpsc::channel();
     let writer = thread::spawn(move || {
-        ended.send(server.write_all(b"pending response")).unwrap();
+        ended
+            .send(server.write_all(&vec![0; 8 * 1024 * 1024]))
+            .unwrap();
     });
+    // An initial WouldBlock may only mean the async driver has not published readiness.
+    // Exceed the pipe/socket capacity so output is still pending when input EOF arrives.
+    assert!(completion.recv_timeout(Duration::from_millis(20)).is_err());
     peer.shutdown(std::net::Shutdown::Write)?;
     assert!(std::io::BufRead::fill_buf(&mut reader)?.is_empty());
     let error = completion
@@ -75,22 +71,15 @@ fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<
 
 #[test]
 fn connection_close_interrupts_a_backpressured_writer() -> io::Result<()> {
-    let (mut stream, _peer) = IpcStream::pair()?;
-    stream.set_nonblocking(true)?;
-    loop {
-        match stream.write(&[0; 4096]) {
-            Ok(_) => {}
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
-            Err(error) => return Err(error),
-        }
-    }
+    let (stream, _peer) = IpcStream::pair()?;
     let (reader, mut writer) = crate::LocalStream::pair(stream)?;
     let (finished, result) = std::sync::mpsc::channel();
     let worker = thread::spawn(move || {
         finished
-            .send(writer.write_all(b"pending response"))
+            .send(writer.write_all(&vec![0; 8 * 1024 * 1024]))
             .unwrap();
     });
+    assert!(result.recv_timeout(Duration::from_millis(20)).is_err());
     reader.close();
     assert!(
         result

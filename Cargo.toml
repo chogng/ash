@@ -249,8 +249,6 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
-# Named-pipe completion buffers must remain owned through cancellation and ERROR_MORE_DATA.
-mio = "1.2.4"
 katex-rs = "=0.3.0"
 ash-utils-markdown-math = { path = "crates/utils/markdown-math" }
 trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }

@@ -4,7 +4,6 @@
 mod directory;
 mod peer;
 pub(crate) mod pipe;
-mod reactor;
 mod readiness;
 mod security;
 

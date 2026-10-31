@@ -1,5 +1,5 @@
 //! Synchronous local IPC: Unix domain sockets on Unix and native named pipes on Windows.
-//! Windows uses overlapped IO driven by one process-wide IOCP reactor.
+//! Windows delegates overlapped IO and readiness to a process-wide Tokio runtime.
 
 #[cfg(windows)]
 extern crate windows_sys_052 as windows_sys;

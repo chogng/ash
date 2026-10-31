@@ -1,13 +1,9 @@
-use std::fs::OpenOptions;
 use std::io;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
-use std::os::windows::io::FromRawHandle;
-use std::os::windows::io::IntoRawHandle;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -16,27 +12,23 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use mio::windows::NamedPipe;
+use futures::FutureExt;
+use futures::future::select_all;
 use sha2::Digest;
 use sha2::Sha256;
+use tokio::io::Interest;
+use tokio::net::windows::named_pipe::ClientOptions;
+use tokio::net::windows::named_pipe::NamedPipeClient;
+use tokio::net::windows::named_pipe::NamedPipeServer;
+use tokio::net::windows::named_pipe::PipeMode;
+use tokio::net::windows::named_pipe::ServerOptions;
+use tokio::sync::Notify;
 use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
-use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
-use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_FIRST_PIPE_INSTANCE;
-use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OVERLAPPED;
-use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
 use windows_sys::Win32::Storage::FileSystem::SECURITY_IDENTIFICATION;
-use windows_sys::Win32::Storage::FileSystem::SECURITY_SQOS_PRESENT;
 use windows_sys::Win32::System::IO::CancelIoEx;
-use windows_sys::Win32::System::Pipes::CreateNamedPipeW;
-use windows_sys::Win32::System::Pipes::PIPE_READMODE_MESSAGE;
-use windows_sys::Win32::System::Pipes::PIPE_REJECT_REMOTE_CLIENTS;
-use windows_sys::Win32::System::Pipes::PIPE_TYPE_MESSAGE;
-use windows_sys::Win32::System::Pipes::PIPE_UNLIMITED_INSTANCES;
-use windows_sys::Win32::System::Pipes::SetNamedPipeHandleState;
 use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
 
-use super::reactor;
-use super::reactor::Registration;
+use super::readiness;
 use super::security::PrivateSecurity;
 use super::security::SecuredObject;
 
@@ -46,9 +38,45 @@ pub(super) enum Side {
     Client,
 }
 
+enum Pipe {
+    Server(Arc<NamedPipeServer>),
+    Client(NamedPipeClient),
+}
+
+impl Pipe {
+    fn read(&self, buffer: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Server(pipe) => pipe.try_read(buffer),
+            Self::Client(pipe) => pipe.try_read(buffer),
+        }
+    }
+
+    fn write(&self, buffer: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Server(pipe) => pipe.try_write(buffer),
+            Self::Client(pipe) => pipe.try_write(buffer),
+        }
+    }
+
+    async fn ready(&self, interest: Interest) -> io::Result<()> {
+        match self {
+            Self::Server(pipe) => pipe.ready(interest).await?,
+            Self::Client(pipe) => pipe.ready(interest).await?,
+        };
+        Ok(())
+    }
+
+    fn as_raw_handle(&self) -> std::os::windows::io::RawHandle {
+        match self {
+            Self::Server(pipe) => pipe.as_raw_handle(),
+            Self::Client(pipe) => pipe.as_raw_handle(),
+        }
+    }
+}
+
 struct Connection {
-    pipe: Mutex<Option<NamedPipe>>,
-    registration: Registration,
+    pipe: Mutex<Option<Arc<Pipe>>>,
+    changed: Notify,
     side: Side,
     input_eof: AtomicBool,
     output_eof: AtomicBool,
@@ -77,20 +105,17 @@ impl IpcStream {
     fn connect_name(name: &str) -> io::Result<Self> {
         let deadline = Instant::now() + Duration::from_secs(1);
         let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
-        let file = loop {
-            match OpenOptions::new()
-                .read(true)
-                .write(true)
+        let _runtime = readiness::enter()?;
+        let pipe = loop {
+            match ClientOptions::new()
+                .pipe_mode(PipeMode::Message)
                 // A discovered server must never be able to impersonate this client.
-                .custom_flags(
-                    FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
-                )
+                .security_qos_flags(SECURITY_IDENTIFICATION)
                 .open(name)
             {
-                Ok(file) => break file,
+                Ok(pipe) => break pipe,
                 Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
                     // A full accept backlog is a live listener, not a missing daemon.
-                    // Wait for an instance and retry: another client can claim it first.
                     let remaining =
                         deadline
                             .checked_duration_since(Instant::now())
@@ -109,28 +134,13 @@ impl IpcStream {
                 Err(error) => return Err(error),
             }
         };
-        let mode = PIPE_READMODE_MESSAGE;
-        if unsafe {
-            SetNamedPipeHandleState(
-                file.as_raw_handle() as _,
-                &mode,
-                std::ptr::null(),
-                std::ptr::null(),
-            )
-        } == 0
-        {
-            return Err(io::Error::last_os_error());
-        }
-        // Ownership transfers to Mio, which retains overlapped buffers until completion.
-        let mut pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
-        let registration = reactor::register(&mut pipe)?;
-        Ok(Self::from_registered(pipe, registration, Side::Client))
+        Ok(Self::from_pipe(Pipe::Client(pipe), Side::Client))
     }
 
-    fn from_registered(pipe: NamedPipe, registration: Registration, side: Side) -> Self {
+    fn from_pipe(pipe: Pipe, side: Side) -> Self {
         Self(Arc::new(Connection {
-            pipe: Mutex::new(Some(pipe)),
-            registration,
+            pipe: Mutex::new(Some(Arc::new(pipe))),
+            changed: Notify::new(),
             side,
             input_eof: AtomicBool::new(false),
             output_eof: AtomicBool::new(false),
@@ -175,12 +185,13 @@ impl IpcStream {
     pub fn shutdown(&self, direction: Shutdown) -> io::Result<()> {
         match direction {
             Shutdown::Write => {
-                return self.operate(Direction::Write, |mut pipe| {
+                return self.operate(Direction::Write, |pipe| {
                     if self.0.output_eof.load(Ordering::Acquire) {
                         return Ok(());
                     }
                     pipe.write(&[])?;
                     self.0.output_eof.store(true, Ordering::Release);
+                    self.0.changed.notify_waiters();
                     Ok(())
                 });
             }
@@ -193,14 +204,12 @@ impl IpcStream {
             Shutdown::Both => {}
         }
         let mut pipe = self.0.pipe.lock().unwrap();
-        self.0.registration.ready.lock().unwrap().closed = true;
         if let Some(pipe) = pipe.take() {
             // Explicit shutdown aborts outstanding IO across all clones. Ordinary drop lets
-            // Mio finish queued writes, preserving bytes already accepted by Write.
+            // Tokio/Mio finish queued writes, preserving bytes already accepted by Write.
             unsafe { CancelIoEx(pipe.as_raw_handle() as _, std::ptr::null()) };
         }
-        self.0.registration.ready.notify();
-        reactor::notify();
+        self.0.changed.notify_waiters();
         Ok(())
     }
 
@@ -210,19 +219,33 @@ impl IpcStream {
         super::peer::peer_identity(pipe.as_raw_handle() as _, self.0.side)
     }
 
-    pub(super) fn ready(&self, direction: Direction) -> bool {
-        let ready = self.0.registration.ready.lock().unwrap();
-        ready.closed
-            || match direction {
-                Direction::Read => ready.readable || self.0.input_eof.load(Ordering::Acquire),
-                Direction::Write => ready.writable || self.0.output_eof.load(Ordering::Acquire),
-            }
+    pub(super) async fn ready(&self, direction: Direction) -> io::Result<()> {
+        // Create the notification before inspecting state so shutdown/EOF cannot be lost
+        // between the check and registering the pipe's readiness future.
+        let changed = self.0.changed.notified();
+        let pipe = self.0.pipe.lock().unwrap().clone();
+        let Some(pipe) = pipe else { return Ok(()) };
+        let eof = match direction {
+            Direction::Read => self.0.input_eof.load(Ordering::Acquire),
+            Direction::Write => self.0.output_eof.load(Ordering::Acquire),
+        };
+        if eof {
+            return Ok(());
+        }
+        let interest = match direction {
+            Direction::Read => Interest::READABLE,
+            Direction::Write => Interest::WRITABLE,
+        };
+        tokio::select! {
+            result = pipe.ready(interest) => result,
+            _ = changed => Ok(()),
+        }
     }
 
     fn operate<T>(
         &self,
         direction: Direction,
-        mut operation: impl FnMut(&NamedPipe) -> io::Result<T>,
+        mut operation: impl FnMut(&Pipe) -> io::Result<T>,
     ) -> io::Result<T> {
         let timeout = match direction {
             Direction::Read => *self.0.read_timeout.lock().unwrap(),
@@ -233,33 +256,15 @@ impl IpcStream {
             {
                 let pipe = self.0.pipe.lock().unwrap();
                 let pipe = pipe.as_ref().ok_or_else(closed)?;
-                // Clear readiness while holding its lock so a completion cannot be lost
-                // between a WouldBlock result and the following wait.
-                let mut ready = self.0.registration.ready.lock().unwrap();
-                if ready.closed {
-                    return Err(closed());
-                }
                 match operation(pipe) {
-                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                        match direction {
-                            Direction::Read => ready.readable = false,
-                            Direction::Write => ready.writable = false,
-                        }
-                        if self.0.nonblocking.load(Ordering::Acquire) {
-                            return Err(error);
-                        }
-                    }
+                    Err(error)
+                        if error.kind() == io::ErrorKind::WouldBlock
+                            && !self.0.nonblocking.load(Ordering::Acquire) => {}
                     result => return result,
                 }
             }
             let remaining = timeout.map(|timeout| timeout.saturating_sub(started.elapsed()));
-            self.0
-                .registration
-                .ready
-                .wait(remaining, |ready| match direction {
-                    Direction::Read => ready.readable,
-                    Direction::Write => ready.writable,
-                })?;
+            readiness::wait(self.ready(direction), remaining)?;
         }
     }
 }
@@ -275,7 +280,7 @@ impl Read for &IpcStream {
         if buffer.is_empty() {
             return Ok(0);
         }
-        let result = self.operate(Direction::Read, |mut pipe| {
+        let result = self.operate(Direction::Read, |pipe| {
             if self.0.input_eof.load(Ordering::Acquire) {
                 return Ok(0);
             }
@@ -286,8 +291,7 @@ impl Read for &IpcStream {
             Ok(count)
         });
         if matches!(result, Ok(0)) {
-            self.0.registration.ready.notify();
-            reactor::notify();
+            self.0.changed.notify_waiters();
         }
         result
     }
@@ -308,7 +312,7 @@ impl Write for &IpcStream {
             return Ok(0);
         }
         // Bound the one in-flight write, preserving kernel backpressure for large frames.
-        self.operate(Direction::Write, |mut pipe| {
+        self.operate(Direction::Write, |pipe| {
             if self.0.output_eof.load(Ordering::Acquire) {
                 return Err(io::ErrorKind::BrokenPipe.into());
             }
@@ -326,14 +330,9 @@ pub(super) enum Direction {
     Write,
 }
 
-struct Pending {
-    pipe: NamedPipe,
-    registration: Registration,
-}
-
 pub struct IpcListener {
     name: String,
-    pending: Mutex<Vec<Pending>>,
+    pending: Mutex<Vec<Arc<NamedPipeServer>>>,
     nonblocking: AtomicBool,
 }
 
@@ -361,43 +360,36 @@ impl IpcListener {
         Ok(())
     }
 
-    pub(super) fn ready(&self) -> bool {
-        self.pending
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|pending| pending.registration.ready.lock().unwrap().writable)
+    pub(super) async fn ready(&self) -> io::Result<()> {
+        let pending = self.pending.lock().unwrap().clone();
+        select_all(pending.iter().map(|pipe| Box::pin(pipe.connect())))
+            .await
+            .0
     }
 
     pub fn accept(&self) -> io::Result<(IpcStream, ())> {
+        let _runtime = readiness::enter()?;
         loop {
             {
                 let mut pending = self.pending.lock().unwrap();
-                if let Some(index) = pending
-                    .iter()
-                    .position(|pending| pending.registration.ready.lock().unwrap().writable)
-                {
-                    if let Some(error) = pending[index].pipe.take_error()? {
-                        return Err(error);
+                for index in 0..pending.len() {
+                    if let Some(result) = pending[index].connect().now_or_never() {
+                        result?;
+                        // Replace before handing off the connected instance, keeping the
+                        // namespace owned even when the last accepted connection closes.
+                        let next = create_instance(&self.name, Instance::Additional)?;
+                        let connected = std::mem::replace(&mut pending[index], next);
+                        return Ok((
+                            IpcStream::from_pipe(Pipe::Server(connected), Side::Server),
+                            (),
+                        ));
                     }
-                    // Claim the replacement before handing off this handle: the namespace
-                    // must stay owned even when the last accepted connection closes.
-                    let next = create_instance(&self.name, Instance::Additional)?;
-                    let connected = std::mem::replace(&mut pending[index], next);
-                    return Ok((
-                        IpcStream::from_registered(
-                            connected.pipe,
-                            connected.registration,
-                            Side::Server,
-                        ),
-                        (),
-                    ));
                 }
                 if self.nonblocking.load(Ordering::Acquire) {
                     return Err(io::ErrorKind::WouldBlock.into());
                 }
             }
-            reactor::wait(None, || self.ready())?;
+            readiness::wait(self.ready(), None)?;
         }
     }
 }
@@ -407,38 +399,21 @@ enum Instance {
     Additional,
 }
 
-fn create_instance(name: &str, instance: Instance) -> io::Result<Pending> {
+fn create_instance(name: &str, instance: Instance) -> io::Result<Arc<NamedPipeServer>> {
     let security = PrivateSecurity::new(SecuredObject::Pipe)?;
-    let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
-    let flags = PIPE_ACCESS_DUPLEX
-        | FILE_FLAG_OVERLAPPED
-        | match instance {
-            Instance::First => FILE_FLAG_FIRST_PIPE_INSTANCE,
-            Instance::Additional => 0,
-        };
-    let handle = unsafe {
-        CreateNamedPipeW(
-            wide.as_ptr(),
-            flags,
-            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_REJECT_REMOTE_CLIENTS,
-            PIPE_UNLIMITED_INSTANCES,
-            64 * 1024,
-            64 * 1024,
-            0,
-            &security.attributes(),
-        )
+    let mut attributes = security.attributes();
+    let _runtime = readiness::enter()?;
+    // The user-only security descriptor and attributes outlive this synchronous create call.
+    let pipe = unsafe {
+        ServerOptions::new()
+            .first_pipe_instance(matches!(instance, Instance::First))
+            .pipe_mode(PipeMode::Message)
+            .reject_remote_clients(true)
+            .in_buffer_size(64 * 1024)
+            .out_buffer_size(64 * 1024)
+            .create_with_security_attributes_raw(name, std::ptr::addr_of_mut!(attributes).cast())?
     };
-    if handle == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
-    let mut pipe = unsafe { NamedPipe::from_raw_handle(handle as _) };
-    let registration = reactor::register(&mut pipe)?;
-    match pipe.connect() {
-        Ok(()) => registration.ready.lock().unwrap().writable = true,
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
-        Err(error) => return Err(error),
-    }
-    Ok(Pending { pipe, registration })
+    Ok(Arc::new(pipe))
 }
 
 /// The filesystem path is only a rendezvous identity. Its depth never enters the pipe name.
