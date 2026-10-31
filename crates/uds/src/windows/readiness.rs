@@ -36,9 +36,9 @@ pub(super) fn wait(
     timeout: Option<Duration>,
 ) -> io::Result<()> {
     let _runtime = enter()?;
-    // These synchronous APIs are also called from Tokio tasks. Using the futures
-    // executor avoids nesting Runtime::block_on while our worker keeps driving IO.
-    futures::executor::block_on(async {
+    // Synchronous callers may already be polling a Tokio or futures task. This bridge
+    // permits nesting and owns its wake signal, while our worker keeps driving IO.
+    futures_lite::future::block_on(async {
         match timeout {
             Some(timeout) => tokio::time::timeout(timeout, future).await.map_err(|_| {
                 io::Error::new(io::ErrorKind::TimedOut, "local IPC deadline elapsed")

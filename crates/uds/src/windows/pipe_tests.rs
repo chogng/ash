@@ -1,8 +1,17 @@
+use std::future::Future;
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Wake;
+use std::task::Waker;
 use std::time::Duration;
+use std::time::Instant;
 
+use super::Direction;
 use super::IpcListener;
 use super::IpcStream;
 
@@ -83,33 +92,91 @@ fn synchronous_io_can_wait_inside_an_existing_tokio_runtime() {
 }
 
 #[test]
+fn synchronous_io_can_wait_inside_futures_block_on() {
+    futures::executor::block_on(async { assert_blocking_read_times_out() });
+}
+
+#[test]
+fn synchronous_io_can_wait_inside_a_local_pool() {
+    futures::executor::LocalPool::new().run_until(async { assert_blocking_read_times_out() });
+}
+
+#[test]
+fn synchronous_io_can_nest_its_blocking_bridge() {
+    futures_lite::future::block_on(async { assert_blocking_read_times_out() });
+}
+
+fn assert_blocking_read_times_out() {
+    let (mut reader, _peer) = IpcStream::pair().unwrap();
+    reader
+        .set_read_timeout(Some(Duration::from_millis(20)))
+        .unwrap();
+    // The peer stays open without sending bytes, forcing the synchronous wait path.
+    assert_eq!(
+        reader.read(&mut [0]).unwrap_err().kind(),
+        std::io::ErrorKind::TimedOut
+    );
+}
+
+struct ChannelWake {
+    index: usize,
+    sender: mpsc::Sender<usize>,
+}
+
+impl Wake for ChannelWake {
+    fn wake(self: Arc<Self>) {
+        let _ = self.sender.send(self.index);
+    }
+}
+
+#[test]
 fn shutdown_wakes_every_clone_waiting_on_the_same_pipe() {
     let (stream, _peer) = IpcStream::pair().unwrap();
-    let barrier = std::sync::Arc::new(std::sync::Barrier::new(5));
-    let (finished, results) = std::sync::mpsc::channel();
-    let workers = (0..4)
-        .map(|_| {
-            let mut reader = stream.try_clone().unwrap();
-            let barrier = barrier.clone();
-            let finished = finished.clone();
-            std::thread::spawn(move || {
-                barrier.wait();
-                finished.send(reader.read(&mut [0])).unwrap();
-            })
+    let readers = (0..4)
+        .map(|_| stream.try_clone().unwrap())
+        .collect::<Vec<_>>();
+    let (sender, receiver) = mpsc::channel();
+    let wakers = (0..readers.len())
+        .map(|index| {
+            Waker::from(Arc::new(ChannelWake {
+                index,
+                sender: sender.clone(),
+            }))
         })
         .collect::<Vec<_>>();
-    barrier.wait();
-    stream.shutdown(Shutdown::Both).unwrap();
-    for _ in 0..4 {
+    let mut waits = readers
+        .iter()
+        .map(|reader| Box::pin(reader.ready(Direction::Read)))
+        .collect::<Vec<_>>();
+    let _runtime = super::readiness::enter().unwrap();
+    // Poll every future before shutdown, proving that all waiters registered their wakers.
+    for (wait, waker) in waits.iter_mut().zip(&wakers) {
         assert!(
-            results
-                .recv_timeout(Duration::from_secs(1))
-                .unwrap()
-                .is_err()
+            wait.as_mut()
+                .poll(&mut Context::from_waker(waker))
+                .is_pending()
         );
     }
-    for worker in workers {
-        worker.join().unwrap();
+    stream.shutdown(Shutdown::Both).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let mut woken = vec![false; readers.len()];
+    while !woken.iter().all(|woken| *woken) {
+        let index = receiver
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap();
+        woken[index] = true;
+    }
+    for (wait, waker) in waits.iter_mut().zip(&wakers) {
+        assert!(matches!(
+            wait.as_mut().poll(&mut Context::from_waker(waker)),
+            Poll::Ready(_)
+        ));
+    }
+    for mut reader in &readers {
+        assert_eq!(
+            reader.read(&mut [0]).unwrap_err().kind(),
+            std::io::ErrorKind::NotConnected
+        );
     }
 }
 

@@ -3430,6 +3430,7 @@ name = "ash-uds"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "futures-lite",
  "libc",
  "sha2 0.10.9",
  "tempfile",
