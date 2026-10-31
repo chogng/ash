@@ -230,8 +230,7 @@ export function registerTerminalActions(): void {
 			const terminals = accessor.get(ITerminalService);
 			lifetime.add(terminals.onDidDisposeInstance(closed => { if (closed === instance) picker.dispose(); }));
 			const icon = await picker.pickIcons();
-			if (icon && terminals.instances.includes(instance)) await instance.changeIcon(icon);
-			instance.xterm?.focus();
+			if (icon !== undefined && terminals.instances.includes(instance)) await instance.changeIcon(icon ?? undefined);
 		}
 	});
 	registerAction2(class MoveTerminalToEditorAction extends Action2 {

@@ -1504,6 +1504,37 @@ suite('terminal browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`terminal icon picker cancellation respects focus ownership in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/terminal.html?input&groups&locale=${locale}`);
+			await expect.poll(() => page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration))).toBe(true);
+			const terminal = page.locator('.xterm-helper-textarea');
+			await terminal.focus();
+			const before = await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata());
+			const canceled = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			const picker = page.getByRole('combobox');
+			await expect(picker).toBeVisible();
+			await picker.press('Escape');
+			await canceled;
+			await expect(terminal).toBeFocused();
+			const replaced = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			await expect(picker).toBeVisible();
+			const replacement = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			await replaced;
+			await expect(picker).toBeFocused();
+			await picker.press('Escape');
+			await replacement;
+			await expect(terminal).toBeFocused();
+			const dismissed = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			await expect(picker).toBeVisible();
+			const outside = page.getByRole('textbox', { name: 'Outside terminal' });
+			await outside.click();
+			await dismissed;
+			await expect(outside).toBeFocused();
+			await expect(picker).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toEqual(before);
+		});
+
 		test(`terminal rename and icon selection update the original instance in ${locale}`, async function () {
 			const { page } = browserTests;
 
@@ -1529,9 +1560,33 @@ suite('terminal browser component', () => {
 			const icons = page.getByRole('combobox');
 			await expect(icons).toBeVisible();
 			await icons.fill('terminal-git-bash');
-			await page.getByRole('option', { name: /terminal-git-bash/ }).click();
+			const option = page.getByRole('option', { name: /terminal-git-bash/ });
+			await expect(option.locator('[data-ash-icon-id="terminal-git-bash"]')).toBeVisible();
+			await expect(option.locator('[data-ash-icon-id="terminal-git-bash"]')).toHaveAttribute('aria-hidden', 'true');
+			await option.click();
 			await choosing;
 			await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toMatchObject({ title: 'My shell', icon: 'terminal-git-bash', created: before.created });
+			await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+
+			const empty = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			await expect(icons).toBeVisible();
+			await icons.fill('zzzz-no-matching-icon-zzzz');
+			await expect(page.getByRole('option')).toHaveCount(0);
+			await icons.press('Enter');
+			await expect(icons).toBeFocused();
+			await icons.press('Escape');
+			await empty;
+			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toMatchObject({ title: 'My shell', icon: 'terminal-git-bash', created: before.created });
+
+			const resetting = page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.changeIcon'));
+			await expect(icons).toBeVisible();
+			await icons.press('Control+End');
+			const reset = page.getByRole('option', { name: locale === 'zh-CN' ? '恢复默认' : 'Reset to default', exact: true });
+			await expect(reset).toBeVisible();
+			await expect(icons).toHaveAttribute('aria-activedescendant', (await reset.getAttribute('id'))!);
+			await icons.press('Enter');
+			await resetting;
+			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata())).toEqual({ ...before, title: 'My shell' });
 			await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 		});
 	}

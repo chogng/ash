@@ -2643,6 +2643,30 @@ test('configured shell titles use the executable unless overrideName explicitly 
 	assert.equal(fixed.customTitle, 'Fixed Work Shell');
 });
 
+test('resetting a terminal icon preserves its launch profile, color, name and process', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using services = terminalServices(processes, folderWorkspaceContext());
+	const terminals = services.get(ITerminalService);
+	const terminal = await terminals.createTerminal({
+		profile: { type: 'default' },
+		icon: { id: 'terminal-powershell' },
+		color: 'terminal.ansiGreen',
+	});
+	const profile = terminal.profile;
+	const resource = terminal.resource;
+	await terminal.rename!('My shell');
+	await terminal.changeIcon!({ id: 'terminal-git-bash' });
+	assert.equal(terminal.profile.icon?.id, 'terminal-git-bash');
+	await terminal.changeIcon!(undefined);
+	assert.equal(terminal.profile, profile);
+	assert.equal(terminal.profile.icon?.id, 'terminal-powershell');
+	assert.equal(terminal.profile.color, 'terminal.ansiGreen');
+	assert.equal(terminal.title, 'My shell');
+	assert.equal(terminal.resource, resource);
+	assert.equal(terminal.state, 'running');
+	assert.equal(processes.createCalls.length, 1);
+});
+
 test('terminal title and icon editing survive process replacement and reset through the original owner', async () => {
 	const processes = new TestTerminalProcessService([]);
 	using services = terminalServices(processes, folderWorkspaceContext());

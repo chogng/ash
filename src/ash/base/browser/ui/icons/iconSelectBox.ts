@@ -194,6 +194,10 @@ export class IconSelectBox extends Disposable {
 	}
 
 	private handleKeyDown(event: KeyboardEvent): void {
+		// Text editing, host shortcuts and IME confirmation keep their native owners.
+		if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+			return;
+		}
 		switch (event.key) {
 			case 'ArrowRight': this.focusNext(); break;
 			case 'ArrowLeft': this.focusPrevious(); break;
