@@ -2,7 +2,7 @@ import type { IButtonStyles } from '../button/button.js';
 import './toolbar.css';
 import { localize } from '../../../../nls.js';
 import type { IContextMenuProvider } from '../../contextmenu.js';
-import type { IAction } from '../../../common/actions.js';
+import type { IAction, IActionRunner } from '../../../common/actions.js';
 import { Separator } from '../../../common/actions.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
@@ -10,8 +10,19 @@ import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } fro
 import type { ActionViewItemOptions } from '../actionbar/actionViewItems.js';
 import type { AnchorPosition } from '../contextview/contextview.js';
 import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
+import { observeResize } from '../../observer.js';
+import { AnimationFrameScheduler } from '../../scheduler.js';
+
+/** Geometry belongs to the host; measurement and overflow remain with the toolbar. */
+export interface IToolBarResponsiveBehaviorOptions {
+	readonly enabled: boolean;
+	readonly observedElement?: HTMLElement;
+	readonly getAvailableWidth?: () => number;
+}
 
 export interface ToolBarOptions {
+	readonly actionRunner?: IActionRunner;
+	readonly responsiveBehavior?: IToolBarResponsiveBehaviorOptions;
 	readonly buttonStyles?: IButtonStyles;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly ariaLabel?: string;
@@ -49,13 +60,16 @@ export class ToolBar extends Disposable {
 	private trailingActions: readonly IAction[] = [];
 	private renderedActions: readonly IAction[] = [];
 	private readonly actionWidths = new Map<IAction, number>();
-	private availableWidth: number | undefined;
+	private readonly layoutScheduler: AnimationFrameScheduler | undefined;
+	private dropdownVisible = false;
+	readonly onDidChangeDropdownVisibility;
 
-	constructor(container: HTMLElement, options: ToolBarOptions) {
+	constructor(private readonly container: HTMLElement, private readonly options: ToolBarOptions) {
 		super();
 		this.moreActionsPlacement = options.moreActionsPlacement;
 		const actionViewItemOptions: ActionViewItemOptions = { buttonStyles: options.buttonStyles, hoverAnchorPosition: options.hoverAnchorPosition };
 		this.actionBar = this._register(new ActionBar(container, {
+			actionRunner: options.actionRunner,
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,
 			highlightToggledItems: options.highlightToggledItems,
@@ -74,6 +88,57 @@ export class ToolBar extends Disposable {
 		}));
 		this.element = this.actionBar.element;
 		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
+		this.onDidChangeDropdownVisibility = this.actionBar.onDidChangeDropdownVisibility;
+		this._register(this.onDidChangeDropdownVisibility(visible => {
+			this.dropdownVisible = visible;
+			if (!visible) this.layoutScheduler?.schedule();
+		}));
+		const ownerWindow = this.element.ownerDocument.defaultView;
+		if (options.responsiveBehavior?.enabled && ownerWindow) {
+			this.layoutScheduler = this._register(new AnimationFrameScheduler(ownerWindow, () => this.relayout()));
+			this._register(observeResize([
+				options.responsiveBehavior.observedElement ?? container,
+				this.element,
+			], () => this.layoutScheduler?.schedule()));
+		}
+	}
+
+	get actionRunner(): IActionRunner {
+		return this.actionBar.actionRunner;
+	}
+
+	set actionRunner(runner: IActionRunner) {
+		this.actionBar.actionRunner = runner;
+	}
+
+	set context(context: unknown) {
+		this.actionBar.context = context;
+	}
+
+	getItemAction(indexOrElement: number | HTMLElement): IAction | undefined {
+		return this.actionBar.getAction(indexOrElement);
+	}
+
+	getItemsLength(): number {
+		return this.actionBar.length();
+	}
+
+	setFocusable(focusable: boolean): void {
+		this.actionBar.setFocusable(focusable);
+	}
+
+	setAriaLabel(label: string): void {
+		this.element.setAttribute('aria-label', label);
+	}
+
+	/** Re-measures externally changed captions as well as the host's available width. */
+	relayout(): void {
+		if (this.isDisposed || this.dropdownVisible || !this.options.responsiveBehavior?.enabled) return;
+		const width = this.options.responsiveBehavior.getAvailableWidth?.() ?? this.container.clientWidth;
+		// Detached and hidden hosts cannot supply useful geometry yet.
+		if (width === 0 && this.options.responsiveBehavior.observedElement?.clientWidth === 0) return;
+		this.actionWidths.clear();
+		this.layout(width);
 	}
 
 	setActions(
@@ -87,16 +152,16 @@ export class ToolBar extends Disposable {
 		this.trailingActions = cleanSeparators(trailingActions);
 		this.actionWidths.clear();
 		this.renderActions(this.withMoreActions(primary));
-		if (this.availableWidth !== undefined) this.layout(this.availableWidth);
+		this.relayout();
 	}
 
 	/** Fits primary actions to a host-supplied width, moving the trailing suffix into More Actions. */
-	layout(width: number): void {
-		this.availableWidth = Math.max(0, width);
+	private layout(width: number): void {
+		const availableWidth = Math.max(0, width);
 		this.element.classList.add('ash-toolbar-responsive');
 		const all = [...this.primaryActions, this.moreActions, ...this.trailingActions];
 		const activeElement = this.element.ownerDocument.activeElement;
-		const focusedAction = this.renderedActions.find((_, index) => this.element.children[index]?.contains(activeElement));
+		const focusedAction = this.renderedActions.find((_, index) => this.actionBar.getItemElement(index)?.contains(activeElement));
 		if (all.some(action => !this.actionWidths.has(action))) {
 			// Measure real custom action views and the menu trigger before choosing a prefix.
 			this.renderActions(all);
@@ -110,7 +175,7 @@ export class ToolBar extends Disposable {
 			}
 			const fits = (actions: readonly IAction[]): boolean => {
 				const itemWidths = actions.reduce((total, action) => total + (this.actionWidths.get(action) ?? 0), 0);
-				return itemWidths + Math.max(0, actions.length - 1) * gap <= this.availableWidth!;
+				return itemWidths + Math.max(0, actions.length - 1) * gap <= availableWidth;
 			};
 			let count = this.primaryActions.length;
 			if (this.menuActions.length > 0 || !fits([...this.primaryActions, ...this.trailingActions])) {
@@ -135,8 +200,8 @@ export class ToolBar extends Disposable {
 		}
 	}
 
-	focus(): void {
-		this.actionBar.focus();
+	focus(index?: number): void {
+		this.actionBar.focus(index);
 	}
 
 	/** Refreshes retained action slots when their ordering and presence are unchanged. */
@@ -151,7 +216,7 @@ export class ToolBar extends Disposable {
 		this.trailingActions = cleanSeparators(trailingActions);
 		this.actionWidths.clear();
 		this.renderActions(this.withMoreActions(primary), true);
-		if (this.availableWidth !== undefined) this.layout(this.availableWidth);
+		this.relayout();
 	}
 
 	private renderActions(actions: readonly IAction[], update = false): void {

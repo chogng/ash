@@ -13,6 +13,7 @@ import { dispatchQuickInputKeyDown } from './quickInputActions.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
 import { QuickInputBox } from './quickInputBox.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../storage/common/storage.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 const viewStateStorageKey = 'workbench.quickInput.viewState';
 
@@ -46,7 +47,10 @@ export class QuickInputController extends Disposable {
 		readonly getContext?: (target: Node) => Context;
 		readonly shouldRestoreFocus?: () => boolean;
 		readonly onDispose?: () => void;
-	}, @IStorageService private readonly storageService: IStorageService) {
+	},
+		@IStorageService private readonly storageService: IStorageService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		this.host = h(container.ownerDocument, 'div');
 		this.host.className = 'ash-quick-input-host';
@@ -112,14 +116,14 @@ export class QuickInputController extends Disposable {
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		this.assertNotDisposed();
-		const quickPick = new QuickPick<TItem>(this.host, {
+		const quickPick = this.instantiationService.createInstance(QuickPick<TItem>, this.host, {
 			onShow: candidate => this.show(candidate),
 			onHide: candidate => this.hide(candidate),
 			onDispose: candidate => {
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
-		});
+		} satisfies BrowserQuickInputHostOptions);
 		this.quickInputs.add(quickPick);
 		return quickPick;
 	}

@@ -1,4 +1,4 @@
-import { Separator, type IAction } from '../../../common/actions.js';
+import { Separator, type IAction, type IActionRunner } from '../../../common/actions.js';
 import type { Icon } from '../../../common/icon.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { assertDefined } from '../../../common/types.js';
@@ -13,6 +13,8 @@ import { appendIcon } from '../lxicons/lxicon.js';
 
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
+	readonly actionRunner?: IActionRunner;
+	readonly actionContext?: unknown;
 	/** Adjacent actions share their host's delay history, independently of other toolbars. */
 	readonly hoverGroupId?: string;
 	readonly buttonStyles?: IButtonStyles;
@@ -34,6 +36,8 @@ export interface ActionViewItemOptions {
  */
 export abstract class ActionViewItem extends Disposable {
 	private hoverGroupId: string | undefined;
+	private _actionRunner: IActionRunner | undefined;
+	protected actionContext: unknown;
 
 	protected constructor(
 		readonly action: IAction,
@@ -41,6 +45,26 @@ export abstract class ActionViewItem extends Disposable {
 	) {
 		super();
 		this.hoverGroupId = actionViewItemOptions.hoverGroupId;
+		this._actionRunner = actionViewItemOptions.actionRunner;
+		this.actionContext = actionViewItemOptions.actionContext;
+	}
+
+	get actionRunner(): IActionRunner | undefined {
+		return this._actionRunner;
+	}
+
+	set actionRunner(runner: IActionRunner | undefined) {
+		this._actionRunner = runner;
+	}
+
+	setActionContext(context: unknown): void {
+		this.actionContext = context;
+	}
+
+	/** Custom action views use this path to retain the host's runner and context. */
+	protected runActionWithContext(action: IAction = this.action, context: unknown = this.actionContext): unknown {
+		if (this._actionRunner) return this._actionRunner.run(action, context);
+		return context === undefined ? action.run() : action.run(context);
 	}
 
 	/** The owning ActionBar assigns its delay group before rendering custom or standard items. */
@@ -144,7 +168,7 @@ export class ButtonActionViewItem extends ActionViewItem {
 	}
 
 	protected runAction(): unknown {
-		return this.action.run();
+		return this.runActionWithContext();
 	}
 }
 
@@ -189,7 +213,7 @@ export class LabelActionViewItem extends ActionViewItem {
 		label.className = 'ash-action-label-text';
 		label.textContent = this.options.label ?? this.action.label;
 		button.append(label);
-		this._register(addDisposableListener(button, 'click', () => this.action.run()));
+		this._register(addDisposableListener(button, 'click', () => this.runActionWithContext()));
 		this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));
 		this.button = button;

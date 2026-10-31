@@ -13,10 +13,11 @@ import { appendIcon, getRegisteredIcon } from '../../../base/browser/ui/lxicons/
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { stripIcons } from '../../../base/common/iconLabels.js';
 import { renderLabelWithIcons } from '../../../base/browser/ui/iconlabel/iconLabels.js';
-import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
+import { ToolBar } from '../../../base/browser/ui/toolbar/toolbar.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { Checkbox } from '../../../base/browser/ui/toggle/toggle.js';
+import { IContextMenuService } from '../../contextview/browser/contextView.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -30,7 +31,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly empty: HTMLDivElement;
 	private readonly list: List<TItem>;
 	private readonly keybindingLabels = this._register(new DisposableMap<HTMLDivElement, KeybindingLabel>());
-	private readonly rowActions = this._register(new DisposableMap<HTMLDivElement, ActionBar>());
+	private readonly rowActions = this._register(new DisposableMap<HTMLDivElement, ToolBar>());
 	private readonly rowResources = this._register(new DisposableMap<HTMLDivElement, DisposableStore>());
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
@@ -79,7 +80,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this._onDidChangeActive.event;
 	readonly onDidTriggerItemButton = this.buttonEmitter.event;
 
-	constructor(container: HTMLElement, private readonly presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
+	constructor(
+		container: HTMLElement,
+		private readonly presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick',
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, 'div');
@@ -139,13 +144,21 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._onDidAccept.fire(item);
 		}));
 		this._register(this.list.onDidChangeActive(({ item, rowId }) => {
+			this.updateActionFocus();
 			this._onDidChangeActive.fire({ item, rowId });
 		}));
 		// The focused option can mount after the input received logical focus,
 		// or leave the DOM during scrolling. Keep the combobox's reference live.
 		this._register(this.list.onDidRenderRows(() => {
+			this.updateActionFocus();
 			this._onDidChangeActive.fire({ item: this.list.activeItem, rowId: this.list.row(this.list.activeIndex)?.id });
 		}));
+	}
+
+	private updateActionFocus(): void {
+		for (const [row, toolbar] of this.rowActions) {
+			toolbar.setFocusable(row.classList.contains('is-active'));
+		}
 	}
 
 	get listId(): string {
@@ -413,22 +426,23 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		}
 		if (item.buttons?.length) {
 			const buttons = item.buttons;
-			const actions = new ActionBar(content, {
+			const actions = new ToolBar(content, {
+				contextMenuProvider: this.contextMenuService,
 				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', label.title),
 				actionViewItemProvider: action => new QuickInputButtonActionViewItem(action, buttons.find(button => button.id === action.id)!),
-				actions: buttons.map(button => ({
-					id: button.id,
-					label: button.label,
-					tooltip: button.label,
-					enabled: true,
-					run: context => {
-						// The view supplies the native click event for both pointer and keyboard activation.
-						const event = context as MouseEvent;
-						this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
-						this.buttonEmitter.fire({ item, button, anchor: event.currentTarget });
-					},
-				})),
 			});
+			actions.setActions(buttons.map(button => ({
+				id: button.id,
+				label: button.label,
+				tooltip: button.label,
+				enabled: true,
+				run: context => {
+					// The view supplies the native click event for both pointer and keyboard activation.
+					const event = context as MouseEvent;
+					this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
+					this.buttonEmitter.fire({ item, button, anchor: event.currentTarget });
+				},
+			})));
 			actions.element.classList.add('ash-quick-pick-row-actions');
 			this.rowActions.set(row, actions);
 		}
@@ -488,7 +502,7 @@ class QuickInputButtonActionViewItem extends ActionViewItem {
 		}
 		this._register(addDisposableListener(button, 'click', event => {
 			stopEvent(event);
-			this.action.run(event);
+			this.runActionWithContext(this.action, event);
 		}));
 		this.setupHover(button, this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));

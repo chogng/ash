@@ -6,7 +6,7 @@ import { setAriaAttribute } from '../../../base/browser/ui/aria/aria.js';
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
+import { Separator, SubmenuAction, type IAction, type IActionRunner } from '../../../base/common/actions.js';
 import { isLinux, isWindows } from '../../../base/common/platform.js';
 import { MenuItemAction, SubmenuItemAction } from '../common/actions.js';
 
@@ -210,7 +210,7 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 	}
 
 	protected override runAction(): unknown {
-		return this.activeAction.run();
+		return this.runActionWithContext(this.activeAction);
 	}
 
 	private updateAlternativeState(modifiers: ModifierKeyEmitter): void {
@@ -265,6 +265,22 @@ export class DropdownWithDefaultActionViewItem extends ActionViewItem {
 	private readonly defaultItem: ActionViewItem;
 	private readonly dropdownItem: DropdownMenuActionViewItem;
 	public readonly onDidChangeDropdownVisibility;
+
+	override get actionRunner(): IActionRunner | undefined {
+		return super.actionRunner;
+	}
+
+	override set actionRunner(runner: IActionRunner | undefined) {
+		super.actionRunner = runner;
+		this.defaultItem.actionRunner = runner;
+		this.dropdownItem.actionRunner = runner;
+	}
+
+	override setActionContext(context: unknown): void {
+		super.setActionContext(context);
+		this.defaultItem.setActionContext(context);
+		this.dropdownItem.setActionContext(context);
+	}
 
 	constructor(
 		action: SubmenuItemAction,

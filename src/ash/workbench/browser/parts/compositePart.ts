@@ -119,19 +119,20 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		if (!toolbar) return;
 		const activeElement = toolbar.element.ownerDocument.activeElement;
 		const focusedAction = toolbar.element.contains(activeElement)
-			? (activeElement as HTMLElement).closest<HTMLElement>('[data-action-id]')?.dataset.actionId
+			? toolbar.getItemAction(activeElement as HTMLElement)?.id
 			: undefined;
 		// A merged View lends its scoped action host; return the Part-owned renderer before switching hosts.
 		this.compositeToolBarContainer!.append(toolbar.element);
 		// The retained renderer must release the previous View's accessible name before its next host lends one.
-		toolbar.element.setAttribute('aria-label', this.activeComposite?.getTitle() ?? this.compositeToolBarAriaLabel);
+		toolbar.setAriaLabel(this.activeComposite?.getTitle() ?? this.compositeToolBarAriaLabel);
 		const primary = this.activeComposite?.getActions() ?? [];
 		const secondary = this.activeComposite?.getSecondaryActions() ?? [];
 		toolbar.setActions(primary, secondary);
 		toolbar.element.hidden = primary.length === 0 && secondary.length === 0;
 		if (focusedAction) {
-			const entry = [...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')].find(element => element.dataset.actionId === focusedAction);
-			entry?.querySelector<HTMLElement>('button:not(:disabled), [tabindex]')?.focus();
+			for (let index = 0; index < toolbar.getItemsLength(); index++) {
+				if (toolbar.getItemAction(index)?.id === focusedAction) { toolbar.focus(index); break; }
+			}
 		}
 	}
 

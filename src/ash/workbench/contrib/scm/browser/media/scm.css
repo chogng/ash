@@ -371,7 +371,7 @@
 
 /* A remembered row focus reveals actions only while the tree has keyboard focus. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
-.ash-scm-graph-actions:has(button[aria-expanded="true"]),
+.ash-scm-graph-actions.dropdown-visible,
 .ash-scm-graph-commit:is(
 		:focus-within,
 		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused

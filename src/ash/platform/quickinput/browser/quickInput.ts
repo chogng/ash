@@ -30,6 +30,7 @@ import { QuickInputList } from './quickInputList.js';
 import { QuickInputType, QuickPickFocus } from '../common/quickInput.js';
 import { localize } from '../../../nls.js';
 import { RawContextKey } from '../../contextkey/common/contextkey.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 export const inQuickInputContext = new RawContextKey<boolean>('inQuickInput', false);
 export const quickInputTypeContextKey = new RawContextKey<string>('quickInputType', '');
@@ -136,7 +137,11 @@ export class QuickPick<TItem extends IQuickPickItem>
 	public set selectedItems(items: readonly TItem[]) { this.list.selectedItems = items; }
 	public get onDidChangeSelection(): Event<readonly TItem[]> { return this.list.onDidChangeSelection; }
 
-	constructor(private readonly host: HTMLElement, options: BrowserQuickInputHostOptions) {
+	constructor(
+		private readonly host: HTMLElement,
+		options: BrowserQuickInputHostOptions,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super();
 		this.options = options;
 		const ownerDocument = host.ownerDocument;
@@ -144,7 +149,13 @@ export class QuickPick<TItem extends IQuickPickItem>
 		this.element.className = 'ash-quick-pick';
 		setRole(this.element, 'dialog');
 		setAriaAttribute(this.element, 'label', this._ariaLabel);
-		this.list = this._register(new QuickInputList<TItem>(this.element));
+		try {
+			this.list = this._register(instantiationService.createInstance(QuickInputList<TItem>, this.element, 'quickPick'));
+		} catch (error) {
+			// A missing list dependency must also release this picker's initialized emitters.
+			this.dispose();
+			throw error;
+		}
 		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
 			inputBoxStyles: defaultInputBoxStyles,

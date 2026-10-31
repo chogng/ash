@@ -1,9 +1,8 @@
 import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../nls.js';
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -411,6 +410,12 @@ export class SCMHistoryViewPane extends ViewPane {
 			MenuId.SCMHistoryTitle,
 			{
 				ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this },
+				responsiveBehavior: {
+					enabled: true,
+					observedElement: this.headerElement,
+					// Keep the collapse control and a readable title beside the operation strip.
+					getAvailableWidth: () => Math.max(0, this.headerElement.clientWidth - 64),
+				},
 				actionViewItemProvider: (action, options) => {
 					if (action.id !== 'workbench.scm.action.graph.pickHistoryItemRefs') { return undefined; }
 					const presentation = this.filterPresentation;
@@ -436,16 +441,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			},
 		));
 		toolbar.element.classList.add('ash-scm-remote-actions');
-		const layoutToolbar = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
-			const width = this.headerElement.clientWidth;
-			if (width === 0) return;
-			// Keep the collapse control and a readable title beside the operation strip.
-			toolbar.layout(Math.max(0, width - 64));
-		}));
-		this._register(observeResize([this.headerElement, toolbar.element], () => layoutToolbar.schedule()));
-		this._register(toolbar.onDidChangeMenuItems(() => layoutToolbar.schedule()));
-		this._register(this.filterPresentation.onDidChange(() => layoutToolbar.schedule()));
-		layoutToolbar.schedule();
+		this._register(this.filterPresentation.onDidChange(() => toolbar.relayout()));
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
@@ -1313,6 +1309,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		resources.add(addDisposableListener(container, 'keydown', event => event.stopPropagation()));
 		const menu = resources.add(this.menuService.createMenu(menuId, scope));
 		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuService, { ariaLabel }));
+		resources.add(toolbar.onDidChangeDropdownVisibility(visible => container.classList.toggle('dropdown-visible', visible)));
 		const update = (): void => {
 			// Secondary actions remain available through the row's context menu.
 			const { primary } = getActionBarActions(menu.getActions({ arg: target }), 'inline');

@@ -89,6 +89,7 @@ export class NotificationTemplateRenderer extends Disposable {
 		const close: IAction = { id: 'notification.clear', label, tooltip: label, enabled: true, icon: Lxicon.close, run: () => remove(item.id) };
 		const toolbar = this._register(new WorkbenchToolBar(toolbarContainer, contextMenuService, {
 			ariaLabel: label,
+			actionRunner,
 			actionViewItemProvider: (action, options) => {
 				if (action === close) return new NotificationCloseActionViewItem(action, item.id, presentation);
 				if (action.id === 'notification.toggle') return new NotificationExpandActionViewItem(action, input.expanded);
@@ -154,6 +155,7 @@ export class NotificationTemplateRenderer extends Disposable {
 		});
 		const update = (current: NotificationItem): void => {
 			input = current;
+			toolbar.context = current;
 			const severityName = Severity[current.severity].toLowerCase();
 			this.domNode.dataset.severity = severityName;
 			if (presentation === 'toast') this.domNode.className = `ash-notification ash-notification-${severityName}`;
@@ -167,10 +169,7 @@ export class NotificationTemplateRenderer extends Disposable {
 			progress.element.setAttribute('aria-label', current.message);
 			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
 			if (previousActions !== current.actions) {
-				secondaryActions = current.actions?.secondary?.map(action => {
-					const runnable = runnableAction(action);
-					return { ...runnable, run: () => actionRunner.run(runnable) };
-				}) ?? [];
+				secondaryActions = current.actions?.secondary?.map(runnableAction) ?? [];
 				configure = current.sourceId || secondaryActions.length ? new ConfigureNotificationAction(secondaryActions) : undefined;
 			}
 			updateToolbar();

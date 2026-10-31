@@ -25,6 +25,7 @@ import { IChatService } from '../../../src/ash/workbench/services/chat/common/ch
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { ILayoutService, BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { TestNotificationService } from './notificationFixture.js';
@@ -52,6 +53,10 @@ services.registerInstance(IStorageService, resources.add(new BrowserStorageServi
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
+services.registerInstance(IContextMenuService, {
+	contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+	showContextMenu() { throw new Error('Unexpected Quick Input context menu'); }, hideContextMenu() { },
+});
 services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 services.registerInstance(IAuxiliaryWindowService, resources.add(services.createInstance(BrowserAuxiliaryWindowService, window, root)));
 const notifications = resources.add(new TestNotificationService());

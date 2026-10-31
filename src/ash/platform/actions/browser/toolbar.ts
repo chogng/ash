@@ -1,8 +1,8 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import type { ActionBarOrientation, ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
-import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from '../../../base/browser/ui/toolbar/toolbar.js';
-import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
+import { ToolBar, type IToolBarResponsiveBehaviorOptions, type MoreActionsPlacement, type ToolBarPresentation } from '../../../base/browser/ui/toolbar/toolbar.js';
+import { SubmenuAction, type IAction, type IActionRunner } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import type { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
@@ -10,6 +10,8 @@ import { createActionViewItem, getActionBarActions } from './menuEntryActionView
 import { MenuId, type IMenu, type IMenuActionOptions, type IMenuChangeEvent, type IMenuService } from '../common/actions.js';
 
 export interface IWorkbenchToolBarOptions {
+	readonly actionRunner?: IActionRunner;
+	readonly responsiveBehavior?: IToolBarResponsiveBehaviorOptions;
 	readonly ariaLabel?: string;
 	readonly orientation?: ActionBarOrientation;
 	readonly actionViewItemProvider?: ActionViewItemProvider;
@@ -32,6 +34,8 @@ export class WorkbenchToolBar extends ToolBar {
 		options: IWorkbenchToolBarOptions = {},
 	) {
 		super(container, {
+			actionRunner: options.actionRunner,
+			responsiveBehavior: options.responsiveBehavior,
 			buttonStyles: defaultButtonStyles,
 			contextMenuProvider,
 			ariaLabel: options.ariaLabel,
