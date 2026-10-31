@@ -1619,6 +1619,19 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(status, '字号 必须介于 1 和 10 之间。');
 
 	const search = resources.add(new SettingsSearchWidget(root, { ariaControls: 'settings-results', contextMenuProvider, localizationService }));
+	const clearSearch = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-clear')!;
+	assert.equal(clearSearch.getAttribute('aria-label'), '清空搜索');
+	assert.equal(clearSearch.disabled, true);
+	const searchChanges: string[] = [];
+	resources.add(search.onDidChange(value => searchChanges.push(value)));
+	search.value = 'workbench.editor';
+	assert.equal(clearSearch.disabled, false);
+	clearSearch.focus();
+	clearSearch.click();
+	assert.equal(search.value, '');
+	assert.deepEqual(searchChanges, ['workbench.editor', '']);
+	assert.equal(clearSearch.disabled, true);
+	assert.equal(browserEnvironment.window.document.activeElement, search.domNode.querySelector('input'));
 	const filter = search.domNode.querySelector<HTMLButtonElement>('.ash-settings-search-filter')!;
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';

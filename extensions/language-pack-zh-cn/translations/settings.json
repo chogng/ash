@@ -111,6 +111,7 @@
     "search.experimental": "实验性",
     "search.preview": "预览",
     "search.stable": "稳定",
+    "search.clearSearch": "清空搜索",
     "option.unavailable": "当前不可用（{0}）",
     "search.maturityHelp": "设置可以标记为实验性或预览；这些标签描述功能的成熟度，不会改变启用状态。输入 @tag:experimental 或 @tag:preview 可筛选对应设置，输入 @stable 可排除这两类设置。可与文本、@id: 和 @modified 组合使用。",
     "status.saveFailed": "无法保存设置。",

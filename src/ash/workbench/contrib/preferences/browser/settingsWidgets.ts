@@ -72,6 +72,22 @@ export class SettingsSearchWidget extends Disposable {
 			ariaControls: options.ariaControls,
 		}));
 		this.inputBox.element.classList.add('ash-settings-search-input');
+		const clearSearchLabel = localize({ bundle: 'ash.settings', key: 'search.clearSearch' }, 'Clear Search');
+		const clearSearchButton = this._register(new Button(this.inputBox.element, {
+			...defaultButtonStyles,
+			label: clearSearchLabel,
+			title: clearSearchLabel,
+			icon: Lxicon.clearAll,
+			iconOnly: true,
+			size: 'small',
+			enabled: false,
+			onClick: () => {
+				this.inputBox.value = '';
+				this.inputBox.focus();
+			},
+		}));
+		clearSearchButton.toggleClassName('ash-settings-search-clear', true);
+		this._register(this.inputBox.onDidChange(value => { clearSearchButton.enabled = !!value; }));
 		this.searchMenu = this._register(new SettingsSearchMenu(this.inputBox.element, {
 			getValue: () => this.inputBox.value,
 			setValue: value => { this.inputBox.value = value; },
