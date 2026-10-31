@@ -3065,27 +3065,6 @@ fn model_ref(model: &str) -> ModelRef {
 }
 
 #[test]
-fn configured_model_context_enables_core_managed_compaction() {
-    let provider = ProviderId::new("openai").unwrap();
-    let model = ModelId::new("gpt-5.6").unwrap();
-    let mut provider_config = ModelProviderConfig::new(provider.clone());
-    provider_config.max_output_tokens = Some(2_048);
-    provider_config.model_context = BTreeMap::from([(
-        model.clone(),
-        ModelContextConfig {
-            context_window: Some(20_000),
-            long_context: None,
-            auto_compact_token_limit: Some(15_000),
-        },
-    )]);
-    let profile = tempfile::tempdir().unwrap();
-    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
-    let configured = config
-        .apply(ConfigCommandRequest {
-            command_id: CommandId::new("configure-context").unwrap(),
-            expected_revision: ConfigRevision::INITIAL,
-            command: UserConfigCommand::ConfigureConnection {
-#[test]
 fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservations() {
     let registry = ProviderConfigRegistry::builtin();
     let manager = ash_models_manager::ModelsManager::new(registry.clone());
@@ -3142,6 +3121,27 @@ fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservat
     assert_eq!(context.usable_input(), Some(272_000 - 4_096 - 1_024));
 }
 
+#[test]
+fn configured_model_context_enables_core_managed_compaction() {
+    let provider = ProviderId::new("openai").unwrap();
+    let model = ModelId::new("gpt-5.6").unwrap();
+    let mut provider_config = ModelProviderConfig::new(provider.clone());
+    provider_config.max_output_tokens = Some(2_048);
+    provider_config.model_context = BTreeMap::from([(
+        model.clone(),
+        ModelContextConfig {
+            context_window: Some(20_000),
+            long_context: None,
+            auto_compact_token_limit: Some(15_000),
+        },
+    )]);
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let configured = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-context").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureConnection {
                 connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
                     .unwrap(),
                 config: provider_config,
@@ -3204,6 +3204,7 @@ fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservat
     assert_eq!(entry.discovered, None);
     assert_eq!(entry.auto_compact_token_limit, Some(15_000));
     assert_eq!(entry.available_context_window, Some(15_000 - 2_048 - 1_024));
+    assert_eq!(entry.usable_context_window, Some(20_000 - 2_048 - 1_024));
     let serialized = serde_json::to_value(entry).unwrap();
     assert_eq!(serialized["context_window"], 20_000);
     assert_eq!(serialized["auto_compact_token_limit"], 15_000);
@@ -3225,7 +3226,6 @@ fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservat
     let mut invalid = snapshot.values.connections[&connection_id].clone();
     invalid
         .model_context
-    assert_eq!(entry.usable_context_window, Some(20_000 - 2_048 - 1_024));
         .get_mut(&model)
         .unwrap()
         .context_window = Some(1_000);
