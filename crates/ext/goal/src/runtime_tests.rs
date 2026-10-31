@@ -3,6 +3,8 @@ use ash_core::InMemoryThreadStore;
 use ash_core::StartGoalTurnRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
+use ash_core::ThreadEventBatch;
+use ash_core::ThreadStore;
 use ash_core::TurnExecutor;
 use async_utils::CancellationToken;
 use core_api::CoreError;
@@ -120,6 +122,252 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
         );
         thread::sleep(Duration::from_millis(1));
     }
+}
+
+#[test]
+fn goal_continuation_resolves_session_advisor_inheritance_without_affecting_other_sessions() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let preference: protocol::AdvisorConfig = serde_json::from_value(serde_json::json!({
+        "enabled": true, "maxCalls": 7, "maxOutputTokens": 8192,
+        "reasoningEffort": "low"
+    }))
+    .unwrap();
+    let model = Arc::new(ScriptedModel::new((0..5).map(|_| {
+        let mut response = text_response("done");
+        response.usage = Some(ModelUsage {
+            input_tokens: Some(1),
+            output_tokens: Some(0),
+            cached_input_tokens: Some(0),
+            cache_write_input_tokens: Some(0),
+            reasoning_tokens: None,
+        });
+        Ok(response)
+    })));
+    let executor = executor(threads.clone(), model.clone());
+
+    for (name, selection) in [
+        (
+            "explicit-chat-model",
+            Some(protocol::ModelRef::new(
+                protocol::ProviderId::new("test").unwrap(),
+                protocol::ModelId::new("chat").unwrap(),
+            )),
+        ),
+        ("no-chat-model", None),
+    ] {
+        let (thread_id, turn_id) =
+            start_session_turn(&threads, name, selection.clone(), Some(preference.clone()));
+        // Session preferences remain unresolved, unlike the settings frozen for each Turn.
+        let advisor_selection = protocol::AdvisorSelection::Model {
+            config: preference.clone(),
+        };
+        threads
+            .configure_advisor(
+                &thread_id,
+                CommandId::new("inherit-advisor").unwrap(),
+                SequenceExpectation::Any,
+                advisor_selection.clone(),
+            )
+            .unwrap();
+        threads
+            .create_goal(&thread_id, "finish the requested task".into(), Some(2))
+            .unwrap();
+        executor.start(&thread_id, &turn_id).unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let snapshot = loop {
+            let snapshot = threads.read_thread(&thread_id).unwrap();
+            if snapshot.turns.len() == 2 && snapshot.turns[1].status == TurnStatus::Completed {
+                break snapshot;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Goal did not continue: statuses={:?}, goal={:?}",
+                snapshot
+                    .turns
+                    .iter()
+                    .map(|turn| turn.status)
+                    .collect::<Vec<_>>(),
+                snapshot.goal
+            );
+            thread::sleep(Duration::from_millis(1));
+        };
+        assert_eq!(snapshot.advisor, advisor_selection);
+        assert_eq!(
+            snapshot.goal.unwrap().status,
+            protocol::ThreadGoalStatus::BudgetLimited
+        );
+        let expected = selection.map(|model| protocol::AdvisorConfig {
+            model: Some(model),
+            reasoning_effort: Some(protocol::ReasoningEffort::High),
+            ..preference.clone()
+        });
+        for turn in &snapshot.turns {
+            assert_eq!(turn.advisor, expected);
+        }
+        for command in &snapshot.commands {
+            if let protocol::ThreadCommand::StartTurn { advisor, .. } = &command.receipt.command {
+                assert_eq!(advisor, &expected);
+            }
+        }
+    }
+
+    let (thread_id, turn_id) = start_session_turn(&threads, "other-session", None, None);
+    executor.start(&thread_id, &turn_id).unwrap();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+    assert_eq!(model.requests().len(), 5);
+}
+
+#[test]
+fn recovered_unresolved_advisor_fails_durably_and_other_sessions_still_execute() {
+    let source_store = Arc::new(InMemoryThreadStore::default());
+    let source = ThreadController::with_store(source_store.clone());
+    let (thread_id, first_turn_id) = start_session_turn(&source, "legacy-goal", None, None);
+    source
+        .complete_turn(&thread_id, &first_turn_id, "first answer".into())
+        .unwrap();
+    source
+        .create_goal(&thread_id, "finish the requested task".into(), None)
+        .unwrap();
+    let hidden_turn = source
+        .start_goal_turn(
+            &thread_id,
+            StartGoalTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("legacy-continuation").unwrap(),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: protocol::ApprovalMode::Manual,
+                tool_mode: protocol::ToolMode::Direct,
+                tool_profile: None,
+            },
+        )
+        .unwrap()
+        .unwrap()
+        .turn_id;
+    let mut events = source_store.events();
+    let preference = serde_json::from_value(serde_json::json!({"enabled":true})).unwrap();
+    // Recreate the journal written before Goal admission resolved Advisor inheritance.
+    let accepted = events
+        .iter_mut()
+        .find(|event| matches!(&event.event, protocol::ThreadEvent::TurnAccepted { turn_id, .. } if turn_id == &hidden_turn))
+        .unwrap();
+    let protocol::ThreadEvent::TurnAccepted { advisor, .. } = &mut accepted.event else {
+        unreachable!();
+    };
+    *advisor = Some(preference);
+    let protocol::ThreadCommand::StartTurn {
+        advisor: command_advisor,
+        ..
+    } = &mut accepted.command.as_mut().unwrap().command
+    else {
+        unreachable!();
+    };
+    *command_advisor = advisor.clone();
+    let store = Arc::new(InMemoryThreadStore::default());
+    store
+        .append_batch(&ThreadEventBatch {
+            history_index: None,
+            history_prefixes: Vec::new(),
+            batch_id: "legacy-journal".into(),
+            thread_id: thread_id.clone(),
+            expected_sequence: 0,
+            events,
+            catalog: source.thread_catalog_record(&thread_id).unwrap(),
+        })
+        .unwrap();
+    let threads = Arc::new(ThreadController::with_store(store.clone()));
+    let loaded = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(loaded.turns.last().unwrap().status, TurnStatus::Running);
+    let model = Arc::new(ScriptedModel::new([Ok(text_response(
+        "other session answer",
+    ))]));
+    let executor = executor(threads.clone(), model.clone());
+    let sessions = [loaded.session_id].into_iter().collect();
+    assert!(matches!(
+        executor.resume_recovered_extension_turns_in_sessions(&sessions),
+        Err(CoreError::Execution(message)) if message == "Turn Advisor configuration has no frozen model"
+    ));
+    let failed = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(failed.turns.last().unwrap().status, TurnStatus::Failed);
+    assert_eq!(
+        failed.goal.unwrap().status,
+        protocol::ThreadGoalStatus::Blocked
+    );
+    assert!(model.requests().is_empty());
+    assert_eq!(
+        executor
+            .resume_recovered_extension_turns_in_sessions(&sessions)
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        ThreadController::with_store(store)
+            .read_thread(&thread_id)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .status,
+        TurnStatus::Failed
+    );
+
+    let (other_thread, other_turn) = start_session_turn(&threads, "healthy-session", None, None);
+    executor.start(&other_thread, &other_turn).unwrap();
+    wait_for_turn_status(&threads, &other_thread, &other_turn, TurnStatus::Completed);
+    assert_eq!(model.requests().len(), 1);
+}
+
+fn start_session_turn(
+    threads: &ThreadController,
+    name: &str,
+    model: Option<protocol::ModelRef>,
+    advisor: Option<protocol::AdvisorConfig>,
+) -> (ThreadId, TurnId) {
+    let thread_id = ThreadId::new(name).unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: protocol::AgentId::new(format!("agent-{name}")).unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: SessionId::new(name).unwrap(),
+            thread_id: thread_id.clone(),
+            title: name.into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor,
+                kind: protocol::TurnKind::Coding,
+                instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model,
+                reasoning_effort: Some(protocol::ReasoningEffort::High),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: protocol::ApprovalMode::Manual,
+                tool_mode: protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    (thread_id, turn_id)
 }
 
 #[test]
