@@ -77,7 +77,11 @@ export class DecorationsOverviewRuler extends ViewPart {
 		return event.affectsOverviewRuler ? this.markMaybe() : false;
 	}
 	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return this.markNeeded(); }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollHeightChanged ? this.markNeeded() : false; }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		if (event.scrollHeightChanged) return this.markNeeded();
+		// The canvas scrolls with its parent; refresh its viewport transform without repainting unchanged markers.
+		return event.scrollLeftChanged || event.scrollTopChanged;
+	}
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return this.markNeeded(); }
 	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean { return this.updateSettings(); }
 

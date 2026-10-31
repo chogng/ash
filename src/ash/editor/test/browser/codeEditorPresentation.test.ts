@@ -1300,6 +1300,56 @@ suite('textModel browser component', () => {
 		await expect.poll(() => overview.evaluate((canvas: HTMLCanvasElement) => Array.from(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data))).toEqual([18, 52, 86, 255]);
 	});
 
+	test('overview ruler stays on the scrollbar after horizontal and vertical scrolling', async function () {
+		const { page } = browserTests;
+
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue(Array.from({ length: 100 }, () => 'long text '.repeat(100)).join('\n'));
+			editor.updateOptions({ wordWrap: 'off', smoothScrolling: false });
+		});
+		const editor = page.locator('.stanza-editor');
+		const overview = editor.locator('.decorationsOverviewRuler');
+		await expect(overview).toHaveAttribute('aria-hidden', 'true');
+		for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+			await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+			for (const side of ['disabled', 'left', 'right'] as const) {
+				await page.evaluate(side => {
+					const control = window.ashTextModelIntegration.getControl();
+					control.updateOptions({ minimap: { enabled: side !== 'disabled', side: side === 'left' ? 'left' : 'right' } });
+					control.setScrollPosition({ scrollLeft: 0, scrollTop: 0 });
+				}, side);
+				await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+				for (const position of [
+					{ scrollLeft: 160, scrollTop: 0 },
+					{ scrollLeft: 160, scrollTop: 640 },
+					{ scrollLeft: 0, scrollTop: 640 },
+					{ scrollLeft: 0, scrollTop: 0 },
+				]) {
+					await page.evaluate(position => window.ashTextModelIntegration.getControl().setScrollPosition(position), position);
+					await expect.poll(() => editor.evaluate(element => {
+						const ruler = element.querySelector('.decorationsOverviewRuler')!.getBoundingClientRect();
+						const track = element.querySelector('.ash-scrollbar-track-vertical')!.getBoundingClientRect();
+						const scrollable = element.querySelector('.ash-smooth-scrollable')!;
+						return {
+							scrollLeft: scrollable.scrollLeft,
+							scrollTop: scrollable.scrollTop,
+							leftOffset: ruler.left - track.left,
+							rightOffset: ruler.right - track.right,
+							topOffset: ruler.top - track.top,
+						};
+					}), { message: `ruler follows the track for ${theme}, minimap=${side}, scroll=${JSON.stringify(position)}` }).toEqual({
+						...position,
+						leftOffset: 0,
+						rightOffset: 0,
+						topOffset: 0,
+					});
+				}
+			}
+		}
+	});
+
 	test('editor scrollbar track colors follow theme overrides in all color schemes', async function () {
 		const { page } = browserTests;
 
