@@ -47,6 +47,7 @@ export const lxiconsLibrary = {
 	chat3Filled: registerLxicon("chat-3-filled", 0xe027),
 	chat4: registerLxicon("chat-4", 0xe02a),
 	chat4Filled: registerLxicon("chat-4-filled", 0xe029),
+	chatSession: registerLxicon("chat-session", 0xe146),
 	check: registerLxicon("check", 0xe02b),
 	chevronDown: registerLxicon("chevron-down", 0xe02c),
 	chevronLeft: registerLxicon("chevron-left", 0xe02d),

@@ -217,6 +217,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "chat-session",
+      "file": "chat-session.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "check",
       "file": "check.svg",
       "rendering": "symbolic"

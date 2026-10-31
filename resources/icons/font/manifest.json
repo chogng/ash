@@ -325,7 +325,8 @@
     "preserve-case": "E142",
     "regex": "E143",
     "whole-word": "E144",
-    "case-sensitive": "E145"
+    "case-sensitive": "E145",
+    "chat-session": "E146"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -371,6 +372,7 @@
     "chat-3": "5a2ecabf49bdfba33465024b4b193544b30de73c5c55c69740ac43534fbfce2f",
     "chat-4-filled": "9ff91ce5f30d163a0a9bfd94aa516d200447bcf088e73a2a774d7f5c70b549a7",
     "chat-4": "5dccd58446288e7b3bcb95a128c3e4a3974301aed81b91f59583e9de6fc58d31",
+    "chat-session": "1b83c160240f8f8045dbd8c7dcd08241f360eb8c509117109dbb65b971f09ee0",
     "check": "bdb331a36dd7c9daa4b7e661d5042f112b118a2e40636914957f385323b3708d",
     "chevron-down": "9eefa364523e803f38ddf298ac785f2337b9a29ca318cf8af5fdf6c6dd097c9c",
     "chevron-left": "7005b07169e51f396c4336c513464f7d1e8cccc874ac496700d468020640e283",
