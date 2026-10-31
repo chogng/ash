@@ -175,6 +175,53 @@ suite('Frontend line diff', () => {
 		]);
 	});
 
+	test('joins internal stylesheet name hyphens between edits while retaining shared name parts', async () => {
+		const cases = [
+			['.ash-chat-body.sessions-sidebar-visible > .ash-chat-pane-host {', '.ash-chat-body.sessions-side-by-side > .ash-chat-sessions-sidebar {', ['sidebar-visible', 'pane-host'], ['side-by-side', 'sessions-sidebar']],
+			['.ash-a-b {', '.ash-c-d {', ['a-b'], ['c-d']],
+			['.ash-old--host {', '.ash-new--sidebar {', ['old--host'], ['new--sidebar']],
+			['color: var(--ash-old-host);', 'color: var(--ash-new-sidebar);', ['old-host'], ['new-sidebar']],
+			['.ash-10-old {', '.ash-20-new {', ['10-old'], ['20-new']],
+			['.ash-old-shared-host {', '.ash-new-shared-sidebar {', ['old', 'host'], ['new', 'sidebar']],
+		] as const;
+		for (const languageId of ['css', 'scss', 'less']) {
+			for (const [original, modified, originalChanges, modifiedChanges] of cases) {
+				const diff = await compute(original, modified, languageId);
+				assert.deepEqual([
+					diff.rows.get(0)!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)),
+					diff.rows.get(0)!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)),
+				], [originalChanges, modifiedChanges], `${languageId}: ${original}`);
+			}
+		}
+	});
+
+	test('keeps name hyphens outside a single renamed part unhighlighted', async () => {
+		const original = '.ash-chat-pane-host {';
+		const modified = '.ash-chat-pane-body {';
+		const diff = await compute(original, modified, 'css');
+		assert.deepEqual([
+			diff.rows.get(0)!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)),
+			diff.rows.get(0)!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)),
+		], [['host'], ['body']]);
+	});
+
+	test('keeps subtraction independent with or without whitespace and shared words', async () => {
+		for (const [original, modified, languageId, originalChanges, modifiedChanges] of [
+			['const value = first - second;', 'const value = alpha - beta;', 'javascript', ['first', 'second'], ['alpha', 'beta']],
+			['const value = first-second;', 'const value = alpha-beta;', 'javascript', ['first', 'second'], ['alpha', 'beta']],
+			['a - b', 'c - d', undefined, ['a', 'b'], ['c', 'd']],
+			['a-b', 'c-d', 'typescript', ['a', 'b'], ['c', 'd']],
+			['width: calc(10px - 20px);', 'width: calc(30px - 40px);', 'css', ['10px', '20px'], ['30px', '40px']],
+			['width: $first-$second;', 'width: $alpha-$beta;', 'scss', ['$first', '$second'], ['$alpha', '$beta']],
+		] as const) {
+			const diff = await compute(original, modified, languageId);
+			assert.deepEqual([
+				diff.rows.get(0)!.originalChanges.map(range => original.slice(range.startColumn, range.endColumn)),
+				diff.rows.get(0)!.modifiedChanges.map(range => modified.slice(range.startColumn, range.endColumn)),
+			], [originalChanges, modifiedChanges], original);
+		}
+	});
+
 	test('detects moved code with edits and added lines using document coordinates', () => {
 		const block = ['function load(input) {', '  const value = parse(input);', '  return value;', '}'];
 		const edited = ['function load(input) {', '  const value = parse(updated);', '  log(value);', '  return value;', '}'];
@@ -389,13 +436,14 @@ suite('Frontend line diff', () => {
 	});
 });
 
-async function compute(original: string, modified: string): Promise<LineDiff> {
+async function compute(original: string, modified: string, languageId?: string): Promise<LineDiff> {
 	const originalLines = original.split('\n');
 	const modifiedLines = modified.split('\n');
 	const result = await new DefaultLinesDiffComputer().computeDiffAsync(originalLines, modifiedLines, {
 		ignoreTrimWhitespace: false,
 		maxComputationTimeMs: 0,
 		computeMoves: false,
+		languageId,
 	}, new AbortController().signal);
 	return toLineDiff(result, originalLines.length, modifiedLines.length);
 }

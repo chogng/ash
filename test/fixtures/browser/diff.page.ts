@@ -1073,7 +1073,11 @@ const harness = {
 	get activeManyActions(): number {
 		return activeManyActions;
 	},
-	setComparisonText(originalText: string, modifiedText: string): void {
+	setComparisonText(originalText: string, modifiedText: string, languageId?: string): void {
+		if (languageId !== undefined) {
+			original.setLanguage(languageId);
+			modified.setLanguage(languageId);
+		}
 		original.setValue(originalText);
 		modified.setValue(modifiedText);
 		input.value = modifiedText;

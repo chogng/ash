@@ -64,6 +64,8 @@ export class DiffModel extends Disposable {
 		});
 		this._register(options.original.onDidChangeContent(() => this.refresh()));
 		this._register(options.modified.onDidChangeContent(() => this.refresh()));
+		this._register(options.original.onDidChangeLanguage(() => this.refresh()));
+		this._register(options.modified.onDidChangeLanguage(() => this.refresh()));
 		this._register(options.original.onWillDispose(() => this.dispose()));
 		this._register(options.modified.onWillDispose(() => this.dispose()));
 		this._register(options.diffProvider.onDidChange(() => this.refresh()));

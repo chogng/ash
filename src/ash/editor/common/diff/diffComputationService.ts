@@ -1,4 +1,4 @@
-import { type IDocumentDiffProviderOptions } from './documentDiffProvider.js';
+import { type ILinesDiffComputerOptions } from './linesDiffComputer.js';
 
 /** One immutable text document with LF line endings supplied to a diff computation. */
 export interface DiffComputationDocument {
@@ -10,5 +10,5 @@ export interface DiffComputationDocument {
 export interface DiffComputationRequest {
 	readonly original: DiffComputationDocument;
 	readonly modified: DiffComputationDocument;
-	readonly options: IDocumentDiffProviderOptions;
+	readonly options: ILinesDiffComputerOptions;
 }

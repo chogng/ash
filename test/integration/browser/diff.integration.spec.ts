@@ -23,6 +23,52 @@ async function clickFileAction(section: Locator, name: string): Promise<void> {
 	await section.getByRole('button', { name, exact: true }).click();
 }
 
+test('diff highlights name hyphens continuously while retaining subtraction in both view modes', async ({ page }, testInfo) => {
+	await openDiffPage(page, 'zh-CN');
+	for (const sideBySide of [true, false]) {
+		await page.evaluate(sideBySide => {
+			window.ashDiffIntegration.setTheme('vs');
+			window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+			window.ashDiffIntegration.setComparisonText(
+				'.ash-chat-body.sessions-sidebar-visible > .ash-chat-pane-host {',
+				'.ash-chat-body.sessions-side-by-side > .ash-chat-sessions-sidebar {',
+				'css',
+			);
+		}, sideBySide);
+		await expect.poll(() => page.evaluate(() => [
+			window.ashDiffIntegration.readCharacterChanges('original'),
+			window.ashDiffIntegration.readCharacterChanges('modified'),
+		])).toEqual([['sidebar-visible', 'pane-host'], ['side-by-side', 'sessions-sidebar']]);
+		// Live editors paint background rectangles; inline deleted rows decorate text spans.
+		const added = page.locator('#single .modified .cdr.stanza-diff-inline-added');
+		await expect(added).toHaveCount(2);
+		for (const highlight of await added.all()) {
+			await expect(highlight).toBeVisible();
+		}
+		if (sideBySide) {
+			await expect(page.locator('#single .original .cdr.stanza-diff-inline-removed')).toHaveCount(2);
+		} else {
+			await expect.poll(async () => (await page.locator('#single .stanza-diff-inline-original-line .stanza-diff-inline-removed').allTextContents()).join('')).toBe('sidebar-visiblepane-host');
+		}
+		await testInfo.attach(`name-hyphens-${sideBySide ? 'side-by-side' : 'inline'}`, { body: await page.locator('#single').screenshot(), contentType: 'image/png' });
+
+		await page.evaluate(() => window.ashDiffIntegration.setComparisonText('const value = first-second;', 'const value = alpha-beta;', 'javascript'));
+		await expect.poll(() => page.evaluate(() => [
+			window.ashDiffIntegration.readCharacterChanges('original'),
+			window.ashDiffIntegration.readCharacterChanges('modified'),
+		])).toEqual([['first', 'second'], ['alpha', 'beta']]);
+		await expect(added).toHaveCount(2);
+		const bounds = await added.evaluateAll(nodes => nodes.map(node => {
+			const rect = node.getBoundingClientRect();
+			return { left: rect.left, right: rect.right };
+		}));
+		expect(bounds[1]!.left).toBeGreaterThan(bounds[0]!.right);
+		if (!sideBySide) {
+			await expect.poll(async () => (await page.locator('#single .stanza-diff-inline-original-line .stanza-diff-inline-removed').allTextContents()).join('')).toBe('firstsecond');
+		}
+	}
+});
+
 test('sash dragging under CPU throttling retains inline diff zones and skips unaffected grid leaves', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	const shared = Array.from({ length: 200 }, (_, index) => `shared ${index}`).join('\n');
