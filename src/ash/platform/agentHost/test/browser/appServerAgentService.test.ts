@@ -13,6 +13,25 @@ import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
+test('Agent role catalog maps source paths to the owning local or SSH editor resource', async () => {
+	const methods: string[] = [];
+	const role = { name: 'reviewer', path: '/workspace/.ash/agents/reviewer.md' };
+	const connection = {
+		request: async (method: { method: string; }) => {
+			methods.push(method.method);
+			return { agents: [role, { name: 'advisor', path: null }], diagnostics: ['broken definition'] };
+		}
+	} as unknown as AppServerProtocolClient;
+	const local = await createAppServerAgentSessionService(connection).readRoleCatalog();
+	assert.equal(local.agents[0]!.resource?.toString(), 'file:///workspace/.ash/agents/reviewer.md');
+	assert.equal(local.agents[1]!.resource, undefined);
+	assert.equal('path' in local.agents[0]!, false);
+	const remote = await createAppServerAgentSessionService(connection, 'dev-box').readRoleCatalog();
+	assert.equal(remote.agents[0]!.resource?.toString(), 'ash-remote://ssh+dev-box/workspace/.ash/agents/reviewer.md');
+	assert.deepEqual(remote.diagnostics, ['broken definition']);
+	assert.deepEqual(methods, ['agent/roles/catalog', 'agent/roles/catalog']);
+});
+
 suite('Session runtime connection ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -404,7 +423,11 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 });
 
 test('Session restoration uses the existing typed lifecycle request', async () => {
-	const session = { sessionId: 'session', title: 'Restored', status: 'active' as const, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'session', title: 'Root', status: 'active' as const }] };
+	const session = {
+		sessionId: 'session', title: 'Restored', status: 'active' as const,
+		manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 },
+		threads: [{ threadId: 'session', title: 'Root', createdAtUnixMs: 1_000, lastActivityAtUnixMs: 2_000, status: 'active' as const }],
+	};
 	const requests: { method: string; params: unknown; }[] = [];
 	const api = createAppServerAgentSessionService({
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {

@@ -286,6 +286,22 @@ test('shared peer-chat creation and process-log export use the remote Session ow
 	assert.deepEqual(calls, [{ sessionId: 'same', commandId: 'create', title: 'Peer' }, { params: { sessionId: 'same' }, signal: controller.signal }]);
 });
 
+test('Agent definition settings query the selected provider and retire its late catalog', async () => {
+	using context = fixture();
+	Object.assign(context.management, { activeUntitledSession: { providerId: 'remote' } });
+	const catalog = { agents: [], diagnostics: ['remote definition diagnostic'] };
+	const pending = new DeferredPromise<typeof catalog>();
+	let late = false;
+	context.remoteHost.session.readRoleCatalog = async () => late ? pending.p : catalog;
+	const sessions = new SessionsAgentSessionService(context.scopes);
+	assert.deepEqual(await sessions.readRoleCatalog(), catalog);
+	late = true;
+	const read = sessions.readRoleCatalog();
+	context.registration.dispose();
+	await pending.complete(catalog);
+	await assert.rejects(read, isCancellationError);
+});
+
 test('the real trace reader projects remote identity and round-trips backend pagination and selected payloads', async () => {
 	using context = fixture();
 	const calls: unknown[] = [];

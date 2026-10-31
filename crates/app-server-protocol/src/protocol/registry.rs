@@ -47,6 +47,8 @@ use crate::protocol::agent::AgentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::agent::AgentRoleCatalogResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentRoleEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentRoleListResult;
@@ -3951,6 +3953,11 @@ client_methods! {
         response: AgentRoleListResult,
         serialization: GlobalSharedRead,
     },
+    AgentRoleCatalog => "agent/roles/catalog" {
+        params: EmptyParams,
+        response: AgentRoleCatalogResult,
+        serialization: GlobalSharedRead,
+    },
     AgentCapabilitiesRead => "agent/capabilities/read" {
         params: EmptyParams,
         response: AgentCapabilitiesReadResult,
@@ -6755,6 +6762,9 @@ typescript_bindings! {
     AgentRoleSource,
     AgentRoleEntry,
     AgentRoleListResult,
+    AgentRoleCatalogResult,
+    crate::protocol::agent::AgentRoleDefinition,
+    crate::protocol::agent::AgentRoleLaunch,
     AgentCapabilitiesReadResult,
     crate::protocol::agent::SandboxPolicyDto,
     crate::protocol::agent::SandboxHostReadDto,

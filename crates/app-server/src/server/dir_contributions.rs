@@ -133,6 +133,15 @@ impl DirContributions {
             .unwrap_or_default()
     }
 
+    pub(super) fn root_agents_directory(&self) -> Option<PathBuf> {
+        self.env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .filter(|catalog| catalog.authorization.is_active())
+            .map(|_| self.dir_root.join(".ash/agents"))
+    }
+
     pub(super) fn agent_snapshots_for(
         &self,
         session_id: &SessionId,

@@ -40,6 +40,8 @@ export interface IAgentSessionService {
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	listAgents(): Promise<Agent.AgentRoleListResult>;
+	/** Includes packaged workflow roles for Settings, without changing selectable root definitions. */
+	readRoleCatalog(): Promise<Agent.AgentRoleCatalog>;
 	read(params: Agent.SessionReadParams): Promise<Agent.SessionResult>;
 	readCatalog(params: Agent.SessionReadParams): Promise<Agent.SessionCatalogReadResult>;
 	list(): Promise<Agent.SessionListResult>;

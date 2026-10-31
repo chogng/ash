@@ -61,6 +61,19 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.AgentRolesSettings, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError(localize({ bundle: 'ash.settings', key: 'roles.verbosityInvalid' }, 'Agent definitions accessibility verbosity must be boolean.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.settings', key: 'roles.verbosityTitle' }, 'Agent definitions accessibility help'); },
+		get description() { return localize({ bundle: 'ash.settings', key: 'roles.verbosityDescription' }, 'Announce how to open accessibility help for Agent definitions.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Terminal,
 	defaultValue: true,
 	parse(value: unknown): boolean {

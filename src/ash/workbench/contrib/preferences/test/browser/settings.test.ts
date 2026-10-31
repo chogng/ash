@@ -91,6 +91,7 @@ import type { HookSource } from '../../../../../platform/agentHost/common/appSer
 import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
 import { IAccessibleViewService, AccessibleViewType, AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -2924,6 +2925,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	};
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
+	services.registerInstance(IAgentSessionService, { readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
 	services.registerInstance(IAppServerHookApi, hooksBackend);
 	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);

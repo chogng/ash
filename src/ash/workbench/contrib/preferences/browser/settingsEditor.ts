@@ -57,6 +57,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
 import { getSettingsSections } from '../../../services/preferences/browser/settingsSections.js';
 import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
+import { AgentRolesSettingsRenderer } from './agentRolesSettingsRenderer.js';
 import { ModelSettingsRenderer } from './modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from './dictationSettingsRenderer.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
@@ -267,6 +268,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(AgentRolesSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SnapshotSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),

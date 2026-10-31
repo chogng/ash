@@ -914,6 +914,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
 		async create() { throw new Error('Not used'); },
 		async listAgents() { return { agents: [] }; },
+		async readRoleCatalog() { throw new Error('Session management does not inspect Agent definitions'); },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
 		async readCatalog({ sessionId }) { readCatalogCount += 1; return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null }; },
 		async list() { listCount += 1; return { sessions }; },

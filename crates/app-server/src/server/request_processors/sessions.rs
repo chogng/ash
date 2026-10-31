@@ -221,6 +221,98 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         result(&AgentRoleListResult { agents })
     }
 
+    pub(super) fn agent_role_catalog(&self) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::agent::AgentRoleCatalogResult;
+        use ash_app_server_protocol::protocol::agent::AgentRoleDefinition;
+        use ash_app_server_protocol::protocol::agent::AgentRoleLaunch;
+
+        let contributions = self
+            .env_runtime
+            .read()
+            .map_err(|_| {
+                core_error(core_api::CoreError::Execution(
+                    "Environment runtime lock poisoned".into(),
+                ))
+            })?
+            ._dir_contributions
+            .clone();
+        let custom = contributions
+            .as_ref()
+            .map(|catalog| catalog.refresh_root_agents());
+        let directory = contributions
+            .as_ref()
+            .and_then(|catalog| catalog.root_agents_directory());
+        let built_in = agent_roles::built_in_roles();
+        let agents = built_in
+            .entries()
+            .iter()
+            .chain(
+                custom
+                    .as_ref()
+                    .map(|catalog| catalog.entries())
+                    .unwrap_or_default(),
+            )
+            .map(|role| AgentRoleDefinition {
+                name: role.name().to_owned(),
+                description: role.description().to_owned(),
+                source: match role.source() {
+                    agent_roles::AgentRoleSource::BuiltIn => ash_protocol::AgentRoleSource::BuiltIn,
+                    agent_roles::AgentRoleSource::Directory { id } => {
+                        ash_protocol::AgentRoleSource::Directory { id: id.clone() }
+                    }
+                },
+                launch: match role.launch() {
+                    agent_roles::RoleLaunch::Any => AgentRoleLaunch::Any,
+                    agent_roles::RoleLaunch::Workflow => AgentRoleLaunch::Workflow,
+                    agent_roles::RoleLaunch::Delegation => AgentRoleLaunch::Delegation,
+                    agent_roles::RoleLaunch::Host => AgentRoleLaunch::Host,
+                },
+                callers: role.callers().to_vec(),
+                delegates: role.delegates().map(<[String]>::to_vec),
+                path: match role.source() {
+                    agent_roles::AgentRoleSource::BuiltIn => None,
+                    agent_roles::AgentRoleSource::Directory { .. } => {
+                        directory.as_ref().map(|directory| {
+                            directory
+                                .join(role.relative_path())
+                                .to_string_lossy()
+                                .into_owned()
+                        })
+                    }
+                },
+                content_digest: role.content_digest().to_owned(),
+                model: role.model().map(str::to_owned),
+                tools: role.tools().map(<[String]>::to_vec),
+                disallowed_tools: role.disallowed_tools().to_vec(),
+                required_tools: role.required_tools().to_vec(),
+                delegation_tools: role.delegation_tools().map(<[String]>::to_vec),
+                disallowed_delegation_tools: role.disallowed_delegation_tools().to_vec(),
+                required_delegation_tools: role.required_delegation_tools().to_vec(),
+                skills: role.skills().map(<[String]>::to_vec),
+                required_skills: role.required_skills().to_vec(),
+                instructions: role.instructions().to_vec(),
+                prompt: role.role_instructions().to_owned(),
+            })
+            .collect();
+        let diagnostics = custom
+            .as_ref()
+            .map(|catalog| {
+                catalog
+                    .diagnostics()
+                    .iter()
+                    .map(|diagnostic| match diagnostic.relative_path() {
+                        Some(path) => format!("{}: {}", path.display(), diagnostic.message()),
+                        None => diagnostic.message().to_owned(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        result(&AgentRoleCatalogResult {
+            agents,
+            diagnostics,
+        })
+    }
+
     pub(super) fn agent_read(&self, params: &Value) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::agent::AgentReadParams;
         use ash_app_server_protocol::protocol::agent::AgentReadResult;
