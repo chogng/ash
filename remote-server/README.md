@@ -54,6 +54,11 @@ into the client product, archive SHA-256 and remote verification before activati
 This exception applies only to the Remote distribution; other Windows product
 archives retain their system-signing requirements. Windows application-control
 policies can still reject an unsigned runtime.
+Windows jobs first install and reuse an 8 MiB binary fixture through an isolated
+OpenSSH service, before compiling the full backend. On a prepared native Windows
+checkout, run this preflight separately with `python -B
+build/release/verify_windows_installer.py --target x86_64-pc-windows-msvc --reports
+.build/remote-installer-check`; it does not build or publish the full runtime.
 The existing Platform checks workflow also exposes `remote_only=true`, which runs
 only this Linux release and its published-asset acceptance checks.
 

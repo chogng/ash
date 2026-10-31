@@ -126,6 +126,71 @@ def ssh_client(fixture: Path) -> Path:
     return ssh
 
 
+@contextmanager
+def ssh_fixture(root: Path, reports: Path):
+    """Own a private SSH listener and retain its diagnostics for either verifier."""
+    reports.mkdir(parents=True, exist_ok=True)
+    fixture = root / "ssh"
+    fixture.mkdir(mode=0o700)
+
+    keygen = (
+        str(Path(os.environ["SystemRoot"]) / "System32/OpenSSH/ssh-keygen.exe")
+        if os.name == "nt"
+        else "ssh-keygen"
+    )
+    for name in ("host", "user"):
+        subprocess.run(
+            [keygen, "-q", "-t", "ed25519", "-f", str(fixture / name), "-N", ""],
+            check=True,
+        )
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    (fixture / "authorized_keys").write_bytes((fixture / "user.pub").read_bytes())
+    (fixture / "sshd_config").write_text(
+        f'Port {port}\nListenAddress 127.0.0.1\nHostKey "{fixture.as_posix()}/host"\n'
+        f'PidFile "{fixture.as_posix()}/sshd.pid"\nAuthorizedKeysFile "{fixture.as_posix()}/authorized_keys"\n'
+        "StrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n"
+        + ("" if os.name == "nt" else "UsePAM no\n")
+        + f"AllowUsers {getpass.getuser().lower()}\nLogLevel ERROR\n"
+        + f'SetEnv "ASH_HOME={root.as_posix()}/remote-profile"\n'
+    )
+    (fixture / "known_hosts").write_text(
+        f"[127.0.0.1]:{port} " + (fixture / "host.pub").read_text()
+    )
+    (fixture / "ssh_config").write_text(
+        f"Host ash-release-fixture\n HostName 127.0.0.1\n Port {port}\n"
+        f' User {getpass.getuser()}\n IdentityFile "{fixture.as_posix()}/user"\n'
+        f' IdentitiesOnly yes\n BatchMode yes\n StrictHostKeyChecking yes\n UserKnownHostsFile "{fixture.as_posix()}/known_hosts"\n'
+        " LogLevel ERROR\n"
+    )
+    ssh = ssh_client(fixture)
+    try:
+        with (
+            (reports / "release-sshd.log").open("w") as log,
+            ssh_server(fixture, log) as running,
+        ):
+            for _ in range(40):
+                probe = subprocess.run(
+                    [str(ssh), "ash-release-fixture", "echo SSH_READY"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if probe.returncode == 0 or not running():
+                    break
+                time.sleep(0.1)
+            if probe.returncode != 0:
+                raise RuntimeError(
+                    f"OpenSSH fixture failed: {probe.stderr}; see {log.name}"
+                )
+            yield ssh
+    finally:
+        ssh_log = fixture / "sshd.log"
+        if ssh_log.exists():
+            (reports / "release-sshd-events.log").write_bytes(ssh_log.read_bytes())
+
+
 def accept(
     package: Path, report: Path, binding: Path | None, catalog: Path | None
 ) -> None:
@@ -141,8 +206,6 @@ def accept(
         prefix="arr-" if os.name == "nt" else "ash-release-ssh-"
     ) as temporary:
         root = Path(temporary).resolve()
-        fixture = root / "ssh"
-        fixture.mkdir(mode=0o700)
         suffix = ".exe" if os.name == "nt" else ""
 
         def run(*arguments: str) -> None:
@@ -154,54 +217,8 @@ def accept(
                 )
                 raise
 
-        keygen = (
-            str(Path(os.environ["SystemRoot"]) / "System32/OpenSSH/ssh-keygen.exe")
-            if os.name == "nt"
-            else "ssh-keygen"
-        )
-        for name in ("host", "user"):
-            run(keygen, "-q", "-t", "ed25519", "-f", str(fixture / name), "-N", "")
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        (fixture / "authorized_keys").write_bytes((fixture / "user.pub").read_bytes())
-        (fixture / "sshd_config").write_text(
-            f'Port {port}\nListenAddress 127.0.0.1\nHostKey "{fixture.as_posix()}/host"\n'
-            f'PidFile "{fixture.as_posix()}/sshd.pid"\nAuthorizedKeysFile "{fixture.as_posix()}/authorized_keys"\n'
-            "StrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n"
-            + ("" if os.name == "nt" else "UsePAM no\n")
-            + f"AllowUsers {getpass.getuser().lower()}\nLogLevel ERROR\n"
-            + f'SetEnv "ASH_HOME={root.as_posix()}/remote-profile"\n'
-        )
-        (fixture / "known_hosts").write_text(
-            f"[127.0.0.1]:{port} " + (fixture / "host.pub").read_text()
-        )
-        (fixture / "ssh_config").write_text(
-            f"Host ash-release-fixture\n HostName 127.0.0.1\n Port {port}\n"
-            f' User {getpass.getuser()}\n IdentityFile "{fixture.as_posix()}/user"\n'
-            f' IdentitiesOnly yes\n BatchMode yes\n StrictHostKeyChecking yes\n UserKnownHostsFile "{fixture.as_posix()}/known_hosts"\n'
-            " LogLevel ERROR\n"
-        )
-        ssh = ssh_client(fixture)
-        with (
-            (report.parent / "release-sshd.log").open("w") as log,
-            ssh_server(fixture, log) as running,
-        ):
+        with ssh_fixture(root, report.parent) as ssh:
             try:
-                for _ in range(40):
-                    probe = subprocess.run(
-                        [str(ssh), "ash-release-fixture", "echo SSH_READY"],
-                        capture_output=True,
-                        text=True,
-                        timeout=15,
-                    )
-                    if probe.returncode == 0 or not running():
-                        break
-                    time.sleep(0.1)
-                if probe.returncode != 0:
-                    raise RuntimeError(
-                        f"OpenSSH fixture failed: {probe.stderr}; see {log.name}"
-                    )
                 script = root / "remoteReleaseAcceptance.js"
                 run(
                     sys.executable,
@@ -323,11 +340,6 @@ def accept(
                         capture_output=True,
                         timeout=30,
                         check=False,
-                    )
-                ssh_log = fixture / "sshd.log"
-                if ssh_log.exists():
-                    (report.parent / "release-sshd-events.log").write_bytes(
-                        ssh_log.read_bytes()
                     )
     print(report)
 

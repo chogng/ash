@@ -214,7 +214,7 @@ def verify(
                         rpc("fs/readFile", {"path": "probe.txt"})["content"]
                         == "release-remote-edit-ok"
                     )
-                    rpc(
+                    process_terminal = rpc(
                         "terminal/create",
                         {
                             "rows": 24,
@@ -239,12 +239,23 @@ def verify(
                             },
                         },
                     )
-                    deadline = time.monotonic() + 10
+                    # Windows PowerShell can cold-start under ARM64 emulation.
+                    # Terminal creation confirms the process, not script completion.
+                    deadline = time.monotonic() + (60 if os.name == "nt" else 10)
                     while (
                         not (workspace / "terminal-marker.txt").exists()
                         and time.monotonic() < deadline
                     ):
                         time.sleep(0.05)
+                    assert (workspace / "terminal-marker.txt").exists(), rpc(
+                        "terminal/read",
+                        {
+                            "terminalId": process_terminal["terminalId"],
+                            "afterSequence": 0,
+                            "afterCommandSequence": 0,
+                            "maxChunks": 16,
+                        },
+                    )
                     assert (
                         rpc("fs/readFile", {"path": "terminal-marker.txt"})["content"]
                         == "release-terminal-ok"
@@ -424,12 +435,21 @@ def verify(
                                 else "printf release-reattached-ok > reattached.txt\n",
                             },
                         )
-                        deadline = time.monotonic() + 10
+                        deadline = time.monotonic() + (60 if os.name == "nt" else 10)
                         while (
                             not (workspace / "reattached.txt").exists()
                             and time.monotonic() < deadline
                         ):
                             time.sleep(0.05)
+                        assert (workspace / "reattached.txt").exists(), rpc(
+                            "terminal/read",
+                            {
+                                "terminalId": terminal,
+                                "afterSequence": 0,
+                                "afterCommandSequence": 0,
+                                "maxChunks": 16,
+                            },
+                        )
                         assert (
                             rpc("fs/readFile", {"path": "reattached.txt"})["content"]
                             == "release-reattached-ok"

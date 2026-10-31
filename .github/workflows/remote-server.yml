@@ -122,6 +122,24 @@ jobs:
       - name: Test Windows binary upload, immutable package and receipt migration
         if: runner.os == 'Windows'
         run: ${{ matrix.python }} -B scripts/cargo.py test -p ash-remote-connections --profile ci-test --locked --target "${{ matrix.target }}" --lib install_tests::powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime -- --exact
+      - name: Install Windows OpenSSH fixture prerequisites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $capability = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+          if ($capability.State -ne 'Installed') {
+            $installation = Add-WindowsCapability -Online -Name $capability.Name
+            if ($installation.RestartNeeded) { throw 'OpenSSH installation requires a restart' }
+          }
+      - name: Verify large binary install and reuse over real Windows SSH
+        if: runner.os == 'Windows'
+        run: ${{ matrix.python }} -B build/release/verify_windows_installer.py --target "${{ matrix.target }}" --reports .build/remote-release/installer
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && runner.os == 'Windows'
+        with:
+          name: remote-windows-installer-${{ matrix.target }}
+          path: .build/remote-release/installer
+          if-no-files-found: ignore
       - name: Build standalone Remote package
         run: ${{ matrix.python }} -B build/remote.py --target "${{ matrix.target }}" --package-dir .build/remote-release/runtime
       - name: Verify connection, editing, terminal and Agent without media installation

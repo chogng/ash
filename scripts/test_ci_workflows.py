@@ -22,6 +22,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_real_windows_ssh_preflight_runs_before_the_full_backend_build(self):
+        workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
+        self.assertLess(
+            workflow.index(
+                "name: Verify large binary install and reuse over real Windows SSH"
+            ),
+            workflow.index("name: Build standalone Remote package"),
+        )
+        self.assertIn("build/release/verify_windows_installer.py --target", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+
     def test_remote_release_plans_native_windows_and_gates_the_client_binding(self):
         workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
         plan = textwrap.dedent(

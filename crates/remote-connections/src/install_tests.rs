@@ -448,7 +448,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
     );
     // Exceed OpenSSH's input window with incompressible bytes. A tiny fixture or
     // a regular input file hides ConsoleStream's nonblocking-pipe failure.
-    assert!(artifact.integrity().archive_size().get() > 3 * 1024 * 1024);
+    assert!(artifact.integrity().archive_size().get() > 8 * 1024 * 1024);
     artifact.open_verified().unwrap();
     // A developer shell can put Git/MSYS tar first on PATH. It treats C: as a
     // remote host; the installer must select the inbox tar instead of this entry.
@@ -460,13 +460,24 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
         std::iter::once(shadow_tar).chain(std::env::split_paths(&inherited_path)),
     )
     .unwrap();
-    for (shell, args) in [
-        ("cmd.exe", vec!["/d", "/s", "/c"]),
+    let mut shells = vec![
+        (
+            "cmd.exe",
+            std::ffi::OsString::from("cmd.exe"),
+            vec!["/d", "/s", "/c"],
+        ),
         (
             "powershell.exe",
+            std::ffi::OsString::from("powershell.exe"),
             vec!["-NoProfile", "-NonInteractive", "-Command"],
         ),
-    ] {
+    ];
+    // The release preflight supplies a private loopback client. Ordinary unit
+    // runs retain their direct-shell coverage without requiring an SSH service.
+    if let Some(ssh) = std::env::var_os("ASH_REMOTE_INSTALLER_TEST_SSH") {
+        shells.push(("OpenSSH", ssh, vec!["-T", "ash-release-fixture"]));
+    }
+    for (shell, executable, args) in shells {
         let install_root = root.path().join(format!("安装 O'Brien $literal% {shell}"));
         let location = RemoteRuntimeInstallLocation::Absolute(
             RemoteRuntimeInstallRoot::parse(install_root.to_str().unwrap()).unwrap(),
@@ -476,7 +487,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
             "__ASH_REMOTE_RUNTIME_INSTALLED__:",
             "__ASH_REMOTE_RUNTIME_REUSED__:",
         ] {
-            let mut process = Command::new(shell);
+            let mut process = Command::new(&executable);
             process.args(&args);
             process.env("PATH", &path);
             if shell == "cmd.exe" {
@@ -538,7 +549,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
 
 #[cfg(windows)]
 fn binary_fixture() -> Vec<u8> {
-    (0u32..98_304)
+    (0u32..262_144)
         .flat_map(|counter| Sha256::digest(counter.to_le_bytes()))
         .collect()
 }
