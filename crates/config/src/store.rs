@@ -11,7 +11,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 11;
+const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 12;
 pub(crate) const OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
 const CONFIG_AUTHORITY_ID: i64 = 1;
 

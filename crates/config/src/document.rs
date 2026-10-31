@@ -209,7 +209,10 @@ pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_review_model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// No override inherits the model of the Turn that produced the changes.
     pub commit_message_model: Option<ModelRef>,
+    #[serde(default)]
+    pub commit_message_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     #[serde(default)]
@@ -502,6 +505,7 @@ pub struct ResolvedConfig {
     pub approval_review_model: ApprovalReviewModelSelection,
     pub code_review_model: Option<ModelRef>,
     pub commit_message_model: Option<ModelRef>,
+    pub commit_message_enabled: bool,
     pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub tool_mode: ash_protocol::ToolMode,
     pub grep_backend: GrepBackend,
@@ -700,6 +704,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             approval_review_model: document.agent.approval_review_model.clone(),
             code_review_model: document.agent.code_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
+            commit_message_enabled: document.agent.commit_message_enabled,
             advisor: document.agent.advisor.clone(),
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,

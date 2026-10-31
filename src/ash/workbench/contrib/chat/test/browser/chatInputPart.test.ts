@@ -158,7 +158,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		listModels: async () => [],
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => [],
 		listCustomModelProviders: async () => [],

@@ -582,6 +582,7 @@ fn update_preferences(
             approval_review_model: Patch::Missing,
             code_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
+            commit_message_enabled: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
             git: Patch::Missing,
@@ -937,6 +938,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 approval_review_model: Patch::Missing,
                 code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(GrepBackend::Tgrep),
                 git: Patch::Missing,
@@ -1544,6 +1546,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 model_reasoning_effort: Patch::Missing,
                 code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
+                commit_message_enabled: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
                 git: Patch::Missing,
@@ -3357,4 +3360,110 @@ fn custom_language_server_configuration_round_trips_and_rejects_invalid_boundari
     );
     drop(reopened);
     remove_config_files(&path);
+}
+
+#[test]
+fn commit_message_enablement_migrates_once_without_changing_the_override() {
+    for (legacy_model, enabled) in [
+        ("", false),
+        (
+            "[agent.commitMessageModel]\nprovider = 'openai'\nmodel = 'summary'\n",
+            true,
+        ),
+    ] {
+        let source = format!("schemaVersion = 11\n{legacy_model}");
+        let decoded = crate::document_migration::decode(&source).unwrap();
+        assert!(decoded.rewrite_required);
+        assert_eq!(decoded.document.agent.commit_message_enabled, enabled);
+        let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+        let reopened = crate::document_migration::decode(&encoded).unwrap();
+        assert!(!reopened.rewrite_required);
+        assert_eq!(reopened.document, decoded.document);
+        assert_eq!(
+            reopened.document.agent.commit_message_model.is_some(),
+            enabled
+        );
+    }
+    let conflict = "schemaVersion = 11\n[agent]\ncommitMessageEnabled = false\n[agent.commitMessageModel]\nprovider = 'openai'\nmodel = 'summary'\n";
+    assert!(crate::document_migration::decode(conflict).is_err());
+    assert!(
+        crate::document_migration::decode(
+            "schemaVersion = 11\n[agent]\ncommitMessageEnabled = 'invalid'\n"
+        )
+        .is_err()
+    );
+    assert!(
+        UserConfigDocument::default()
+            .agent
+            .commit_message_model
+            .is_none()
+    );
+}
+
+#[test]
+fn commit_message_toggle_preserves_the_model_and_inherited_authorization_is_exact() {
+    let mut document = UserConfigDocument::default();
+    let model = model_ref("openai", "summary");
+    let dir = directory_grant_id();
+    let update = |document: &mut UserConfigDocument, enabled| {
+        crate::mutation::apply_command(
+            document,
+            &UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                commit_message_enabled: Patch::Value(enabled),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    };
+    let provider = ModelProviderConfig::new(model.provider.clone());
+    document
+        .connections
+        .insert(provider.connection.clone(), provider);
+    document.agent.commit_message_model = Some(model.clone());
+    update(&mut document, true);
+    update(&mut document, false);
+    assert!(!document.agent.commit_message_enabled);
+    assert_eq!(document.agent.commit_message_model, Some(model.clone()));
+    crate::mutation::apply_command(
+        &mut document,
+        &UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            commit_message_model: Patch::Null,
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+    assert!(document.agent.commit_message_model.is_none());
+    crate::mutation::apply_command(
+        &mut document,
+        &UserConfigCommand::AuthorizeCommitMessageEgress {
+            dir: dir.clone(),
+            model: Some(model.clone()),
+        },
+    )
+    .unwrap();
+    let config = ResolvedConfig::from(&document);
+    assert_eq!(
+        config
+            .commit_messages
+            .authorized_model(&dir, Some(&model), &config.providers),
+        Some(&model)
+    );
+    let other = model_ref("openai", "another-model");
+    assert!(
+        config
+            .commit_messages
+            .authorized_model(&dir, Some(&other), &config.providers)
+            .is_none()
+    );
+    document.agent.commit_message_model = Some(other);
+    assert!(
+        crate::mutation::apply_command(
+            &mut document,
+            &UserConfigCommand::AuthorizeCommitMessageEgress {
+                dir,
+                model: Some(model),
+            }
+        )
+        .is_err()
+    );
 }

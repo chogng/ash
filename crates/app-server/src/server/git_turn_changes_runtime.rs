@@ -1,5 +1,6 @@
 use super::fs_watcher::FileSystemWatcher;
 use super::git_turn_changes_commit::spawn_commit_job;
+use super::git_turn_changes_message::selected_message_model;
 use super::git_turn_changes_message::spawn_message_job;
 use super::thread_dirs::ThreadDirs;
 use super::update_broker::UpdateBroker;
@@ -575,16 +576,20 @@ impl GitTurnChangesRuntime {
         publish_records(&self.updates, records);
     }
 
-    pub(super) fn commit_message_configured(&self) -> bool {
+    pub(super) fn commit_message_configured(&self, thread_id: &ThreadId, turn_id: &TurnId) -> bool {
         self.config.read_snapshot().is_ok_and(|snapshot| {
+            if !snapshot.values.commit_message_enabled {
+                return false;
+            }
+            let Ok(model) =
+                selected_message_model(&self.threads, &snapshot.values, thread_id, turn_id)
+            else {
+                return false;
+            };
             snapshot
                 .values
                 .commit_messages
-                .authorized_model(
-                    &self.dirs.id,
-                    snapshot.values.commit_message_model.as_ref(),
-                    &snapshot.values.providers,
-                )
+                .authorized_model(&self.dirs.id, Some(&model), &snapshot.values.providers)
                 .is_some()
         })
     }

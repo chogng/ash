@@ -102,26 +102,33 @@ test('Review model saves only independent review settings with the current confi
 });
 
 
-test('Code review model is saved and cleared independently of the chat model', async () => {
-	const model = { provider: 'anthropic', model: 'review-model' };
-	const writes: ConfigUpdateParams[] = [];
-	const api = createAppServerAgentModelsService({
-		async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {
-			if (definition.method === 'config/read') { return { revision: 4, codeReviewModel: model, model: { provider: 'openai', model: 'chat-model' } }; }
-			writes.push(params); return {};
-		},
-	} as unknown as AppServerProtocolClient);
-	const defaults = await api.readDefaults();
-	assert.deepEqual(defaults.codeReviewModel, model);
-	assert.notEqual(defaults.codeReviewModel, model);
-	await api.configureDefaults({ codeReviewModel: model }, defaults.revision);
-	await api.configureDefaults({ codeReviewModel: null }, defaults.revision);
-	assert.deepEqual(writes.map(({ commandId, ...write }) => write), [{ expectedRevision: 4, codeReviewModel: model }, { expectedRevision: 4, codeReviewModel: null }]);
-});
+for (const kind of ['codeReviewModel', 'commitMessageModel'] as const) {
+	test(`${kind} is saved and cleared independently of the chat model`, async () => {
+		const model = { provider: 'anthropic', model: 'task-model' };
+		const writes: ConfigUpdateParams[] = [];
+		const api = createAppServerAgentModelsService({
+			async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {
+				if (definition.method === 'config/read') { return { revision: 4, commitMessageEnabled: false, [kind]: model, model: { provider: 'openai', model: 'chat-model' } }; }
+				writes.push(params); return {};
+			},
+		} as unknown as AppServerProtocolClient);
+		const defaults = await api.readDefaults();
+		assert.deepEqual(defaults[kind], model);
+		assert.notEqual(defaults[kind], model);
+		await api.configureDefaults({ [kind]: model }, defaults.revision);
+		await api.configureDefaults({ [kind]: null }, defaults.revision);
+		assert.deepEqual(writes.map(({ commandId, ...write }) => write), [{ expectedRevision: 4, [kind]: model }, { expectedRevision: 4, [kind]: null }]);
+		if (kind === 'commitMessageModel') {
+			await api.configureDefaults({ commitMessageEnabled: true }, defaults.revision);
+			await api.configureDefaults({ commitMessageEnabled: false }, defaults.revision);
+			assert.deepEqual(writes.slice(-2).map(({ commandId, ...write }) => write), [{ expectedRevision: 4, commitMessageEnabled: true }, { expectedRevision: 4, commitMessageEnabled: false }]);
+		}
+	});
+}
 
 test('Profile model defaults preserve an unset model and clear effort without clearing unrelated configuration', async () => {
 	const writes: ConfigUpdateParams[] = [];
-	const configured = { revision: 12, model: { provider: 'example', model: 'reasoning' }, modelReasoningEffort: 'high' };
+	const configured = { commitMessageEnabled: false, revision: 12, model: { provider: 'example', model: 'reasoning' }, modelReasoningEffort: 'high' };
 	const api = createAppServerAgentModelsService({
 		async request(definition: { method: string; }, params: ConfigUpdateParams): Promise<unknown> {
 			if (definition.method === 'config/read') return configured;
@@ -129,7 +136,7 @@ test('Profile model defaults preserve an unset model and clear effort without cl
 		},
 	} as unknown as AppServerProtocolClient);
 	const snapshot = await api.readDefaults();
-	assert.deepEqual(snapshot, { codeReviewModel: null, revision: 12, model: configured.model, reasoningEffort: 'high' });
+	assert.deepEqual(snapshot, { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 12, model: configured.model, reasoningEffort: 'high' });
 	assert.notEqual(snapshot.model, configured.model);
 	await api.configureDefaults({ reasoningEffort: null }, snapshot.revision);
 	await api.configureDefaults({ model: null, reasoningEffort: null }, snapshot.revision);

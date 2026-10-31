@@ -39,11 +39,20 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 	return {
 		readDefaults: async () => {
 			const config = await appServerRequest(connection, 'config/read', {});
-			return { codeReviewModel: config.codeReviewModel ? { ...config.codeReviewModel } : null, revision: config.revision, model: config.model ? { ...config.model } : null, reasoningEffort: config.modelReasoningEffort ?? null };
+			return {
+				commitMessageModel: config.commitMessageModel ? { ...config.commitMessageModel } : null,
+				commitMessageEnabled: config.commitMessageEnabled,
+				codeReviewModel: config.codeReviewModel ? { ...config.codeReviewModel } : null,
+				revision: config.revision,
+				model: config.model ? { ...config.model } : null,
+				reasoningEffort: config.modelReasoningEffort ?? null,
+			};
 		},
 		configureDefaults: async (update, expectedRevision) => {
 			await appServerRequest(connection, 'config/update', {
 				commandId: createUuid(), expectedRevision,
+				...(update.commitMessageEnabled !== undefined ? { commitMessageEnabled: update.commitMessageEnabled } : {}),
+				...(update.commitMessageModel !== undefined ? { commitMessageModel: update.commitMessageModel } : {}),
 				...(update.codeReviewModel !== undefined ? { codeReviewModel: update.codeReviewModel } : {}),
 				...(update.model !== undefined ? { model: update.model } : {}),
 				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),

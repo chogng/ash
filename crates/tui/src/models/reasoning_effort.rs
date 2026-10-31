@@ -144,6 +144,7 @@ pub(super) fn update<T: JsonRpcTransport>(
         model_reasoning_effort: Patch::Value(effort),
         code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
+        commit_message_enabled: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
         grep_backend: Patch::Missing,

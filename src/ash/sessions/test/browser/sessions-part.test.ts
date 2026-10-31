@@ -180,7 +180,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async listModels() { return []; },
 		getDefaultNewChatModel() { return undefined; },
 		async rememberSelectedModel() { },
-		readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		async listModelCatalog() { return []; },
 		async listModelProviders() { return []; },

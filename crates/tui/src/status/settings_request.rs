@@ -87,6 +87,7 @@ where
             approval_review_model: Patch::Missing,
             code_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
+            commit_message_enabled: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
             git: Patch::Missing,

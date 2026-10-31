@@ -148,6 +148,9 @@ export type ApprovalReviewModelSelection =
 
 /** Backend execution defaults. Null means no configured model, not an executable automatic selection. */
 export interface AgentModelDefaults {
+	/** Null inherits the model of the Turn that produced the changes. */
+	readonly commitMessageModel: ModelRef | null;
+	readonly commitMessageEnabled: boolean;
 	/** Null follows the reviewing Thread's current model. */
 	readonly codeReviewModel: ModelRef | null;
 	readonly revision: number;
@@ -156,6 +159,8 @@ export interface AgentModelDefaults {
 }
 
 export interface AgentModelDefaultsUpdate {
+	readonly commitMessageModel?: ModelRef | null;
+	readonly commitMessageEnabled?: boolean;
 	readonly codeReviewModel?: ModelRef | null;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;

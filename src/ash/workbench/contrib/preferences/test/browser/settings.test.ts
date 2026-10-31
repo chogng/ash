@@ -2436,7 +2436,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],

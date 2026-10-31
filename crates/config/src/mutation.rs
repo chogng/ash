@@ -153,12 +153,24 @@ pub(crate) fn apply_command(
         UserConfigCommand::ConfigureToolSearch { config } => {
             document.tool_search = config.clone();
         }
-        UserConfigCommand::AuthorizeCommitMessageEgress { dir } => {
+        UserConfigCommand::AuthorizeCommitMessageEgress { dir, model } => {
+            if let (Some(configured), Some(requested)) =
+                (&document.agent.commit_message_model, model)
+                && configured != requested
+            {
+                return Err(ConfigError(
+                    "authorization model does not match the commit-message override".into(),
+                ));
+            }
             document
                 .commit_messages
                 .authorize(
                     dir.clone(),
-                    document.agent.commit_message_model.as_ref(),
+                    document
+                        .agent
+                        .commit_message_model
+                        .as_ref()
+                        .or(model.as_ref()),
                     &crate::ResolvedConfig::from(&*document).providers,
                 )
                 .map_err(|message| ConfigError(message.into()))?;
@@ -246,6 +258,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Missing => {}
         Patch::Null => document.agent.code_review_model = None,
         Patch::Value(model) => document.agent.code_review_model = Some(model.clone()),
+    }
+    match update.commit_message_enabled {
+        Patch::Missing => {}
+        Patch::Null => document.agent.commit_message_enabled = false,
+        Patch::Value(enabled) => document.agent.commit_message_enabled = enabled,
     }
     match &update.commit_message_model {
         Patch::Missing => {}

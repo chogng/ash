@@ -254,7 +254,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelProviders: () => pending,

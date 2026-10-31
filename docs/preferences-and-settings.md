@@ -142,6 +142,8 @@ API key 输入框失焦即保存，清空即移除；成功保存不弹通知，
 
 `Add model` 添加 Model ID、上下文 token 数、可选上游 Model ID 与 1M 预设。上游 ID 映射只解析一次，由 Rust 在真正发送请求时使用；配置、开关和上下文绑定界面 ID。行内可编辑上下文和映射，也可删除手动声明；删除发现模型的手动上下文声明后，端点模型仍在表格中并关闭启用开关。Rust 的 models-manager 拥有发现与缓存，model-provider 拥有 HTTP 发现、分页和探测，成功发现的自定义模型进入聊天选择器。ChatService 只保留聊天、线程和 Advisor 配置操作。
 
+Chat → Agents 中的审查模型和提交信息模型由 Preferences 的 `AgentTaskModelSettingsModel` 与共享 renderer 呈现，分别读写后端 `agent.codeReviewModel` 和 `agent.commitMessageModel`，不改变对话模型。提交信息模型为空表示继承产生改动的那一轮对话模型；`agent.commitMessageEnabled` 独立控制自动生成，关闭后保留模型选择。更换模型会由配置 owner 清除原有目录授权，生成仍经过既有的目录授权检查。这些值均为后端用户配置，不另存到 Workbench `settings.json`。文件 schema 12 保留旧配置的显式模型并启用自动生成，原先未配置模型的用户保持关闭。继承时仍校验实际模型与目录授权绑定的接入；授权 API 可传入该轮模型，模型或接入不匹配时不生成，也不静默退回用户默认模型。
+
 ## Configuration 的存储与配置层
 
 ```mermaid

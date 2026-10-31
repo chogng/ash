@@ -75,20 +75,21 @@ fn generate_message(
     updates: &UpdateBroker,
     change_set_id: &git_turn_changes::ChangeSetId,
 ) -> Result<(), String> {
-    let snapshot = config.read_snapshot().map_err(|error| error.0)?;
-    let selected_model = snapshot
-        .values
-        .commit_messages
-        .authorized_model(
-            dir_id,
-            snapshot.values.commit_message_model.as_ref(),
-            &snapshot.values.providers,
-        )
-        .cloned()
-        .ok_or_else(|| "commit-message model is not authorized for this Directory".to_string())?;
     let mut record = store
         .load(change_set_id)
         .map_err(|error| error.to_string())?;
+    let snapshot = config.read_snapshot().map_err(|error| error.0)?;
+    let selected_model = selected_message_model(
+        threads,
+        &snapshot.values,
+        &record.thread_id,
+        &record.turn_id,
+    )?;
+    snapshot
+        .values
+        .commit_messages
+        .authorized_model(dir_id, Some(&selected_model), &snapshot.values.providers)
+        .ok_or_else(|| "commit-message model is not authorized for this Directory".to_string())?;
     if record.message_state == MessageState::Queued {
         let expected = record.revision;
         record
@@ -159,6 +160,28 @@ fn generate_message(
         .map_err(|error| error.to_string())?;
     publish_records(updates, &[latest]);
     Ok(())
+}
+
+/// Inheritance is tied to the originating Turn, never the current Thread selection or user default.
+pub(super) fn selected_message_model(
+    threads: &ThreadController,
+    config: &ash_config::ResolvedConfig,
+    thread_id: &ash_protocol::ThreadId,
+    turn_id: &ash_protocol::TurnId,
+) -> Result<ash_protocol::ModelRef, String> {
+    if let Some(model) = &config.commit_message_model {
+        return Ok(model.clone());
+    }
+    threads
+        .read_thread(thread_id)
+        .map_err(|error| error.to_string())?
+        .turns
+        .iter()
+        .find(|turn| &turn.turn_id == turn_id)
+        .and_then(|turn| turn.model.clone())
+        .ok_or_else(|| {
+            "originating Turn has no model to inherit; select a commit-message model".into()
+        })
 }
 
 fn commit_message_prompt(
@@ -320,12 +343,5 @@ fn redact_sensitive_text(value: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn commit_message_context_redacts_credentials_line_by_line() {
-        assert_eq!(
-            super::redact_sensitive_text("safe\nAuthorization: Bearer value\nstill safe"),
-            "safe\n[redacted sensitive line]\nstill safe"
-        );
-    }
-}
+#[path = "git_turn_changes_message_tests.rs"]
+mod tests;

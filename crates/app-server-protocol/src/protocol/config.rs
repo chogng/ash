@@ -744,7 +744,9 @@ pub struct ConfigReadResult {
     pub code_review_model: Option<ModelRefDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    /// No override inherits the model of the Turn that produced the changes.
     pub commit_message_model: Option<ModelRefDto>,
+    pub commit_message_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub advisor: Option<ash_protocol::AdvisorConfig>,
@@ -826,6 +828,10 @@ pub struct CommitMessageAuthorizeParams {
     #[schemars(range(min = 0))]
     #[ts(type = "number")]
     pub expected_revision: u64,
+    /// Exact originating Turn model when the summary model is inherited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model: Option<ModelRefDto>,
 }
 
 /// Revokes automatic commit-message source egress for the active directory.
@@ -914,6 +920,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]
     pub commit_message_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<bool>")]
+    #[ts(as = "Option<bool>", optional = nullable)]
+    pub commit_message_enabled: Patch<bool>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ash_protocol::AdvisorConfig>")]
     #[ts(as = "Option<ash_protocol::AdvisorConfig>", optional = nullable)]

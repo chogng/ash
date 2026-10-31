@@ -46,7 +46,7 @@ test('SCM split review starts reviewer Turns for each scope and keeps the curren
 		const enabled = workbench.page.getByRole('switch', { name: `Enable ${reviewModel.model}`, exact: true });
 		if (!await enabled.isChecked()) { await enabled.press('Space'); }
 		await workbench.settingsEditor.selectCategory('agents');
-		const reviewSelector = workbench.page.getByRole('combobox', { name: 'Model', exact: true });
+		const reviewSelector = workbench.page.locator('[data-settings-item-id="chat.codeReview"]').getByRole('combobox');
 		await expect(reviewSelector).toBeEnabled();
 		await reviewSelector.click();
 		await workbench.page.getByRole('option', { name: reviewModel.model, exact: true }).click();
@@ -56,6 +56,26 @@ test('SCM split review starts reviewer Turns for each scope and keeps the curren
 		await expect(workbench.page.getByText('Loading Advisor settings…', { exact: true })).toBeHidden();
 		await expect(workbench.page.getByRole('heading', { name: 'Review model', exact: true })).toHaveCount(1);
 		await workbench.page.screenshot({ path: testInfo.outputPath('code-review-model-settings.png') });
+		const commitSelector = workbench.page.locator('[data-settings-item-id="chat.commitMessage"]').getByRole('combobox');
+		await expect(commitSelector).toHaveText('Inherit conversation model');
+		await commitSelector.press('Enter');
+		await workbench.page.getByRole('option', { name: reviewModel.model, exact: true }).click();
+		await expect.poll(async () => (await client.request(methods['config/read'], {})).commitMessageModel).toEqual(reviewModel);
+		const commitToggle = workbench.page.getByRole('switch', { name: 'Automatically generate commit messages', exact: true });
+		await expect(commitToggle).not.toBeChecked();
+		await commitToggle.press('Space');
+		await expect.poll(async () => (await client.request(methods['config/read'], {})).commitMessageEnabled).toBe(true);
+		await expect(commitToggle).toBeEnabled();
+		await commitToggle.press('Space');
+		await expect.poll(async () => (await client.request(methods['config/read'], {})).commitMessageEnabled).toBe(false);
+		await expect(commitSelector).toHaveText(reviewModel.model);
+
+		expect((await client.request(methods['config/read'], {})).codeReviewModel).toEqual(reviewModel);
+		await expect(commitSelector).toBeEnabled();
+		await commitSelector.press('Enter');
+		await workbench.page.getByRole('option', { name: 'Inherit conversation model', exact: true }).click();
+		await expect.poll(async () => (await client.request(methods['config/read'], {})).commitMessageModel ?? null).toBeNull();
+		expect((await client.request(methods['config/read'], {})).model).toEqual(model);
 		await workbench.page.locator('.ash-modal-editor-close').click();
 		await run('git', ['branch', 'review-base'], { cwd: testWorkspace.directory });
 		await writeFile(testWorkspace.file, 'const staged = 1;\n');
