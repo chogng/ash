@@ -1,13 +1,13 @@
 import { Schemas } from '../../../../base/common/network.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryFileSystemProvider } from '../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { LogService } from '../../../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../../../platform/log/common/consoleLogSink.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -22,12 +22,27 @@ import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { createThemePreviewHost, connectThemePreview, openThemePreviewEditors } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
-import { Event } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { ISCMService, VIEW_PANE_ID } from '../../scm/common/scm.js';
 import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryProvider } from '../../scm/common/history.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
+import { ChatViewPane, type IChatViewPaneEntry } from '../../chat/browser/widgetHosts/viewPane/chatViewPane.js';
+import { ChatWidget, type IChatWidgetModel } from '../../chat/browser/widget/chatWidget.js';
+import type { ChatInputState } from '../../chat/browser/widget/input/chatInput.js';
+import type { IQuickChatSession } from '../../chat/browser/chat.js';
+import { CHAT_VIEW_ID, CHAT_VIEW_CONTAINER_ID } from '../../chat/common/chat.js';
+import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
+import { ViewsRegistry, ViewContainerLocation } from '../../../common/views.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 
 const host = await createThemePreviewHost();
 const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection } = host;
@@ -35,12 +50,17 @@ const sample = new URLSearchParams(location.search).get('sample');
 const diffPreview = sample === 'diff';
 const codePreview = sample === 'code';
 const scmPreview = sample === 'scm';
-// Code preview owns no conversations or media. Shared Chat contributions can
-// observe that empty scope without borrowing the enclosing product's history.
+const chatPreview = sample === 'chat';
+// Preview conversations are fixed samples. Shared actions cannot reach the
+// enclosing product's history or submit messages to an app server.
 const chatUnavailable = () =>
 	new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
+let createPreviewDraft: (() => void) | undefined;
 serviceCollection.set(IChatSessionNavigationService, {
-	createNewConversation: () => { throw chatUnavailable(); },
+	createNewConversation: () => {
+		if (!createPreviewDraft) throw chatUnavailable();
+		createPreviewDraft();
+	},
 	revision: 0,
 	getConversations: () => [],
 	getActiveConversation: () => undefined,
@@ -57,6 +77,118 @@ serviceCollection.set(IChatSessionNavigationService, {
 });
 // Registration stays behind localization and within this isolated document.
 await import('./themePreview.contribution.js');
+
+/** Supplies fixed content to the real Chat frame, transcript and composer. */
+class ChatPreviewPane extends ChatViewPane {
+	private readonly entries: IChatViewPaneEntry<IChatWidgetModel>[] = [];
+	private selected: string | undefined;
+	private revision = 0;
+	private readonly changed = this._register(new Emitter<void>());
+
+	constructor(
+		container: HTMLElement,
+		options: IViewPaneOptions,
+		@ICommandService commandService: ICommandService,
+		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IConfigurationService configuration: IConfigurationService,
+		@INotificationService notifications: INotificationService,
+		@ILifecycleService lifecycleService: ILifecycleService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IEditorService editorService: IEditorService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@IContextViewService private readonly contextViewService: IContextViewService,
+		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
+		@IOpenerService private readonly opener: IOpenerService,
+	) {
+		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorService);
+	}
+
+	public initialize(): void {
+		const labels = [
+			localize('themeEditor.previewChatColors', 'Chat colors'),
+			localize('themeEditor.previewChatDraft', 'Sample draft'),
+		];
+		for (const [index, label] of labels.entries()) {
+			const id = `theme-preview-chat-${index}`;
+			const model: IChatWidgetModel = {
+				onDidChange: Event.None, onDidChangeComposer: Event.None, composerGeneration: 0,
+				sessionId: undefined, threadId: undefined, untitledSessionId: id, goal: undefined,
+				items: index === 0 ? [
+					{ id: 'request', type: 'userMessage', text: localize('themeEditor.previewChatRequest', 'How do the Chat background and tabs fit this theme?'), transient: false },
+					{ id: 'response', type: 'agentMessage', text: localize('themeEditor.previewChatResponse', 'In Tabs mode, the conversation shares the selected tab’s editor background. In List mode, it uses the background of its host panel.\n\nTry changing the background, text and input colors. This sample never sends messages.'), transient: false },
+				] : [],
+				inputState: {
+					mode: 'agent', queuedMessages: 0, phase: 'ready', inputBlocked: true,
+					canInterrupt: false, approvalMode: 'manual', models: [], isAutomaticModel: false,
+					slashCommands: [], skillSelectors: [], canSelectAgent: false,
+				} satisfies ChatInputState,
+				send: async () => { throw chatUnavailable(); },
+				executeServerCommand: async () => { throw chatUnavailable(); },
+				interrupt: async () => { throw chatUnavailable(); },
+				refreshChanges: async () => { throw chatUnavailable(); },
+				selectModel: async () => { throw chatUnavailable(); },
+				selectReasoningEffort: async () => { throw chatUnavailable(); },
+				selectAutomaticModel: async () => { throw chatUnavailable(); },
+				listAgents: async () => [],
+				selectAgent: () => { throw chatUnavailable(); },
+				selectMode: () => { throw chatUnavailable(); },
+				selectApprovalMode: () => { throw chatUnavailable(); },
+				resolveInteraction: async () => { throw chatUnavailable(); },
+				retryFailedTurn: async () => { throw chatUnavailable(); },
+				...Disposable.None,
+			};
+			const pane = this._register(this.instantiationService.createInstance(ChatWidget,
+				this.paneHost, id, model, () => this.activatePane(this.entries[1]!.id),
+				this.contextMenuService, this.contextViewService,
+				this.commandService, this.accessibleViews, this.notifications, this.opener,
+				this.editorService, undefined, undefined,
+			));
+			this.entries.push({ id, label, pane });
+		}
+		this.openedPaneIds = this.entries.map(entry => entry.id);
+		const owner = this;
+		this.initializeSessionsControl({
+			onDidChange: this.changed.event, state: 'ready', error: undefined,
+			get items() {
+				return owner.entries.map(entry => ({
+					id: entry.id, title: entry.label, description: '', kind: 'draft' as const,
+					active: owner.selected === entry.id, getActions: () => [], open: () => owner.activatePane(entry.id),
+				}));
+			},
+		}, () => this.activatePane(this.entries[1]!.id));
+		this.activatePane(this.entries[0]!.id);
+		this.updateSessionsLayout();
+		createPreviewDraft = () => this.activatePane(this.entries[1]!.id);
+	}
+
+	protected override get selectionRevision(): number { return this.revision; }
+	protected override saveViewState(): void { }
+	protected override ensureConversationForVisibleChat(): void { }
+	protected override updateSessions() {
+		return { entries: this.entries.filter(entry => this.openedPaneIds.includes(entry.id)), activePaneId: this.selected };
+	}
+	protected override activatePane(id: string): void {
+		this.selected = id;
+		this.revision += 1;
+		if (!this.openedPaneIds.includes(id)) this.openedPaneIds.push(id);
+		this.syncSessions();
+		this.changed.fire();
+	}
+	public override async openInNewWindow(): Promise<void> { throw chatUnavailable(); }
+	public override createQuickChat(): IQuickChatSession { throw chatUnavailable(); }
+}
+
+if (chatPreview) {
+	ViewsRegistry.registerStaticViewContainer({
+		id: CHAT_VIEW_CONTAINER_ID, title: localize('themeEditor.group.chat', 'Chat'),
+		location: ViewContainerLocation.AuxiliaryBar, icon: Lxicon.chat, isDefault: true,
+	});
+	ViewsRegistry.registerStaticViews(CHAT_VIEW_CONTAINER_ID, [{
+		id: CHAT_VIEW_ID, title: localize('themeEditor.group.chat', 'Chat'), canToggleVisibility: false,
+		when: ChatContextKeys.enabled.isEqualTo(true), ctorDescriptor: new SyncDescriptor(ChatPreviewPane),
+	}]);
+}
 
 // Keep the real panel's layout and theme, without constructing terminal services,
 // profile discovery, a PTY, xterm, or a command interpreter for a color sample.
@@ -146,15 +278,16 @@ const workbench = resources.add(
 		workspaceFileSystemProvider: workspaceFiles,
 		defaultLayout: {
 			parts: {
-				sidebar: !diffPreview && !codePreview,
-				panel: !diffPreview && !codePreview && !scmPreview,
-				auxiliarybar: false,
+				sidebar: !diffPreview && !codePreview && !chatPreview,
+				panel: !diffPreview && !codePreview && !scmPreview && !chatPreview,
+				auxiliarybar: chatPreview,
 				agentSidebar: false,
 			},
 		},
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
+			...(chatPreview ? ['workbench.contrib.chatEnablement', 'workbench.contrib.chatInputEditor'] : []),
 			...(scmPreview ? ['workbench.contrib.scmRepositories'] : []),
 			'workbench.contrib.layoutActionsContext',
 			'workbench.contrib.modernUI',
@@ -267,6 +400,12 @@ if (scmPreview) {
 }
 const editorService = services.get(IEditorService);
 await openThemePreviewEditors(host, services, diffPreview ? 'diff' : 'code');
+if (chatPreview) {
+	const view = await services.get(IViewsService).openView<ChatPreviewPane>(CHAT_VIEW_ID);
+	view?.initialize();
+	const layout = services.get(IWorkbenchLayoutService);
+	layout.resizePart('auxiliarybar', { width: 480, height: layout.getPartSize('auxiliarybar').height });
+}
 
 const publishContent = connectThemePreview(
 	resources,
@@ -283,18 +422,26 @@ const publishContent = connectThemePreview(
 				.join('\n') +
 			'\n' +
 			output +
+			'\n' + (root.querySelector<HTMLElement>('.ash-chat-view')?.innerText ?? '') +
 			'\n' +
 			history
 		);
 	},
 );
 resources.add(editorService.onDidActiveEditorChange(publishContent));
+if (chatPreview) {
+	resources.add(addDisposableListener(root, 'click', publishContent));
+	resources.add(addDisposableListener(root, 'input', publishContent));
+}
 const editorListeners = resources.add(new DisposableStore());
 const bindEditors = (): void => {
 	editorListeners.clear();
 	for (const editor of services.get(ICodeEditorService).listCodeEditors()) {
 		// Files opened from the sample Explorer or a split share the same fixed-content policy.
-		editor.updateOptions({ readOnly: true });
+		const resource = editor.getModel()?.uri;
+		if (resource?.scheme === workspaceRoot.scheme && resource.path.startsWith(workspaceRoot.path + '/')) {
+			editor.updateOptions({ readOnly: true });
+		}
 		editorListeners.add(editor.onDidChangeModelContent(publishContent));
 	}
 };

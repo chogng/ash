@@ -173,7 +173,11 @@ resources.add(services.createInstance(SaveParticipantsContribution));
 const backups = resources.add(new InMemoryWorkingCopyBackupService('theme-editor-integration'));
 resources.add(new WorkingCopyBackupTracker(services.get(IWorkingCopyService), backups, window));
 const root = document.querySelector<HTMLElement>('#main')!;
-services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
+// This editor-only host has no sidebar or panel for Theme Editor to hide.
+class ThemeEditorFixtureLayout extends BrowserLayoutService {
+	public hidePart(): void { }
+}
+services.registerInstance(ILayoutService, resources.add(new ThemeEditorFixtureLayout({ root })));
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 services.registerInstance(IThemeService, themes);

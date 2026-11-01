@@ -18,6 +18,13 @@ async function editColor(field: Locator, value: string): Promise<void> {
 	await field.press('Enter');
 }
 
+async function readChatDraft(input: Locator): Promise<string> {
+	return input.evaluate(element =>
+		(element as HTMLElement & { editContext?: { text: string; }; }).editContext?.text
+		?? (element as HTMLTextAreaElement).value,
+	);
+}
+
 async function overrideReferencedColor(popup: Page, id: string, value: string): Promise<void> {
 	await popup.getByRole('button', { name: `Choose color for ${id}`, exact: true }).press('Enter');
 	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
@@ -327,6 +334,46 @@ test('diff preview keeps its sample fixed through theme undo, redo and switching
 	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(2);
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(persisted);
 });
+
+for (const [locale, theme] of [['en', 'aurora'], ['zh-CN', 'ash-high-contrast-light']] as const) {
+	test(`Chat preview follows tab and host backgrounds through the isolated theme channel (${locale})`, async ({ page }, testInfo) => {
+		const popup = await openEditor(page, locale, theme);
+		const chinese = locale === 'zh-CN';
+		const search = popup.getByRole('searchbox');
+		await popup.locator('.ash-theme-editor-preview-scenes').getByRole('tab', { name: chinese ? '聊天' : 'Chat', exact: true }).press('Enter');
+		const frame = popup.frameLocator('.ash-theme-editor-preview:visible');
+		const chat = frame.locator('.ash-chat-pane-host > .ash-chat:visible');
+		await expect(chat).toBeVisible();
+		await expect(chat).toContainText(chinese ? '此示例不会发送消息' : 'This sample never sends messages');
+		await expect(frame.locator('.ash-chat-body')).toHaveClass(/has-session-tabs/);
+		await search.fill('editor.background');
+		const color = popup.getByRole('textbox', { name: chinese ? 'editor.background 的十六进制颜色' : 'Hex color for editor.background', exact: true });
+		await editColor(color, '#234567');
+		await expect(chat).toHaveCSS('background-color', 'rgb(35, 69, 103)');
+		await expect(frame.locator('.ash-chat-view-tabs .ash-tab.checked')).toHaveCSS('background-color', 'rgb(35, 69, 103)');
+		const input = chat.getByRole('textbox').first();
+		await input.focus();
+		await popup.keyboard.insertText('theme_preview_local_draft');
+		await page.evaluate(() => window.themeEditorTest.setSetting('chat.viewSessions.presentation', 'list'));
+		await expect(frame.locator('.ash-chat-body')).not.toHaveClass(/has-session-tabs/);
+		await search.fill('auxiliaryBar.background');
+		const choose = popup.getByRole('button', { name: chinese ? '为 auxiliaryBar.background 选择颜色' : 'Choose color for auxiliaryBar.background', exact: true });
+		await choose.press('Enter');
+		const picker = popup.getByRole('dialog', { name: chinese ? '颜色选择器' : 'Color picker', exact: true });
+		await editColor(picker.getByRole('textbox', { name: chinese ? '颜色值' : 'Color value', exact: true }), '#345678');
+		await picker.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click();
+		await expect(chat).toHaveCSS('background-color', 'rgb(52, 86, 120)');
+		await page.evaluate(() => window.themeEditorTest.setSetting('chat.viewSessions.presentation', 'tabs'));
+		await expect(chat).toHaveCSS('background-color', 'rgb(35, 69, 103)');
+		await expect.poll(() => readChatDraft(input)).toBe('theme_preview_local_draft');
+		await popup.screenshot({ path: testInfo.outputPath('theme-editor-chat.png') });
+		expect(await page.evaluate(() => window.themeEditorTest.source())).not.toContain('theme_preview_local_draft');
+		await popup.locator('.ash-theme-editor-preview-scenes').getByRole('tab', { name: chinese ? '代码' : 'Code', exact: true }).press('Enter');
+		await expect(frame.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
+		await popup.locator('.ash-theme-editor-preview-scenes').getByRole('tab', { name: chinese ? '聊天' : 'Chat', exact: true }).press('Space');
+		await expect.poll(() => readChatDraft(input)).toBe('theme_preview_local_draft');
+	});
+}
 
 test('the standard source editor preserves theme edits and undo through editor type switches', async ({ page }) => {
 	const popup = await openEditor(page);

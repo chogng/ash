@@ -16,10 +16,14 @@ import type { ColorContribution, ColorValue } from '../../../../platform/theme/c
 import { serializeUserColorThemeDraft } from '../../../services/themes/common/colorThemeData.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING } from '../../chat/common/chat.js';
+import { ChatConfiguration } from '../../chat/common/constants.js';
 
 /** Presentation preferences shared with the host, never its paths, accounts or backend settings. */
 export const themePreviewConfigurationKeys = [
 	...Object.values(WorkbenchConfiguration),
+	AGENT_SESSIONS_PRESENTATION_SETTING,
+	ChatConfiguration.ChatViewSessionsOrientation,
 	'editor.fontFamily',
 	'editor.fontSize',
 	'editor.lineHeight',
@@ -72,7 +76,7 @@ export function getThemeColorReferences(
 }
 
 type PreviewWindow = 'workbench' | 'sessions';
-type PreviewScene = 'interface' | 'code' | 'diff' | 'scm';
+type PreviewScene = 'interface' | 'code' | 'diff' | 'scm' | 'chat';
 
 /** One retained document owns its channel and reported state until the editor closes. */
 class ThemePreviewFrame extends Disposable {
@@ -264,6 +268,11 @@ export class ThemePreview extends Disposable {
 						label: localize('themeEditor.diffPreview', 'Diff'),
 					},
 					...(value === 'workbench' ? [{
+						id: 'chat',
+						value: 'chat' as const,
+						tabId: 'theme-scene-chat',
+						label: localize('themeEditor.group.chat', 'Chat'),
+					}, {
 						id: 'scm',
 						value: 'scm' as const,
 						tabId: 'theme-scene-scm',
