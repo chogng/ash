@@ -258,6 +258,32 @@ suite('TabList incremental updates', () => {
 suite('TabList rendered layout', () => {
 	const browser = useBrowserTests();
 
+	test('shows the dragging cursor only during a drag, not when opening a context menu', async () => {
+		const { page } = browser;
+		await page.goto('/tablist.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const tab = page.locator('#document').getByRole('tab');
+		const source = tab.locator('..');
+		await expect(source).toHaveAttribute('draggable', 'true');
+		for (const button of ['right', 'left', 'middle'] as const) {
+			await tab.hover();
+			await page.mouse.down({ button });
+			try {
+				await expect(tab).toHaveCSS('cursor', 'pointer');
+				await expect(source).not.toHaveClass(/ash-dnd-dragging/u);
+			} finally {
+				await page.mouse.up({ button });
+			}
+			await expect(tab).toHaveCSS('cursor', 'pointer');
+		}
+		await source.dispatchEvent('dragstart', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+		await expect(source).toHaveClass(/ash-dnd-dragging/u);
+		await expect(tab).toHaveCSS('cursor', 'grabbing');
+		await source.dispatchEvent('dragend');
+		await expect(source).not.toHaveClass(/ash-dnd-dragging/u);
+		await expect(tab).toHaveCSS('cursor', 'pointer');
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`centers actionless labels at their content width across presentations (${locale})`, async () => {
 			const { page } = browser;

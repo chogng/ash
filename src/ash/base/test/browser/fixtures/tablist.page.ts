@@ -45,6 +45,13 @@ const documents = resources.add(
 		presentation: 'inset',
 		onActivate: () => {},
 		onClose: () => {},
+		draggable: true,
+		dragAndDrop: {
+			canDrop: () => false,
+			onDragStart: () => {},
+			onDrop: () => {},
+			onDragEnd: () => {},
+		},
 	}),
 );
 documents.setTabs([{ id: 'file', value: 'file', label: 'File', tabId: 'file-tab' }], 'file');
