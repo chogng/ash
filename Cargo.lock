@@ -584,6 +584,7 @@ dependencies = [
  "ash-app-server-transport",
  "ash-app-tools",
  "ash-apply-patch",
+ "ash-arg0",
  "ash-assets",
  "ash-async-utils",
  "ash-attachment-store",
@@ -661,6 +662,7 @@ dependencies = [
  "ash-otel-trace-websocket",
  "ash-package-store",
  "ash-plugin",
+ "ash-process-hardening",
  "ash-projects",
  "ash-prompts",
  "ash-protocol",
@@ -804,6 +806,7 @@ dependencies = [
  "ash-file-system",
  "ash-file-watcher",
  "ash-mxc-sandbox",
+ "ash-utils-pty",
 ]
 
 [[package]]

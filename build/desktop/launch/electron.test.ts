@@ -1,14 +1,88 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { appendFile, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { promisify } from 'node:util';
 import { isProcessRunning, ProcessRun } from '../../processes.ts';
 import { pythonCommand } from '../../python.ts';
+import { resolveElectronConfiguration } from '../../../test/automation/electron.ts';
 
-const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
+test('real Ash development services exit after worker death or launcher loss with a stopped worker', {
+	skip: process.env.ASH_ELECTRON_LAUNCH_PRODUCT_TESTS !== '1' || process.platform === 'win32', timeout: 180_000,
+}, async t => {
+	const repository = resolve(import.meta.dirname, '../../..');
+	const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-launch-product-')));
+	const runs: ProcessRun[] = [];
+	t.after(async () => {
+		await Promise.all(runs.map(run => run.stop('SIGTERM')));
+		await rm(directory, { recursive: true, force: true });
+	});
+	async function freePort(): Promise<number> {
+		const server = createServer();
+		await new Promise<void>(resolveReady => server.listen(0, '127.0.0.1', resolveReady));
+		const port = (server.address() as import('node:net').AddressInfo).port;
+		await new Promise<void>((resolveClosed, reject) => server.close(error => error ? reject(error) : resolveClosed()));
+		return port;
+	}
+	const rendererPort = await freePort();
+	const cdpPort = await freePort();
+	for (const stopWorker of [false, true]) {
+		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: join(directory, String(stopWorker)) });
+		const child = spawn(process.execPath, [resolve(repository, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services',
+		...configuration.args.filter(argument => argument !== repository), `--remote-debugging-port=${cdpPort}`, '--remote-debugging-address=127.0.0.1'], {
+			cwd: repository, stdio: 'pipe', env: { ...configuration.env, ASH_RENDERER_URL: `http://127.0.0.1:${rendererPort}`, ASH_DEV_APP_SERVER_RELOAD: '1' },
+		});
+		let output = '';
+		child.stdout.on('data', chunk => { output = (output + chunk).slice(-16_384); });
+		child.stderr.on('data', chunk => { output = (output + chunk).slice(-16_384); });
+		const run = new ProcessRun(repository, undefined, 5_000);
+		runs.push(run);
+		await run.own(child);
+		const startupDeadline = Date.now() + 60_000;
+		let targets: { url: string; }[] = [];
+		while (Date.now() < startupDeadline) {
+			try { targets = await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`, { signal: AbortSignal.timeout(1_000) })).json() as typeof targets; }
+			catch { /* Electron's CDP endpoint is not listening yet. */ }
+			if (targets.some(target => target.url.startsWith(`http://127.0.0.1:${rendererPort}/`))) break;
+			assert.equal(child.exitCode, null, output);
+			await delay(100);
+		}
+		assert.ok(targets.some(target => target.url.startsWith(`http://127.0.0.1:${rendererPort}/`)), output);
+		const snapshot = (await promisify(execFile)('ps', ['-axo', 'pid=,ppid=,pgid=,command='])).stdout.trim().split('\n').map(line => {
+			const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/u)!;
+			return { pid: Number(match[1]), parent: Number(match[2]), group: Number(match[3]), command: match[4] };
+		});
+		const supervisor = snapshot.find(process => process.parent === child.pid && process.command.includes('/launch/supervisor.ts'))!;
+		const worker = snapshot.find(process => process.parent === supervisor?.pid && process.command.includes('/launch/electron.ts'))!;
+		assert.ok(worker, output);
+		const owned = snapshot.filter(process => process.group === worker.pid);
+		assert.ok(owned.some(process => process.command.includes('vite/bin/vite.js')), output);
+		assert.ok(owned.some(process => process.command.includes('watch-app-server.ts')), output);
+		assert.ok(owned.some(process => process.command.includes('Contents/MacOS/Electron') || /\/electron\s/u.test(process.command)), output);
+		await run.own(child);
+		if (stopWorker) {
+			process.kill(worker.pid, 'SIGSTOP');
+			child.kill('SIGKILL');
+		} else {
+			process.kill(worker.pid, 'SIGKILL');
+		}
+		const pids = [child.pid!, supervisor.pid, ...owned.map(process => process.pid)];
+		const cleanupDeadline = Date.now() + 15_000;
+		while (pids.some(isProcessRunning) && Date.now() < cleanupDeadline) await delay(50);
+		for (const pid of pids) assert.equal(isProcessRunning(pid), false, `Leaked actual Ash process ${pid}: ${output}`);
+		for (const port of [rendererPort, cdpPort]) {
+			const server = createServer();
+			await new Promise<void>((resolveReady, reject) => server.once('error', reject).listen(port, '127.0.0.1', resolveReady));
+			await new Promise<void>((resolveClosed, reject) => server.close(error => error ? reject(error) : resolveClosed()));
+		}
+	}
+});
+
+const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
 for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) {
 	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: process.platform === 'win32' ? 60_000 : 20_000 }, async t => {
@@ -300,8 +374,8 @@ if (!fs.existsSync('launches.log')) {
 	assert.equal(isProcessRunning(pids[1]!), true);
 });
 
-for (const mode of ['running', 'rendererStarting', 'watcherFails'] as const) {
-	test(`F5 launcher owns Renderer and Rust watcher cleanup (${mode})`, { timeout: 30_000 }, async t => {
+for (const mode of ['running', 'rendererStarting', 'watcherFails', 'portBusy', 'supervisorKilled', 'supervisorKilledDuringRendererStartup', 'workerKilled', 'workerKilledDuringRendererStartup', 'workerHung', 'launcherKilledWorkerHung'] as const) {
+	test(`F5 launcher owns Renderer and Rust watcher cleanup (${mode})`, { timeout: 90_000 }, async t => {
 		const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-debug-services-')));
 		for (const name of launchSources) {
 			await mkdir(join(root, name, '..'), { recursive: true });
@@ -313,20 +387,28 @@ for (const mode of ['running', 'rendererStarting', 'watcherFails'] as const) {
 		await writeFile(join(root, 'package.json'), '{"type":"module","main":"fixture.cjs"}');
 		await writeFile(join(root, 'mode'), mode);
 		await writeFile(join(root, 'build/desktop/host.ts'), `
+import { existsSync, writeFileSync } from 'node:fs';
+writeFileSync('supervisor.pid', String(process.ppid));
 export async function watchHost(onReady) {
   const done = Promise.withResolvers();
+  const timer = setInterval(() => {
+    if (!existsSync('hang-worker')) return;
+    writeFileSync('worker-hung', '');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
+  }, 20);
   onReady(true, 'initial');
-  return { close: async () => done.resolve(), done: done.promise };
+  return { close: async () => { clearInterval(timer); done.resolve(); }, done: done.promise };
 }
 `);
 		const record = `require('node:fs').appendFileSync('services.log', process.pid + '\\n');`;
 		await writeFile(join(root, 'fixture.cjs'), `${record}\nprocess.send('ash:dev:ready'); setInterval(() => {}, 1000);`);
 		await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), `
 ${record}
+require('node:fs').writeFileSync('worker.pid', String(process.ppid));
 const net = require('node:net');
 const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
 net.createServer().listen(port, '127.0.0.1', () => {
-  if (require('node:fs').readFileSync('mode', 'utf8') !== 'rendererStarting') console.log('\\x1b[32mLocal:\\x1b[0m \\x1b[36mhttp://\\x1b[1m127.0.0.1\\x1b[22m:' + port + '/');
+  if (!['rendererStarting', 'supervisorKilledDuringRendererStartup', 'workerKilledDuringRendererStartup'].includes(require('node:fs').readFileSync('mode', 'utf8'))) console.log('\\x1b[32mLocal:\\x1b[0m \\x1b[36mhttp://\\x1b[1m127.0.0.1\\x1b[22m:' + port + '/');
 });
 `);
 		await writeFile(join(root, 'build/node_modules/vite/package.json'), '{"type":"commonjs"}');
@@ -344,10 +426,15 @@ setInterval(() => {}, 1000);
 		await new Promise<void>(resolveReady => reservation.listen(0, '127.0.0.1', resolveReady));
 		const port = (reservation.address() as import('node:net').AddressInfo).port;
 		await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+		if (mode === 'portBusy') await new Promise<void>(resolveReady => reservation.listen(port, '127.0.0.1', resolveReady));
 		const runs: ProcessRun[] = [];
 		t.after(async () => { await Promise.all(runs.map(run => run.stop('SIGTERM'))); await rm(root, { recursive: true, force: true }); });
 		const pids = async (): Promise<number[]> => readFile(join(root, 'services.log'), 'utf8').then(text => text.trim().split('\n').filter(Boolean).map(Number), () => []);
-		for (let attempt = 0; attempt < (mode === 'running' ? 2 : 1); attempt++) {
+		const supervisorKilled = mode === 'supervisorKilled' || mode === 'supervisorKilledDuringRendererStartup';
+		const rendererStarting = mode === 'rendererStarting' || mode === 'supervisorKilledDuringRendererStartup' || mode === 'workerKilledDuringRendererStartup';
+		const workerKilled = mode === 'workerKilled' || mode === 'workerKilledDuringRendererStartup';
+		const workerHung = mode === 'workerHung' || mode === 'launcherKilledWorkerHung';
+		for (let attempt = 0; attempt < (mode === 'running' || supervisorKilled || workerKilled ? 2 : 1); attempt++) {
 			const run = new ProcessRun(root, undefined, 100);
 			runs.push(run);
 			const previousCount = (await pids()).length;
@@ -358,18 +445,43 @@ setInterval(() => {}, 1000);
 			child.stdout.on('data', chunk => { output += chunk; });
 			child.stderr.on('data', chunk => { output += chunk; });
 			await run.own(child);
-			const deadline = Date.now() + 10_000;
-			const expectedCount = mode === 'running' ? 4 : mode === 'watcherFails' ? 2 : 1;
+			const deadline = Date.now() + (workerHung ? 50_000 : 15_000);
+			const expectedCount = rendererStarting || mode === 'portBusy' ? 1 : mode === 'watcherFails' ? 2 : 4;
 			while ((await pids()).length < previousCount + expectedCount && Date.now() < deadline) await delay(20);
 			assert.equal((await pids()).length, previousCount + expectedCount, output);
-			if (mode !== 'watcherFails') {
+			const worker = Number(await readFile(join(root, 'worker.pid'), 'utf8'));
+			const supervisor = Number(await readFile(join(root, 'supervisor.pid'), 'utf8'));
+			if (workerKilled) {
+				await run.own(child);
+				process.kill(worker, 'SIGKILL');
+			} else if (workerHung) {
+				await run.own(child);
+				await writeFile(join(root, 'hang-worker'), '');
+				while (!await readFile(join(root, 'worker-hung')).then(() => true, () => false) && Date.now() < deadline) await delay(20);
+				assert.ok(await readFile(join(root, 'worker-hung')));
+				if (mode === 'launcherKilledWorkerHung') child.kill('SIGKILL');
+			} else if (supervisorKilled) {
+				// Retain the tree for test teardown, but signal only the supervisor:
+				// the worker must reclaim its own services after the IPC channel closes.
+				await run.own(child);
+				child.kill('SIGKILL');
+			} else if (mode !== 'watcherFails' && mode !== 'portBusy') {
 				if (process.platform === 'win32') await run.stop('SIGTERM');
 				else child.kill('SIGTERM');
 			}
 			while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(20);
-			if (mode !== 'watcherFails' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
-			else assert.equal(child.exitCode, mode === 'watcherFails' ? 1 : 143, output);
-			for (const pid of await pids()) assert.equal(isProcessRunning(pid), false, `Leaked F5 process ${pid}: ${output}`);
+			if (supervisorKilled || mode === 'launcherKilledWorkerHung') assert.equal(child.signalCode, 'SIGKILL', output);
+			else if (workerKilled || workerHung) assert.equal(child.exitCode, 1, output);
+			else if (mode !== 'watcherFails' && mode !== 'portBusy' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
+			else assert.equal(child.exitCode, mode === 'watcherFails' || mode === 'portBusy' ? 1 : 143, output);
+			const owned = [supervisor, worker, ...await pids()];
+			while (owned.some(isProcessRunning) && Date.now() < deadline) await delay(20);
+			for (const pid of owned) assert.equal(isProcessRunning(pid), false, `Leaked F5 process ${pid}: ${output}`);
+			if (mode === 'workerHung') assert.match(output, /Development worker stopped responding/u);
+			if (mode === 'portBusy') {
+				assert.equal(reservation.listening, true, 'An unrelated port owner must survive launcher cleanup');
+				await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+			}
 			await new Promise<void>((resolveReady, reject) => reservation.once('error', reject).listen(port, '127.0.0.1', resolveReady));
 			await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
 		}

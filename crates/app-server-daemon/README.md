@@ -15,6 +15,9 @@
 - 启动失败时终止并回收新子进程，仅清理该代记录；仍存活或已被后继进程替换的记录受到保护。
 - Windows 通过同一进程句柄读取创建时间、验证身份、终止并等待退出；后台启动要求脱离控制程序的 Job。Unix 验证启动身份后终止。
 - App Server 持有目录服务、队列和自动化运行；本 crate 的正常依赖不包含 App Server 实现。
+- managed App Server 的生命周期独立于启动它的 Desktop、TUI 或 CLI；客户端退出只释放连接与其租约。
+  扩展进程由共享扩展 supervisor 与平台进程 owner 回收：Windows 使用 Job，Unix owned session
+  使用独立 lifeline guard。强杀后台服务同样会触发子进程回收；旧 endpoint 与 PID 记录由既有代际校验恢复。
 
 ## 命令与路径
 

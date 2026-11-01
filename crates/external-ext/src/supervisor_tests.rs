@@ -113,6 +113,8 @@ struct TestProcess {
     starting_speech: usize,
     exited: AtomicBool,
     hang_invocations: AtomicBool,
+    hang_pings: AtomicBool,
+    pings: AtomicUsize,
     client_on_invoke: AtomicBool,
     client_replies: AtomicUsize,
     cancels: AtomicUsize,
@@ -225,7 +227,10 @@ impl ExtensionHostProcess for TestProcess {
                 Some(HostSuccess::Cancelled)
             }
             HostRequestKind::Deactivate => Some(HostSuccess::Deactivated),
-            HostRequestKind::Ping => Some(HostSuccess::Pong),
+            HostRequestKind::Ping => {
+                self.pings.fetch_add(1, Ordering::Release);
+                (!self.hang_pings.load(Ordering::Acquire)).then_some(HostSuccess::Pong)
+            }
             HostRequestKind::Shutdown => Some(HostSuccess::Shutdown),
         };
         if let Some(response) = response {
@@ -601,6 +606,46 @@ fn reconcile_recovers_an_idle_crash_and_replays_activation() {
     assert_eq!(snapshot.incarnation, 2);
     assert_eq!(launcher.spawns.load(Ordering::Acquire), 2);
     assert_eq!(snapshot.registrations.len(), 1);
+}
+
+#[test]
+fn reconcile_retires_an_idle_unresponsive_peer_and_replays_activation() {
+    let launcher = Arc::new(TestLauncher::default());
+    let authority = Arc::new(TestAuthority::authorized());
+    let supervisor = supervisor(Arc::clone(&launcher), Arc::clone(&authority));
+    supervisor.start().unwrap();
+    let first = Arc::clone(&launcher.processes.lock().unwrap()[0]);
+    first.hang_pings.store(true, Ordering::Release);
+    std::thread::sleep(Duration::from_millis(35));
+    assert_eq!(supervisor.reconcile().unwrap().incarnation, 1);
+    std::thread::sleep(Duration::from_millis(35));
+
+    let snapshot = supervisor.reconcile().unwrap();
+
+    assert!(first.has_exited());
+    assert_eq!(snapshot.status, ExtensionHostStatus::Ready);
+    assert_eq!(snapshot.incarnation, 2);
+    assert_eq!(launcher.spawns.load(Ordering::Acquire), 2);
+    assert_eq!(authority.active_leases.load(Ordering::Acquire), 1);
+}
+
+#[test]
+fn shutdown_wins_over_an_in_flight_health_probe_without_restarting_the_peer() {
+    let launcher = Arc::new(TestLauncher::default());
+    let supervisor = supervisor(Arc::clone(&launcher), Arc::new(TestAuthority::authorized()));
+    supervisor.start().unwrap();
+    let first = Arc::clone(&launcher.processes.lock().unwrap()[0]);
+    first.hang_pings.store(true, Ordering::Release);
+    std::thread::sleep(Duration::from_millis(35));
+    supervisor.reconcile().unwrap();
+    assert_eq!(first.pings.load(Ordering::Acquire), 1);
+    supervisor.shutdown().unwrap();
+    std::thread::sleep(Duration::from_millis(35));
+    assert_eq!(
+        supervisor.reconcile().unwrap().status,
+        ExtensionHostStatus::Stopped
+    );
+    assert_eq!(launcher.spawns.load(Ordering::Acquire), 1);
 }
 
 #[test]

@@ -22,6 +22,12 @@
 
 ## 安全边界
 
+`ProcessWatchdog` 由真实 owner 循环报告进度，独立 OS 线程监测停滞。managed App Server 的预算为
+60 秒，覆盖初始化、运行循环及 owned services 的析构。声明顺序保证服务析构完成后才停用看门狗。
+超时直接终止当前进程，不再次进入可能已锁死的退出 hook；内核关闭 Unix session guard 的 lifeline
+或 Windows Job 句柄后，由对应 owner 回收子进程。机器或整个进程暂停后给予新的进度预算；
+整个进程持续被暂停时，由 daemon 的显式 stop 超时与精确代际强制终止路径收尾。
+
 - 清理环境只能影响后续环境继承，不能撤销动态加载器在构造函数之前已加载的库；发行包的加载路径、签名和启动环境需由打包与启动方保证。
 - 发布版 core 硬限制会被子进程继承，普通子进程不能自行提高；这会影响从 Ash 启动的工具生成 core dump。
 - Linux 调试附加限制依据 [PR_SET_DUMPABLE](https://man7.org/linux/man-pages/man2/pr_set_dumpable.2const.html)，不承诺阻止具备调试能力的特权进程。

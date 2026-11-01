@@ -176,30 +176,43 @@ child.once('message', pid => { writeFileSync(${JSON.stringify(marker)}, String(p
 	assert.equal(await isAlive(pid), false);
 });
 
-test('a supervisor cleans detached registered resources after its worker exits', { skip: process.platform === 'win32', timeout: 20_000 }, async t => {
-	const directory = await mkdtemp(join(repository, 'test/.process-owner-'));
-	t.after(() => rm(directory, { recursive: true, force: true }));
-	const marker = join(directory, 'pid');
-	const worker = join(directory, 'worker.ts');
-	await writeFile(worker, `
+for (const rootExits of [false, true]) {
+	test(`a supervisor cleans detached registered resources after its worker exits (resource root exits: ${rootExits})`, { skip: process.platform === 'win32', timeout: 20_000 }, async t => {
+		const directory = await mkdtemp(join(repository, 'test/.process-owner-'));
+		t.after(() => rm(directory, { recursive: true, force: true }));
+		const marker = join(directory, 'pid');
+		const worker = join(directory, 'worker.ts');
+		await writeFile(worker, `
 import { execFile, spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { registerRunResource } from ${JSON.stringify(join(repository, 'build/processes.ts'))};
 const resource = await registerRunResource();
-const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+const child = spawn(process.execPath, ['-e', ${JSON.stringify(rootExits ? `
+const { spawn } = require('node:child_process');
+const helper = spawn(process.execPath, ['-e', 'process.send(process.pid); setInterval(() => {}, 1000)'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+helper.once('message', pid => process.send(pid));
+process.once('message', () => process.exit(0));
+` : 'setInterval(() => {}, 1000)')}], { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+const helper = ${rootExits} ? new Promise(resolve => child.once('message', resolve)) : Promise.resolve(child.pid);
 await resource.process(child);
-await writeFile(${JSON.stringify(marker)}, String(child.pid));
+await writeFile(${JSON.stringify(marker)}, String(await helper));
+if (${rootExits}) {
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  child.send('exit');
+  await exited;
+}
 process.exit(0);
 `);
-	const run = new ProcessRun(repository, directory);
-	let pid: number | undefined;
-	t.after(async () => { await run.close(); if (pid && await isAlive(pid)) process.kill(pid, 'SIGKILL'); });
-	const result = await run.command(process.execPath, [worker], { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
-	assert.equal(result.code, 0);
-	pid = Number(await readFile(marker, 'utf8'));
-	await run.close();
-	assert.equal(await isAlive(pid), false);
-});
+		const run = new ProcessRun(repository, directory);
+		let pid: number | undefined;
+		t.after(async () => { await run.close(); if (pid && await isAlive(pid)) process.kill(pid, 'SIGKILL'); });
+		const result = await run.command(process.execPath, [worker], { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
+		assert.equal(result.code, 0);
+		pid = Number(await readFile(marker, 'utf8'));
+		await run.close();
+		assert.equal(await isAlive(pid), false);
+	});
+}
 
 async function isAlive(pid: number): Promise<boolean> {
 	try { const { stdout } = await promisify(execFile)('ps', ['-p', String(pid), '-o', 'stat=']); return !stdout.trim().startsWith('Z'); }

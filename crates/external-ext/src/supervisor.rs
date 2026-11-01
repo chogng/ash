@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::thread;
+use std::time::Duration;
 use std::time::Instant;
 
 use crate::ActivateResult;
@@ -72,6 +73,11 @@ struct RetainedOutputEvent {
     bytes: usize,
 }
 
+struct HealthProbe {
+    request: PendingHostRequest,
+    started: Instant,
+}
+
 struct SupervisorState {
     initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
     client_handler: Option<Arc<ExtensionBackgroundClientHandler>>,
@@ -90,6 +96,8 @@ struct SupervisorState {
     output_events: VecDeque<RetainedOutputEvent>,
     output_event_bytes: usize,
     next_output_event_sequence: u64,
+    last_health_probe: Instant,
+    health_probe: Option<HealthProbe>,
 }
 
 struct SupervisorInner {
@@ -149,6 +157,8 @@ impl ExtensionHostSupervisor {
                     output_events: VecDeque::new(),
                     output_event_bytes: 0,
                     next_output_event_sequence: 1,
+                    last_health_probe: Instant::now(),
+                    health_probe: None,
                 }),
                 lifecycle: Mutex::new(()),
                 next_request_id: AtomicU64::new(1),
@@ -234,28 +244,56 @@ impl ExtensionHostSupervisor {
         }
     }
 
-    /// Reconciles an idle runtime that exited since its last request.
+    /// Reconciles exited peers and periodically probes otherwise idle runtimes for progress.
     ///
     /// App Server should call this from its runtime health loop. A deliberately stopped host stays
     /// stopped; a ready host whose process exited consumes restart budget and replays activation.
     pub fn reconcile(&self) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
-        let (status, incarnation, exited) = {
-            let state = self
+        let (status, incarnation, failed) = {
+            let mut state = self
                 .inner
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostError::HostExited)?;
-            (
-                state.status,
-                state.incarnation,
-                state
-                    .process
-                    .as_ref()
-                    .is_some_and(|process| process.has_exited()),
-            )
+            let process = state.process.clone();
+            let mut failed = process.as_ref().is_some_and(|process| process.has_exited());
+            if state.status == ExtensionHostStatus::Ready && !failed {
+                if let Some(probe) = state.health_probe.take() {
+                    // Health maintenance also owns revocation. Never block that loop
+                    // waiting for one peer: inspect its pending pong on the next tick.
+                    match probe.request.recv_timeout(Duration::ZERO) {
+                        Ok(Some(response)) => {
+                            failed = require_success(Some(response), |success| {
+                                matches!(success, HostSuccess::Pong)
+                            })
+                            .is_err();
+                        }
+                        Ok(None) if probe.started.elapsed() < self.inner.limits.request_timeout => {
+                            state.health_probe = Some(probe);
+                        }
+                        Ok(None) | Err(_) => failed = true,
+                    }
+                } else if state.last_health_probe.elapsed() >= self.inner.limits.request_timeout
+                    && let Some(process) = process
+                {
+                    state.last_health_probe = Instant::now();
+                    match self.request(&process, state.incarnation, HostRequestKind::Ping) {
+                        Ok(request) => {
+                            state.health_probe = Some(HealthProbe {
+                                request,
+                                started: Instant::now(),
+                            })
+                        }
+                        // Cancellation and shutdown retain priority over a health probe.
+                        Err(ExtensionHostError::QuotaExceeded(_)) => {}
+                        Err(_) => failed = true,
+                    }
+                }
+            }
+            (state.status, state.incarnation, failed)
         };
         match status {
-            ExtensionHostStatus::Ready if exited => {
+            ExtensionHostStatus::Ready if failed => {
                 self.recover_failed_incarnation(incarnation)?;
             }
             ExtensionHostStatus::CrashLoop => return Err(ExtensionHostError::CrashLoop),
@@ -280,6 +318,7 @@ impl ExtensionHostSupervisor {
                 .lock()
                 .map_err(|_| ExtensionHostError::HostExited)?;
             state.status = ExtensionHostStatus::Stopped;
+            state.health_probe = None;
             state.registrations.clear();
             (
                 state.process.clone(),
@@ -549,6 +588,8 @@ impl ExtensionHostSupervisor {
                     }
                 }
                 state.status = ExtensionHostStatus::Ready;
+                state.last_health_probe = Instant::now();
+                state.health_probe = None;
                 state.process_lease = Some(lease);
                 state.client_worker = worker;
                 state.restart.record_healthy();
@@ -705,16 +746,20 @@ impl ExtensionHostSupervisor {
             .lifecycle
             .lock()
             .map_err(|_| ExtensionHostError::HostExited)?;
-        if self
+        let state = self
             .inner
             .state
             .lock()
-            .map_err(|_| ExtensionHostError::HostExited)?
-            .incarnation
-            != incarnation
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        if state.incarnation != incarnation
+            || matches!(
+                state.status,
+                ExtensionHostStatus::Stopped | ExtensionHostStatus::CrashLoop
+            )
         {
             return Ok(());
         }
+        drop(state);
         self.recover_locked()
     }
 
@@ -727,6 +772,7 @@ impl ExtensionHostSupervisor {
                     .lock()
                     .map_err(|_| ExtensionHostError::HostExited)?;
                 state.status = ExtensionHostStatus::Recovering;
+                state.health_probe = None;
                 state.registrations.clear();
                 let process = state.process.clone();
                 let incarnation = state.incarnation;
