@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test, type TestContext } from 'node:test';
-import { planAffectedTests } from './impact.ts';
+import { pathToFileURL } from 'node:url';
+import { planAffectedTests } from './impactWorker.ts';
 
 function fixture(t: TestContext) {
 	const root = mkdtempSync(join(tmpdir(), 'ash-test-impact-'));
@@ -159,4 +160,106 @@ test('historical planning does not mix in worktree changes or rewrite the checko
 	assert.deepEqual(planAffectedTests(f.root, f.base, f.tests, { head }).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
 	assert.equal(f.git('status', '--porcelain'), status);
 	assert.equal(f.git('rev-parse', 'HEAD'), head);
+});
+
+test('declaration edits select named consumers and their local helper dependencies', t => {
+	const f = fixture(t);
+	const module = (value: number) => `function helper() { return ${value}; }\nexport function changed() { return helper(); }\nexport function stable() { return 3; }`;
+	f.write('src/value.ts', module(1));
+	f.write('src/test/a.test.ts', "import { changed as read } from '../value.js'; void read;");
+	f.write('src/test/b.test.ts', "import { stable } from '../value.js'; void stable;");
+	const base = f.commit();
+	f.write('src/value.ts', module(2));
+	assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
+});
+
+test('declaration slicing retains type consumers and named re-exports', t => {
+	const f = fixture(t);
+	f.write('src/types.ts', 'export interface Value { value: number; }\nexport interface Other { other: number; }');
+	f.write('src/barrel.ts', "export { Other } from './types.js';");
+	f.write('src/test/a.test.ts', "import type { Other } from '../barrel.js'; export type T = Other;");
+	const base = f.commit();
+	f.write('src/types.ts', 'export interface Value { value: string; }\nexport interface Other { other: number; }');
+	assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/b.test.js', 'test/architecture/ownership.test.js']);
+});
+
+test('namespace, side-effect and dynamic loads retain the whole module surface', t => {
+	for (const load of ["import * as values from '../value.js'; void values;", "import '../value.js';", "import { stable } from '../value.js'; void import('../value.js');", "import { stable } from '../value.js'; require('../value.js');"]) {
+		const f = fixture(t);
+		f.write('src/value.ts', 'export function value() { return 1; }\nexport function stable() { return 3; }');
+		f.write('src/test/a.test.ts', load);
+		const base = f.commit();
+		f.write('src/value.ts', 'export function value() { return 2; }\nexport function stable() { return 3; }');
+		assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js'], load);
+	}
+});
+
+test('load-time calls, static initialization and reflection keep file-level selection', t => {
+	for (const suffix of ['\nvalue();', '\nexternal();', '\nexport const initialized = value();', '\nexport class C { static initialized = value(); }', '\neval("value()");',
+		'\nexport class C extends Base {}', '\nexport class C { [external()]() {} }', '\n@external\nexport class C {}']) {
+		const f = fixture(t);
+		f.write('src/value.ts', 'export function value() { return 1; }\nexport function stable() { return 3; }' + suffix);
+		f.write('src/test/a.test.ts', "import { stable } from '../value.js'; void stable;");
+		const base = f.commit();
+		f.write('src/value.ts', 'export function value() { return 2; }\nexport function stable() { return 3; }' + suffix);
+		assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js'], suffix);
+	}
+});
+
+test('mutable state and import changes keep file-level selection', t => {
+	for (const [before, after] of [
+		['export let value = 1; export const stable = 3;', 'export let value = 2; export const stable = 3;'],
+		["import './one.js'; export const value = 1; export const stable = 3;", "import './two.js'; export const value = 1; export const stable = 3;"],
+	]) {
+		const f = fixture(t);
+		f.write('src/value.ts', before);
+		f.write('src/test/a.test.ts', "import { stable } from '../value.js'; void stable;");
+		const base = f.commit();
+		f.write('src/value.ts', after);
+		assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
+	}
+});
+
+test('a removed helper reference still selects its former exported consumer', t => {
+	const f = fixture(t);
+	f.write('src/value.ts', 'function helper() { return 1; } export function value() { return helper(); } export function stable() { return 3; }');
+	f.write('src/test/a.test.ts', "import { value } from '../value.js'; void value;");
+	f.write('src/test/b.test.ts', "import { stable } from '../value.js'; void stable;");
+	const base = f.commit();
+	f.write('src/value.ts', 'function helper() { return 2; } export function value() { return 4; } export function stable() { return 3; }');
+	assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
+});
+
+test('a dependency edit upgrades a changed module declaration slice regardless of traversal order', t => {
+	for (const dependency of ['aaa', 'zzz']) {
+		const f = fixture(t);
+		f.write(`src/${dependency}.ts`, 'export const dependency = 1;');
+		const module = (value: number) => `import { dependency } from './${dependency}.js'; export function value() { return ${value}; } export function stable() { return dependency; }`;
+		f.write('src/value.ts', module(1));
+		f.write('src/test/a.test.ts', "import { stable } from '../value.js'; void stable;");
+		const base = f.commit();
+		f.write('src/value.ts', module(2));
+		f.write(`src/${dependency}.ts`, 'export const dependency = 2;');
+		assert.deepEqual(planAffectedTests(f.root, base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
+	}
+});
+
+test('malformed changed modules fail closed to the entire suite', t => {
+	const f = fixture(t);
+	f.write('src/value.ts', 'export function value( {');
+	const plan = planAffectedTests(f.root, f.base, f.tests);
+	assert.equal(plan.full, true);
+	assert.match(plan.reason, /cannot parse/u);
+});
+
+test('an unavailable pinned analyzer retains every test, while invalid revisions still fail', async t => {
+	const f = fixture(t);
+	// A fixture host without node_modules exercises actual process-start failure.
+	f.write('test/unit/impactWorker.ts', readFileSync(new URL('./impactWorker.ts', import.meta.url), 'utf8'));
+	const worker = await import(pathToFileURL(join(f.root, 'test/unit/impactWorker.ts')).href);
+	const plan = worker.planAffectedTests(f.root, f.base, f.tests);
+	assert.equal(plan.full, true);
+	assert.deepEqual(plan.files, f.tests);
+	assert.match(plan.reason, /worker unavailable/u);
+	assert.throws(() => worker.planAffectedTests(f.root, 'missing-revision', f.tests));
 });

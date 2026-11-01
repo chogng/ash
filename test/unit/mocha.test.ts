@@ -172,6 +172,7 @@ test('all selected paths are validated before any test starts', () => {
 
 test('workers overlap isolated files without starting beyond their limit', { timeout: 20_000 }, async t => {
 	const release = join(directory, 'pool-release');
+	writeFileSync(join(directory, 'pool-state.js'), 'export const state = { owner: undefined };');
 	const fixtures = [0, 1, 2].map(index => {
 		const path = join(directory, `pool-${index}.test.js`);
 		writeFileSync(path, `
@@ -179,12 +180,16 @@ import assert from 'node:assert/strict';
 import { existsSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
 import { test } from 'mocha';
+import { state } from './pool-state.js';
 test('isolated file ${index}', async () => {
  assert.equal(globalThis.unitPoolOwner, undefined);
+ assert.equal(state.owner, undefined);
  globalThis.unitPoolOwner = ${index};
+ state.owner = ${index};
  writeFileSync(${JSON.stringify(join(directory, `pool-ready-${index}`))}, 'ready');
  while (!existsSync(${JSON.stringify(release)})) await setTimeout(25);
  assert.equal(globalThis.unitPoolOwner, ${index});
+ assert.equal(state.owner, ${index});
 });
 `);
 		return relative(outputDirectory, path).replaceAll('\\', '/');
@@ -205,6 +210,55 @@ test('isolated file ${index}', async () => {
 	writeFileSync(release, 'continue');
 	assert.equal(await stopped, 0, output);
 	assert.match(output, /3 tests executed across 3 files; 0 failed files/);
+});
+
+test('isolated files reuse bytecode storage and remove the run-owned cache afterward', () => {
+	const marker = join(directory, 'compile-cache.json');
+	const fixtures = [0, 1].map(index => {
+		const path = join(directory, `compile-cache-${index}.test.js`);
+		writeFileSync(path, `
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { getCompileCacheDir } from 'node:module';
+import { test } from 'mocha';
+test('reuses bytecode ${index}', () => {
+ const cache = getCompileCacheDir();
+ assert.ok(cache);
+ ${index === 0 ? `writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ cache, pid: process.pid }));` : `
+ const previous = JSON.parse(readFileSync(${JSON.stringify(marker)}, 'utf8'));
+ assert.equal(cache, previous.cache);
+ assert.notEqual(process.pid, previous.pid);
+ assert.ok(readdirSync(cache).length > 0, 'Previous isolated process did not flush bytecode');`}
+});
+`);
+		return relative(outputDirectory, path).replaceAll('\\', '/');
+	});
+	// This case checks the default run-owned cache rather than caller overrides.
+	const env: NodeJS.ProcessEnv = { ...runnerEnvironment };
+	for (const name of ['NODE_COMPILE_CACHE', 'NODE_DISABLE_COMPILE_CACHE', 'NODE_V8_COVERAGE']) delete env[name];
+	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: 15_000 });
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /2 tests executed across 2 files; 0 failed files/);
+	assert.equal(existsSync(JSON.parse(readFileSync(marker, 'utf8')).cache), false);
+});
+
+test('the preload resolves editor aliases and ignores static and dynamic CSS imports', () => {
+	const path = join(directory, 'loader.test.js');
+	writeFileSync(join(directory, 'ignored.css'), '.invalid-javascript { color: red; }');
+	writeFileSync(path, `
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { VSBuffer } from 'ash:editor/base/common/buffer.js';
+import './ignored.css';
+test('loads through the synchronous hooks', async () => {
+ assert.equal(VSBuffer.fromString('loader').toString(), 'loader');
+ assert.equal((await import('ash:editor/base/common/buffer.js')).VSBuffer, VSBuffer);
+ assert.deepEqual(Object.keys(await import('./ignored.css')), []);
+});
+`);
+	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\\\', '/')]);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
 });
 
 test('a filter matching no tests fails the run', () => {

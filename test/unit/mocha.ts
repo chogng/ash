@@ -3,7 +3,7 @@ import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdte
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
-import { planAffectedTests } from './impact.ts';
+import { planAffectedTests } from './impactWorker.ts';
 
 interface Selection {
 	readonly runs: readonly string[];
@@ -118,7 +118,16 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			await withProcessRun(desktopDirectory, async (run, environment) => {
 				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
 					? await startBrowserUnitServer(run, environment) : undefined;
-				const testEnvironment = browserServer ? { ...environment, ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : environment;
+				// Reuse compiled bytecode across isolated processes, never their module
+				// instances or globals. The first completed files warm subsequent workers;
+				// the run owns cleanup, and V8 coverage keeps its uncached precision.
+				// A single wave has no reuse to offset the cost of writing a cold cache.
+				const testEnvironment = {
+					...environment,
+					NODE_COMPILE_CACHE: environment.NODE_COMPILE_CACHE ?? (files.length > selection.workers ? resolve(resultDirectory, 'compile-cache') : undefined),
+					...(environment.NODE_V8_COVERAGE ? { NODE_DISABLE_COMPILE_CACHE: '1' } : {}),
+					...(browserServer ? { ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : {}),
+				};
 				try {
 					let nextFile = 0;
 					const worker = async (): Promise<void> => {
