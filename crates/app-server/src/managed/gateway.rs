@@ -308,16 +308,19 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
     let (outbound, incoming) = crate::server::message_queue::outbound_queue(256);
     thread::scope(|scope| {
         let requests = RequestDispatcher::start(scope)?;
+        let profile_connection = profile_server.product_host_connection();
+        let wire_connection = profile_connection.clone();
         let writer_telemetry = profile_server.telemetry.clone();
         let writer_handle = scope.spawn(move || {
             let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
             while let Ok(message) = incoming.recv() {
-                message.write_to(&mut writer, &writer_telemetry)?;
+                message.write_to(&mut writer, &writer_telemetry, |raw| {
+                    wire_connection.wire_sent(raw)
+                })?;
             }
             Ok::<(), io::Error>(())
         });
 
-        let profile_connection = profile_server.product_host_connection();
         let ide_attachment = Arc::clone(&profile_connection.ide_attachment);
         let profile_notifications = profile_server.connection_notifications(&profile_connection);
         let profile_outbound = outbound.clone();
@@ -361,6 +364,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                         continue;
                     }
                 };
+                profile.connection.wire_received(&raw, &request);
                 let method_name = request
                     .get("method")
                     .and_then(Value::as_str)
@@ -433,6 +437,28 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     if initialized {
                         initialize_request = Some(raw);
                     }
+                    continue;
+                }
+                // Wire evidence belongs to the renderer-facing connection, before directory/remote routing.
+                if matches!(
+                    method.and_then(client_method),
+                    Some(
+                        ClientMethod::WireLogStart
+                            | ClientMethod::WireLogRead
+                            | ClientMethod::WireLogStop
+                    )
+                ) {
+                    let output = outbound.clone();
+                    requests.dispatch(
+                        Arc::clone(&profile.server),
+                        &profile.connection,
+                        raw,
+                        move |response| {
+                            output
+                                .send(response.into())
+                                .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
+                        },
+                    )?;
                     continue;
                 }
                 if matches!(method, Some("session/list" | "session/catalog/subscribe")) {

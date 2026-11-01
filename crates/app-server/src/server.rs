@@ -239,6 +239,7 @@ mod semantic_index_job;
 mod session_operations;
 #[path = "server/request_processors/session_runtime.rs"]
 mod session_runtime_processor;
+mod wire_log;
 
 #[path = "server/request_processors/skills.rs"]
 mod skill_operations;
@@ -459,6 +460,7 @@ pub struct ConnectionState {
     pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
+    wire_log: Arc<Mutex<wire_log::WireLog>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -481,6 +483,14 @@ struct ConnectionMutableState {
 }
 
 impl ConnectionState {
+    pub(crate) fn wire_received(&self, raw: &str, envelope: &Value) {
+        self.wire_log.lock().unwrap().received(raw, envelope);
+    }
+
+    pub(crate) fn wire_sent(&self, raw: &str) {
+        self.wire_log.lock().unwrap().sent(raw);
+    }
+
     fn is_closed(&self) -> bool {
         connection_state(self).closed
     }
@@ -1791,6 +1801,7 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        connection.wire_log.lock().unwrap().close();
         connection.tcp_streams.close_all();
         self.cancel_connection_logins(connection.connection_id);
         self.memory_diagnostics_processor
@@ -3101,10 +3112,13 @@ impl AppServer {
                     return Err(error);
                 }
             };
+            let wire_log = Arc::clone(&connection.wire_log);
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
                 while let Ok(message) = outbound_rx.recv() {
-                    message.write_to(&mut writer, &self.telemetry)?;
+                    message.write_to(&mut writer, &self.telemetry, |raw| {
+                        wire_log.lock().unwrap().sent(raw);
+                    })?;
                 }
                 Ok::<(), std::io::Error>(())
             });
@@ -3128,6 +3142,11 @@ impl AppServer {
                             format!("invalid App Server inbound JSON: {error}"),
                         )
                     })?;
+                    connection
+                        .wire_log
+                        .lock()
+                        .unwrap()
+                        .received(&line, &envelope);
                     if envelope.get("method").is_none() {
                         let handled = self
                             .client_host
@@ -3432,6 +3451,29 @@ impl AppServer {
                 .cancel(connection, &request.params),
             Some(ClientMethod::SessionRead) => {
                 self.session_processor().session_read(&request.params)
+            }
+            Some(ClientMethod::WireLogStart) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogParams =
+                    decode(&request.params)?;
+                connection.wire_log.lock().unwrap().start(&params)?;
+                result(&())
+            }
+            Some(ClientMethod::WireLogStop) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogParams =
+                    decode(&request.params)?;
+                connection.wire_log.lock().unwrap().stop(&params)?;
+                result(&())
+            }
+            Some(ClientMethod::WireLogRead) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogReadParams =
+                    decode(&request.params)?;
+                result(
+                    &connection
+                        .wire_log
+                        .lock()
+                        .unwrap()
+                        .read(connection.connection_id, &params)?,
+                )
             }
             Some(ClientMethod::SessionTraceRead) => {
                 self.session_processor().session_trace_read(&request.params)

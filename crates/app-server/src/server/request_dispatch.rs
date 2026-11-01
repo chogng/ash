@@ -121,10 +121,14 @@ impl OutgoingMessage {
         self,
         writer: &mut JsonlWriter<W>,
         telemetry: &ash_otel::Telemetry,
+        delivered: impl FnOnce(&str),
     ) -> io::Result<()> {
         let span = telemetry.start_outbound(self.trace);
         let started = Instant::now();
         let result = writer.write_message(&self.raw);
+        if result.is_ok() {
+            delivered(&self.raw);
+        }
         span.record_duration("rpc.write_ms", started.elapsed());
         span.finish(if result.is_ok() {
             diagnostics::Outcome::Succeeded

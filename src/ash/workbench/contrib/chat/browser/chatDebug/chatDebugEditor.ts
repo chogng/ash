@@ -1,3 +1,5 @@
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import type { AgentSession } from '../../../../../platform/agentHost/common/agent.js';
 import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import {
 	defaultButtonStyles,
@@ -5,7 +7,6 @@ import {
 	defaultInputBoxStyles,
 	defaultListStyles,
 	defaultProgressBarStyles,
-	defaultFindWidgetStyles,
 } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IChatDebugService } from '../../common/chatDebugService.js';
 // Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
@@ -28,14 +29,13 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { EditorPane } from '../../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../common/editor.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
-import { readAgentTraceLocation, type AgentTraceLocation } from './chatDebugEditorInput.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { createAgentTraceInput, createAgentTraceResource, readAgentTraceLocation, rememberAgentTraceResource, type AgentTraceLocation } from './chatDebugEditorInput.js';
 import { traceOverview, diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../common/chatDebugEvents.js';
 
 import { ObjectTree } from '../../../../../base/browser/ui/tree/objectTree.js';
-import { TreeVisibility } from '../../../../../base/browser/ui/tree/tree.js';
 import { SplitView } from '../../../../../base/browser/ui/splitview/splitview.js';
 import { TabList } from '../../../../../base/browser/ui/tablist/tabList.js';
-import { IconLabel } from '../../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { List } from '../../../../../base/browser/ui/list/listWidget.js';
 import { CountBadge } from '../../../../../base/browser/ui/countBadge/countBadge.js';
@@ -50,9 +50,15 @@ import type { ITextModel } from '../../../../../editor/common/model.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { ChatDebugFilterState, type ChatDebugEventKind } from './chatDebugFilters.js';
 import { ChatDebugOverviewView } from './chatDebugOverviewView.js';
+import { ChatDebugLogsView } from './chatDebugLogsView.js';
+import { ChatDebugHomeView } from './chatDebugHomeView.js';
+import { ChatDebugFlowChartView } from './chatDebugFlowChartView.js';
+import { ChatDebugWireLogView } from './chatDebugWireLogView.js';
+import { ChatDebugCacheExplorerView } from './chatDebugCacheExplorerView.js';
 import { AgentTraceViewModel, eventLabel, invocationTimingLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
+type DebugView = 'overview' | 'logs' | 'flowchart' | 'cache' | 'wirelog';
 interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; readonly kind?: string; readonly outgoing?: boolean; }
 let detailSequence = 0;
 
@@ -80,12 +86,20 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	private filter!: InputBox;
 	private errorsButton!: Button;
 	private overview!: ChatDebugOverviewView;
+	private home!: ChatDebugHomeView;
+	private viewNavigation!: HTMLElement;
+	private activeView: DebugView = 'logs';
+	private readonly viewButtons = new Map<DebugView, Button>();
+	private flow!: ChatDebugFlowChartView;
+	private cache!: ChatDebugCacheExplorerView;
+	private wire!: ChatDebugWireLogView;
 	private readonly filters = this._register(new ChatDebugFilterState());
 	private readonly kindButtons = new Map<ChatDebugEventKind, Button>();
 	private toolbar!: WorkbenchToolBar;
 	private refreshAction!: IAction;
 	private secondaryActions!: readonly IAction[];
 	private tree!: ObjectTree<TraceEntry>;
+	private logs!: ChatDebugLogsView;
 	private tabs!: TabList<DetailTab>;
 	private relationList!: List<TraceRelation>;
 	private detailScroll!: ScrollableElement;
@@ -98,7 +112,6 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	private readonly inspectorResources = this._register(new DisposableStore());
 	private readonly bodyEditor = this._register(new MutableDisposable<CodeEditorWidget>());
 	private readonly bodyModel = this._register(new MutableDisposable<ITextModel>());
-	private readonly rowLabels = new Map<HTMLElement, IconLabel>();
 	private filteredCollapse: Map<string, boolean> | undefined;
 	private filterKey = '';
 	private dimension: IDimension = { width: 900, height: 600 };
@@ -108,6 +121,12 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	private detailText = '';
 	private bodySectionIdentity: string | undefined;
 	private graphRequest: Promise<AgentTraceGraph> | undefined;
+	private graphVersion = 0;
+	private sessionDetails: AgentSession | undefined;
+	private sessionDetailsLoaded = false;
+	private sessionDetailsVersion = 0;
+	private sessionDetailsError: string | undefined;
+	private sessionDetailsRequest: Promise<void> | undefined;
 	private trace: AgentTrace | undefined;
 	private sessionId: string | undefined;
 	private location: AgentTraceLocation | undefined;
@@ -138,19 +157,22 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IModelService private readonly models: IModelService,
+		@IEditorService private readonly editors: IEditorService,
+		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 		@IThemeService theme: IThemeService,
-		@IStorageService storage: IStorageService,
+		@IStorageService private readonly debugStorage: IStorageService,
 	) {
-		super(chatDebugEditorId, theme, storage);
+		super(chatDebugEditorId, theme, debugStorage);
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.sessionId === this.sessionId && event.durableSequence > (this.cursors[event.threadId] ?? 0)) { this.requestRefresh(); }
 		}));
 		this._register(chat.onDidBecomeReady(() => {
 			this.subscriptions.clear();
+			this.sessionDetailsLoaded = false; this.sessionDetailsVersion++;
 			this.requestRefresh();
 		}));
 		this._register(chat.onDidChangeSession(event => {
-			if (event.sessionId === this.sessionId) { this.requestRefresh(); }
+			if (event.sessionId === this.sessionId) { this.sessionDetailsLoaded = false; this.sessionDetailsVersion++; this.requestRefresh(); }
 		}));
 		this._register(toDisposable(() => this.clearInput()));
 	}
@@ -177,7 +199,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.statusDomNode.setAttribute('role', 'status');
 		const actions = h(document, 'div', { className: 'ash-agent-trace-actions' });
 		this.toolbar = this._register(new WorkbenchToolBar(actions, this.contextMenus, { ariaLabel: localize('agentTrace.actions', 'Trace actions') }));
-		this.refreshAction = { id: 'trace.refresh', label: localize('agentTrace.refresh', 'Refresh'), tooltip: '', icon: Lxicon.refresh, enabled: true, run: () => this.requestRefresh() };
+		this.refreshAction = { id: 'trace.refresh', label: localize('agentTrace.refresh', 'Refresh'), tooltip: '', icon: Lxicon.refresh, enabled: true, run: () => { this.sessionDetailsLoaded = false; this.sessionDetailsVersion++; this.requestRefresh(); } };
 		const file = h(document, 'input');
 		file.type = 'file'; file.accept = '.json'; file.hidden = true;
 		file.setAttribute('aria-label', localize('agentTrace.import', 'Import trace'));
@@ -194,11 +216,45 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			file.value = '';
 		}));
 		header.append(title, this.statusDomNode, actions);
+		this._register(new Button(header, {
+			...defaultButtonStyles, presentation: 'quiet', label: localize('chatDebug.home', 'Home'),
+			onClick: () => { void this.openResource(createAgentTraceResource()); },
+		}));
+		this.viewNavigation = h(document, 'nav', { className: 'ash-chat-debug-view-navigation' });
+		this.viewNavigation.setAttribute('aria-label', localize('chatDebug.views', 'Debug Views'));
+		for (const [view, label] of [
+			['overview', localize('chatDebug.overviewView', 'Overview')],
+			['logs', localize('chatDebug.logsView', 'Logs')],
+			['flowchart', localize('chatDebug.flowChart', 'Flow Chart')],
+			['cache', localize('chatDebug.cacheExplorer', 'Cache Explorer')],
+			['wirelog', localize('chatDebug.wireLog', 'Wire Log')],
+		] as const) {
+			const button = this._register(new Button(this.viewNavigation, {
+				...defaultButtonStyles, presentation: 'secondary', label,
+				onClick: () => {
+					this.activeView = view;
+					if (view === 'overview') { this.overview.container.open = true; this.sessionDetailsLoaded = false; this.sessionDetailsVersion++; }
+					this.render();
+				},
+			}));
+			this.viewButtons.set(view, button);
+		}
+		this.home = this._register(this.instantiation.createInstance(ChatDebugHomeView, this.domNode));
+		this._register(this.home.onNavigateToSession(resource => { void this.openResource(resource); }));
+		this.flow = this._register(new ChatDebugFlowChartView(this.domNode, this.filters));
+		this.wire = this._register(this.instantiation.createInstance(ChatDebugWireLogView, this.domNode));
+		this.cache = this._register(this.instantiation.createInstance(ChatDebugCacheExplorerView, this.domNode));
+		this._register(this.flow.onDidSelectEvent(id => this.showEventInLogs(id)));
+		this._register(this.cache.onDidSelectEvent(record => {
+			const entry = this.viewModel.findEvent(record.threadId, record.turnId ?? undefined, record.eventId);
+			if (entry) { this.showEventInLogs(entry.id); }
+		}));
 		this.locationDomNode = h(document, 'p', { className: 'ash-agent-trace-location' });
 		this.locationDomNode.setAttribute('aria-live', 'polite');
 		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles));
 		this.progress.element.hidden = true;
 		this.overview = this._register(new ChatDebugOverviewView(this.domNode));
+		this._register(this.overview.onDidRevealSession(({ sessionId, threadId }) => { void this.navigation.openConversation(sessionId, threadId).catch(error => { if (!this.isDisposed) { this.statusDomNode.textContent = String(error); } }); }));
 		this._register(addDisposableListener(this.overview.container, 'toggle', () => this.layout(this.dimension)));
 		this.bodyDomNode = h(document, 'div', { className: 'ash-agent-trace-body' });
 		this.navigationDomNode = h(document, 'div', { className: 'ash-agent-trace-navigation' });
@@ -253,39 +309,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.render();
 		}));
 		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
-		this.treeDomNode = h(document, 'div', { className: 'ash-agent-trace-tree' });
-		this.tree = this._register(new ObjectTree<TraceEntry>(this.treeDomNode, {
-			styles: defaultListStyles,
-			findWidgetStyles: defaultFindWidgetStyles,
-			ariaLabel: localize('agentTrace.timeline', 'Execution timeline'),
-			scrolling: 'managed',
-			getHeight: () => 22,
-			indent: 12,
-			indentGuides: 'always',
-			expandOnlyOnTwistieClick: true,
-			modelOptions: { identityProvider: { getId: entry => entry.id }, filter: { filter: entry => entry.kind === 'event' ? this.viewModel.matched.has(entry.id) : TreeVisibility.Recurse } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => entry.label },
-			renderElement: entry => {
-				const root = h(document, 'span', { className: `ash-agent-trace-row ash-agent-trace-${entry.kind}` });
-				root.dataset.traceRow = entry.id;
-				root.dataset.threadId = entry.threadId;
-				if (entry.turnId) { root.dataset.turnId = entry.turnId; }
-				if (entry.key) { root.dataset.key = entry.key; }
-				if (entry.record) { root.dataset.eventId = entry.record.eventId; }
-				const type = entry.record?.event.type;
-				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record, entry.performance)].filter(Boolean).join(' · ') });
-				this.rowLabels.set(root, label);
-				if (entry.failed) {
-					const failure = h(document, 'span', { className: 'ash-agent-trace-failure' });
-					failure.textContent = localize('agentTrace.failedShort', 'Failed'); root.append(failure);
-				}
-				return root;
-			},
-			onDidRemoveRow: row => {
-				const root = row.querySelector<HTMLElement>('[data-trace-row]');
-				if (root) { this.rowLabels.get(root)?.dispose(); this.rowLabels.delete(root); }
-			},
-		}));
+		this.navigationDomNode.append(structure, search, kinds);
+		this.logs = this._register(this.instantiation.createInstance(ChatDebugLogsView, this.navigationDomNode));
+		this.tree = this.logs.tree;
+		this.treeDomNode = this.logs.container;
 		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
 			if (!browserEvent || !elements[0]) { return; }
 			if (this.dimension.width < 640 && this.overview.container.open) {
@@ -295,7 +322,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.select(elements[0].id);
 		}));
 		this.emptyTree = h(document, 'p', { className: 'ash-agent-trace-empty' });
-		this.navigationDomNode.append(structure, search, kinds, this.treeDomNode, this.emptyTree, this.summaryDomNode);
+		this.navigationDomNode.append(this.emptyTree, this.summaryDomNode);
 		this.inspectorDomNode = h(document, 'div', { className: 'ash-agent-trace-inspector' });
 		this.inspectorTitle = h(document, 'h2', { className: 'ash-agent-trace-inspector-title' });
 		this.inspectorIdentity = h(document, 'p', { className: 'ash-agent-trace-inspector-identity' });
@@ -339,7 +366,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.relationWarning = h(document, 'p', { className: 'ash-agent-trace-relation-warning' });
 		this.panelDomNode.append(this.bodyEditorHost, this.relationsDomNode, this.relationWarning);
 		this.inspectorDomNode.append(this.panelDomNode);
-		this.domNode.append(header, file, this.locationDomNode, this.overview.container, this.bodyDomNode);
+		this.domNode.append(header, file, this.viewNavigation, this.locationDomNode, this.home.container, this.overview.container, this.bodyDomNode, this.flow.container, this.cache.container, this.wire.container);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -347,12 +374,41 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.render();
 	}
 
+	private loadSessionDetails(): void {
+		const sessionId = this.sessionId!;
+		const revision = this.revision;
+		const version = this.sessionDetailsVersion;
+		const request = this.traces.readSession(sessionId).then(session => {
+			if (revision === this.revision && version === this.sessionDetailsVersion && !this.isDisposed) { this.sessionDetails = session; this.sessionDetailsLoaded = true; this.sessionDetailsError = undefined; if (this.activeView === 'overview') { this.overview.setSession(session); } }
+		}, error => {
+			if (revision === this.revision && version === this.sessionDetailsVersion && !this.isDisposed) {
+				this.sessionDetailsLoaded = true; this.sessionDetailsError = localize('chatDebug.sessionDetailsFailed', 'Could not read current session details: {0}', String(error));
+				if (this.activeView === 'overview') { this.overview.setSession(undefined, this.sessionDetailsError); }
+			}
+		}).finally(() => { if (this.sessionDetailsRequest === request) { this.sessionDetailsRequest = undefined; } });
+		this.sessionDetailsRequest = request;
+	}
+
+	private async openResource(resource: import('../../../../../base/common/uri.js').URI): Promise<void> {
+		try { await this.editors.openEditor(createAgentTraceInput(resource), { pinned: true }); }
+		catch (error) { if (!this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+	}
+
+	private showEventInLogs(id: string): void {
+		this.activeView = 'logs';
+		this.resetFilters();
+		this.render();
+		this.select(id, true);
+		this.tree.domFocus();
+	}
+
 	private configureSplit(narrow: boolean): void {
 		if (this.split.value?.orientation === (narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL)) { return; }
 		// Pane roots and widget owners survive orientation changes; only the Sash layout is replaced.
 		this.navigationDomNode.remove(); this.inspectorDomNode.remove();
 		this.split.value = new SplitView(this.bodyDomNode, { proportionalLayout: false, orientation: narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL, styles: { separatorBorder: 'var(--ash-widget-border)' } });
-		this.split.value.addView({ element: this.navigationDomNode, minimumSize: narrow ? 120 : 200, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutNavigation(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.35);
+		// Keep the virtual viewport usable beneath the fixed filter and action rows.
+		this.split.value.addView({ element: this.navigationDomNode, minimumSize: narrow ? 260 : 200, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutNavigation(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.35);
 		this.split.value.addView({ element: this.inspectorDomNode, minimumSize: narrow ? 160 : 240, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutInspector(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.65);
 	}
 
@@ -372,19 +428,29 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		try { this.location = readAgentTraceLocation(input.resource); }
 		catch (error) { this.statusDomNode.textContent = String(error); throw error; }
 		this.sessionId = this.location?.sessionId;
+		this.activeView = this.location?.viewHint ?? 'logs';
 		if (this.location?.threadId) {
 			this.resetFilters();
 		}
 		this.inputSignal = signal;
+		if (this.location?.filter !== undefined) { this.filters.setTextFilter(this.location.filter); }
 		const abort = (): void => { if (this.inputSignal === signal) { this.clearInput(); } };
 		signal.addEventListener('abort', abort, { once: true });
 		this.pendingInput.value = toDisposable(() => signal.removeEventListener('abort', abort));
 		if (signal.aborted) { abort(); return; }
+		rememberAgentTraceResource(this.debugStorage, input.resource);
 		if (this.sessionId) { await this.refresh(); }
-		else { this.render(); }
+		else { this.home.show(); this.render(); }
 	}
 
 	public override clearInput(): void {
+		this.home?.hide();
+		this.sessionDetails = undefined; this.sessionDetailsLoaded = false; this.sessionDetailsError = undefined; this.sessionDetailsRequest = undefined;
+		this.overview?.setSession(undefined);
+		this.activeView = 'logs';
+		this.flow?.clear();
+		this.cache?.clear();
+		this.wire?.clear();
 		this.revision++;
 		this.importSelection++;
 		this.exportOperation = undefined;
@@ -412,7 +478,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.inspectorResources.clear();
 		this.tab = 'overview';
 		this.relationWarning && (this.relationWarning.textContent = '');
-		if (!this.isDisposed) { this.tree?.setChildren([]); if (this.relationList) { this.relationList.items = []; } }
+		if (!this.isDisposed) { this.logs?.clear(); if (this.relationList) { this.relationList.items = []; } }
 		this.render();
 	}
 
@@ -448,6 +514,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				const page = await this.traces.readTrace(sessionId, this.cursors);
 				if (revision !== this.revision || this.isDisposed) { return; }
 				this.trace = mergeAgentTrace(this.trace, page.trace);
+				if (page.trace.threads.some(thread => thread.events.length)) { this.graphVersion++; }
 				this.cursors = page.cursors;
 				more = page.hasMore;
 				for (const thread of this.trace.threads) {
@@ -475,6 +542,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				const page = await this.traces.readTraceDiagnostics(sessionId, this.diagnosticCursor);
 				if (revision !== this.revision || this.isDisposed || !this.trace) { return; }
 				this.trace = { ...this.trace, diagnostics: mergeAgentTraceDiagnostics(this.trace.diagnostics, page.diagnostics), graph: page.diagnostics.events.length ? undefined : this.trace.graph };
+				if (page.diagnostics.events.length) { this.graphVersion++; }
 				this.diagnosticCursor = page.cursor;
 				diagnosticMore = page.hasMore;
 			}
@@ -517,13 +585,16 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 
 	private render(): void {
 		if (!this.domNode || this.isDisposed) { return; }
+		this.viewNavigation.hidden = !this.trace;
+		this.bodyDomNode.hidden = !this.home.container.hidden || this.activeView !== 'logs';
+		for (const [view, button] of this.viewButtons) { button.checked = view === this.activeView; }
 		this.locationDomNode.hidden = !this.location?.threadId;
 		if (!this.location?.threadId) { this.locationDomNode.textContent = ''; }
 		const changed = this.viewModel.update(this.trace);
-		const query = this.filter.value;
+		const query = this.filters.textFilter;
+		this.filter.value = query;
 		this.viewModel.filter(this.filters);
-		if (changed) { this.tree.setChildren(this.viewModel.roots); }
-		else { this.tree.model.refilter(); }
+		this.logs.refreshList(this.viewModel, changed);
 		const filterKey = JSON.stringify([query, this.filters.errorsOnly, [...this.kindButtons.keys()].map(kind => this.filters.isKindVisible(kind))]);
 		const filtering = this.filters.active;
 		if (filtering) {
@@ -543,6 +614,16 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.emptyTree.textContent = this.trace ? localize('agentTrace.noMatches', 'No matching execution events.') : localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
 		this.summaryDomNode.textContent = this.trace ? localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, this.viewModel.shownCount, this.viewModel.eventCount) : '';
 		this.overview.render(this.trace);
+		this.overview.setSession(this.activeView === 'overview' ? this.sessionDetails : undefined, this.activeView === 'overview' ? this.sessionDetailsError : undefined);
+		if (this.activeView === 'overview' && this.inputSignal && !this.inputSignal.aborted && this.sessionId && !this.sessionDetailsLoaded && !this.sessionDetailsRequest && this.isShown) { this.loadSessionDetails(); }
+		this.overview.container.hidden = !this.trace || this.activeView === 'flowchart' || this.activeView === 'cache' || this.activeView === 'wirelog';
+		if (this.activeView === 'flowchart' && this.trace) {
+			this.flow.show(this.trace.graph, this.viewModel);
+			if (!this.trace.graph && !this.graphRequest) { void this.loadFlowGraph(); }
+		} else { this.flow.hide(); }
+		if (this.activeView === 'cache' && this.trace) { this.cache.show(this.trace, this.sessionId); }
+		else { this.cache.hide(); }
+		if (this.activeView === 'wirelog' && this.isShown) { this.wire.show(this.sessionId); } else { this.wire.hide(); }
 		if (!this.trace) { this.statusDomNode.textContent = ''; }
 		let located = false;
 		if (this.location?.threadId && !this.locationKey) {
@@ -562,8 +643,41 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		}
 		if (this.selected && located) { this.tree.expandTo(this.selected); this.tree.setFocus(this.selected); }
 		if (this.selected) { this.tree.setSelection([this.selected]); }
-		this.renderInspector();
+		if (this.activeView === 'logs') { this.renderInspector(); }
 		this.layout(this.dimension);
+	}
+
+	private async loadFlowGraph(): Promise<void> {
+		const revision = this.revision;
+		try {
+			const graph = await this.readGraph();
+			if (revision === this.revision && !this.isDisposed && this.activeView === 'flowchart') { this.flow.show(graph, this.viewModel); }
+		} catch (error) {
+			if (revision === this.revision && !this.isDisposed && this.activeView === 'flowchart') {
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
+				this.flow.show({ nodes: {}, edges: [], warnings: [String(error)] }, this.viewModel);
+			}
+		}
+	}
+
+	private async readGraph(): Promise<AgentTraceGraph> {
+		const trace = this.trace!;
+		if (trace.graph) { return trace.graph; }
+		if (!this.sessionId) { return { nodes: {}, edges: [], warnings: [localize('chatDebug.noGraph', 'This capture does not include a saved relationship graph.')] }; }
+		const revision = this.revision;
+		const version = this.graphVersion;
+		const request = this.graphRequest ??= this.traces.readTraceGraph(this.sessionId);
+		let graph: AgentTraceGraph;
+		try {
+			graph = await request;
+		} finally { if (this.graphRequest === request) { this.graphRequest = undefined; } }
+		if (revision === this.revision && this.trace) {
+			// New evidence invalidated this read while it was in flight. Read the current
+			// graph before caching it against the newer capture's navigation state.
+			if (version !== this.graphVersion) { return this.readGraph(); }
+			this.trace = { ...this.trace, graph };
+		}
+		return graph;
 	}
 
 	private resetFilters(): void {
@@ -748,8 +862,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		if (!this.trace) { this.relationList.items = []; return; }
 		const revision = this.revision;
 		try {
-			const graph = this.trace.graph ?? (this.sessionId ? await (this.graphRequest ??= this.traces.readTraceGraph(this.sessionId)) : undefined);
-			if (revision === this.revision) { this.graphRequest = undefined; }
+			const graph = await this.readGraph();
 			if (revision !== this.revision || this.isDisposed || !this.trace || this.tab !== 'relations') { return; }
 			if (graph) { this.trace = { ...this.trace, graph }; this.renderRelationships(graph); }
 			else { this.renderRelationships({ nodes: {}, edges: [], warnings: [] }); }
@@ -820,6 +933,11 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	}
 
 	public getAccessibleContent(): string {
+		if (!this.home.container.hidden) { return `${this.statusDomNode.textContent}\n${this.home.getAccessibleContent()}`; }
+		if (this.activeView === 'flowchart') { return this.flow.getAccessibleContent(); }
+		if (this.activeView === 'cache') { return this.cache.getAccessibleContent(); }
+		if (this.activeView === 'wirelog') { return this.wire.getAccessibleContent(); }
+		if (this.activeView === 'overview') { return this.overview.getAccessibleContent(); }
 		const lines: string[] = [];
 		const visit = (nodes: readonly import('../../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
 			for (const node of nodes) {
@@ -835,8 +953,16 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.isShown = visible;
-		if (visible) { this.requestRefresh(); }
+		if (visible) {
+			if (!this.sessionId && !this.trace && this.inputSignal) { this.home.show(); }
+			this.render();
+			this.requestRefresh();
+		}
 		else {
+			this.home.hide();
+			this.flow.hide();
+			this.cache.hide();
+			this.wire.hide();
 			// Hiding abandons an unfinished read. Invalidate only that cached render so
 			// resuming retries it without resetting a body that is already being read.
 			if (this.pendingEvidence && this.pendingEvidence.identity === this.detailIdentity) { this.detailIdentity = undefined; this.detailValue = undefined; }
@@ -855,6 +981,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`;
+		this.home.layout();
+		this.flow.layout();
+		this.cache.layout(dimension.width);
+		this.wire.layout(dimension.width);
 		this.overview.setNarrow(dimension.width < 640);
 		this.configureSplit(dimension.width < 640);
 		// On a narrow window the expanded overview and tree share the available height.
@@ -863,8 +993,16 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		const height = this.bodyDomNode.clientHeight;
 		this.split.value!.layout(dimension.width < 640 ? height : dimension.width, dimension.width < 640 ? dimension.width : height);
 	}
-	public override focus(): void { if (this.selected) { this.tree.domFocus(); } else { this.filter.focus(); } }
-	public override getControl(): IEditorControl | undefined { return this.bodyEditorHost && !this.bodyEditorHost.hidden ? this.bodyEditor.value : undefined; }
+	public override focus(): void {
+		if (!this.home.container.hidden) { this.home.focus(); }
+		else if (this.activeView === 'flowchart') { this.flow.focus(); }
+		else if (this.activeView === 'cache') { this.cache.focus(); }
+		else if (this.activeView === 'wirelog') { this.wire.focus(); }
+		else if (this.activeView === 'overview') { this.viewButtons.get('overview')?.focus(); }
+		else if (this.selected) { this.tree.domFocus(); }
+		else { this.filter.focus(); }
+	}
+	public override getControl(): IEditorControl | undefined { return this.isShown && this.activeView === 'cache' ? this.cache.getControl() : this.isShown && this.activeView === 'logs' && this.bodyEditorHost && !this.bodyEditorHost.hidden ? this.bodyEditor.value : undefined; }
 }
 
 

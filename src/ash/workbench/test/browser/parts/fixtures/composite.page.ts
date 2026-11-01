@@ -286,6 +286,14 @@ if (new URLSearchParams(location.search).has('output')) {
 		});
 		services.registerInstance(ISessionsService, { getSelection: (reader?: IReader) => ({ activeSelection: agentSession.read(reader), visibleSelections: [] }), get activeSelection() { return agentSession.get(); } } as unknown as ISessionsService);
 		services.registerInstance(IChatDebugService, {
+		onDidChangeAvailableSessionResources: Event.None,
+		getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+		readSession: async sessionId => ({ sessionId, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
+		exportWireLog: async () => { throw new Error('Fixture must not export Wire capture'); },
+		startWireLog: async () => { throw new Error('Fixture must not start Wire capture'); },
+		stopWireLog: async () => { },
+		readWireLog: async () => { throw new Error('Fixture has no Wire capture'); },
+		refreshAvailableSessions: async () => { },
 			readTrace: async (sessionId, after) => ({ trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: agentEvents.filter(event => event.sequence > (after.root ?? 0)) }] }, cursors: { root: agentEvents.at(-1)!.sequence }, hasMore: false }),
 			readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, pendingRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 			readTracePayload: async () => { throw new Error('Output must not read model bodies'); },

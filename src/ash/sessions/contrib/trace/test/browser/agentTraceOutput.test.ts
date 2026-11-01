@@ -2,7 +2,7 @@ import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { observableValue, type IReader } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -43,6 +43,14 @@ function setup(resources: DisposableStore) {
 	const diagnosticReads: number[] = [];
 	let readOverride: ((sessionId: string) => Promise<AgentTracePage>) | undefined;
 	owner.registerInstance(IChatDebugService, {
+		onDidChangeAvailableSessionResources: Event.None,
+		getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+		readSession: async sessionId => ({ sessionId, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
+		exportWireLog: async () => { throw new Error('Fixture must not export Wire capture'); },
+		startWireLog: async () => { throw new Error('Fixture must not start Wire capture'); },
+		stopWireLog: async () => { },
+		readWireLog: async () => { throw new Error('Fixture has no Wire capture'); },
+		refreshAvailableSessions: async () => { },
 		readTrace: async (sessionId, after) => {
 			reads.push({ sessionId, after: { ...after } });
 			return readOverride ? readOverride(sessionId) : { trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: events.filter(record => record.sequence > (after.root ?? 0)) }] }, cursors: { root: events.at(-1)?.sequence ?? 0 }, hasMore: false };

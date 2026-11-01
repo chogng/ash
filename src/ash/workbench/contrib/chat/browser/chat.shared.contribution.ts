@@ -1,3 +1,13 @@
+import { isHTMLElement } from '../../../../base/browser/dom.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { registerEditorPane } from '../../../browser/editor.js';
+import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
+import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
 import { registerChatChangesActions } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
@@ -395,3 +405,32 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 registerAgentSessionActions();
 
 registerChatChangesActions();
+
+registerEditorPane({
+	id: chatDebugEditorId,
+	name: localize('chatDebugInputName', 'Agent Debug Logs'),
+	canOpen: input => input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: async options => {
+		if (!options.instantiationService) { throw new Error('Execution Trace requires Workbench services'); }
+		const { ChatDebugEditor } = await import('./chatDebug/chatDebugEditor.js');
+		return options.instantiationService.createInstance(ChatDebugEditor);
+	},
+});
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type,
+		name: `agentTrace.${type}`,
+		priority: 100,
+		when: ContextKeyExpr.has('agentTraceFocused'),
+		getProvider: accessor => {
+			const activePane = accessor.get(IEditorPart).activePane;
+			if (activePane?.id !== chatDebugEditorId) { return undefined; }
+			const pane = activePane as ChatDebugEditor;
+			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
+			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Agent Debug Logs\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between search, the execution tree and detail tabs. Arrow keys, Home and End navigate the tree; Left and Right collapse or expand it. Detail tabs activate with Enter or Space. Overview is the default; Raw record opens a readonly editor on demand. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. Input and Output load the selected saved body on demand; choose a body section to read it. Core requests and materialized requests remain distinct, as do complete responses and partial output. Requests are semantic ModelService input, not HTTP bytes. Relations follows recorded model, tool, Code Mode, terminal and child-agent links. More Actions contains Import, Export and Help. Accessible View includes filtered events outside the mounted tree viewport. Model evidence is placed at its recorded Thread prefix when available. Child Threads keep their own sequence. Relations also shows saved child result returns and joins; result-to-model input links require the loaded Core request body. Unknown associations stay unknown. Hiding or closing the editor stops polling and releases subscriptions. Export freezes all loaded events when clicked, including events hidden by the filter. Relationships exclude events and causal evidence outside that capture, with omissions listed in graph warnings. Only one export runs at a time. The last selected import wins even if an earlier file finishes later. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.') + '\n' + localize('chatDebug.navigationHelp', 'Home lists saved sessions from the current backend catalog. Search by title or Session ID and activate a session with Enter. Debug Views switches between Overview, Logs, Flow Chart and Cache Explorer. Flow Chart uses saved relationships; filter text is shared with Logs. Tab reaches graph nodes, Enter opens their saved event in Logs, and zoom controls change the graph scale. Cache Explorer compares requests from the same Thread and evidence boundary; Core and materialized requests are separate. Show Request in Logs locates the selected request. Missing or omitted request bodies stay unavailable. Refresh retries a failed request body read. Imports never read live payloads. Changed semantic requests do not establish a provider cache miss. Home and editor hiding release the previous live subscriptions.') + '\n' + localize('chatDebug.wireHelp', 'Wire Log records raw JSON-RPC frames on the selected App Server connection, including other sessions. Start New Capture begins a backend memory capture. Stop Capture freezes it; leaving the view also stops capture. A new capture replaces the stopped one, and disconnect clears it. Filter by method, type or ID, and choose the request direction. Tab reaches calls; Enter displays the original request and its paired response, latency and errors. Responses outside the capture remain unpaired. Frame truncation and dropped older frames are reported. Accessible View includes matching calls beyond Show More Frames. Imported traces never acquire live Wire Log frames.') + '\n' + localize('chatDebug.inspectionHelp', 'Session locations accept viewHint and filter; reopening preserves the target view and filter. Overview shows current backend session details; Reveal Chat Session opens Chat through its existing navigation owner. Logs supports Tree View and List View over the same event identities, Expand All, Collapse All and Copy Selected Row. These do not change backend history. Compare in Diff Editor opens an on-demand readonly request comparison within the same evidence boundary; hiding releases its computation and text models. Wire Log shows requests, error frames, unanswered calls in the capture and the slowest paired call. Export stops backend recording and reads every retained frame; display filters do not affect exports, and truncation and drop metadata are preserved.') + '\n' + localize('chatDebug.filterHelp', 'Use commas for alternative text terms and !term to exclude text. Use thread:ID and turn:ID for exact identities. after:YYYY-MM-DD and before:YYYY-MM-DD use inclusive UTC days; ISO timestamps require a time zone. Kind buttons independently show or hide models, tools, agents and other events. Clear filters restores all events. Capture overview is independent of display filters. Each token subtotal shows reported-call coverage; unknown is different from zero. Cached input is included in input tokens. Old imports without a matching backend overview show unknown metrics. In narrow windows, expanding the overview shows it with the event tree; choosing an event restores its details.') + '\n' + localize('chatDebug.timingHelp', 'Client timing starts at each model call. First text latency counts the first nonempty body delta, excluding reasoning, metadata and completed snapshots. Generation lasts from first text to call completion and includes transport and local processing. Text TPS estimates non-reasoning output tokens divided by generation duration, not server decode speed; single-chunk responses, tool calls, failures and missing details show unknown. Performance values and unknown reasons are produced by the backend and preserved in exports. Old captures without performance projections stay unknown; the viewer does not recalculate them.'),
+				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
+		},
+	});
+}

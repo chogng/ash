@@ -13,6 +13,14 @@ suite('Execution Trace location', () => {
 		assert.deepEqual(readAgentTraceLocation(createAgentTraceResource('session')), { sessionId: 'session' });
 	});
 
+	test('preserves a direct view and filter in the restorable editor identity', () => {
+		const target = { sessionId: 'session', viewHint: 'cache' as const, filter: 'thread:root, !failure' };
+		assert.deepEqual(readAgentTraceLocation(URI.parse(createAgentTraceResource(target).toString())), target);
+		assert.throws(() => createAgentTraceResource({ sessionId: 'session', viewHint: 'unknown' } as unknown as AgentTraceLocation));
+		assert.throws(() => readAgentTraceLocation(URI.parse('ash-agent-trace:/session?viewHint=unknown')));
+		assert.throws(() => createAgentTraceResource({ sessionId: 'session', filter: 'x'.repeat(4097) }));
+	});
+
 	test('restores encoded Thread, Turn and event identities from a saved URI', () => {
 		const target = { sessionId: 'session', threadId: 'child / + &= 中文', turnId: 'turn?%', eventId: 'event#=' };
 		const resource = createAgentTraceResource(target);

@@ -942,3 +942,36 @@ export interface AgentVoiceTaskRequest extends AgentVoiceSource {
 	readonly commandId: string;
 	readonly transcript: string;
 }
+
+/** Session selects the provider connection; capture includes every session on that connection. */
+export interface SessionWireLogParams extends SessionReadParams {
+	readonly captureId: string;
+}
+export interface SessionWireLogReadParams extends SessionWireLogParams {
+	readonly after: number;
+	readonly limit: number;
+}
+/** Evidence observed at the backend transport boundary, never reconstructed from model events. */
+export interface AgentWireLogFrame {
+	readonly sequence: number;
+	readonly timestampMs: number;
+	readonly direction: 'clientToServer' | 'serverToClient';
+	readonly kind: 'request' | 'notification' | 'response';
+	readonly requestId: string | null;
+	readonly method: string | null;
+	readonly requestSequence: number | null;
+	readonly elapsedMs: number | null;
+	readonly isError: boolean;
+	readonly byteLength: number;
+	readonly truncated: boolean;
+	readonly raw: string;
+}
+export interface AgentWireLogPage {
+	readonly captureId: string;
+	readonly connectionId: string;
+	readonly recording: boolean;
+	readonly frames: readonly AgentWireLogFrame[];
+	readonly cursor: number;
+	readonly hasMore: boolean;
+	readonly droppedFrames: number;
+}

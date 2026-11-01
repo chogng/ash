@@ -94,6 +94,10 @@ export interface IAgentThreadService {
 	readTraceDiagnostics(params: Agent.SessionTraceDiagnosticsReadParams): Promise<Agent.SessionTraceDiagnosticsReadResult>;
 	readTracePayload(params: Agent.SessionTracePayloadReadParams): Promise<Agent.SessionTracePayloadReadResult>;
 	readTraceGraph(params: Agent.SessionReadParams): Promise<Agent.SessionTraceGraphReadResult>;
+	startWireLog(params: Agent.SessionWireLogParams): Promise<void>;
+	stopWireLog(params: Agent.SessionWireLogParams): Promise<void>;
+	readWireLog(params: Agent.SessionWireLogReadParams): Promise<Agent.AgentWireLogPage>;
+
 	configureAdvisor(params: Agent.SessionOperationInput<'configureAdvisor'>): Promise<Agent.AdvisorConfigureResult>;
 	read(params: { readonly sessionId: string; readonly threadId: string; readonly history?: Agent.ThreadSnapshotHistory; }): Promise<Agent.ThreadRead>;
 	subscribe(params: {
@@ -103,6 +107,11 @@ export interface IAgentThreadService {
 		readonly history?: Agent.ThreadSnapshotHistory;
 	}): Promise<Agent.ThreadSubscription>;
 	unsubscribe(params: Agent.SessionReadParams & { readonly threadId: string; }): Promise<void>;
+}
+
+/** The connection-owned capture was released, for example by a backend reconnect. */
+export class AgentWireLogCaptureUnavailableError extends Error {
+	constructor() { super('Wire capture is unavailable'); this.name = 'AgentWireLogCaptureUnavailableError'; }
 }
 
 export class AgentThreadHistoryConflictError extends Error {

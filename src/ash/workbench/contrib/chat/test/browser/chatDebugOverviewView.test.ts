@@ -31,3 +31,19 @@ test('Chat Debug distinguishes unknown from zero and explains coverage using the
 		assert.match(view.getAccessibleContent(), /此捕获记录没有匹配的后端概览/);
 	} finally { resetNlsResolver(); dom.window.close(); }
 });
+
+
+test('Overview shows current backend metadata separately and reveals through the existing navigation event', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using view = new ChatDebugOverviewView(dom.window.document.body);
+		const opened: unknown[] = [];
+		using listener = view.onDidRevealSession(value => opened.push(value));
+		view.setSession({ sessionId: 'remote-session', title: 'Current backend title', status: 'active', manager: { status: 'working', statusChangedAtUnixMs: 1 }, executionTarget: { type: 'ssh', host: 'build', root: '/workspace' }, threads: [{ threadId: 'root', title: 'Root', status: 'active', createdAtUnixMs: 1 }] });
+		assert.match(view.getAccessibleContent(), /Current backend title/);
+		assert.match(view.getAccessibleContent(), /Working/); assert.match(view.getAccessibleContent(), /build:\/workspace/);
+		[...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Reveal Chat Session')!.click();
+		assert.deepEqual(opened, [{ sessionId: 'remote-session', threadId: 'root' }]);
+		view.setSession(undefined); assert.doesNotMatch(view.getAccessibleContent(), /Current backend title/);
+	} finally { dom.window.close(); }
+});

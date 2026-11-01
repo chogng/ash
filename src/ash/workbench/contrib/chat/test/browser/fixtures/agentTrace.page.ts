@@ -1,3 +1,7 @@
+import { IDiffService } from '../../../../../../workbench/services/diff/common/diffService.js';
+import { DiffService } from '../../../../../../workbench/services/diff/browser/diffService.js';
+import { DiffEditorWidget } from '../../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { IChatSessionNavigationService } from '../../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../../../test/fixtures/codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import '../../../../../../base/browser/ui/styles.css';
@@ -26,6 +30,7 @@ import { IStorageService } from '../../../../../../platform/storage/common/stora
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { ChatDebugEditor } from '../../../browser/chatDebug/chatDebugEditor.js';
 import { IChatService } from '../../../../../services/chat/common/chatService.js';
+import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { IChatDebugService } from '../../../common/chatDebugService.js';
 import { ExtensionColorThemeService } from '../../../../../services/extensions/browser/extensionColorThemeService.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
@@ -39,6 +44,7 @@ declare global {
 			setTheme(id: string): Promise<void>;
 			dispose(): void;
 			accessibleContent(): string;
+			diffValues(): { original: string; modified: string; } | undefined;
 			resources(): { models: number; editors: number; };
 			layout(width: number, height: number): void;
 		};
@@ -65,15 +71,28 @@ services.registerInstance(IChatService, {
 	onDidBecomeReady: Event.None,
 } as unknown as IChatService);
 const rejectLiveRead = async (): Promise<never> => { throw new Error('Imported trace fixtures must not read live captures'); };
+services.registerSingleton(IDiffService, () => services.createInstance(DiffService));
+services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
 services.registerInstance(IChatDebugService, {
-	readTrace: rejectLiveRead,
-	readTraceDiagnostics: rejectLiveRead,
+		onDidChangeAvailableSessionResources: Event.None,
+		getAvailableSessionResources: () => [URI.parse('ash-agent-trace:/catalog-fixture')], getHistoricalSessionTitle: () => 'Catalog fixture',
+		readSession: async sessionId => ({ sessionId, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
+		exportWireLog: async () => { throw new Error('Fixture must not export Wire capture'); },
+		startWireLog: async () => { throw new Error('Fixture must not start Wire capture'); },
+		stopWireLog: async () => { },
+		readWireLog: async () => { throw new Error('Fixture has no Wire capture'); },
+		refreshAvailableSessions: async () => { },
+	readTrace: async sessionId => { if (sessionId !== 'catalog-fixture') { return rejectLiveRead(); } return { trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false }; },
+	readTraceDiagnostics: async sessionId => { if (sessionId !== 'catalog-fixture') { return rejectLiveRead(); } return { diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }; },
 	readTracePayload: rejectLiveRead,
 	readTraceGraph: rejectLiveRead,
 });
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 themes.initialize();
 services.registerInstance(IThemeService, themes);
+services.registerInstance(IEditorService, {
+	openEditor: async (input: import('../../../../../common/editor.js').IResourceEditorInput) => { await editor.setInput(input, new AbortController().signal); },
+} as unknown as IEditorService);
 const editor = resources.add(services.createInstance(ChatDebugEditor));
 editor.create(root);
 editor.layout({ width: 900, height: 650 });
@@ -85,6 +104,7 @@ window.agentTraceIntegration = {
 	async setTheme(id: string): Promise<void> { await themes.setColorTheme(id, 'themePicker'); },
 	dispose(): void { resources.dispose(); },
 	accessibleContent: () => editor.getAccessibleContent(),
+	diffValues: () => { const control = editor.getControl(); return control instanceof DiffEditorWidget ? { original: control.getOriginalEditor().getModel()?.getValue() ?? '', modified: control.getModifiedEditor().getModel()?.getValue() ?? '' } : undefined; },
 	resources: () => ({ models: models.getModels().length, editors: codeEditors.listCodeEditors().length }),
 	layout: (width, height) => editor.layout({ width, height }),
 };

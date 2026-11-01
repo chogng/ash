@@ -1,3 +1,7 @@
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import type { AgentSession } from '../../../../../platform/agentHost/common/agent.js';
+import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
@@ -8,6 +12,13 @@ import { recordingLabel } from './agentTraceModel.js';
 export class ChatDebugOverviewView extends Disposable {
 	readonly container: HTMLDetailsElement;
 	private readonly body: HTMLDivElement;
+	private readonly session: HTMLDivElement;
+	private readonly revealButton: Button;
+	private readonly reveal = this._register(new Emitter<{ sessionId: string; threadId: string; }>());
+	readonly onDidRevealSession = this.reveal.event;
+	private currentSession: AgentSession | undefined;
+	private sessionError: string | undefined;
+	private destination: { sessionId: string; threadId: string; } | undefined;
 	private capture: AgentTrace | undefined;
 	private narrow = false;
 	private content = '';
@@ -19,6 +30,10 @@ export class ChatDebugOverviewView extends Disposable {
 		this.container.hidden = true;
 		this.container.setAttribute('aria-label', localize('chatDebug.captureOverview', 'Capture overview'));
 		this.container.append(h(parent.ownerDocument, 'summary', localize('chatDebug.captureOverview', 'Capture overview')));
+		this.session = h(parent.ownerDocument, 'div', { className: 'ash-chat-debug-session-details' });
+		this.revealButton = this._register(new Button(this.container, { ...defaultButtonStyles, presentation: 'secondary', label: localize('chatDebug.revealSession', 'Reveal Chat Session'), onClick: () => { if (this.destination) { this.reveal.fire(this.destination); } } }));
+		this.revealButton.domNode.hidden = true;
+		this.container.append(this.session);
 		this.body = h(parent.ownerDocument, 'div');
 		this.container.append(this.body);
 		parent.append(this.container);
@@ -70,5 +85,34 @@ export class ChatDebugOverviewView extends Disposable {
 		this.container.open = !narrow;
 	}
 
-	getAccessibleContent(): string { return this.content; }
+	setSession(session: AgentSession | undefined, error?: string): void {
+		if (session === this.currentSession && error === this.sessionError) { return; }
+		this.currentSession = session; this.sessionError = error;
+		this.session.replaceChildren();
+		this.destination = undefined; this.revealButton.domNode.hidden = true;
+		if (error) { this.session.append(h(this.session.ownerDocument, 'p', error)); return; }
+		if (!session) { return; }
+		const document = this.session.ownerDocument;
+		const title = h(document, 'h3', session.title);
+		const labels = {
+			idle: localize('chatDebug.sessionIdle', 'Idle'), needsInput: localize('chatDebug.sessionNeedsInput', 'Needs Input'),
+			working: localize('chatDebug.sessionWorking', 'Working'), readyForReview: localize('chatDebug.sessionReview', 'Ready for Review'),
+			completed: localize('chatDebug.sessionCompleted', 'Completed'), failed: localize('chatDebug.sessionFailed', 'Failed'), stopped: localize('chatDebug.sessionStopped', 'Stopped'),
+		};
+		this.session.append(title, h(document, 'p', localize('chatDebug.currentSessionState', 'Current backend session · {0} · {1}', session.sessionId, labels[session.manager.status])));
+		if (session.executionTarget) {
+			const target = session.executionTarget;
+			this.session.append(h(document, 'p', target.type === 'ssh' ? `${target.host}:${target.root}` : target.root));
+		}
+		const root = session.threads.find(thread => !thread.parentThreadId) ?? session.threads[0];
+		if (root) {
+			this.destination = { sessionId: session.sessionId, threadId: root.threadId };
+			this.revealButton.domNode.hidden = false;
+			for (const [value, label] of [[root.createdAtUnixMs, localize('chatDebug.sessionCreated', 'Created')], [root.lastActivityAtUnixMs, localize('chatDebug.sessionActivity', 'Last Activity')]] as const) {
+				if (value !== undefined) { this.session.append(h(document, 'p', localize('chatDebug.sessionDate', '{0}: {1}', label, new Date(value).toLocaleString()))); }
+			}
+		}
+	}
+
+	getAccessibleContent(): string { return [this.session.textContent, this.content].filter(Boolean).join('\n'); }
 }

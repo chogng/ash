@@ -79,6 +79,14 @@ class ExportFixture extends Disposable {
 		} as IChatSessionNavigationService);
 		this.services.registerInstance(IOutputService, { get channels() { return fixture.channels; } } as unknown as IOutputService);
 		this.services.registerInstance(IChatDebugService, {
+			onDidChangeAvailableSessionResources: Event.None,
+			getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+			readSession: async sessionId => ({ sessionId, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
+			exportWireLog: async () => { throw new Error('Fixture must not export Wire capture'); },
+			startWireLog: async () => { throw new Error('Fixture must not start Wire capture'); },
+			stopWireLog: async () => { },
+			readWireLog: async () => { throw new Error('Fixture has no Wire capture'); },
+			refreshAvailableSessions: async () => { },
 			readTrace: async (id, after) => { this.traceSessions.push(id); return await this.trace(id, after); },
 			readTraceDiagnostics: async id => { this.diagnosticSessions.push(id); return await this.diagnostics(); },
 			readTraceGraph: async () => { throw new Error('Graph is not part of this export'); },

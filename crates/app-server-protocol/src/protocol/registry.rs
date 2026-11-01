@@ -1644,6 +1644,18 @@ use crate::protocol::github::GitHubLabelsResult;
 use crate::protocol::github::GitHubRepositoryResult;
 
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogDirection;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogFrame;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogFrameKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogPage;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogReadParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAcquireCapabilityParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAcquiredCapabilityDto;
@@ -3993,6 +4005,15 @@ client_methods! {
         params: SessionReadParams,
         response: SessionResult,
         serialization: SessionSharedRead,
+    },
+    WireLogStart => "diagnostics/wireLog/start" {
+        params: WireLogParams, response: (), serialization: None,
+    },
+    WireLogStop => "diagnostics/wireLog/stop" {
+        params: WireLogParams, response: (), serialization: None,
+    },
+    WireLogRead => "diagnostics/wireLog/read" {
+        params: WireLogReadParams, response: WireLogPage, serialization: None,
     },
     SessionTraceRead => "session/trace/read" {
         params: SessionTraceReadParams,
@@ -6997,6 +7018,12 @@ typescript_bindings! {
     SessionRuntimeResult,
     SessionRuntimeRequest,
     SessionReadParams,
+    WireLogParams,
+    WireLogReadParams,
+    WireLogPage,
+    WireLogDirection,
+    WireLogFrameKind,
+    WireLogFrame,
     SessionTraceReadParams,
     SessionTraceReadResult,
     AgentHostDebugLogsResult,

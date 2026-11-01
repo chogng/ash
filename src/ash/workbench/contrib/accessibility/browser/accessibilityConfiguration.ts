@@ -607,3 +607,10 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		description: localize('treeView.verbosityDescription', 'Announce how to open accessibility help when an extension tree receives focus.'),
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.AgentTrace,
+	defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.')); } return value; },
+	setting: { valueType: 'boolean', title: localize('agentTrace.verbosity', 'Agent Debug Logs accessibility help'), description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when Agent Debug Logs receives focus.') },
+});

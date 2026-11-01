@@ -45,6 +45,9 @@ export class SessionsAgentThreadService extends Disposable implements IAgentThre
 	readTraceDiagnostics(...args: Parameters<IAgentThreadService['readTraceDiagnostics']>): ReturnType<IAgentThreadService['readTraceDiagnostics']> { return this.scopes.getScope(args[0].sessionId).thread.readTraceDiagnostics(...args); }
 	readTracePayload(...args: Parameters<IAgentThreadService['readTracePayload']>): ReturnType<IAgentThreadService['readTracePayload']> { return this.scopes.getScope(args[0].sessionId).thread.readTracePayload(...args); }
 	readTraceGraph(...args: Parameters<IAgentThreadService['readTraceGraph']>): ReturnType<IAgentThreadService['readTraceGraph']> { return this.scopes.getScope(args[0].sessionId).thread.readTraceGraph(...args); }
+	startWireLog(...args: Parameters<IAgentThreadService['startWireLog']>): ReturnType<IAgentThreadService['startWireLog']> { return this.scopes.getScope(args[0].sessionId).thread.startWireLog(...args); }
+	stopWireLog(...args: Parameters<IAgentThreadService['stopWireLog']>): ReturnType<IAgentThreadService['stopWireLog']> { return this.scopes.getScope(args[0].sessionId).thread.stopWireLog(...args); }
+	readWireLog(...args: Parameters<IAgentThreadService['readWireLog']>): ReturnType<IAgentThreadService['readWireLog']> { return this.scopes.getScope(args[0].sessionId).thread.readWireLog(...args); }
 	configureAdvisor(...args: Parameters<IAgentThreadService['configureAdvisor']>): ReturnType<IAgentThreadService['configureAdvisor']> { return this.scopes.getScope(args[0].sessionId).thread.configureAdvisor(...args); }
 	read(...args: Parameters<IAgentThreadService['read']>): ReturnType<IAgentThreadService['read']> { return this.scopes.getScope(args[0].sessionId).thread.read(...args); }
 	subscribe(...args: Parameters<IAgentThreadService['subscribe']>): ReturnType<IAgentThreadService['subscribe']> { return this.scopes.getScope(args[0].sessionId).thread.subscribe(...args); }

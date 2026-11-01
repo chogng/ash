@@ -18,7 +18,7 @@ import { createAppServerResourceApi, readAppServerResource } from './appServerAp
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
-import { AgentThreadHistoryConflictError } from '../common/agentService.js';
+import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	Thread as ThreadDto,
@@ -106,6 +106,9 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 		readTraceDiagnostics: () => unavailable('thread.readTraceDiagnostics'),
 		readTracePayload: () => unavailable('thread.readTracePayload'),
 		readTraceGraph: () => unavailable('thread.readTraceGraph'),
+		startWireLog: () => unavailable('thread.startWireLog'),
+		stopWireLog: () => unavailable('thread.stopWireLog'),
+		readWireLog: () => unavailable('thread.readWireLog'),
 		read: () => unavailable('thread.read'),
 		configureAdvisor: () => unavailable('thread.configureAdvisor'),
 		subscribe: () => unavailable('thread.subscribe'),
@@ -444,6 +447,15 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		readTraceDiagnostics: (params) => appServerRequest(connection, 'session/trace/diagnostics/read', params),
 		readTracePayload: (params) => appServerRequest(connection, 'session/trace/payload/read', params),
 		readTraceGraph: (params) => appServerRequest(connection, 'session/trace/graph/read', params),
+		startWireLog: async ({ captureId }) => { await appServerRequest(connection, 'diagnostics/wireLog/start', { captureId }); },
+		stopWireLog: async ({ captureId }) => { await appServerRequest(connection, 'diagnostics/wireLog/stop', { captureId }); },
+		readWireLog: async ({ captureId, after, limit }) => {
+			try { return await appServerRequest(connection, 'diagnostics/wireLog/read', { captureId, after, limit }); }
+			catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'ResourceNotFound') { throw new AgentWireLogCaptureUnavailableError(); }
+				throw error;
+			}
+		},
 		read: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/read', params);
 			const thread = toThread(result.thread);

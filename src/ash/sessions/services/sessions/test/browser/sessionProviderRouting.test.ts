@@ -306,7 +306,11 @@ test('the real trace reader projects remote identity and round-trips backend pag
 	using context = fixture();
 	const calls: unknown[] = [];
 	const payload = { sessionId: 'model-content-session', threadId: 'model-content-thread' };
+	const wirePage = { captureId: 'wire', connectionId: '7', recording: false, frames: [], cursor: 0, hasMore: false, droppedFrames: 0 };
 	Object.assign(context.remoteHost.thread, {
+		startWireLog: async (params: unknown) => { calls.push(params); },
+		stopWireLog: async (params: unknown) => { calls.push(params); },
+		readWireLog: async (params: unknown) => { calls.push(params); return wirePage; },
 		readTrace: async (params: { sessionId: string; after: Record<string, number>; }) => {
 			calls.push(params);
 			assert.equal(params.sessionId, 'same');
@@ -320,7 +324,7 @@ test('the real trace reader projects remote identity and round-trips backend pag
 		readTracePayload: async (params: unknown) => { calls.push(params); return { payload }; },
 		readTraceGraph: async () => ({ graph: { nodes: { opaque: { id: 'opaque', kind: 'thread', label: 'Thread', threadId: 'thread', turnId: null, eventKey: 'thread:event-1' } }, edges: [{ from: 'opaque', to: 'opaque', kind: 'self' }], warnings: [] } }),
 	});
-	const debug = new AppServerChatDebugService(context.scopes.getScope(context.sessionId).thread);
+	using debug = new AppServerChatDebugService(context.scopes.getScope(context.sessionId).thread, new SessionsAgentSessionService(context.scopes));
 	const first = await debug.readTrace(context.sessionId, {});
 	assert.equal(first.trace.sessionId, context.sessionId);
 	assert.equal(first.trace.threads[0]!.threadId, context.threadId);
@@ -339,4 +343,10 @@ test('the real trace reader projects remote identity and round-trips backend pag
 	assert.equal(graph.nodes.opaque!.threadId, context.threadId);
 	assert.equal(graph.nodes.opaque!.eventKey, 'thread:event-1');
 	assert.equal(graph.edges[0]!.from, 'opaque');
+	await debug.startWireLog(context.sessionId, 'wire');
+	assert.deepEqual(calls.at(-1), { sessionId: 'same', captureId: 'wire' });
+	assert.equal(await debug.readWireLog(context.sessionId, 'wire', 0), wirePage, 'frame contents and connection identity stay backend evidence');
+	assert.deepEqual(calls.at(-1), { sessionId: 'same', captureId: 'wire', after: 0, limit: 100 });
+	await debug.stopWireLog(context.sessionId, 'wire');
+	assert.deepEqual(calls.at(-1), { sessionId: 'same', captureId: 'wire' });
 });

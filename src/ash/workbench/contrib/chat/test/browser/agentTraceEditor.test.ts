@@ -4,6 +4,28 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('agentTrace browser component', () => {
 	const browserTests = useBrowserTests();
+
+	test('Chat Debug opens a discovered session through editor navigation and returns Home with the keyboard', async () => {
+		const { page } = browserTests;
+		await page.goto('/agentTrace.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const viewer = page.locator('.ash-agent-trace');
+		const home = viewer.getByRole('region', { name: 'Debug Sessions' });
+		await expect(home).toBeVisible();
+		await home.getByRole('textbox').fill('missing');
+		await expect(home.getByRole('button', { name: 'Catalog fixture' })).toHaveCount(0);
+		await home.getByRole('textbox').fill('catalog');
+		const session = home.getByRole('button', { name: 'Catalog fixture' });
+		await session.focus();
+		await session.press('Enter');
+		await expect(home).toBeHidden();
+		await expect(viewer.getByRole('status')).toContainText('Live');
+		await expect(viewer.getByRole('navigation', { name: 'Debug Views' })).toBeVisible();
+		await viewer.getByRole('button', { name: 'Home', exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect(home).toBeVisible();
+		await expect(home.getByRole('button', { name: 'Catalog fixture' })).toBeVisible();
+	});
 	const capture = {
 		formatVersion: 3, sessionId: 'theme-fixture', historyPrefixes: [],
 		threads: [{
@@ -20,6 +42,101 @@ suite('agentTrace browser component', () => {
 			}, edges: [{ from: 'root', to: 'turn', kind: 'owns' }], warnings: ['Missing causal witness fixture']
 		},
 	};
+
+	test('Chat Debug filters saved graph nodes, zooms and opens the corresponding log event', async () => {
+		const { page } = browserTests;
+		await page.goto('/agentTrace.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const viewer = page.locator('.ash-agent-trace');
+		await viewer.locator('input[type=file]').setInputFiles({ name: 'graph.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(capture)) });
+		await viewer.getByRole('button', { name: 'Flow Chart', exact: true }).click();
+		const flow = viewer.getByRole('region', { name: 'Flow Chart', exact: true });
+		await expect(flow).toBeVisible();
+		await expect(flow.locator('[data-graph-node]')).toHaveCount(2);
+		await expect(flow.locator('[data-graph-edge]')).toHaveCount(1);
+		await expect(flow).toContainText('Missing causal witness fixture');
+		const node = flow.locator('[data-graph-node=turn]');
+		const width = (await node.boundingBox())!.width;
+		await flow.getByRole('button', { name: 'Zoom In', exact: true }).click();
+		await expect.poll(async () => (await node.boundingBox())!.width).toBeGreaterThan(width);
+		for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(id => window.agentTraceIntegration.setTheme(id), theme);
+			const foreground = await flow.evaluate(element => getComputedStyle(element).color);
+			await expect(flow.locator('[data-graph-edge]')).toHaveCSS('stroke', foreground);
+			await node.focus();
+			await expect(node).toBeFocused();
+		}
+		const filter = flow.getByRole('textbox', { name: 'Filter Flow Chart' });
+		await filter.fill('turnCompleted');
+		await expect(flow.locator('[data-graph-node]')).toHaveCount(1);
+		await expect(flow.locator('[data-graph-edge]')).toHaveCount(0);
+		await node.focus();
+		await node.press('Enter');
+		await expect(flow).toBeHidden();
+		await expect(viewer.getByRole('tree')).toBeFocused();
+		await expect(viewer.locator('[role=treeitem][aria-selected=true] [data-event-id="e-2"]')).toBeVisible();
+		await expect(viewer.getByRole('textbox', { name: 'Filter execution events' })).toHaveValue('');
+	});
+
+	test('Cache Explorer compares the same Thread and boundary and keeps imported evidence offline', async () => {
+		const { page } = browserTests;
+		await page.goto('/agentTrace.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const ref = (id: string, kind = 'coreRequest') => ({ payloadId: id, kind, byteLength: 1, status: 'saved', digest: `sha256:${'0'.repeat(64)}` });
+		const records = [
+			{ threadId: 'root', event: { type: 'modelAttemptStarted', attemptId: 'first', requestPayload: ref('payload-1') } },
+			{ threadId: 'child', event: { type: 'modelAttemptStarted', attemptId: 'other', requestPayload: ref('payload-2') } },
+			{ threadId: 'root', event: { type: 'modelAttemptStarted', attemptId: 'second', requestPayload: ref('payload-3') } },
+			{ threadId: 'root', event: { type: 'modelRequestPrepared', attemptId: 'second', requestPayload: ref('payload-4', 'materializedRequest') } },
+		].map((record, index) => ({ ...record, eventId: `request-${index}`, sequence: index + 1, recordedAt: index, turnId: 'turn' }));
+		const artifact = {
+			formatVersion: 3, sessionId: 'offline', historyPrefixes: [], threads: [],
+			diagnostics: {
+				formatVersion: 1, captureId: 'capture', recordingStatus: 'recording', droppedRecords: 0, events: records,
+				payloads: { 'payload-1': { instructions: 'stable instructions', input: ['first prompt'] }, 'payload-2': { input: ['other Thread'] }, 'payload-3': { instructions: 'stable instructions', input: ['first prompt', 'new prompt'] }, 'payload-4': { input: ['materialized body'] } },
+			},
+		};
+		const viewer = page.locator('.ash-agent-trace');
+		await viewer.locator('input[type=file]').setInputFiles({ name: 'requests.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(artifact)) });
+		await viewer.getByRole('button', { name: 'Cache Explorer', exact: true }).click();
+		const cache = viewer.getByRole('region', { name: 'Cache Explorer', exact: true });
+		await expect(cache.getByRole('region', { name: 'Previous Request', exact: true })).toContainText('first prompt');
+		await expect(cache.getByRole('region', { name: 'Selected Request', exact: true })).toContainText('new prompt');
+		await expect(cache.locator('.ash-chat-debug-request-pair')).not.toContainText('other Thread');
+		for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(id => window.agentTraceIntegration.setTheme(id), theme);
+			for (const width of [900, 500]) {
+				await page.evaluate(width => window.agentTraceIntegration.layout(width, 650), width);
+				const previous = (await cache.getByRole('region', { name: 'Previous Request', exact: true }).boundingBox())!;
+				const selected = (await cache.getByRole('region', { name: 'Selected Request', exact: true }).boundingBox())!;
+				if (width === 500) { expect(selected.y).toBeGreaterThanOrEqual(previous.y + previous.height); }
+				else { expect(selected.x).toBeGreaterThanOrEqual(previous.x + previous.width); }
+			}
+		}
+		await page.evaluate(() => window.agentTraceIntegration.layout(900, 650));
+		const beforeDiff = await page.evaluate(() => window.agentTraceIntegration.resources());
+		await cache.getByRole('button', { name: 'Compare in Diff Editor', exact: true }).click();
+		const diff = cache.locator('.ash-chat-debug-cache-diff');
+		await expect(diff).toBeVisible();
+		await expect.poll(() => diff.locator('.stanza-diff-line-added').count()).toBeGreaterThan(0);
+		const values = await page.evaluate(() => window.agentTraceIntegration.diffValues());
+		expect(values?.original).toContain('first prompt'); expect(values?.modified).toContain('new prompt');
+		await expect.poll(async () => (await page.evaluate(() => window.agentTraceIntegration.resources())).editors).toBe(beforeDiff.editors + 2);
+		await viewer.getByRole('button', { name: 'Logs', exact: true }).click();
+		await expect.poll(async () => (await page.evaluate(() => window.agentTraceIntegration.resources())).editors).toBe(beforeDiff.editors);
+		await viewer.getByRole('button', { name: 'Cache Explorer', exact: true }).click();
+		await cache.getByRole('button', { name: 'Materialized Requests', exact: true }).click();
+		await expect(cache).toContainText('No earlier request from this Thread');
+		await expect(cache.getByRole('region', { name: 'Selected Request', exact: true })).toContainText('materialized body');
+		await cache.getByRole('button', { name: 'Show Request in Logs', exact: true }).click();
+		await expect(cache).toBeHidden();
+		await expect(viewer.locator('[role=treeitem][aria-selected=true] [data-event-id="request-3"]')).toBeVisible();
+		delete (artifact.diagnostics as { payloads?: unknown; }).payloads;
+		await viewer.locator('input[type=file]').setInputFiles({ name: 'missing.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(artifact)) });
+		await viewer.getByRole('button', { name: 'Cache Explorer', exact: true }).click();
+		await expect(cache).toContainText('This capture does not include the selected payload.');
+		await expect(cache).not.toContainText('Imported trace fixtures must not read live captures');
+	});
 
 	test('Execution Trace uses shared tree, tabs and resizable panes across themes and narrow layouts', async function () {
 		const { page } = browserTests;
@@ -40,6 +157,7 @@ suite('agentTrace browser component', () => {
 		for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(id => window.agentTraceIntegration.setTheme(id), id);
 			await expect(page.locator('#root')).toHaveAttribute('data-color-theme', id);
+			await expect.poll(async () => (await viewer.locator('.ash-agent-trace-tree').boundingBox())!.height).toBeGreaterThan(44);
 			await failure.click();
 			await expect(failure).toHaveCSS('height', '22px');
 			await expect(failure).toHaveCSS('line-height', '22px');
