@@ -41,6 +41,38 @@ const storageKey = 'sessions.singlePane.layoutState';
 suite('DesktopLayoutController', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('legacy browser inputs reach their retained host before the document slot is released', async () => {
+		const { DesktopDockedTabsCoordinator } = await import('../../browser/desktop/desktopDockedTabsCoordinator.js');
+		using fixture = await createFixture();
+		const input = { resource: URI.parse('ash-browser:/browser_target_00000000-0000-0000-0000-000000000001') };
+		fixture.services.registerInstance(ISessionChangesService, {
+			openChangesEditor: async () => { throw new Error('Browser migration must not open Changes'); },
+		} as unknown as ISessionChangesService);
+		const operations: string[] = [];
+		const group = {
+			id: 1, inputs: [input],
+			closeEditor: async (candidate: typeof input, options: { reason: string; }) => {
+				assert.equal(candidate, input);
+				operations.push(options.reason);
+				return true;
+			},
+		};
+		fixture.editor.groups = [group];
+		Object.assign(fixture.services.get(ILayoutService), {
+			codeCards: {
+				browser: {
+					openEditor: async (candidate: typeof input) => {
+						assert.equal(candidate, input);
+						operations.push('opened');
+					}
+				}
+			},
+		});
+		using coordinator = fixture.services.createInstance(DesktopDockedTabsCoordinator, 2);
+		await coordinator.removeRestoredDetailTabs();
+		assert.deepEqual(operations, ['opened', 'move']);
+	});
+
 	test('hidden Canvas retention preserves split geometry while still capturing new tabs', async () => {
 		using fixture = await createFixture();
 		const initial = {

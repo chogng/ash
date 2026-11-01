@@ -32,7 +32,6 @@ import '../workbench/contrib/limitIndicator/browser/limitIndicator.contribution.
 import '../workbench/contrib/languageStatus/browser/languageStatus.contribution.js';
 import '../workbench/contrib/opener/browser/opener.contribution.js';
 import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
-import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/contrib/webview/browser/webview.contribution.js';
 import '../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import './contrib/sessions/browser/views/sessionsViewActions.js';

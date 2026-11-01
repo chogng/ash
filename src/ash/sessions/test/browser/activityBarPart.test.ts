@@ -65,6 +65,24 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	assert.equal(speech.hasActiveSpeechToTextSession, false);
 });
 
+test('Sessions common entry supplies shared Chat services and startup contributions without IDE window actions', async () => {
+	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
+	const { WorkbenchContributionsRegistry } = await import('../../../workbench/common/contributions.js');
+	const { IChatEditingService } = await import('../../../workbench/contrib/chat/common/editing/chatEditingService.js');
+	const { IDictationOnboardingService } = await import('../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js');
+	const { IChatDebugService } = await import('../../../workbench/contrib/chat/common/chatDebugService.js');
+	const { IChatResponseResourceFileSystemProvider } = await import('../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js');
+	const registrations = getSingletonServiceDescriptors();
+	for (const id of [IChatEditingService, IDictationOnboardingService, IChatDebugService, IChatResponseResourceFileSystemProvider]) {
+		assert.equal(registrations.filter(([candidate]) => candidate === id).length, 1, String(id));
+	}
+	using services = new InstantiationService();
+	using host = WorkbenchContributionsRegistry.createHost(services, undefined, [
+		'chatResponseResourceWorkbenchContribution', 'chat.edits.editorOverlay', 'chat.promptLanguageFeatures',
+	]);
+	assert.equal(host.phase, undefined);
+});
+
 test('Sessions common entry supplies the shared editor Worker service in each window scope', async () => {
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
 	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');

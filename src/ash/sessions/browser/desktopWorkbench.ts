@@ -1337,8 +1337,8 @@ export class DesktopWorkbenchLayout
 	setBrowserPart(part: WorkbenchEditorPart): void { this.browser.mount(part); }
 
 	setBrowserVisible(visible: boolean): void {
+		if (this.expandedCard && (visible ? this.expandedCard !== 'browser' : this.expandedCard === 'browser')) this.expandCard(this.expandedCard);
 		if (this.browserVisible === visible) return;
-		if (!visible && this.expandedCard === 'browser') this.expandCard('browser');
 		this.browserVisible = visible;
 		this.updateParts(() => {
 			if (visible) this.placeOpeningCard('browser');
@@ -1360,8 +1360,8 @@ export class DesktopWorkbenchLayout
 	}
 
 	setChangesVisible(visible: boolean): void {
+		if (this.expandedCard && (visible ? this.expandedCard !== 'changes' : this.expandedCard === 'changes')) this.expandCard(this.expandedCard);
 		if (this.changesVisible === visible) { return; }
-		if (!visible && this.expandedCard === 'changes') { this.expandCard('changes'); }
 		this.changesVisible = visible;
 		this.updateParts(() => {
 			if (visible) this.placeOpeningCard('changes');
@@ -1438,6 +1438,7 @@ export class DesktopWorkbenchLayout
 
 	setSessionLayout(key: string | undefined): void {
 		if (!this.active || key === this.sessionLayoutKey) return;
+		this.viewDrag.clear();
 		this.saveState();
 		this.grid.exitMaximizedView();
 		this.sessionLayoutKey = key;

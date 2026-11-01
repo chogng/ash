@@ -707,7 +707,6 @@ export abstract class Workbench extends Disposable {
 			})));
 		// Document hosts resolve Chat editing, whose signals use the window accessibility policy.
 		if (options.createTextDocumentHost) { this._register(options.createTextDocumentHost(services)); }
-		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
 		const notificationActionRunner = this._register(services.createInstance(NotificationActionRunner));
 		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
@@ -1080,6 +1079,8 @@ export abstract class Workbench extends Disposable {
 				layout.setActivityBarLocation(location);
 			}
 		}));
+		// Browser integration resolves editor and view services; install it after the window graph is complete.
+		if (options.createBrowserHost) this._register(options.createBrowserHost(services));
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));

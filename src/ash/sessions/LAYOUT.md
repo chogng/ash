@@ -221,7 +221,11 @@ Files and Terminal have independent card visibility. Files combines the retained
 
 Card controls consume presentations supplied by their content owners: a title, header, retained root and layout callback. They do not infer card identity from Workbench Part IDs or create content models. Header dragging and Alt+Shift+Arrow on a focused header action call the same outer Grid operations; separators resize its branches with the keyboard or pointer. A first open extends the visible arrangement, while reopening a placed card preserves its retained slot. Each selected Session owns its tool topology and dimensions; sidebar visibility and width remain window-owned. Multi-session presentation uses a shared arrangement. Tool visibility remains window-owned and does not change with geometry restoration.
 
+Without a remembered user width, the first Terminal or information pane takes one third of the content width; Files, Changes and Browser take three fifths. The next new pane splits a rightmost single pane vertically. If that column already contains a stack, the new pane starts another column. Remembered widths take precedence for new columns, subject to the Grid's minimum-size constraints.
+
 GridView owns maximization and its normal geometry; DesktopWorkbenchLayout derives the expanded card from Grid and excludes the titlebar and navigation from maximization. Auxiliary-window detachment retains its normal tree in DesktopWorkbenchLayout. Both operations retain the same content and restore its arrangement. Browser remains in its creating window because the native Chromium view is window-owned. During pointer rearrangement, a transient host overlay participates in BrowserView occlusion so native page content cannot cover the layout feedback. Session information is another Sessions-owned Grid leaf. Changes and Browser keep their editor inputs outside the main document working sets; compatible legacy Browser inputs migrate to the Browser host without closing their pages.
+
+The window composition persists the Browser editor host's tabs and view state as an Editor working set at `sessions.browser.editorState` in workspace UI state. BrowserView initializes its page models before that working set is restored; EditorPart validates and deserializes the inputs through the existing Browser serializer. The tool layout alone owns Browser visibility. Hiding the card never closes its tabs or destroys its native pages.
 
 The Sessions EditorPart reuses the shared editor-group capabilities. It retains a locked product-page group and separate session document groups. Mode changes select their visibility; restoring session document groups keeps the product group, panes and documents alive. The independent conversation grid remains in SessionsPart.
 
@@ -272,6 +276,8 @@ Phone layouts are planned to replace selected parts and pickers with mobile subc
 ## Contributions and loading
 
 Layout contributions register through the appropriate `sessions.*.main.ts` entry point. Shared workbench code should change only when the capability is useful outside the Agents Window; Sessions-specific policy stays under `vs/sessions`.
+
+Shared Chat services and editor contributions load through `chat.shared.contribution.ts`; each renderer host registers its own window actions. Runtime Browser integration starts after the window's editor and view services are registered.
 
 ## Change policy
 

@@ -33,9 +33,32 @@ import { ChatReferenceAttachmentWidgetContribution } from './attachments/chatRef
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './chatManagement/chatManagement.contribution.js';
+import { IChatEditingService } from '../common/editing/chatEditingService.js';
+import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
+import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+import { ChatInputEditor } from './widget/input/chatInputEditor.js';
+import { ChatInputEditors } from './widget/input/chatInputEditorRegistry.js';
+import { IChatDebugService } from '../common/chatDebugService.js';
+import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService.js';
+import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
+import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+
+// Both renderer hosts use these primitives; each host registers its own New and History actions.
+registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
+registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
+registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
+registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PromptLanguageFeaturesProvider));
+registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
+	const instantiationService = accessor.get(IInstantiationService);
+	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });
+});
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);

@@ -1485,6 +1485,12 @@ test('Code first opens stack a rightmost pane, then add a new column and retain 
 		assert.equal(layout.expandedCard, 'browser');
 		layout.expandCard('browser');
 		assert.equal(layout.isCardVisible('changes'), true);
+		layout.expandCard('browser');
+		layout.setChangesVisible(true);
+		assert.equal(layout.expandedCard, undefined, 'An explicit Changes open reveals its retained card beside Browser');
+		layout.expandCard('changes');
+		layout.setBrowserVisible(true);
+		assert.equal(layout.expandedCard, undefined, 'An explicit Browser open exits expansion of another card');
 	} finally {
 		for (const part of parts.values()) part.dispose();
 		dom.window.close();
