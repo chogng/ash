@@ -24,6 +24,7 @@ import type {
 	IQuickInputNavigation,
 	IKeyMods,
 	IQuickInput,
+	IQuickWidget,
 	IQuickPickDidAcceptEvent,
 } from '../common/quickInput.js';
 import { QuickInputList } from './quickInputList.js';
@@ -49,6 +50,56 @@ export interface IBrowserQuickInputHost extends IQuickInput {
 	focus(): void;
 	hide(): void;
 	dispose(): void;
+}
+
+/** Hosts borrowed content; hiding or disposing the host never disposes that content. */
+export class QuickWidget extends Disposable implements IQuickWidget, IBrowserQuickInputHost {
+	readonly type = QuickInputType.QuickWidget;
+	readonly element: HTMLDivElement;
+	readonly onDidHide: Event<void>;
+	contextKey?: string;
+	ignoreFocusOut = false;
+	private readonly hidden = this._register(new Emitter<void>());
+	private visible = false;
+	private content: HTMLElement | undefined;
+
+	constructor(host: HTMLElement, private readonly hostOptions: BrowserQuickInputHostOptions) {
+		super();
+		this.element = h(host.ownerDocument, 'div', { className: 'ash-quick-widget' });
+		this.onDidHide = this.hidden.event;
+		this._register(toDisposable(() => {
+			this.hide();
+			this.hostOptions.onDispose(this);
+			this.element.remove();
+		}));
+	}
+
+	get widget(): unknown { return this.content; }
+	set widget(value: unknown) {
+		if (value !== undefined && !isHTMLElement(value)) throw new TypeError('Quick Widget content must be an HTMLElement');
+		this.content = value;
+		this.element.replaceChildren(...(value ? [value] : []));
+	}
+
+	show(): void {
+		this.assertNotDisposed();
+		this.visible = true;
+		this.hostOptions.onShow(this);
+	}
+
+	hide(): void {
+		if (!this.visible) return;
+		this.visible = false;
+		this.hostOptions.onHide(this);
+		this.hidden.fire();
+	}
+
+	focus(): void {
+		this.content?.querySelector<HTMLElement>('textarea, input, [contenteditable="true"], [tabindex="0"], button')?.focus();
+	}
+
+	// The embedded component owns Enter and submission, including IME and modifier behavior.
+	accept(): void { }
 }
 
 /** DOM implementation of one searchable Quick Pick controller. */

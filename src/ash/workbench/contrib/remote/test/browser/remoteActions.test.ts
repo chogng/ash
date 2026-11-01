@@ -109,6 +109,7 @@ class TestQuickInputService implements IQuickInputService {
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;
+	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
 	async input(): Promise<string | undefined> { return undefined; }

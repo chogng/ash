@@ -378,6 +378,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.QuickChat,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Quick Chat accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('quickChat.verbosityTitle', 'Quick Chat Accessibility Help'),
+		description: localize('quickChat.verbosityDescription', 'Announce how to open accessibility help when Quick Chat receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatModelConfiguration,
 	defaultValue: true,
 	parse(value: unknown): boolean {

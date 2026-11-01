@@ -187,6 +187,7 @@ class TestQuickInputService implements IQuickInputService {
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;
+	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
 	constructor(private readonly labels: string[] = []) { }

@@ -1,5 +1,7 @@
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
+import { Emitter } from '../../base/common/event.js';
+import type { IQuickChatSession } from '../../workbench/contrib/chat/browser/chat.js';
 import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -57,6 +59,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private failedSelectionRevision: number | undefined;
 	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: SessionAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
 	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
+	private quickChat: { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; } | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -104,6 +107,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
+			this.quickChat?.session.dispose();
 			for (const popup of this.popouts.values()) popup.resources.dispose();
 			this.popouts.clear();
 			for (const pane of this.panes.values()) pane.dispose();
@@ -268,6 +272,58 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		return this.sessionService.navigationRevision;
 	}
 
+	public override createQuickChat(parent: HTMLElement, titleId: string): IQuickChatSession {
+		this.quickChat?.session.dispose();
+		const draft = this.sessionService.createUntitledSession(localize('quickChat.title', 'Quick Chat'), undefined, undefined, false);
+		const id = untitledSessionPaneId(draft);
+		this.syncSessions(id);
+		const pane = this.panes.get(id)!;
+		pane.model.selectMode('ask');
+		const resources = new DisposableStore();
+		const retired = resources.add(new Emitter<void>());
+		setDisposableOwner(resources, this);
+		const placeholder = h(parent.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
+		placeholder.id = `${pane.element.id}-quick`;
+		resources.add(new Button(placeholder, {
+			...defaultButtonStyles,
+			presentation: 'quiet',
+			label: localize('quickChat.focus', 'Chat is open in Quick Chat'),
+			onClick: () => { void this.commandService.executeCommand('workbench.action.openQuickChat'); },
+		}));
+		let disposed = false;
+		const session: IQuickChatSession = {
+			[Symbol.dispose]: () => session.dispose(),
+			widget: pane,
+			onDidDispose: retired.event,
+			setVisible: visible => {
+				if (this.quickChat?.session !== session) return;
+				this.quickChat.visible = visible;
+				pane.setVisible(visible);
+			},
+			reveal: () => {
+				if (disposed) return;
+				session.dispose();
+				if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
+				else if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
+				this.syncSessions();
+			},
+			dispose: () => {
+				if (disposed) return;
+				disposed = true;
+				this.quickChat = undefined;
+				this.paneHost.append(pane.element);
+				placeholder.remove();
+				retired.fire();
+				resources.dispose();
+				queueMicrotask(() => { if (!this.viewDisposed) this.syncSessions(); });
+			},
+		};
+		this.quickChat = { session, placeholder, titleId, visible: true };
+		this.syncSessions();
+		parent.append(pane.element);
+		return session;
+	}
+
 	protected override updateSessions(openPaneId?: string): {
 		readonly entries: readonly IChatViewPaneEntry<ChatWidgetModel>[];
 		readonly activePaneId: string | undefined;
@@ -355,6 +411,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;
 			this.panes.delete(paneId);
+			if (this.quickChat?.session.widget === pane) this.quickChat.session.dispose();
 			this.popouts.get(pane)?.resources.dispose();
 			pane.dispose();
 		}
@@ -362,6 +419,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		return {
 			activePaneId,
 			entries: entries.map(entry => {
+				if (this.quickChat?.session.widget === entry.pane) {
+					return { ...entry, detached: { placeholder: this.quickChat.placeholder, titleId: this.quickChat.titleId, visible: this.quickChat.visible } };
+				}
 				const popup = this.popouts.get(entry.pane);
 				if (!popup) {
 					return entry;
@@ -432,6 +492,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					existing.dispose();
 				} else {
 					this.panes.delete(paneId);
+					if (this.quickChat?.session.widget === pane) this.quickChat.session.dispose();
 					this.popouts.get(pane)?.resources.dispose();
 					pane.dispose();
 					continue;

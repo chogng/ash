@@ -613,6 +613,27 @@ function createManagement(fake: ReturnType<typeof sessionHost>, containers?: IDe
 	return new SessionsManagementService(createProvider(fake, undefined, containers));
 }
 
+test('background Quick Chat drafts preserve foreground navigation through materialization', async () => {
+	const fake = sessionHost([session('existing', 'root')]);
+	fake.host.session.create = async () => {
+		const created = session('quick', 'quick-root');
+		fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	using management = createManagement(fake);
+	await management.initialize();
+	const active = management.active;
+	const revision = management.navigationRevision;
+	const quick = management.createUntitledSession('Quick Chat', undefined, undefined, false);
+	assert.equal(management.active, active);
+	assert.equal(management.activeUntitledSession, undefined);
+	assert.equal(management.navigationRevision, revision);
+	const materialized = await management.materializeUntitledSession(quick.untitledSessionId);
+	assert.equal(management.active?.session.sessionId, active?.session.sessionId);
+	assert.equal(management.navigationRevision, revision);
+	assert.notEqual(materialized.session.sessionId, active?.session.sessionId);
+});
+
 test('connection transitions keep the catalog unavailable until provider reload completes', async () => {
 	const fake = sessionHost([session('one', 'thread')]);
 	using service = createManagement(fake);

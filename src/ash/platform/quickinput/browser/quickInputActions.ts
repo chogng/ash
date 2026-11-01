@@ -48,7 +48,7 @@ for (const command of commands) {
 		inQuickInputContext.isEqualTo(true),
 		// An owned menu can live outside the picker. Its Escape must dismiss that menu first.
 		command.anywhere ? ContextKeyExpr.has(quickInputTypeContextKey.key) : undefined,
-		command.anywhere ? undefined : quickInputFocusContext.isEqualTo(true),
+		command.anywhere ? undefined : ContextKeyExpr.and(quickInputFocusContext.isEqualTo(true), ContextKeyExpr.notEquals(quickInputTypeContextKey.key, QuickInputType.QuickWidget)),
 		command.pickOnly ? quickInputTypeContextKey.isEqualTo(QuickInputType.QuickPick) : undefined,
 		command.endOnly ? endOfQuickInputBoxContext.isEqualTo(true) : undefined,
 	);
@@ -78,7 +78,7 @@ export function dispatchQuickInputKeyDown(event: KeyboardEvent, input: IQuickInp
 	const values = new Map<string, ContextKeyValue>([
 		[inQuickInputContext.key, true],
 		[quickInputTypeContextKey.key, input.type],
-		[quickInputFocusContext.key, !target.closest('button, [role="tab"]')],
+		[quickInputFocusContext.key, input.type !== QuickInputType.QuickWidget && !target.closest('button, [role="tab"]')],
 		[endOfQuickInputBoxContext.key, !field || field.selectionStart === field.selectionEnd && field.selectionEnd === field.value.length],
 	]);
 	const context: Context = {

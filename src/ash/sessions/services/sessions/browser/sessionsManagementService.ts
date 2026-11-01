@@ -209,14 +209,16 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string): IUntitledChatSession {
+	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
-		this.selectionRevision++;
 		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
 		this._untitledSessions = [session, ...this._untitledSessions];
-		this._activeUntitledSessionId = session.untitledSessionId;
-		this._error = undefined;
+		if (activate) {
+			this.selectionRevision++;
+			this._activeUntitledSessionId = session.untitledSessionId;
+			this._error = undefined;
+		}
 		this._onDidChange.fire();
 		return session;
 	}

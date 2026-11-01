@@ -141,6 +141,7 @@ import { ChatTipService as CoworkChatTipService, IChatTipService as ICoworkChatT
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
 
 const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
 const inputResources = new DisposableStore();
@@ -380,6 +381,119 @@ test('registered Chat host rejects missing service registrations before creating
 	using services = new InstantiationService();
 	const descriptor = ViewsRegistry.getViews(CHAT_VIEW_CONTAINER_ID).find(view => view.id === CHAT_VIEW_ID)!.ctorDescriptor;
 	assert.throws(() => services.createInstance(descriptor, browserEnvironment.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }), /chatService/u);
+});
+
+test('Quick Chat retains its independent composer through hide, materialization and reveal', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
+	using contextView = new BrowserContextViewService(dom.window.document.body);
+	const fake = fakeApi({ sessions: [session('existing', 'existing-thread')], createSession: session('session-1', 'thread-1') });
+	using sessions = new SessionsManagementService(fake.api);
+	using chat = createChatService(fake.api);
+	const services = createInputServices(contextView, chat);
+	const layout = {
+		...testLayoutService(),
+		mainContainer: dom.window.document.body,
+		activeContainer: dom.window.document.body,
+		activeContainerDimension: { width: 1440, height: 900 },
+		activeContainerOffset: { top: 0, quickInputTop: 0 },
+		onDidLayoutActiveContainer: Event.None,
+		onDidChangeActiveContainer: Event.None,
+	} as IWorkbenchLayoutService;
+	using pane = new SessionChatViewPane(
+		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
+		services.get(IMenuService), services.get(IContextMenuService), contextView, services.get(ICommandService),
+		layout, unavailableFileService, unavailableAccessibleViewService, notifications,
+		services, services.get(IConfigurationService), services.get(IStorageService), testLifecycle,
+		{ groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, services.get(IContextKeyService),
+	);
+	dom.window.document.body.append(pane.element);
+	await sessions.initialize();
+	await nextTask();
+	const mainInput = pane.element.querySelector<HTMLTextAreaElement>('textarea')!;
+	typeChatText(dom.window, mainInput, 'Keep the main draft');
+	const revision = sessions.navigationRevision;
+	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: services.get(IContextKeyService), layoutService: layout, instantiationService: services });
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IWorkbenchLayoutService, layout);
+	let focusedMain = 0;
+	services.registerInstance(IViewsService, {
+		getViewWithId: () => pane,
+		isViewVisible: () => true,
+		focusView: async () => { focusedMain++; pane.focus(); return true; },
+	} as unknown as IViewsService);
+	using quick = services.createInstance(QuickChatService);
+	assert.equal(quick.enabled, true);
+	const previousNotifications = notifications.model.getNotifications();
+	quick.open();
+	await nextTask();
+	assert.deepEqual(notifications.model.getNotifications().filter(item => !previousNotifications.includes(item)).map(item => item.message), []);
+	await waitFor(() => dom.window.document.querySelector('.ash-quick-chat textarea') !== null);
+	const original = dom.window.document.querySelector<HTMLElement>('.ash-quick-chat .ash-chat')!;
+	const input = original.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.equal(sessions.navigationRevision, revision);
+	assert.equal(sessions.active?.session.sessionId, 'existing');
+	assert.equal(mainInput.value, 'Keep the main draft');
+	assert.equal(original.querySelector('[data-action-id="ash.chat.input.mode"]')?.textContent, 'Ask');
+	const helpImplementation = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'quickChat' && provider.type === AccessibleViewType.Help)!;
+	using help = helpImplementation.getProvider(services)!;
+	assert.match(help.provideContent(), /workbench.action.quickchat.toggle/);
+	typeChatText(dom.window, input, 'Keep the floating draft');
+	quick.close();
+	assert.equal(dom.window.document.querySelector('.ash-quick-chat'), null);
+	quick.open();
+	await waitFor(() => original.isConnected);
+	assert.equal(original.querySelector('textarea'), input);
+	assert.equal(input.value, 'Keep the floating draft');
+	const widget = services.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode === original)!;
+	const borrowed = widget as InstanceType<typeof ChatWidget>;
+	borrowed.addContext({ id: 'floating-file', kind: 'file', name: 'floating.txt', resolve: async () => ({ name: 'floating.txt', content: 'floating context' }) });
+	quick.open({ query: 'A quick question' });
+	await waitFor(() => fake.turnStartRequests.length === 1);
+	await nextTask();
+	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(fake.turnStartRequests[0]!.mode, 'ask');
+	assert.equal(sessions.active?.session.sessionId, 'existing');
+	quick.close();
+	fake.emit({
+		method: 'session/thread/transcript/update',
+		params: {
+			sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision: 2,
+			changes: [{ type: 'upsert', entry: { type: 'item', entryId: 'quick-answer', turnId: 'turn-1', transient: true, item: { type: 'agentMessage', itemId: 'quick-answer', turnId: 'turn-1', text: 'Answer received while hidden' } } }],
+		},
+	});
+	quick.open();
+	await waitFor(() => original.textContent?.includes('Answer received while hidden') === true);
+	const viewImplementation = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'quickChat' && provider.type === AccessibleViewType.View)!;
+	using accessibleView = viewImplementation.getProvider(services)!;
+	assert.match(accessibleView.provideContent(), /Answer received while hidden/);
+	typeChatText(dom.window, input, 'A later draft');
+	const prepared = new DeferredPromise<void>();
+	let preparationSignal: AbortSignal | undefined;
+	const preparing = borrowed.acquireContext(async signal => {
+		preparationSignal = signal;
+		await prepared.p;
+		return [{ id: 'pending-file', kind: 'file', name: 'pending.txt', resolve: async () => ({ name: 'pending.txt', content: 'Prepared during handoff' }) }];
+	});
+	await quick.openInChatView();
+	assert.equal(focusedMain, 1);
+	assert.equal(original.closest('.ash-chat-pane-host') !== null, true);
+	assert.equal(original.querySelector('textarea'), input);
+	assert.equal(input.value, 'A later draft');
+	const preparationSurvived = preparationSignal?.aborted === false;
+	await prepared.complete();
+	await preparing;
+	assert.equal(preparationSurvived, true);
+	assert.ok((await borrowed.captureDraft())?.draft.contexts.some(context => context.name === 'pending.txt'));
+	assert.equal(sessions.active?.session.sessionId, borrowed.sessionId);
+	assert.equal(mainInput.value, 'Keep the main draft');
+	assert.equal(fake.turnStartRequests.length, 1);
+	await services.get(IConfigurationService).updateValue(ChatAIDisabledSettingId, true);
+	quick.open();
+	await nextTask();
+	assert.equal(quick.enabled, false);
+	assert.equal(dom.window.document.querySelector('.ash-quick-chat'), null);
 });
 
 test('100 catalog sessions instantiate only opened conversations and reconnect those retained drafts', async () => {

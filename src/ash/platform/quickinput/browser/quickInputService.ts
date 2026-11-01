@@ -8,7 +8,7 @@ import type { IContextKey } from '../../contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILayoutService } from '../../layout/browser/layoutService.js';
 import type { IQuickAccessController } from '../common/quickAccess.js';
-import { QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
+import { QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickWidget } from '../common/quickInput.js';
 import { endOfQuickInputBoxContext, inQuickInputContext, quickInputFocusContext, quickInputTypeContextKey } from './quickInput.js';
 import { QuickAccessController } from './quickAccess.js';
 import { QuickInputController } from './quickInputController.js';
@@ -67,6 +67,8 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 	private getInputContainer(): HTMLElement {
 		const container = this.layoutService.activeContainer;
 		const focused = getActiveElement(container.ownerDocument);
+		const widget = isHTMLElement(focused) ? focused.closest<HTMLElement>('.ash-quick-widget') : undefined;
+		if (widget && container.contains(widget)) return widget;
 		const modal = isHTMLElement(focused) ? focused.closest<HTMLElement>('dialog[open]') : undefined;
 		// Native modal dialogs make overlays outside their subtree inert. Keep the window's
 		// single Quick Input service and its command handlers, but host the controller inside it.
@@ -78,18 +80,33 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		let type: IContextKey<string>;
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
+		let widgetContext: IContextKey<boolean> | undefined;
 		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, container, className, {
 			onShow: input => {
-				for (const [, controller] of this.inputControllers) {
+				for (const [owner, controller] of this.inputControllers) {
+					// An embedded surface stays alive while its attachment or history picker is open.
+					if (controller.currentQuickInput?.type === QuickInputType.QuickWidget && owner.contains(container)) continue;
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();
 				}
 				this.visibleInputs.add(input);
+				if (input.type === QuickInputType.QuickWidget && (input as IQuickWidget).contextKey) {
+					widgetContext = scope.createKey((input as IQuickWidget).contextKey!, false);
+					widgetContext.set(true);
+				}
 				type.set(input.type);
 				this.inQuickInput.set(true);
 				this.shown.fire();
 			},
 			onHide: input => {
+				if (input.type === QuickInputType.QuickWidget) {
+					const content = (input as IQuickWidget).widget;
+					for (const [child] of this.inputControllers) {
+						if (child !== container && isHTMLElement(content) && child.contains(content)) this.inputControllers.deleteAndDispose(child);
+					}
+				}
 				this.visibleInputs.delete(input);
+				widgetContext?.reset();
+				widgetContext = undefined;
 				type.reset(); focus.reset(); end.reset();
 				if (!this.visibleInputs.size) this.inQuickInput.reset();
 				this.hidden.fire();
@@ -116,11 +133,16 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 	}
 
 	public get currentQuickInput(): IQuickInput | undefined {
-		return this.inputControllers.get(this.getInputContainer())?.currentQuickInput;
+		return this.inputControllers.get(this.getInputContainer())?.currentQuickInput
+			?? this.inputControllers.get(this.layoutService.activeContainer)?.currentQuickInput;
 	}
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		return this.controller.createQuickPick<TItem>();
+	}
+
+	public createQuickWidget(): IQuickWidget {
+		return this.controller.createQuickWidget();
 	}
 
 	public input(options: IInputOptions = {}, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {

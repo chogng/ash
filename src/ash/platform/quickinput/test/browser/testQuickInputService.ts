@@ -38,6 +38,7 @@ export class TestQuickInputService extends QuickInputService {
 
 /** Unused service controls fail loudly in headless tests of input/pick consumers. */
 export const quickInputServiceTestControls: Omit<IQuickInputService, 'input' | 'createQuickPick'> = {
+	createQuickWidget() { throw new Error('Unexpected Quick Widget'); },
 	quickAccess: { onDidChangeVisibility: Event.None, show() { throw new Error('Unexpected Quick Access'); } },
 	onShow: Event.None, onHide: Event.None, currentQuickInput: undefined,
 	focus() { throw new Error('Unexpected Quick Input focus'); },

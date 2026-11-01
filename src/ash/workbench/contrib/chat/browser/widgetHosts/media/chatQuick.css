@@ -1,0 +1,51 @@
+.ash-quick-chat {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: min(720px, calc(100vw - 32px));
+	height: min(280px, calc(100vh - 80px));
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	color: var(--ash-foreground);
+	background: var(--ash-quickInput-background);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 8px 32px var(--ash-widget-shadow);
+}
+
+.ash-quick-chat-header {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}
+
+.ash-quick-chat-header > span {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-quick-chat-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-quick-chat-content > .ash-chat {
+	background: inherit;
+}
+
+.ash-high-contrast .ash-quick-chat {
+	box-shadow: none;
+}

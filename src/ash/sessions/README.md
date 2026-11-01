@@ -59,6 +59,11 @@ Actions use
 `IChatViewPane` and `IChatSessionNavigationService` without importing Sessions
 implementations.
 
+Quick Chat borrows a distinct retained conversation from `SessionChatViewPane`.
+Its background draft leaves foreground selection unchanged; hiding the overlay
+retains the composer and live response. Opening in Chat View reparents that same
+widget and selects its existing identity without replaying messages.
+
 Regular Workbench Chat presents opened Sessions through the shared Workbench tab
 control by default, with a List alternative in Chat More Actions. The host owns
 opened-tab order; the Sessions adapter persists it alongside per-session Thread

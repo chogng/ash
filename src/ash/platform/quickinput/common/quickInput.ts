@@ -69,6 +69,7 @@ export enum QuickPickFocus {
 export enum QuickInputType {
 	QuickPick = 'quickPick',
 	InputBox = 'inputBox',
+	QuickWidget = 'quickWidget',
 }
 
 /** The active control, including prompts that do not contain a result list. */
@@ -78,6 +79,15 @@ export interface IQuickInput extends IDisposable {
 	focus(): void;
 	accept(inBackground?: boolean): void | Promise<void>;
 	hide(): void;
+}
+
+/** A caller-owned interactive surface using the window's Quick Input lifetime. */
+export interface IQuickWidget extends IQuickInput {
+	readonly type: QuickInputType.QuickWidget;
+	widget: unknown | undefined;
+	contextKey?: string;
+	ignoreFocusOut: boolean;
+	show(): void;
 }
 
 export interface IQuickPickDidAcceptEvent {
@@ -149,6 +159,7 @@ export interface IQuickInputService {
 	accept(keyMods?: IKeyMods): Promise<void>;
 	cancel(): Promise<void>;
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
+	createQuickWidget(): IQuickWidget;
 	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined>;
 }
 

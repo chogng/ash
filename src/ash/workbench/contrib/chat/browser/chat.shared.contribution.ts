@@ -22,6 +22,9 @@ import { ILanguageModelToolsService } from '../common/tools/languageModelToolsSe
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
 import { ChatWidgetService } from './widget/chatWidgetService.js';
+import { IQuickChatService } from './chat.js';
+import { QuickChatService } from './widgetHosts/chatQuick.js';
+import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
 import { CopyTextProvider } from './widget/input/editor/chatPasteProviders.js';
 import { ChatAttachmentWidgetRegistry, IChatAttachmentWidgetRegistry } from './attachments/chatAttachmentWidgetRegistry.js';
 import { ChatReferenceAttachmentWidgetContribution } from './attachments/chatReferenceAttachmentWidget.contribution.js';
@@ -35,6 +38,8 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+registerSingleton(IQuickChatService, QuickChatService, InstantiationType.Delayed);
+registerQuickChatActions();
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
 	key: AGENT_SESSIONS_PRESENTATION_SETTING,

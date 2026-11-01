@@ -223,6 +223,7 @@ class TestQuickInputService implements IQuickInputService {
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;
+	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	public readonly pickers: TestQuickPick<IQuickPickItem>[] = [];
 

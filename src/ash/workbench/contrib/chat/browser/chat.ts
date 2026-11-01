@@ -6,6 +6,8 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
+import type { Selection } from '../../../../editor/common/core/selection.js';
+import type { ChatWidget } from './widget/chatWidget.js';
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
@@ -32,6 +34,34 @@ export interface IChatWidgetService {
 }
 
 export const IChatWidgetService = createServiceIdentifier<IChatWidgetService>('chatWidgetService');
+
+export interface IQuickChatOpenOptions {
+	readonly query: string;
+	readonly isPartialQuery?: boolean;
+	readonly selection?: Selection;
+}
+
+export interface IQuickChatService {
+	readonly onDidClose: Event<void>;
+	readonly enabled: boolean;
+	readonly focused: boolean;
+	readonly sessionResource: URI | undefined;
+	toggle(options?: IQuickChatOpenOptions): void;
+	open(options?: IQuickChatOpenOptions): void;
+	focus(): void;
+	close(): void;
+	openInChatView(): Promise<void>;
+}
+
+export const IQuickChatService = createServiceIdentifier<IQuickChatService>('quickChatService');
+
+/** A borrowed presentation: the Sessions adapter retains its model and draft lifetime. */
+export interface IQuickChatSession extends IDisposable {
+	readonly widget: ChatWidget;
+	readonly onDidDispose: Event<void>;
+	setVisible(visible: boolean): void;
+	reveal(): void;
+}
 
 /** The composer remains the owner of preparation; a target admits references to its input. */
 export interface IChatPasteTarget {
