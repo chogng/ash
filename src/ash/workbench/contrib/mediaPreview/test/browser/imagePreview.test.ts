@@ -13,10 +13,14 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { inspectImage } from '../../../../../base/browser/image.js';
-import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
+import { EditorPanes } from '../../../../browser/editor.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';
+import { ImagePreviewEditor } from '../../browser/imagePreviewEditor.js';
+import { IMAGE_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
@@ -28,7 +32,7 @@ class ImageFixture extends Disposable {
 	public readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly services = this._register(new InstantiationService());
 	public readonly revoked: string[] = [];
-	public readonly preview: ImagePreview;
+	public readonly preview: ImagePreviewEditor;
 	public read = async (): Promise<Uint8Array> => png;
 	public decode = async (): Promise<ImageBitmap> => ({ width: 800, height: 600, close: () => { this.closedBitmaps++; } }) as ImageBitmap;
 	public closedBitmaps = 0;
@@ -38,7 +42,15 @@ class ImageFixture extends Disposable {
 		this._register(toDisposable(() => this.preview.dispose()));
 		const originalRevoke = URL.revokeObjectURL;
 		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
-		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
+		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], {}));
+		const fixture = this;
+		this.browser.window.HTMLImageElement.prototype.decode = async function (): Promise<void> {
+			const decoded = await fixture.decode();
+			Object.defineProperties(this, { naturalWidth: { value: decoded.width }, naturalHeight: { value: decoded.height } });
+			decoded.close();
+		};
+		this.services.registerInstance(IClipboardService, this._register(new BrowserClipboardService(undefined)));
+		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
@@ -56,16 +68,16 @@ class ImageFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
-		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: this.services }, 'Image preview') as ImagePreview);
+		this.preview = this._register(EditorPanes.getEditorPanes().find(pane => pane.id === IMAGE_PREVIEW_EDITOR_ID)!.create({ instantiationService: this.services }) as ImagePreviewEditor);
 		this.preview.create(this.browser.window.document.body);
-		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
+		const viewport = this.browser.window.document.querySelector('.ash-image-viewer')!;
 		Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 300 } });
 	}
 }
 
 test('Image preview factory requires production services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: services }, 'Image preview'), /fileService/);
+	assert.throws(() => EditorPanes.getEditorPanes().find(pane => pane.id === IMAGE_PREVIEW_EDITOR_ID)!.create({ instantiationService: services }), /fileService/);
 });
 
 test('Image preview opens through the registered pane, zooms and releases its URL on closure', async () => {
@@ -73,7 +85,8 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
 	const image = fixture.browser.window.document.querySelector('img')!;
 	const url = image.src;
-	assert.equal(fixture.preview.id, IMAGE_PREVIEW_ID);
+	assert.equal(fixture.preview.id, IMAGE_PREVIEW_EDITOR_ID);
+	assert.equal(fixture.browser.window.document.querySelector('[role="toolbar"]'), null);
 	assert.deepEqual([image.style.width, image.style.height, image.alt, fixture.closedBitmaps], ['400px', '300px', 'Product', 1]);
 	fixture.preview.focus();
 	const viewport = fixture.browser.window.document.activeElement!;
@@ -81,7 +94,7 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	assert.equal(image.style.width, '800px');
 	assert.match(fixture.preview.getAccessibleContent(), /800 × 600 pixels[\s\S]*100%/);
 	viewport.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: '+', bubbles: true }));
-	assert.equal(image.style.width, '1000px');
+	assert.equal(image.style.width, '1200px');
 	fixture.preview.clearInput();
 	assert.deepEqual([image.hasAttribute('src'), fixture.revoked], [false, [url]]);
 });
@@ -133,7 +146,7 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 		fixture.preview.dispose();
 		await decoding.complete({ width: 800, height: 600, close: () => { fixture.closedBitmaps++; } } as ImageBitmap);
 		await cancelled;
-		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 0, null]);
+		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 1, null]);
 	} finally {
 		fixture.dispose();
 	}
@@ -147,7 +160,7 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 
 	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
-	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');
+	assert.equal(fixture.browser.window.document.querySelector('button')!.hidden, true);
 	fixture.preview.clearInput();
 	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
@@ -166,17 +179,16 @@ test('Image preview refreshes a changed resource and revokes the previous URL', 
 	assert.equal(image.src, original);
 	fixture.changes.fire({ resources: [resource] });
 	await setImmediate();
-	assert.deepEqual([image.style.width, image.style.height, fixture.revoked], ['320px', '200px', [original]]);
+	assert.deepEqual([image.style.width, image.style.height, fixture.revoked], ['400px', '250px', [original]]);
 	assert.notEqual(image.src, original);
 });
 
-test('Image inspection rejects unsupported signatures and preview decoding failures can be retried', async () => {
+test('Image preview decoding failures can be retried', async () => {
 	using fixture = new ImageFixture();
-	await assert.rejects(inspectImage(new Uint8Array([137, 80, 78, 71])), /PNG, JPEG or WebP/);
 	fixture.decode = async () => { throw new Error('Invalid encoded image'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: The image data could not be decoded/);
-	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [0, false]);
+	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [1, false]);
 	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
 	assert.ok(retry, 'failed image decode should expose a Retry action');
 	fixture.decode = async () => ({ width: 320, height: 200, close: () => { fixture.closedBitmaps++; } }) as ImageBitmap;

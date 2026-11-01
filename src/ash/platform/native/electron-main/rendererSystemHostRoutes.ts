@@ -63,6 +63,17 @@ export function rendererSystemHostRoutes(
 		{ channel: 'ash:host:readClipboardData', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.read() },
 		{ channel: 'ash:host:readClipboardImage', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.readImage() },
 		{
+			channel: 'ash:host:writeClipboardImage',
+			validate: value => {
+				if (!(value instanceof Uint8Array) || value.length < 8 ||
+					![137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => value[index] === byte)) {
+					throw new TypeError('Image clipboard requires PNG bytes');
+				}
+				return value;
+			},
+			invoke: value => clipboard.writeImage(value as Uint8Array),
+		},
+		{
 			channel: 'ash:host:screenshot', validate: validateScreenshotRectangle, invoke: async value => {
 				// The trusted router binds this route to its sender; another window can never be chosen by renderer input.
 				return (await getScreenshot(window, value as ReturnType<typeof validateScreenshotRectangle>))?.buffer;

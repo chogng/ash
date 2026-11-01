@@ -202,6 +202,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
+					'workbench.contrib.mediaPreviewStatusBar',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',

@@ -225,6 +225,7 @@ services.registerInstance(IClipboardService, {
 	readFindText: async () => '',
 	writeFindText: async () => { },
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
+	writeImage: async () => { },
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
 let screenshotCalls = 0;

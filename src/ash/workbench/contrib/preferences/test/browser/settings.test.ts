@@ -51,6 +51,7 @@ import type { SettingsSectionReference } from '../../browser/settingsTreeModels.
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
@@ -161,6 +162,7 @@ await import('../../../scm/browser/scm.contribution.js');
 await import('../../../../../platform/update/common/update.config.contribution.js');
 await import('../../../../../platform/meteredConnection/common/meteredConnection.config.contribution.js');
 await import('../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js');
+await import('../../../mediaPreview/browser/mediaPreview.contribution.js');
 
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
@@ -742,7 +744,31 @@ test('Extension settings use catalog identities and standard schemas without a p
 	);
 });
 
+test('Image preview zoom preferences belong to Features with validated defaults and Chinese labels', async () => {
+	using reset = toDisposable(resetNlsResolver);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	const defaults = new DefaultSettings();
+	const zoom = defaults.get('mediaPreview.image.defaultZoom');
+	const percentage = defaults.get('mediaPreview.image.fitToWindowPercentage');
+	assert.equal(zoom.title, '默认图片缩放');
+	assert.equal(percentage.title, '适应区域占比（%）');
+	assert.equal(zoom.configuration.defaultValue, 'fit');
+	assert.equal(percentage.configuration.defaultValue, 100);
+	assert.equal(zoom.configuration.scope, ConfigurationScope.WINDOW);
+	const layout = createSettingsLayout(defaults.all);
+	for (const setting of [zoom, percentage]) assert.equal(findSettingCategory(layout, setting.id), 'media-preview');
+	using configuration = new InMemoryConfigurationService();
+	await assert.rejects(configuration.updateValue(zoom.id, 'fill'), TypeError);
+	for (const value of [0, 101, NaN, '50']) await assert.rejects(configuration.updateValue(percentage.id, value), TypeError);
+	await configuration.updateValue(percentage.id, 50);
+	assert.equal(configuration.getValue(percentage.id), 50);
+});
+
 test('Built-in Git, Markdown and Media settings localize, persist and reset through the canonical registry', async () => {
+	using reset = toDisposable(resetNlsResolver);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	const registry = new ConfigurationRegistry();
 	for (const name of ['git', 'markdown-language-features', 'media-preview']) {
 		const manifest = JSON.parse(await readFile(`extensions/${name}/package.json`, 'utf8'));
@@ -760,6 +786,12 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 			remove: [],
 		});
 	}
+	for (const key of ['mediaPreview.video.autoPlay', 'mediaPreview.video.loop']) {
+		const definition = configurationRegistry.getConfiguration(key) as IRegisteredConfiguration<boolean>;
+		assert.ok(definition.setting?.valueType === 'boolean');
+		assert.equal(definition.source, undefined, `${key} belongs to Workbench`);
+		registry.registerConfiguration<boolean>({ ...definition, setting: definition.setting });
+	}
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(
@@ -767,7 +799,6 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		[
 			['extension.ash.git', 82],
 			['extension.ash.markdown-language-features', 18],
-			['extension.ash.media-preview', 2],
 		],
 	);
 	const git = layout.find(category => category.id === 'extension.ash.git')!;
@@ -793,6 +824,11 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		'every registered setting has exactly one editing location',
 	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
+	const media = layout.find(category => category.id === 'media-preview')!;
+	assert.equal(media.groups.flatMap(group => group.settings).length, 2);
+	for (const setting of media.groups.flatMap(group => group.settings)) {
+		assert.equal(findSettingCategory(layout, setting.id), media.id);
+	}
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
 	assert.deepEqual(['fontFamily', 'codeFontFamily', 'blockquoteFontFamily'].map(key => defaults.get(`markdown.preview.${key}`).title), ['正文字体', '代码字体', '引用字体']);
 	const markdown = layout.find(category => category.id === 'extension.ash.markdown-language-features')!;
@@ -823,6 +859,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
 	using configuration = new WorkspaceService({ registry });
 	await configuration.updateValue('mediaPreview.video.loop', true);
+	await assert.rejects(configuration.updateValue('mediaPreview.video.loop', 'true'), /true.*false/);
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	await configuration.updateValue('markdown.preview.fontFamily', '"Microsoft YaHei", sans-serif');
@@ -890,7 +927,7 @@ for (const locale of ['en', 'zh-CN']) {
 					triggerPaste() { }, read: async () => [],
 					readText: async () => '', writeText: async () => { },
 					readFindText: async () => '', writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { }, hasResources: async () => false,
 				},
@@ -967,7 +1004,7 @@ for (const locale of ['en', 'zh-CN']) {
 						writeText: async () => { },
 						readFindText: async () => '',
 						writeFindText: async () => { },
-						readImage: async () => new Uint8Array(),
+						readImage: async () => new Uint8Array(), writeImage: async () => { },
 						readResources: async () => ({ resources: [], operation: 'copy' }),
 						writeResources: async () => { },
 						hasResources: async () => false,
@@ -1056,7 +1093,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 				writeText: async () => { },
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1184,7 +1221,7 @@ test('URL rule suggestions follow extension registration without changing saved 
 				read: async () => [],
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1254,7 +1291,7 @@ test('Configured markers follow explicit local user overrides and expose one acc
 					writeText: async () => { },
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1428,7 +1465,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 					},
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1519,7 +1556,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 				},
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1614,7 +1651,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 					writeText: async () => { },
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1876,7 +1913,7 @@ test('editor line height displays pixels and preserves automatic settings until 
 			writeText: async () => { },
 			readFindText: async () => '',
 			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
+			readImage: async () => new Uint8Array(), writeImage: async () => { },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { },
 			hasResources: async () => false,
@@ -2002,6 +2039,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'editor-opening',
 			'accessibilitySignals',
 			'accessibility',
+			'media-preview',
 			'explorer',
 			'search',
 			'source-control',
@@ -2045,8 +2083,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	const features = new TOCTreeModel(tree).children.find(node => node.element.id === 'group.features');
 	assert.ok(features);
 	assert.deepEqual(
-		[...features.children!].slice(0, 2).map(node => node.element.id),
-		['accessibilitySignals', 'accessibility'],
+		[...features.children!].slice(0, 3).map(node => node.element.id),
+		['accessibilitySignals', 'accessibility', 'media-preview'],
 	);
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'display-language');
 	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'interaction');
@@ -2244,6 +2282,7 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(group?.description, category.description);
 		for (const [id, title, description] of [
 			['accessibilitySignals', '辅助功能信号', '设置工作台事件的声音提示和播报。'],
+			['media-preview', '媒体预览', '设置图片缩放和媒体播放。'],
 			['accessibility', '辅助功能', '设置屏幕阅读器支持、辅助功能帮助、动态效果、透明度和链接可见性。'],
 		]) {
 			const feature = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === id)!;
@@ -2837,7 +2876,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		read: async () => [],
 		readFindText: async () => '',
 		writeFindText: async () => { },
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		readResources: async () => ({ resources: [], operation: 'copy' }),
 		writeResources: async () => { },
 		hasResources: async () => false,
@@ -4522,7 +4561,7 @@ test('Chinese editor tab styles link to Workbench Style and retain keyboard focu
 			writeText: async () => { },
 			readFindText: async () => '',
 			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
+			readImage: async () => new Uint8Array(), writeImage: async () => { },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { },
 			hasResources: async () => false,

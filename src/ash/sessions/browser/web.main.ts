@@ -85,6 +85,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
+					'workbench.contrib.mediaPreviewStatusBar',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',

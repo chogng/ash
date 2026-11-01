@@ -13,29 +13,6 @@
   "contributes": {
     "customEditors": [
       {
-        "viewType": "ash.imagePreview",
-        "displayName": "%image.preview%",
-        "priority": "default",
-        "selector": [
-          {
-            "filenamePattern": "*.png",
-            "mimeType": "image/png"
-          },
-          {
-            "filenamePattern": "*.jpg",
-            "mimeType": "image/jpeg"
-          },
-          {
-            "filenamePattern": "*.jpeg",
-            "mimeType": "image/jpeg"
-          },
-          {
-            "filenamePattern": "*.webp",
-            "mimeType": "image/webp"
-          }
-        ]
-      },
-      {
         "viewType": "ash.audioPreview",
         "displayName": "%audio.preview%",
         "priority": "default",
@@ -72,25 +49,6 @@
             "mimeType": "video/webm"
           }
         ]
-      }
-    ],
-    "configuration": [
-      {
-        "title": "%settings.mediapreview%",
-        "properties": {
-          "mediaPreview.video.autoPlay": {
-            "type": "boolean",
-            "default": false,
-            "title": "%mediaPreview.video.autoPlay.title%",
-            "description": "%mediaPreview.video.autoPlay.description%"
-          },
-          "mediaPreview.video.loop": {
-            "type": "boolean",
-            "default": false,
-            "title": "%mediaPreview.video.loop.title%",
-            "description": "%mediaPreview.video.loop.description%"
-          }
-        }
       }
     ]
   }

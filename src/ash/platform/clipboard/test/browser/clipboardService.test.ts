@@ -4,6 +4,32 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { BrowserClipboardService } from '../../browser/clipboardService.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+
+test('browser image writes acquire clipboard access before encoding finishes and propagate failures', async () => {
+	const previous = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+	class ImageClipboardItem {
+		constructor(public readonly data: Record<string, Promise<Blob>>) { }
+	}
+	Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: ImageClipboardItem });
+	try {
+		const encoding = new DeferredPromise<Uint8Array>();
+		let written: ImageClipboardItem | undefined;
+		using clipboard = new BrowserClipboardService({
+			write: async items => { written = items[0] as unknown as ImageClipboardItem; },
+		} as Clipboard);
+		const writing = clipboard.writeImage(encoding.p);
+		assert.ok(written, 'the write must begin inside the initiating user gesture');
+		await encoding.complete(Uint8Array.of(1, 2, 3));
+		await writing;
+		assert.deepEqual(new Uint8Array(await (await written.data['image/png']).arrayBuffer()), Uint8Array.of(1, 2, 3));
+		using denied = new BrowserClipboardService({ write: async () => { throw new Error('Permission denied'); } } as unknown as Clipboard);
+		await assert.rejects(denied.writeImage(Uint8Array.of(1)), /Permission denied/);
+	} finally {
+		if (previous) Object.defineProperty(globalThis, 'ClipboardItem', previous);
+		else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+	}
+});
 
 test('browser resource clipboard is shared across service instances and follows external writes', async () => {
 	const previousClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');

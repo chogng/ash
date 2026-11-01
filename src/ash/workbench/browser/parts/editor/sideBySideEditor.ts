@@ -4,6 +4,7 @@ import './media/sidebysideeditor.css';
 import { h, type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
 import { EditorPane } from './editorPane.js';
 import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 
@@ -29,14 +30,16 @@ export class SideBySideEditor extends EditorPane implements IEditorPane {
 		container.className = 'ash-side-by-side-editor';
 		const left = h(parent.ownerDocument, 'section');
 		left.className = 'ash-side-by-side-editor-secondary';
-		left.setAttribute('aria-label', 'Original');
+		left.setAttribute('aria-label', localize('sideBySideEditor.original', 'Original'));
 		const right = h(parent.ownerDocument, 'section');
 		right.className = 'ash-side-by-side-editor-primary';
-		right.setAttribute('aria-label', 'Modified');
+		right.setAttribute('aria-label', localize('sideBySideEditor.modified', 'Modified'));
 		container.append(left, right);
 		parent.append(container);
 		super.create(container);
 		this.container = container;
+		this.secondaryPane.group = this.group;
+		this.primaryPane.group = this.group;
 		this.secondaryPane.create(left);
 		this.primaryPane.create(right);
 		this._register(toDisposable(() => container.remove()));

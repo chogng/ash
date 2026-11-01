@@ -16,9 +16,6 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
-import mediaManifest from '../../../../../../../extensions/media-preview/package.json' with { type: 'json' };
 import { FileKind, IFileService, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes, getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
@@ -74,6 +71,7 @@ test('Built-in media declarations activate from the package catalog, localize, r
 		generation++;
 		await service.reload();
 		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID), false);
+		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/media/product.gif') })?.id, 'ash.imagePreview');
 		included = false;
 		generation++;
 		await service.reload();
@@ -116,9 +114,7 @@ class MediaFixture extends Disposable {
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
-		const registry = new ConfigurationRegistry();
-		registry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(mediaManifest), { id: 'ash.media-preview', name: 'media-preview', publisher: 'ash', version: '1.0.0' }).contributes.configuration], remove: [] });
-		this.configuration = this._register(new InMemoryConfigurationService(registry));
+		this.configuration = this._register(new InMemoryConfigurationService());
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });

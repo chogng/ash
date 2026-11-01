@@ -425,6 +425,7 @@ class MemoryClipboardService implements IClipboardServiceContract {
 	async readFindText(): Promise<string> { return ''; }
 	async writeFindText(): Promise<void> { }
 	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
+	async writeImage(): Promise<void> { }
 	text = '';
 	async readText(): Promise<string> { return this.text; }
 	async writeText(value: string): Promise<void> { this.text = value; }
@@ -440,6 +441,7 @@ class DeferredClipboardService implements IClipboardServiceContract {
 	async readFindText(): Promise<string> { return ''; }
 	async writeFindText(): Promise<void> { }
 	async readImage(): Promise<Uint8Array> { return new Uint8Array(); }
+	async writeImage(): Promise<void> { }
 	async readResources(): Promise<{ resources: readonly never[]; operation: 'copy'; }> { return { resources: [], operation: 'copy' }; }
 	async writeResources(): Promise<void> { }
 	async hasResources(): Promise<boolean> { return false; }

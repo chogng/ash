@@ -1,6 +1,47 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
+test('Built-in Media Preview settings live under Features and retain existing profile values', { tag: ['@electron-app-server'] }, async ({ workbench }, testInfo) => {
+	const page = workbench.page;
+	const existing = await readUserSettings(page);
+	await writeUserSettings(page, '{\n  // Preview preferences\n  "mediaPreview.video.autoPlay": true,\n  "mediaPreview.video.loop": true,\n  "accessibility.verbosity.imagePreview": false,\n  "workbench.commandPalette.history": 12,\n}\n', existing.revision);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('media-preview');
+	const settings = workbench.settingsEditor.element;
+	await expect(settings.locator('[data-settings-group-id="features"]')).toBeVisible();
+	await expect(settings.locator('[data-tree-id="media-preview"]')).toHaveAttribute('aria-level', '2');
+	await expect(settings.getByRole('heading', { name: 'Media Preview', exact: true, level: 3 })).toBeVisible();
+	await expect(settings.locator('[data-settings-category-id="extension.ash.media-preview"]')).toHaveCount(0);
+	const autoplay = settings.locator('[data-configuration-key="mediaPreview.video.autoPlay"]');
+	const loop = settings.locator('[data-configuration-key="mediaPreview.video.loop"]');
+	await expect(autoplay).toHaveAttribute('aria-checked', 'true');
+	await expect(loop).toHaveAttribute('aria-checked', 'true');
+	await expect(settings.locator('[data-configuration-key^="accessibility.verbosity."]')).toHaveCount(0);
+	const fitPercentage = settings.locator('[data-configuration-key="mediaPreview.image.fitToWindowPercentage"]');
+	await expect(fitPercentage).toHaveValue('100');
+	await fitPercentage.fill('80');
+	await fitPercentage.press('Tab');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/"mediaPreview.image.fitToWindowPercentage":\s*80/u);
+	await expect(settings.locator('[data-configuration-key="mediaPreview.image.defaultZoom"]')).toBeVisible();
+	await loop.focus();
+	await loop.press('Space');
+	await expect(loop).toHaveAttribute('aria-checked', 'false');
+	await expect.poll(async () => (await readUserSettings(page)).content).not.toMatch(/"mediaPreview.video.loop":/u);
+	const saved = (await readUserSettings(page)).content;
+	expect(saved).toContain('// Preview preferences');
+	expect(saved).toMatch(/"workbench.commandPalette.history":\s*12/u);
+	await testInfo.attach('media-preview-settings', { body: await settings.screenshot(), contentType: 'image/png' });
+	await settings.getByRole('searchbox').fill('@id:mediaPreview.video.loop');
+	await expect(settings.locator('[data-configuration-key="mediaPreview.video.loop"]')).toHaveCount(1);
+	await settings.getByRole('searchbox').fill('');
+	await workbench.settingsEditor.selectCategory('accessibility');
+	await settings.getByRole('searchbox').fill('@id:accessibility.verbosity.imagePreview');
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.imagePreview"]')).toHaveAttribute('aria-checked', 'false');
+	await settings.getByRole('searchbox').fill('@id:accessibility.verbosity.mediaPreview');
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.mediaPreview"]')).toBeVisible();
+});
+
 test('Path rule settings use editable lists and persist removal of default rules', async ({ workbench, application, restartWorkbench, reloadWorkbench, target }, testInfo) => {
 	test.setTimeout(120_000);
 	for (const chinese of [false, true]) {

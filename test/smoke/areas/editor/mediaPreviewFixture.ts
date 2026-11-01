@@ -125,15 +125,31 @@ export async function createMediaPreviewFixture(page: Page, target: PlaywrightTa
 				send(text);
 			};
 			const postMessage = MessagePort.prototype.postMessage;
-			MessagePort.prototype.postMessage = function (message: { frame?: string; }, transfer: Transferable[] | StructuredSerializeOptions = []): void {
-				if (!message?.frame) { Reflect.apply(postMessage, this, [message, transfer]); return; }
+			MessagePort.prototype.postMessage = function (message: { frame?: string; data?: Uint8Array; }, transfer: Transferable[] | StructuredSerializeOptions = []): void {
+				if (!message?.frame && !(message?.data instanceof Uint8Array)) { Reflect.apply(postMessage, this, [message, transfer]); return; }
 				if (!observedPorts.has(this)) {
 					observedPorts.add(this);
-					const listener = (event: MessageEvent<{ frame?: string; }>): void => { if (event.data?.frame) { observe(event.data.frame); } };
+					const decoder = new TextDecoder();
+					let buffered = '';
+					const listener = (event: MessageEvent<{ frame?: string; data?: Uint8Array; }>): void => {
+						if (event.data?.frame) { observe(event.data.frame); return; }
+						if (!(event.data?.data instanceof Uint8Array)) return;
+						// Native ports now carry JSONL bytes, whose chunks need not end at a frame boundary.
+						buffered += decoder.decode(event.data.data, { stream: true });
+						let end: number;
+						while ((end = buffered.indexOf('\n')) >= 0) {
+							const frame = buffered.slice(0, end);
+							buffered = buffered.slice(end + 1);
+							if (frame) observe(frame);
+						}
+					};
 					this.addEventListener('message', listener);
 					cleanups.push(() => this.removeEventListener('message', listener));
 				}
-				outgoing(message.frame, frame => Reflect.apply(postMessage, this, [{ ...message, frame }, transfer]));
+				const frame = message.frame ?? new TextDecoder().decode(message.data).trim();
+				outgoing(frame, frame => Reflect.apply(postMessage, this, [message.frame
+					? { ...message, frame }
+					: { ...message, data: new TextEncoder().encode(frame + '\n') }, transfer]));
 			};
 			cleanups.push(() => { MessagePort.prototype.postMessage = postMessage; });
 			const send = WebSocket.prototype.send;

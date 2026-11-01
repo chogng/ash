@@ -188,7 +188,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		read: async () => [],
 		readText: async () => '', writeText: async text => { copied.push(text); }, readFindText: async () => '',
 		writeFindText: async () => { },
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 	} satisfies IClipboardService);
 	services.registerInstance(IKeybindingService, {

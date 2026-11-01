@@ -10,7 +10,7 @@ import type { NotificationService } from '../../../src/ash/workbench/services/no
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
-import { ImagePreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreview.js';
+import { ImagePreviewEditor } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreviewEditor.js';
 import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
 import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
@@ -263,7 +263,7 @@ resources.add(services.get(ICodeEditorService).registerCodeEditorOpenHandler(asy
 	return file;
 }));
 services.registerInstance(IEditorPart, { get activePane() { return { getControl: () => file }; } } as unknown as IEditorPart);
-let mediaPreview: ImagePreview | MediaPreview | undefined;
+let mediaPreview: ImagePreviewEditor | MediaPreview | undefined;
 let mediaPreviewRoot: HTMLElement | undefined;
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
@@ -280,7 +280,7 @@ services.registerInstance(IEditorService, {
 			mediaPreviewRoot = document.createElement('section');
 			mediaPreviewRoot.style.cssText = 'height:240px;width:600px';
 			document.body.append(mediaPreviewRoot);
-			mediaPreview = /\.(?:png|jpeg|gif|webp)$/u.test(input.resource.path) ? resources.add(previewServices.createInstance(ImagePreview)) : resources.add(previewServices.createInstance(MediaPreview, 'audio', 'Audio'));
+			mediaPreview = /\.(?:png|jpeg|gif|webp)$/u.test(input.resource.path) ? resources.add(previewServices.createInstance(ImagePreviewEditor)) : resources.add(previewServices.createInstance(MediaPreview, 'audio', 'Audio'));
 			mediaPreview.create(mediaPreviewRoot);
 			await mediaPreview.setInput({ resource: input.resource, readOnly: input.readOnly }, new AbortController().signal);
 			mediaPreview.setVisible(true);

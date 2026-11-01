@@ -448,6 +448,20 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'media-preview',
+				label: localize({ bundle: 'ash.settings', key: 'categories.media-preview.label' }, 'Media Preview'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.media-preview.description' }, 'Configure image zoom and media playback.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'media-preview',
+						label: localize({ bundle: 'ash.settings', key: 'categories.media-preview.label' }, 'Media Preview'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.media-preview.description' }, 'Configure image zoom and media playback.'),
+						settings: ['mediaPreview.*'],
+					},
+				],
+			},
+			{
 				id: 'explorer',
 				label: localize({ bundle: 'ash.settings', key: 'categories.explorer.label' }, 'Explorer'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.explorer.description' }, 'Configure file nesting and automatic file reveal.'),
