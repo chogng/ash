@@ -24,7 +24,6 @@ import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/ex
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';
 import '../../../src/ash/sessions/browser/media/style.css';
@@ -153,7 +152,6 @@ services.registerInstance(IClipboardService, { writeText: async (value: string) 
 registerCodeEditorServices(services);
 
 resources.add(bindTestColorTheme(services.get(IThemeService), document.body));
-services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(new ChatResponseResourceFileSystemProvider()));
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
 window.ashChatGPTIntegration = {

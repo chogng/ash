@@ -36,6 +36,7 @@ export function registerLayoutActions(
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
+	let terminalToggle: Promise<void> | undefined;
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
@@ -105,15 +106,50 @@ export function registerLayoutActions(
 					});
 				}
 				override async run(accessor: ServicesAccessor): Promise<void> {
-					if (!layout.isPartAvailable('editor')) return;
-					if (!await editor.toggleToolEditors(input => input instanceof TerminalEditorInput)) {
+					if (!layout.isPartAvailable('editor')) {
+						return;
+					}
+					terminalToggle ??= (async () => {
 						const terminals = accessor.get(ITerminalService);
 						await terminals.whenConnected;
-						const retained = terminals.activeInstance ?? terminals.instances[0];
-						if (retained) await accessor.get(ITerminalEditorService).openEditor(retained);
-						else await terminals.createTerminal({ location: TerminalLocation.Editor });
-					}
-					updateContext();
+						if (disposables.isDisposed) {
+							return;
+						}
+						const terminalEditors = accessor.get(ITerminalEditorService);
+						const groups = editor.getToolGroups(input => input instanceof TerminalEditorInput);
+						const unavailable = groups.flatMap(group => group.inputs
+							.filter(input => input instanceof TerminalEditorInput && !terminalEditors.getInstanceFromResource(input.resource))
+							.map(input => ({ group, input })));
+						const hasLiveTerminal = groups.some(group => group.inputs.some(input =>
+							input instanceof TerminalEditorInput && terminalEditors.getInstanceFromResource(input.resource)));
+						if (!hasLiveTerminal) {
+							// A restored tab can outlive its PTY checkpoint. Replace it in its
+							// retained group only after an explicit request successfully opens a shell.
+							const destination = groups.find(group => group === editor.activeGroup) ?? groups[0];
+							const location = destination ? { viewColumn: destination.id } : undefined;
+							const retained = terminals.activeInstance ?? terminals.instances[0];
+							if (retained) {
+								await terminalEditors.openEditor(retained, location);
+							} else {
+								await terminals.createTerminal({ location: location ?? TerminalLocation.Editor });
+							}
+							if (destination) {
+								editor.setGroupVisible(destination.id, true);
+								editor.activateGroup(destination.id);
+								editor.focus();
+							}
+						}
+						for (const { group, input } of unavailable) {
+							await group.closeEditor(input, { skipConfirmation: true });
+						}
+						if (hasLiveTerminal) {
+							await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
+						}
+					})().finally(() => {
+						terminalToggle = undefined;
+						updateContext();
+					});
+					return terminalToggle;
 				}
 			},
 		),

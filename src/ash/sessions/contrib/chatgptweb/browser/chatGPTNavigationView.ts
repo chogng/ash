@@ -1,6 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, toDisposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -208,6 +209,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
 export class ChatGPTNavigationView extends ViewPane {
+	private readonly bodySizeUpdate: AnimationFrameScheduler;
 	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly rows = this._register(new DisposableStore());
 	private conversations: readonly ChatGPTConversation[] = [];
@@ -222,6 +224,8 @@ export class ChatGPTNavigationView extends ViewPane {
 		@IClipboardService private readonly clipboard: IClipboardService,
 	) {
 		super(navigation, { ...options, headerSize: 32, minimumBodySize: 0 });
+		this.bodySizeUpdate = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.updateBodySize()));
+		this._register(observeResize(this.element, () => this.bodySizeUpdate.schedule()));
 		this.element.classList.add('ash-chatgpt-navigation-group');
 		this.element.dataset.group = key;
 		this.element.setAttribute('role', 'group');
@@ -232,6 +236,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			if (!this.isBodyVisible()) {
 				this.menuGeneration++; this.menuLoad.clear();
 				if (this.menuRow) { this.contextMenus.hideContextMenu(); }
+			} else {
+				this.bodySizeUpdate.schedule();
 			}
 		}));
 	}
@@ -256,11 +262,20 @@ export class ChatGPTNavigationView extends ViewPane {
 				else { button.removeAttribute('aria-current'); }
 			}
 		}
+		this.updateBodySize();
+	}
+
+	private updateBodySize(): void {
+		// The retained composite can render history before its DOM is mounted.
+		// Inherited row metrics become available on attachment; resize retries then.
+		if (!this.contentElement.isConnected) {
+			return;
+		}
 		// Pane sizing follows the host's row metric, including its text and action targets.
 		const styles = getWindow(this.contentElement).getComputedStyle(this.contentElement);
 		const gap = parseFloat(styles.rowGap) || 0;
 		const rowHeight = parseFloat(styles.getPropertyValue('--ash-list-rowHeight'));
-		const count = conversations.length;
+		const count = this.conversations.length;
 		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
 	}
 

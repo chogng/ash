@@ -55,6 +55,33 @@ suite('chatgptweb browser component', () => {
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`ChatGPT history group sizing waits for its detached sidebar to mount (${locale})`, async () => {
+			const { page } = browserTests;
+			await mockChatGPTRequests(page);
+			let releaseHistory!: () => void;
+			const history = new Promise<void>(resolve => { releaseHistory = resolve; });
+			await page.route('**/service/backend-api/conversations?*', async route => {
+				await history;
+				await route.fulfill({ json: { items: [{ id: 'first', title: 'First conversation' }, { id: 'second', title: 'Second conversation' }], total: 2 } });
+			});
+			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
+			const retained = await page.locator('#navigation').elementHandle();
+			expect(retained).not.toBeNull();
+			await retained!.evaluate(element => element.remove());
+			releaseHistory();
+			await expect.poll(() => retained!.evaluate(element => element.querySelectorAll('.ash-chatgpt-conversation').length)).toBe(2);
+			expect(await retained!.evaluate(element => getComputedStyle(element.querySelector('.ash-chatgpt-navigation-rows')!).getPropertyValue('--ash-list-rowHeight'))).toBe('');
+			await retained!.evaluate(element => document.querySelector('.ash-sessions-window')!.prepend(element));
+			const group = page.locator('.ash-chatgpt-navigation-group');
+			await expect(group.getByRole('button', { name: 'First conversation', exact: true })).toBeVisible();
+			await expect(group.getByRole('button', { name: 'Second conversation', exact: true })).toBeVisible();
+			await expect.poll(() => group.evaluate(element => {
+				const header = element.querySelector('.ash-pane-view-header')!;
+				return element.getBoundingClientRect().height - header.getBoundingClientRect().height;
+			})).toBe(68);
+			await retained!.dispose();
+		});
+
 		test(`ChatGPT group hover fills follow list inset changes (${locale})`, async () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);

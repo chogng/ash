@@ -7,7 +7,7 @@ import { BrowserViewUri } from '../../../platform/browserView/common/browserView
 import { TerminalEditorInput } from '../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../workbench/common/editor.js';
-import type { IEditorGroupViewOptions } from '../../../workbench/browser/parts/editor/editor.js';
+import type { IEditorGroupView, IEditorGroupViewOptions } from '../../../workbench/browser/parts/editor/editor.js';
 import type { EditorGroupView } from '../../../workbench/browser/parts/editor/editorGroupView.js';
 import type { IEditorPartOptions } from '../../../workbench/browser/parts/editor/editorPart.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../workbench/services/editor/common/editorService.js';
@@ -113,10 +113,15 @@ export class DesktopMainEditorPart extends EditorPart {
 		return super.openEditor(input, options, target ?? { groupId: existing?.id ?? this.activeGroup.id });
 	}
 
+	/** Queries the current session's tools, including retained hidden groups. */
+	public getToolGroups(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; } = {}): readonly IEditorGroupView[] {
+		return this.groups.filter(group => this.inWorkingSet(group.id)
+			&& (group.inputs.some(accepts) || (group.inputs.length === 0 && group.id === options.emptyGroupId)));
+	}
+
 	/** Hiding tools retains their inputs; a mixed group selects its next non-tool tab. */
 	public async toggleToolEditors(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; readonly allGroups?: boolean; } = {}): Promise<boolean> {
-		const groups = this.groups.filter(group => this.inWorkingSet(group.id)
-			&& (group.inputs.some(accepts) || (group.inputs.length === 0 && group.id === options.emptyGroupId)));
+		const groups = this.getToolGroups(accepts, options);
 		if (groups.length === 0) return false;
 		const visible = groups.some(group => this.isGroupVisible(group.id) && (!group.activeInput || accepts(group.activeInput)));
 		for (const group of groups) {
