@@ -1467,6 +1467,26 @@
       "rendering": "symbolic"
     },
     {
+      "id": "thumbsdown",
+      "file": "thumbsdown.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsdown-filled",
+      "file": "thumbsdown-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsup",
+      "file": "thumbsup.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsup-filled",
+      "file": "thumbsup-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "translate",
       "file": "translate.svg",
       "rendering": "symbolic"

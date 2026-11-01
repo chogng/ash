@@ -348,7 +348,11 @@
     "layout-sidebar-right-session": "E159",
     "layout-sidebar-right": "E15A",
     "dashboard": "E15B",
-    "image-session": "E15C"
+    "image-session": "E15C",
+    "thumbsup-filled": "E15D",
+    "thumbsdown-filled": "E15E",
+    "thumbsdown": "E15F",
+    "thumbsup": "E160"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -644,6 +648,10 @@
     "terminal": "da8230a0f70a37dfa791217bc17697fce6c99d1ced68fc92e7ebb77abe7dc5ea",
     "text-2": "8095be0ad3ba4d0f15e0510cac5484964b308fbad7b1536b2febbaa80c1fb462",
     "text": "9dc6ef9dbf5f84e207b20c978ad8fc4f01c501cf6b9ab9b05f4689f0dc0e5480",
+    "thumbsdown-filled": "c607bf65d12ad3d75ca69843350525ff8adabbbd15147f5a4446758bfb1104fc",
+    "thumbsdown": "0b1aaa34f51c1cf0d522127463ce6ade3c00ddd900680d709eb0c9da27629d8f",
+    "thumbsup-filled": "af7c7606213a3ebf9a376cad2496c069f558757d93dff25c47fe5bb2709bf74b",
+    "thumbsup": "1dc01a3318e4df69d1263af39e5ca6b39d041a28debc2ade04d330e9914e7a6c",
     "translate": "08a217cbe272ac8f3b94cf2133bd064017ffa6b9c31f652737417a52408805ec",
     "trash-flat": "ec938448beac60481578d50b27f6dc6d2ff05d77167860918bf2c66a31406485",
     "trash": "42c566e80e8d41ace902efd889abac97519ea73d2e5bae16e903e72167fb99a2",
