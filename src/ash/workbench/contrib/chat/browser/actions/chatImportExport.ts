@@ -104,7 +104,7 @@ export function registerChatExportActions(): DisposableStore {
 		constructor() {
 			super({
 				id: 'workbench.action.chat.export', title: localize2('chat.transfer.export', 'Chat: Export Conversation Transcript'),
-				shortTitle: localize2('chat.transfer.export.label', 'Export Transcript…'),
+				shortTitle: localize2('chat.transfer.export.label', 'Export Transcript'),
 				f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
 				menu: { id: MenuId.ChatTitle, when: ChatContextKeys.enabled.isEqualTo(true), group: '1_cutcopypaste', order: 9 },
 			});

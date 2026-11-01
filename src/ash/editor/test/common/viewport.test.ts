@@ -167,6 +167,25 @@ test('ViewLayout includes vertical padding in content and row projection', () =>
 	});
 });
 
+test('ViewLayout maps vertical offsets outside the text to existing line numbers', () => {
+	for (const padding of [{ top: 0, bottom: 0 }, { top: 10, bottom: 15 }]) {
+		using model = new TextModel(lines(3));
+		using viewport = new ViewLayout(model, { lineHeight: 20, padding });
+		const offsets = [-20, 0, padding.top, padding.top + 19, padding.top + 20, padding.top + 59, padding.top + 60, padding.top + 60 + padding.bottom, 1_000];
+
+		assert.deepEqual(offsets.map(offset => viewport.getLineNumberAtVerticalOffset(offset)), [1, 1, 1, 1, 2, 3, 3, 3, 3]);
+		// Viewport ranges still need the end index when no text intersects the viewport.
+		assert.equal(viewport.getLineIndexAtVerticalOffset(padding.top + 60), 3);
+	}
+});
+
+test('ViewLayout maps offsets below an empty document to its only line', () => {
+	using model = new TextModel('');
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
+
+	assert.deepEqual([0, 19, 20, 1_000].map(offset => viewport.getLineNumberAtVerticalOffset(offset)), [1, 1, 1, 1]);
+});
+
 test('ViewLayout reserves independently addressable view zones between lines', () => {
 	using model = new TextModel(lines(4));
 	using viewport = new ViewLayout(model, { lineHeight: 20 });

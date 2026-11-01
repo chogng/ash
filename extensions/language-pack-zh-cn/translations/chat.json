@@ -3,7 +3,7 @@
     "chat.transfer.invalid": "此文件不是受支持的 Ash 聊天记录。",
     "chat.transfer.tooLarge": "聊天记录超出了文档限制：10 MB、10,000 条消息及 1,024 个字符的标题。",
     "chat.transfer.export": "聊天：导出对话记录",
-    "chat.transfer.export.label": "导出对话记录…",
+    "chat.transfer.export.label": "导出对话记录",
     "chat.transfer.toolExitCode": "工具执行失败，退出码为 {0}",
     "chat.transfer.import": "聊天：打开已保存的记录（只读）",
     "chat.transfer.file": "Ash 聊天记录",
