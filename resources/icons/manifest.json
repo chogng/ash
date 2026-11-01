@@ -822,8 +822,18 @@
       "rendering": "symbolic"
     },
     {
+      "id": "issue-draft",
+      "file": "issue-draft.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "issue-opened",
       "file": "issue-opened.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "issue-reopened",
+      "file": "issue-reopened.svg",
       "rendering": "symbolic"
     },
     {

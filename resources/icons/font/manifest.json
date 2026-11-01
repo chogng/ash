@@ -334,7 +334,9 @@
     "chat-mode-filled": "E14B",
     "chat-mode": "E14C",
     "chat": "E14D",
-    "comment-discussion": "E14E"
+    "comment-discussion": "E14E",
+    "issue-draft": "E14F",
+    "issue-reopened": "E150"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -501,7 +503,9 @@
     "info": "9aa637884722838ba53238992e560569c9df12bf4f918e2404fbce11d40178d5",
     "inspect": "b92172aa91de23b36c765e4a43f4059c7086bd83b27b435541c2fff1c99da76d",
     "issue-closed": "151a28fe444b1e993292883c2d28ee6b1a46705118af7d6da12b24c8147e4aad",
+    "issue-draft": "e0ed832579f75eacea32f79b3281e026ab54f6ec2b7d2b7c1985c82ebd8271c9",
     "issue-opened": "4f940e0b55de78d447a4c31e424bfbeb267fa99821b9258f7132271278d697ce",
+    "issue-reopened": "98468e943e5e651f54e01f26ecc51437fdd89651eab7c13c6f77c98bfce68289",
     "issues": "395b8c3063d79730c29631a307870b05a9a53fb76a031c7acefb611d3490889e",
     "italics": "21bc1a379f91dab6943cd24086b5e5e8bc9d3944b04b4ebe05117dc685d0cff9",
     "kebab-vertical": "3406c85d1c928683ae6f4140cc891fb24ae9e12cd959f67098b5efee5efdfd4f",
