@@ -173,7 +173,12 @@ def normalize_svg(path, preserve_paints=False):
     # Resolve each SVG fill rule before unioning the same-color paths. Overlap
     # removal keeps holes and joins correct in TrueType's nonzero winding model.
     shapes = [s.as_path().remove_overlaps() for s in shapes if s.fill != "none"]
-    outline = SVGPath.from_commands(union(shapes)).d
+    # Nearly touching clipped outlines can lose their holes in Skia's boolean
+    # operations at small SVG coordinates. Use font units, as for stroking.
+    scale = UPM / max(viewbox.w, viewbox.h)
+    enlarged = [s.apply_transform(Affine2D(scale, 0, 0, scale, 0, 0)) for s in shapes]
+    outline = SVGPath.from_commands(union(enlarged)).apply_transform(
+        Affine2D(1 / scale, 0, 0, 1 / scale, 0, 0)).d
     if not outline:
         raise ValueError(f"{path}: conversion produced an empty outline")
     normalized = f'<svg xmlns="{SVG_NS}" viewBox="{viewbox.x} {viewbox.y} {viewbox.w} {viewbox.h}"><path d="{outline}"/></svg>\n'
