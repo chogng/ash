@@ -184,7 +184,7 @@ test('Sessions Customize uses Chinese labels and localized Skills controls', asy
 	let originalPage = workbench.page;
 	await originalPage.keyboard.press('ControlOrMeta+,');
 	let editor = originalPage.locator('.ash-settings-editor');
-	await editor.locator('[data-settings-category-id="general"]').click();
+	await editor.locator('[data-settings-category-id="display-language"]').click();
 	const language = editor.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await language.click();
 	await originalPage.keyboard.press('End');

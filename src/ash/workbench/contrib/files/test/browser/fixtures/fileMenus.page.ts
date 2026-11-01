@@ -121,15 +121,15 @@ if (new URLSearchParams(location.search).has('applicationMenu')) {
 	for (const [id, title, icon, toggled] of [
 		['fixture.icon', 'With icon', Lxicon.add, undefined],
 		['fixture.plain', 'Without icon', undefined, undefined],
-		['fixture.checked', 'Checked', Lxicon.layoutSidebarLeft1, ContextKeyExpr.true()],
-		['fixture.unchecked', 'Unchecked', Lxicon.layoutSidebarLeft1, ContextKeyExpr.false()],
+		['fixture.checked', 'Checked', Lxicon.layoutSidebarLeft, ContextKeyExpr.true()],
+		['fixture.unchecked', 'Unchecked', Lxicon.layoutSidebarLeft, ContextKeyExpr.false()],
 	] as const) {
 		lifetime.add(MenusRegistry.appendMenuItem(fileMenu, { command: { id, title, icon, toggled } }));
 	}
 	for (const [command, key] of [['fixture.icon', 'n'], ['fixture.plain', 'a']] as const) {
 		lifetime.add(KeybindingsRegistry.registerKeybindingRule({ command, source: KeybindingSource.Workbench, keybinding: Keybinding.single(logicalKey(key, { primaryKey: true })) }));
 	}
-	lifetime.add(MenusRegistry.appendMenuItem(titlebarMenu, { command: { id: 'fixture.sidebar', title: 'Toggle sidebar', icon: Lxicon.layoutSidebarLeft1 }, group: 'navigation' }));
+	lifetime.add(MenusRegistry.appendMenuItem(titlebarMenu, { command: { id: 'fixture.sidebar', title: 'Toggle sidebar', icon: Lxicon.layoutSidebarLeft }, group: 'navigation' }));
 	lifetime.add(MenusRegistry.appendMenuItem(editMenu, { command: { id: 'fixture.edit', title: 'Edit item' } }));
 	const host = document.body.insertBefore(document.createElement('div'), document.body.firstChild);
 	host.classList.add('ash-workbench-titlebar');

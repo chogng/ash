@@ -33,7 +33,8 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 	}
 
 	public async openPaneComposite(id: string | undefined, location: ViewContainerLocation, focus = false): Promise<PaneComposite | undefined> {
-		const part = this.getPart(location);
+		const part = this.parts.get(location);
+		if (!part) return undefined;
 		const containerId = id ?? part.getCompositeIdToRestore();
 		const container = this.descriptors.getViewContainers(location).find(candidate => candidate.id === containerId);
 		if (!container) { return undefined; }
@@ -63,7 +64,8 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 	}
 
 	public getActivePaneComposite(location: ViewContainerLocation): PaneComposite | undefined {
-		const part = this.getPart(location);
+		const part = this.parts.get(location);
+		if (!part) return undefined;
 		const id = part.activeCompositeId;
 		const composite = id ? part.getComposite(id) : undefined;
 		return composite?.isVisible() ? composite : undefined;
@@ -79,7 +81,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 	}
 
 	public getProgressIndicator(id: string, location: ViewContainerLocation): IProgressIndicator | undefined {
-		return this.getPart(location).getProgressIndicator(id);
+		return this.parts.get(location)?.getProgressIndicator(id);
 	}
 
 	public hideActivePaneComposite(location: ViewContainerLocation): void {
@@ -87,13 +89,9 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 	}
 
 	public getLastActivePaneCompositeId(location: ViewContainerLocation): string | undefined {
-		const part = this.getPart(location);
+		const part = this.parts.get(location);
+		if (!part) return undefined;
 		return part.activeCompositeId ?? part.getCompositeIdToRestore();
 	}
 
-	private getPart(location: ViewContainerLocation): PaneCompositePart {
-		const part = this.parts.get(location);
-		if (!part) { throw new Error(`No Part hosts view container location: ${location}`); }
-		return part;
-	}
 }

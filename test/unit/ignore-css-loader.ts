@@ -1,8 +1,8 @@
-import type { LoadHook, ResolveHook } from 'node:module';
+import type { LoadHookSync, ResolveHookSync } from 'node:module';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const resolve: ResolveHook = (specifier, context, nextResolve) => {
+export const resolve: ResolveHookSync = (specifier, context, nextResolve) => {
 	if (specifier.startsWith('ash:editor/')) {
 		specifier = pathToFileURL(resolvePath(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolvePath(import.meta.dirname, '../../.build/desktop/test'), 'src/ash', specifier.slice('ash:editor/'.length))).href;
 	}
@@ -15,7 +15,7 @@ export const resolve: ResolveHook = (specifier, context, nextResolve) => {
 	};
 };
 
-export const load: LoadHook = (url, context, nextLoad) => {
+export const load: LoadHookSync = (url, context, nextLoad) => {
 	if (!url.endsWith('.css')) {
 		return nextLoad(url, context);
 	}

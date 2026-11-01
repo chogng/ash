@@ -10,7 +10,7 @@ import { IndexTree } from '../../browser/ui/tree/indexTree.js';
 import { IndexTreeModel } from '../../browser/ui/tree/indexTreeModel.js';
 import { CompressibleObjectTree, ObjectTree } from '../../browser/ui/tree/objectTree.js';
 import { ObjectTreeModel } from '../../browser/ui/tree/objectTreeModel.js';
-import { TreeVisibility } from '../../browser/ui/tree/tree.js';
+import { TreeVisibility, type ITreeRenderer } from '../../browser/ui/tree/tree.js';
 import { h, svg } from '../../browser/dom.js';
 import { isMacintosh } from '../../common/platform.js';
 import { DeferredPromise } from '../../common/async.js';
@@ -18,6 +18,107 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 
 suite('ObjectTree partial update lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('rerender without a target refreshes every visible row while retaining focus and selection', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let reviewed = false;
+			const rendered: string[] = [];
+			using tree = new ObjectTree<string>(dom.window.document.body, {
+				reuseRows: true,
+				modelOptions: { identityProvider: { getId: item => item } },
+				renderElement: item => {
+					rendered.push(item);
+					const label = h(dom.window.document, 'span');
+					label.textContent = `${item}: ${reviewed ? 'reviewed' : 'unread'}`;
+					return label;
+				},
+			});
+			tree.setChildren([{ element: 'first' }, { element: 'second' }]);
+			tree.setSelection(['second']);
+			tree.setFocus('second');
+			tree.domFocus();
+			const rows = [...tree.domNode.querySelectorAll('[role=treeitem]')];
+			rendered.length = 0;
+			reviewed = true;
+			tree.rerender();
+			assert.deepEqual(rendered, ['first', 'second']);
+			assert.deepEqual([...tree.domNode.querySelectorAll('[role=treeitem]')], rows);
+			assert.deepEqual(rows.map(row => row.textContent), ['first: reviewed', 'second: reviewed']);
+			assert.deepEqual(tree.selection, ['second']);
+			assert.equal(dom.window.document.activeElement, tree.domNode);
+		} finally { dom.window.close(); }
+	});
+
+	test('template renderers receive the projected row index after tree find filters the model', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const indices: [string, number][] = [];
+			using tree = new ObjectTree<string>(dom.window.document.body, {
+				virtualDelegate: { getHeight: () => 28, getTemplateId: () => 'label' },
+				renderers: [{
+					templateId: 'label',
+					renderTemplate: container => container,
+					renderElement: (node, index, container: HTMLElement) => { indices.push([node.element, index]); container.textContent = node.element; },
+					disposeTemplate: () => { },
+				}],
+				modelOptions: { identityProvider: { getId: item => item } },
+				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item },
+				findMode: 'filter',
+			});
+			tree.setChildren([{ element: 'One' }, { element: 'Two' }]);
+			indices.length = 0;
+			tree.setFindPattern('Two');
+			assert.deepEqual(indices, [['Two', 0]]);
+		} finally { dom.window.close(); }
+	});
+
+	test('template rows reuse content, receive model filter data and balance both disposal lifetimes', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			type Item = { id: string; label: string; };
+			let templates = 0;
+			let disposedTemplates = 0;
+			let rendered = 0;
+			let released = 0;
+			let query = 'first';
+			const renderer: ITreeRenderer<Item, string, HTMLButtonElement> = {
+				templateId: 'button',
+				renderTemplate: container => {
+					templates++;
+					const button = h(dom.window.document, 'button');
+					container.append(button);
+					return button;
+				},
+				renderElement: (node, _index, button, details) => { assert.equal(details?.height, 28); rendered++; button.textContent = `${node.element.label}: ${node.filterData}`; },
+				disposeElement: (_node, _index, button, details) => { assert.equal(details?.height, 28); released++; button.textContent = ''; },
+				disposeTemplate: () => { disposedTemplates++; },
+			};
+			using tree = new ObjectTree<Item>(dom.window.document.body, {
+				virtualDelegate: { getHeight: () => 28, getTemplateId: () => 'button' },
+				renderers: [renderer],
+				modelOptions: {
+					identityProvider: { getId: item => item.id },
+					filter: { filter: () => ({ visibility: TreeVisibility.Visible, data: query }) },
+				},
+			});
+			tree.setChildren([{ element: { id: 'one', label: 'One' } }]);
+			const button = tree.element.querySelector('button')!;
+			assert.equal(button.textContent, 'One: first');
+			query = 'second';
+			tree.model.refilter();
+			assert.equal(tree.element.querySelector('button'), button);
+			assert.equal(button.textContent, 'One: second');
+			tree.setChildren([{ element: { id: 'one', label: 'Replacement' } }]);
+			assert.equal(tree.element.querySelector('button'), button);
+			assert.equal(button.textContent, 'Replacement: second');
+			assert.equal(templates, 1);
+			assert.equal(disposedTemplates, 0);
+			tree.dispose();
+			assert.equal(released, rendered);
+			assert.equal(disposedTemplates, templates);
+		} finally { dom.window.close(); }
+	});
 
 	test('ObjectTree refilter with unchanged visibility retains focused selected rows without DOM writes', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');

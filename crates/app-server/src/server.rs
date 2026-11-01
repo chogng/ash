@@ -239,6 +239,7 @@ mod semantic_index_job;
 mod session_operations;
 #[path = "server/request_processors/session_runtime.rs"]
 mod session_runtime_processor;
+mod wire_log;
 
 #[path = "server/request_processors/skills.rs"]
 mod skill_operations;
@@ -453,11 +454,13 @@ impl EnvStateMode {
 
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionState {
+    tcp_streams: Arc<network_proxy::TcpStreams>,
     pub(super) connection_id: u64,
     authority: ConnectionAuthority,
     pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
     state: Arc<Mutex<ConnectionMutableState>>,
     outbound_notifications: NotificationQueue,
+    wire_log: Arc<Mutex<wire_log::WireLog>>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -480,6 +483,14 @@ struct ConnectionMutableState {
 }
 
 impl ConnectionState {
+    pub(crate) fn wire_received(&self, raw: &str, envelope: &Value) {
+        self.wire_log.lock().unwrap().received(raw, envelope);
+    }
+
+    pub(crate) fn wire_sent(&self, raw: &str) {
+        self.wire_log.lock().unwrap().sent(raw);
+    }
+
     fn is_closed(&self) -> bool {
         connection_state(self).closed
     }
@@ -1760,6 +1771,7 @@ impl AppServer {
     }
 
     pub(crate) fn cancel_connection_requests(&self, connection: &ConnectionState) {
+        connection.tcp_streams.close_all();
         self.request_cancellations
             .cancel_connection(connection.connection_id);
         self.cancel_connection_logins(connection.connection_id);
@@ -1789,6 +1801,8 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        connection.wire_log.lock().unwrap().close();
+        connection.tcp_streams.close_all();
         self.cancel_connection_logins(connection.connection_id);
         self.memory_diagnostics_processor
             .connection_closed(connection.connection_id);
@@ -3098,10 +3112,13 @@ impl AppServer {
                     return Err(error);
                 }
             };
+            let wire_log = Arc::clone(&connection.wire_log);
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
                 while let Ok(message) = outbound_rx.recv() {
-                    message.write_to(&mut writer, &self.telemetry)?;
+                    message.write_to(&mut writer, &self.telemetry, |raw| {
+                        wire_log.lock().unwrap().sent(raw);
+                    })?;
                 }
                 Ok::<(), std::io::Error>(())
             });
@@ -3125,6 +3142,11 @@ impl AppServer {
                             format!("invalid App Server inbound JSON: {error}"),
                         )
                     })?;
+                    connection
+                        .wire_log
+                        .lock()
+                        .unwrap()
+                        .received(&line, &envelope);
                     if envelope.get("method").is_none() {
                         let handled = self
                             .client_host
@@ -3222,6 +3244,16 @@ impl AppServer {
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()
                 .configure(connection, &request.params),
+            Some(
+                ClientMethod::BrowserTcpOpen
+                | ClientMethod::BrowserTcpRead
+                | ClientMethod::BrowserTcpWrite
+                | ClientMethod::BrowserTcpClose,
+            ) => self.browser_processor().tcp(
+                connection,
+                client_method(&request.method).unwrap(),
+                &request.params,
+            ),
             Some(ClientMethod::BrowserNetworkAuthorize) => self
                 .browser_processor()
                 .authorize_network(connection, &request.params, cancellation),
@@ -3419,6 +3451,29 @@ impl AppServer {
                 .cancel(connection, &request.params),
             Some(ClientMethod::SessionRead) => {
                 self.session_processor().session_read(&request.params)
+            }
+            Some(ClientMethod::WireLogStart) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogParams =
+                    decode(&request.params)?;
+                connection.wire_log.lock().unwrap().start(&params)?;
+                result(&())
+            }
+            Some(ClientMethod::WireLogStop) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogParams =
+                    decode(&request.params)?;
+                connection.wire_log.lock().unwrap().stop(&params)?;
+                result(&())
+            }
+            Some(ClientMethod::WireLogRead) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::WireLogReadParams =
+                    decode(&request.params)?;
+                result(
+                    &connection
+                        .wire_log
+                        .lock()
+                        .unwrap()
+                        .read(connection.connection_id, &params)?,
+                )
             }
             Some(ClientMethod::SessionTraceRead) => {
                 self.session_processor().session_trace_read(&request.params)
@@ -3799,6 +3854,23 @@ impl AppServer {
             Some(ClientMethod::ExtensionsSources) => self
                 .extension_packages_processor()
                 .extension_sources(&request.params),
+            Some(ClientMethod::ExtensionsUpdates) => self
+                .extension_packages_processor()
+                .extension_updates(connection, &request.params),
+            Some(
+                ClientMethod::ExtensionsSetUpdatePolicy | ClientMethod::ExtensionsCheckUpdates,
+            ) => {
+                if !connection.allows_extension_source_configuration() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                if client_method(&request.method) == Some(ClientMethod::ExtensionsSetUpdatePolicy) {
+                    self.extension_packages_processor()
+                        .extension_update_policy(connection, &request.params)
+                } else {
+                    self.extension_packages_processor()
+                        .extension_check_updates(connection, &request.params)
+                }
+            }
             Some(ClientMethod::ExtensionsAddSource | ClientMethod::ExtensionsSetSourceEnabled) => {
                 if !connection.allows_extension_source_configuration() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
@@ -4461,6 +4533,9 @@ impl AppServer {
             }
             Some(ClientMethod::GitChangeFile) => {
                 self.git_processor().git_change_file(&request.params)
+            }
+            Some(ClientMethod::GitChangeFiles) => {
+                self.git_processor().git_change_files(&request.params)
             }
             Some(ClientMethod::GitConflictFile) => {
                 self.git_processor().git_conflict_file(&request.params)

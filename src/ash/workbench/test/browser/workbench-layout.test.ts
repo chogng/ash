@@ -613,6 +613,34 @@ test('Workbench pane sashes snap closed and reopen their retained Parts', () => 
 	dom.window.close();
 });
 
+test('Workbench sash changes publish completed Part geometry and visibility without a window resize', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
+	try {
+		harness.layout.layout(new Dimension(1_200, 800));
+		const snapshot = () => ({
+			sidebar: harness.layout.getPartSize('sidebar').width,
+			panel: harness.layout.getPartSize('panel').height,
+			sidebarVisible: harness.layout.isPartVisible('sidebar'),
+			panelVisible: harness.layout.isPartVisible('panel'),
+		});
+		const geometry: ReturnType<typeof snapshot>[] = [];
+		harness.disposables.add(harness.layout.onDidLayoutMainContainer(() => geometry.push(snapshot())));
+		dragWorkbenchSash(dom.window, harness.container, 'sidebar', 0, -harness.layout.getPartSize('sidebar').width);
+		assert.equal(harness.layout.isPartVisible('sidebar'), false);
+		assert.deepEqual(geometry.at(-1), snapshot());
+		dragWorkbenchSash(dom.window, harness.container, 'sidebar', 0, 110);
+		assert.equal(harness.layout.isPartVisible('sidebar'), true);
+		assert.deepEqual(geometry.at(-1), snapshot());
+		dragWorkbenchSash(dom.window, harness.container, 'panel', 0, harness.layout.getPartSize('panel').height);
+		assert.equal(harness.layout.isPartVisible('panel'), false);
+		assert.deepEqual(geometry.at(-1), snapshot());
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
+});
+
 test('platform and Workbench dependencies resolve one owner and publish completed Part geometry', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document);
@@ -2834,8 +2862,8 @@ test('panel layout actions use state icons', () => {
 			.flatMap(([, actions]) => actions)
 			.find(action => action.id === 'workbench.action.toggleMaximizedPanel');
 
-	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff1);
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff1);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff);
 	assert.ok(
 		menuService
 			.getMenuActions(MenuId.PanelTitle)
@@ -2843,9 +2871,9 @@ test('panel layout actions use state icons', () => {
 			.some(action => action.id === 'workbench.action.closePanel'),
 	);
 	contextKeys.setContext('sideBarVisible', true);
-	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft1);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft);
 	contextKeys.setContext('panelVisible', true);
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanel1);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanel);
 	assert.equal(maximizePanelAction()?.icon, Lxicon.screenFull);
 	assert.equal(maximizePanelAction()?.checked, false);
 	contextKeys.setContext('panelMaximized', true);
@@ -3209,6 +3237,13 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	);
 	assert.equal(await views.openView('missing'), null);
 	assert.equal(await panes.openPaneComposite('missing', ViewContainerLocation.Panel), undefined);
+	// A product host may omit a region entirely; its registered views cannot create a fallback host.
+	using withoutPanel = services.createInstance(PaneCompositePartService, new Map());
+	assert.equal(await withoutPanel.openPaneComposite('test.panel.first', ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getActivePaneComposite(ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getLastActivePaneCompositeId(ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getProgressIndicator('test.panel.first', ViewContainerLocation.Panel), undefined);
+
 	using incomplete = new InstantiationService();
 	assert.throws(() => incomplete.createInstance(PaneCompositePartService, parts), /service/i);
 	assert.throws(() => incomplete.createInstance(ViewDescriptorService, { registry }), /service/i);

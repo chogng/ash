@@ -67,7 +67,9 @@ jobs:
         run: python -B build/bun_acceptance.py install --phase "$PHASE" --output "$OUTPUT"
       - name: Prepare identical generated inputs
         if: inputs.phase != 'setup'
-        run: pnpm run prepare:generated
+        run: |
+          pnpm run protocol:generate
+          pnpm run prepare:generated
       - name: Compare checkers and injected-error diagnostics
         if: inputs.phase != 'setup'
         env:

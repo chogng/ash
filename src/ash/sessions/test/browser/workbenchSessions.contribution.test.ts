@@ -1,3 +1,7 @@
+import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from '../../browser/sessionActionsService.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -12,6 +16,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -27,7 +32,8 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { createThreadMultiDiffEditorInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createThreadMultiDiffEditorInput, registerChatChangesActions } from '../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -43,7 +49,7 @@ for (const [name, value] of Object.entries({
 }
 await import('../../contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 await import('../../browser/workbenchChat.contribution.js');
-await import('../../browser/turnMultiDiffSource.contribution.js');
+registerChatChangesActions();
 await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
 const { SESSIONS_FILES_CONTAINER_ID } = await import('../../contrib/files/browser/files.contribution.js');
 
@@ -73,16 +79,16 @@ test('Workspace changes focus SCM only after their opening command completes', a
 	assert.deepEqual(calls, ['git.openWorkspaceChanges', VIEW_PANE_ID]);
 });
 
-test('Sessions Files contribution loads and opens its container through the invoking window', async () => {
+test('Sessions Files contribution opens its editor through the invoking window', async () => {
 	using services = new InstantiationService();
-	const opened: unknown[][] = [];
-	services.registerInstance(IViewsService, {
-		openViewContainer: async (...args: unknown[]) => { opened.push(args); return null; },
-	} as unknown as IViewsService);
+	const opened: string[] = [];
+	services.registerInstance(ICommandService, {
+		executeCommand: async (id: string) => { opened.push(id); },
+	} as unknown as ICommandService);
 	const command = CommandsRegistry.getCommand(SESSIONS_FILES_CONTAINER_ID);
 	assert.ok(command);
 	await services.invokeFunction(command);
-	assert.deepEqual(opened, [[SESSIONS_FILES_CONTAINER_ID, true]]);
+	assert.deepEqual(opened, [NEW_FILE_TAB_COMMAND_ID]);
 });
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
@@ -114,7 +120,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IViewsService, { openView: async () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-		if (id === ISessionsManagementService || id === IChatSessionNavigationService) {
+		if (id === ISessionsManagementService || id === IChatSessionNavigationService || id === IDevContainerAgentHostService) {
 			services.registerSingleton(id, () => services.createInstance(descriptor));
 		}
 	}
@@ -202,6 +208,9 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		sessions: [session],
 		initialize: async () => { },
 	} as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 	using contributions = WorkbenchContributionsRegistry.createHost(services);
@@ -288,6 +297,9 @@ test('Chat opens the current checkpoint when composer counts arrive before its f
 	const session = { sessionId: 'session', chats: [{ threadId: 'B' }] };
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	const opened: MultiDiffEditorInput[] = [];
 	services.registerInstance(IEditorService, {
@@ -316,6 +328,9 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 	} as unknown as IChatService;
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, sessions as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	let opened = false;
 	services.registerInstance(IEditorService, { openEditor: async () => { opened = true; } } as unknown as IEditorService);

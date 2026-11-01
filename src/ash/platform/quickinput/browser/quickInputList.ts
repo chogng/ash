@@ -18,6 +18,7 @@ import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewIte
 import type { IAction } from '../../../base/common/actions.js';
 import { Checkbox } from '../../../base/browser/ui/toggle/toggle.js';
 import { IContextMenuService } from '../../contextview/browser/contextView.js';
+import { quickInputButtonsToActionArrays } from './quickInputUtils.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -106,6 +107,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			accessibilityProvider: {
 				getAriaSetSize: () => this._visibleItems.length,
 				getAriaPosInSet: item => this._visibleItems.indexOf(item) + 1,
+				isChecked: item => this.multiple ? this.checked.has(item) : undefined,
 			},
 			renderItem: (item, _index, row) => this.renderItem(item, row),
 			onDidRemoveRow: row => {
@@ -349,7 +351,6 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		if (this.multiple) {
 			// The active option announces checked state; the visual control shares
 			// its keyboard target instead of adding another stop to every row.
-			row.setAttribute('aria-checked', String(this.checked.has(item)));
 			const resources = new DisposableStore();
 			const checkbox = resources.add(new Checkbox(content, {
 				...defaultCheckboxStyles,
@@ -368,8 +369,6 @@ export class QuickInputList<TItem extends IQuickPickItem>
 				this.setActiveItem(item);
 			}));
 			this.rowResources.set(row, resources);
-		} else {
-			row.removeAttribute('aria-checked');
 		}
 		if (item.iconClasses?.length) {
 			const icon = h(ownerDocument, 'span');
@@ -429,20 +428,18 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			const actions = new ToolBar(content, {
 				contextMenuProvider: this.contextMenuService,
 				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', label.title),
-				actionViewItemProvider: action => new QuickInputButtonActionViewItem(action, buttons.find(button => button.id === action.id)!),
-			});
-			actions.setActions(buttons.map(button => ({
-				id: button.id,
-				label: button.label,
-				tooltip: button.label,
-				enabled: true,
-				run: context => {
-					// The view supplies the native click event for both pointer and keyboard activation.
-					const event = context as MouseEvent;
-					this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
-					this.buttonEmitter.fire({ item, button, anchor: event.currentTarget });
+				actionViewItemProvider: action => {
+					const button = buttons[Number(action.id.split('-').at(-1))];
+					return button ? new QuickInputButtonActionViewItem(action, button) : undefined;
 				},
-			})));
+			});
+			const converted = quickInputButtonsToActionArrays(buttons, 'quickPick', (button, context) => {
+				// The view supplies the native click event for both pointer and keyboard activation.
+				const event = context as MouseEvent | undefined;
+				if (event) this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
+				this.buttonEmitter.fire({ item, button: button as IQuickPickItemButton, anchor: event?.currentTarget });
+			});
+			actions.setActions(converted.primary, converted.secondary);
 			actions.element.classList.add('ash-quick-pick-row-actions');
 			this.rowActions.set(row, actions);
 		}
@@ -481,13 +478,25 @@ class QuickInputButtonActionViewItem extends ActionViewItem {
 		button.type = 'button';
 		button.disabled = !this.action.enabled;
 		button.className = 'ash-quick-pick-row-action';
-		button.textContent = iconClass ? '' : this.action.label;
-		button.setAttribute('aria-label', this.action.label);
+		if (this.descriptor.alwaysVisible) button.classList.add('always-visible');
+		button.textContent = iconClass || this.descriptor.iconPath ? '' : this.action.label;
+		if (this.action.checked !== undefined) button.setAttribute('aria-pressed', String(this.action.checked));
+		button.setAttribute('aria-label', this.descriptor.label ?? this.descriptor.tooltip ?? this.action.label);
 		if (this.descriptor.hasPopup) {
 			button.setAttribute('aria-haspopup', this.descriptor.hasPopup);
 			button.setAttribute('aria-expanded', 'false');
 		}
-		if (iconClass) {
+		if (this.descriptor.iconPath) {
+			button.classList.add('icon-only');
+			const path = this.descriptor.iconPath;
+			for (const [theme, uri] of [['dark', path.dark], ['light', path.light ?? path.dark]] as const) {
+				const image = h(ownerDocument, 'img');
+				image.className = `ash-quick-input-button-image-${theme}`;
+				image.src = uri.toString();
+				image.alt = '';
+				button.append(image);
+			}
+		} else if (iconClass) {
 			button.classList.add('icon-only');
 			const iconId = iconClass.split(/\s+/).find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
 			const icon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
@@ -503,6 +512,7 @@ class QuickInputButtonActionViewItem extends ActionViewItem {
 		this._register(addDisposableListener(button, 'click', event => {
 			stopEvent(event);
 			this.runActionWithContext(this.action, event);
+			if (this.action.checked !== undefined) button.setAttribute('aria-pressed', String(this.action.checked));
 		}));
 		this.setupHover(button, this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));

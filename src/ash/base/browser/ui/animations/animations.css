@@ -1,0 +1,64 @@
+.ash-click-animation {
+	position: fixed;
+	z-index: 10000;
+	pointer-events: none;
+	user-select: none;
+}
+
+.ash-click-confetti-particle {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: var(--ash-spacing-size40);
+	height: var(--ash-spacing-size40);
+	background: var(--ash-charts-blue);
+}
+
+.ash-click-confetti-particle:nth-child(6n + 2) {
+	background: var(--ash-charts-green);
+}
+
+.ash-click-confetti-particle:nth-child(6n + 3) {
+	background: var(--ash-charts-yellow);
+}
+
+.ash-click-confetti-particle:nth-child(6n + 4) {
+	background: var(--ash-charts-purple);
+}
+
+.ash-click-confetti-particle:nth-child(6n + 5) {
+	background: var(--ash-charts-orange);
+}
+
+.ash-click-confetti-particle:nth-child(6n + 6) {
+	background: var(--ash-charts-red);
+}
+
+.ash-click-feedback-icon {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	color: var(--ash-focusBorder);
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-click-feedback-icon > .ash-icon {
+	font-size: inherit;
+}
+
+.ash-click-feedback-ring {
+	position: absolute;
+	inset: 0;
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-click-feedback-ray {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: var(--ash-spacing-size20);
+	height: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-circle);
+	background: var(--ash-focusBorder);
+}

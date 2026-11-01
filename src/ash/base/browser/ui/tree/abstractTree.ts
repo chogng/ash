@@ -34,7 +34,7 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
 	/** Content labels come from the host; Tree owns structural ARIA. */
-	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<T>, 'getAriaLabel'>;
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<T>, 'getAriaLabel' | 'isChecked' | 'isDisabled'>;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
@@ -52,7 +52,8 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly multipleSelectionSupport?: boolean;
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
-	readonly renderElement: (element: TNode) => HTMLElement;
+	readonly renderElement: (element: TNode, index: number) => HTMLElement;
+	readonly updateElement?: (element: TNode, index: number, content: HTMLElement) => void;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
 	readonly reuseRows?: boolean;
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
@@ -135,10 +136,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 				getAriaSetSize: (node) => node.visibleChildrenCount,
 				getAriaPosInSet: (node) => node.visibleChildIndex + 1,
 				isExpanded: (node) => node.collapsible ? this.isExpanded(node) : undefined,
+				isChecked: node => options.accessibilityProvider?.isChecked?.(node.element),
+				isDisabled: node => options.accessibilityProvider?.isDisabled?.(node.element),
 			},
-			renderItem: (node, _index, row) => this.renderRow(node, row),
+			renderItem: (node, index, row) => this.renderRow(node, row, index),
 			reuseRows: options.reuseRows,
-			updateItem: (node, _index, row, rerender) => this.updateRow(node, row, rerender),
+			updateItem: (node, index, row, rerender) => this.updateRow(node, row, rerender, index),
 			onDidRemoveRow: options.onDidRemoveRow,
 		}));
 		this.element = this.list.element;
@@ -218,14 +221,23 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.emitFindResult();
 	}
 
-	rerender(id: string): void {
+	rerender(id?: string): void {
 		if (this.findController?.query) {
 			this.items = this.sourceItems;
 			return;
 		}
-		const index = this.items.findIndex(node => node.id === id);
-		if (index < 0) return;
-		this.list.rerender(index);
+		const rerenderRow = (index: number): void => {
+			const row = this.list.row(index);
+			if (row) this.renderedElements.delete(row as HTMLDivElement);
+			this.list.rerender(index);
+		};
+		if (id === undefined) {
+			this.items.forEach((_node, index) => rerenderRow(index));
+		} else {
+			const index = this.items.findIndex(node => node.id === id);
+			if (index < 0) return;
+			rerenderRow(index);
+		}
 		this.updateActiveIndentGuides();
 		this.updateStickyScroll();
 	}
@@ -378,7 +390,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		}));
 	}
 
-	private renderRow(node: TNode, row: HTMLDivElement): HTMLElement {
+	private renderRow(node: TNode, row: HTMLDivElement, index: number): HTMLElement {
 		const document = row.ownerDocument;
 		row.classList.add('ash-tree-row');
 		row.dataset.treeId = node.id;
@@ -404,19 +416,22 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 		const contents = h(document, 'span');
 		contents.className = 'ash-tree-contents';
-		contents.append(this.options.renderElement(node));
+		contents.append(this.options.renderElement(node, index));
 		this.renderedElements.set(row, node.element);
 		inner.append(indent, twistie, contents);
 		return inner;
 	}
 
-	private updateRow(node: TNode, row: HTMLDivElement, rerender: boolean): void {
+	private updateRow(node: TNode, row: HTMLDivElement, rerender: boolean, index: number): void {
 		const elementChanged = this.renderedElements.get(row) !== node.element;
 		if (elementChanged) {
 			this.options.onDidRemoveRow?.(row);
 			const contents = row.querySelector<HTMLSpanElement>(':scope > .ash-tree-row-inner > .ash-tree-contents');
-			contents?.replaceChildren(this.options.renderElement(node));
+			contents?.replaceChildren(this.options.renderElement(node, index));
 			this.renderedElements.set(row, node.element);
+		} else if (this.options.updateElement) {
+			const content = row.querySelector<HTMLElement>(':scope > .ash-tree-row-inner > .ash-tree-contents')?.firstElementChild;
+			if (content) this.options.updateElement(node, index, content as HTMLElement);
 		}
 		row.classList.toggle('collapsible', node.collapsible);
 		row.classList.toggle('expanded', node.collapsible && !node.collapsed);

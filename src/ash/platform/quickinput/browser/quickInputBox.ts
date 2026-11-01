@@ -1,5 +1,4 @@
 import { defaultInputBoxStyles } from '../../theme/browser/defaultStyles.js';
-import { stopEvent } from '../../../base/browser/dom.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -29,19 +28,13 @@ export class QuickInputBox extends Disposable {
 		this.onDidAccept = this.acceptEmitter.event;
 		this.onDidError = this.errorEmitter.event;
 		this._register(this.inputBox.onDidChange(() => this.inputBox.showValidation('')));
-		this._register(this.inputBox.onKeyDown(event => {
-			if (event.key === 'Tab') {
-				stopEvent(event);
-				this.focus();
-				return;
-			}
-		}));
 		this._register(toDisposable(() => this.clear()));
 	}
 
 	public focus(): void {
 		this.inputBox.focus();
 	}
+	public set enabled(value: boolean) { this.inputBox.enabled = value; }
 
 	public clear(): void {
 		this.inputBox.value = '';

@@ -532,7 +532,7 @@ suite('changes browser component', () => {
 		await expect(form.getByRole('textbox', { name: 'Target branch' })).toHaveValue('main');
 		await expect(form.getByRole('textbox', { name: 'Title', exact: true })).toBeFocused();
 		await page.keyboard.press('Shift+Tab');
-		await expect(form.getByRole('button', { name: 'Create pull request' })).toBeFocused();
+		await expect(form.getByRole('button', { name: 'Pull request action' })).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(form).toBeHidden();
 		await expect(create).toBeFocused();
@@ -589,7 +589,8 @@ suite('changes browser component', () => {
 		const form = page.getByRole('dialog', { name: '创建拉取请求' });
 		await expect(form.getByRole('textbox', { name: '标题', exact: true })).toHaveValue('feature');
 		await expect(form.getByRole('textbox', { name: '目标分支' })).toHaveValue('main');
-		await expect(form.getByRole('combobox', { name: '拉取请求操作' })).toHaveValue('create');
+		await expect(form.getByRole('button', { name: '拉取请求操作' })).toHaveAttribute('aria-haspopup', 'menu');
+		await expect(form.getByRole('button', { name: '创建拉取请求', exact: true })).toBeEnabled();
 		await expect(form.getByRole('checkbox', { name: '创建为草稿' })).toBeVisible();
 		await form.getByRole('button', { name: '取消', exact: true }).click();
 		await expect(form).toBeHidden();

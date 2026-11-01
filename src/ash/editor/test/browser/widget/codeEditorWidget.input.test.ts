@@ -678,6 +678,15 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	support.handleFocusChange(false);
 	assert.equal(nextSimpleContent.textContent, '');
 	assert.equal(nextSimpleContent.getAttribute('aria-hidden'), 'true');
+	const mutations = new dom.window.MutationObserver(() => { });
+	mutations.observe(nextSimpleContent, { attributes: true, childList: true, subtree: true });
+	try {
+		support.writeScreenReaderContent();
+		support.writeScreenReaderContent();
+		assert.deepEqual(mutations.takeRecords(), [], 'Inactive preparation must leave an empty screen-reader mirror untouched');
+	} finally {
+		mutations.disconnect();
+	}
 	const outsideText = text(dom.window.document, 'outside');
 	container.append(outsideText);
 	domSelection.setBaseAndExtent(outsideText, 0, outsideText, 4);

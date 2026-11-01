@@ -99,7 +99,8 @@ export interface SessionCreateParams {
 	readonly executionTarget:
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
-	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
+	| { readonly type: 'remote'; readonly authority: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; readonly hostAuthority?: string; }
 	| null;
 	readonly agent:
 	| { readonly type: 'default'; }
@@ -240,8 +241,29 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 }
 
 export interface QueuedMessage {
+	readonly sessionId: string;
+	readonly threadId: string;
+	/** The durable enqueue command is also the message's stable identity. */
+	readonly commandId: string;
+	readonly revision: number;
 	readonly status: 'pending' | 'paused' | 'delivering' | 'started' | 'rejected' | 'cancelled';
+	readonly mode: SessionMode;
+	readonly text: string;
+	/** Non-text input is retained by Core and never reconstructed by an editor. */
+	readonly contextCount: number;
+	readonly turnId?: string;
+	readonly error?: string;
 }
+
+export interface QueueMessageTarget extends QueueListParams {
+	readonly commandId: string;
+	readonly expectedRevision: number;
+}
+
+export type QueueMessageEdit =
+	| { readonly type: 'pause' | 'resume'; }
+	| { readonly type: 'replaceText'; readonly text: string; }
+	| { readonly type: 'send'; };
 
 export interface QueueListParams extends SessionReadParams {
 	readonly threadId: string;
@@ -940,4 +962,37 @@ export interface AgentVoiceTaskRequest extends AgentVoiceSource {
 	readonly delegationId: string;
 	readonly commandId: string;
 	readonly transcript: string;
+}
+
+/** Session selects the provider connection; capture includes every session on that connection. */
+export interface SessionWireLogParams extends SessionReadParams {
+	readonly captureId: string;
+}
+export interface SessionWireLogReadParams extends SessionWireLogParams {
+	readonly after: number;
+	readonly limit: number;
+}
+/** Evidence observed at the backend transport boundary, never reconstructed from model events. */
+export interface AgentWireLogFrame {
+	readonly sequence: number;
+	readonly timestampMs: number;
+	readonly direction: 'clientToServer' | 'serverToClient';
+	readonly kind: 'request' | 'notification' | 'response';
+	readonly requestId: string | null;
+	readonly method: string | null;
+	readonly requestSequence: number | null;
+	readonly elapsedMs: number | null;
+	readonly isError: boolean;
+	readonly byteLength: number;
+	readonly truncated: boolean;
+	readonly raw: string;
+}
+export interface AgentWireLogPage {
+	readonly captureId: string;
+	readonly connectionId: string;
+	readonly recording: boolean;
+	readonly frames: readonly AgentWireLogFrame[];
+	readonly cursor: number;
+	readonly hasMore: boolean;
+	readonly droppedFrames: number;
 }

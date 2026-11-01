@@ -1,4 +1,6 @@
-import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
+import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
+import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -45,6 +47,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'KeyboardEvent']);
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
+	contextKeys.setContext('sessions.desktopCode', true);
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
@@ -101,8 +104,11 @@ test('Sessions titlebar initializes localized actions and closes the application
 	services.registerInstance(IContextKeyService, contextKeys);
 	const titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
+	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
+	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
+	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
-	using actions = registerLayoutActions(layout, sessions, contextKeys);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
@@ -187,13 +193,15 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 	}
 	const titlebar = resources.add(new ResizableTitlebar(browser.window.document.body, 'titlebar'));
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
+	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
+	parts.set('editor', resources.add(editorServices.createInstance(DesktopMainEditorPart, browser.window.document.body, {})));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	layout.layout(new Dimension(1_200, 800));
 	for (const height of [48, 40, 35, 48]) {
 		titlebar.setHeight(height);
 		assert.equal(layout.getPartSize('titlebar').height, height);
 		assert.equal(layout.mainContainerOffset.top, height);
-		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-card')!.style.top, `${height}px`);
+		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-frame')!.style.top, `${height}px`);
 		assert.equal(layout.getPartSize('sessions').height, 800 - height);
 	}
 });
@@ -201,7 +209,7 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new InstantiationService();
+	const services = layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {

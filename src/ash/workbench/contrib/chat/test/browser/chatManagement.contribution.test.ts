@@ -32,6 +32,13 @@ const catalog: readonly ModelCatalogEntry[] = [
 	{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus', longContext: null },
 ];
 
+const longCatalog: readonly ModelCatalogEntry[] = [
+	...catalog,
+	...Array.from({ length: 5 }, (_, index) => ({
+		model: { provider: 'openai', model: `extra-${index}` }, displayName: `Extra Model ${index}`, longContext: null,
+	})),
+];
+
 function setup(resources: DisposableStore, read: () => Promise<readonly ModelCatalogEntry[]> = async () => catalog) {
 	const services = resources.add(createTestEditorServices());
 	const notifications = resources.add(new TestNotificationService());
@@ -147,6 +154,90 @@ test('The model card contains the full model list without connection controls', 
 	assert.equal(widget.itemCount, 3);
 });
 
+test('Long model lists show five rows and retain expansion, row identity and focus across search and saves', async () => {
+	using resources = new DisposableStore();
+	const { services, root, enabled } = setup(resources, async () => longCatalog);
+	enabled.add('opus');
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	root.append(widget.element);
+	widget.render();
+	await nextTurn();
+	const rows = (): HTMLElement[] => [...root.querySelectorAll<HTMLElement>('.ash-models-settings-model-row')];
+	const names = (): (string | null)[] => rows().map(row => row.querySelector('.ash-icon-label-text')!.textContent);
+	const first = rows()[0];
+	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand')!;
+	assert.equal(rows().length, 5);
+	assert.equal(widget.itemCount, 8);
+	assert.equal(expand.textContent, 'View all');
+	assert.equal(expand.getAttribute('aria-expanded'), 'false');
+	assert.equal(document.getElementById(expand.getAttribute('aria-controls')!), root.querySelector('.ash-chat-models-list'));
+	assert.equal(expand.parentElement!.lastElementChild, expand);
+	expand.focus();
+	expand.click();
+	assert.equal(rows().length, 8);
+	const initialNames = names();
+	assert.equal(rows()[0], first);
+	assert.equal(expand.textContent, 'View less');
+	assert.equal(expand.getAttribute('aria-expanded'), 'true');
+	assert.equal(document.activeElement, expand);
+	expand.click();
+	assert.equal(rows().length, 5);
+	assert.equal(document.activeElement, expand);
+	widget.search('openai');
+	assert.equal(rows().length, 7, 'Search includes matches beyond the collapsed preview');
+	assert.equal(root.querySelector('.ash-models-settings-expand'), null);
+	widget.clearSearch();
+	assert.equal(rows().length, 5);
+	expand.click();
+	widget.search('extra-4');
+	const toggle = root.querySelector<HTMLInputElement>('input[role="switch"]')!;
+	toggle.focus();
+	toggle.click();
+	await nextTurn();
+	assert.equal(enabled.has('extra-4'), true);
+	assert.equal(document.activeElement, toggle);
+	widget.clearSearch();
+	assert.equal(rows().length, 8, 'Clearing search restores the previous expanded state');
+	assert.deepEqual(names(), initialNames, 'Enabling a model while searching preserves its original position');
+	const firstToggle = rows()[0].querySelector<HTMLInputElement>('input[role="switch"]')!;
+	firstToggle.focus();
+	firstToggle.click();
+	await nextTurn();
+	assert.equal(firstToggle.checked, false);
+	assert.equal(document.activeElement, firstToggle);
+	assert.deepEqual(names(), initialNames, 'Disabling a model preserves its position and focus');
+	expand.click();
+	assert.deepEqual(names(), initialNames.slice(0, 5));
+	widget.setVisible(false);
+	widget.setVisible(true);
+	assert.deepEqual(names().slice(0, 2), ['Opus', 'Extra Model 4'], 'A new visit sorts the currently enabled models first');
+});
+
+test('Settings search bypasses the preview even when every model matches and empty results omit the expansion item', async () => {
+	using resources = new DisposableStore();
+	const { services, root } = setup(resources, async () => longCatalog);
+	let hostQuery = '';
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {
+		matches: (entry: ModelCatalogEntry) => entry.model.provider.includes(hostQuery),
+		isSearching: () => !!hostQuery,
+	}));
+	root.append(widget.element);
+	widget.render();
+	await nextTurn();
+	hostQuery = 'a';
+	widget.render();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 8);
+	assert.equal(root.querySelector('.ash-models-settings-expand'), null);
+	hostQuery = '';
+	widget.render();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 5);
+	widget.search('no-such-model');
+	assert.equal(widget.itemCount, 0);
+	assert.equal(widget.hasResults, false);
+	assert.equal(root.querySelector('.ash-models-settings-expand'), null);
+	assert.equal(root.querySelector('.ash-models-settings-empty')?.textContent, 'No models found.');
+});
+
 test('A failed model visibility write restores the switch and reports the error inline', async () => {
 	using resources = new DisposableStore();
 	const { services, root, notifications, writes } = setup(resources);
@@ -171,13 +262,17 @@ test('Models settings catalog uses Chinese accessibility content and restores se
 	initializeTestLocalization('zh-CN');
 	try {
 		using resources = new DisposableStore();
-		const { services, root, menus } = setup(resources);
+		const { services, root, menus } = setup(resources, async () => longCatalog);
 		const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 		root.append(widget.element);
 		widget.render();
 		await nextTurn();
 		const search = root.querySelector<HTMLInputElement>('input[aria-label="搜索模型"]')!;
 		assert.ok(search);
+		const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand')!;
+		assert.equal(expand.textContent, '查看全部');
+		expand.click();
+		assert.equal(expand.textContent, '收起');
 		widget.search('older');
 		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View);
 		const provider = services.invokeFunction(implementation!.getProvider.bind(implementation!))!;
@@ -190,6 +285,9 @@ test('Models settings catalog uses Chinese accessibility content and restores se
 		widget.focusSearch();
 		const help = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.Help)!;
 		const helpProvider = services.invokeFunction(help.getProvider.bind(help))!;
+		assert.match(helpProvider.provideContent(), /默认显示前五个模型/);
+		assert.match(helpProvider.provideContent(), /使用“查看全部”展开列表，使用“收起”恢复/);
+		assert.match(helpProvider.provideContent(), /切换开关、搜索、展开或收起列表时，顺序保持不变/);
 		assert.match(helpProvider.provideContent(), /模型开关控制单个模型是否显示/);
 		assert.match(helpProvider.provideContent(), /支持上下文切换的模型会在名称旁显示容量文字按钮/);
 		assert.match(helpProvider.provideContent(), /独立的订阅账号卡片管理账号登录/);

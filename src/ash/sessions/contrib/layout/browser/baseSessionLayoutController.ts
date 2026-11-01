@@ -23,8 +23,6 @@ import { ILifecycleService, LifecyclePhase } from '../../../../workbench/service
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { IPaneCompositePartService } from '../../../../workbench/services/panecomposite/browser/panecomposite.js';
-import { ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
 
 const layoutStateKey = 'sessions.singlePane.layoutState';
 
@@ -36,7 +34,7 @@ export abstract class BaseLayoutController extends Disposable {
 	public retainEditor(input: IResourceEditorInput) { this.retainedEditors.add(input); return toDisposable(() => this.retainedEditors.delete(input)); }
 	public suppressEditorAutoVisibility() { this.autoVisibilitySuppressions++; return toDisposable(() => this.autoVisibilitySuppressions--); }
 	private readonly workingSets = new Map<string, EditorWorkingSet>();
-	private readonly panelViews = new Map<string, string>();
+
 	private readonly chatVisibility = new Map<string, { readonly editor: boolean; readonly auxiliarybar: boolean; }>();
 	protected readonly chatLayoutPresentation: ChatLayoutPresentation;
 	private readonly chatLayoutContext: ChatLayoutContext;
@@ -53,7 +51,6 @@ export abstract class BaseLayoutController extends Disposable {
 	protected restoring = false;
 
 	constructor(
-		@IPaneCompositePartService protected readonly panes: IPaneCompositePartService,
 		@ISessionsService protected readonly sessions: ISessionsService,
 		@ISessionsManagementService protected readonly management: ISessionsManagementService,
 		@IEditorPart protected readonly editor: IEditorPart,
@@ -85,16 +82,14 @@ export abstract class BaseLayoutController extends Disposable {
 				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			for (const entry of entries) {
-				if (!isRecord(entry) || typeof entry.sessionResource !== 'string' || (entry.editorWorkingSet !== undefined && !isRecord(entry.editorWorkingSet)) || (entry.panelViewContainerId !== undefined && typeof entry.panelViewContainerId !== 'string')) {
+				if (!isRecord(entry) || typeof entry.sessionResource !== 'string' || (entry.editorWorkingSet !== undefined && !isRecord(entry.editorWorkingSet))) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
 				// The editor owns validation and deserialization of its persisted working sets.
 				if (entry.editorWorkingSet) {
 					this.workingSets.set(entry.sessionResource, removeLegacyPageEditors(entry.editorWorkingSet as unknown as EditorWorkingSet));
 				}
-				if (typeof entry.panelViewContainerId === 'string') {
-					this.panelViews.set(entry.sessionResource, entry.panelViewContainerId);
-				}
+
 				if (entry.partVisibility !== undefined) {
 					if (!isRecord(entry.partVisibility) || typeof entry.partVisibility.editor !== 'boolean' || typeof entry.partVisibility.auxiliarybar !== 'boolean') {
 						throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
@@ -106,13 +101,7 @@ export abstract class BaseLayoutController extends Disposable {
 	}
 
 	public start(): void {
-		this._register(this.panes.onDidPaneCompositeOpen(event => {
-			if (event.viewContainerLocation !== ViewContainerLocation.Panel) { return; }
-			const selected = this.sessions.getSelection();
-			if (this.layout.isPartVisible('panel') && selected.activeSelection && selected.visibleSelections.length === 1) {
-				this.panelViews.set(this.sessionKey(selected.activeSelection), event.composite.id);
-			}
-		}));
+
 		this._register(this.storage.onWillSaveState(() => this.saveState()));
 		this._register(this.lifecycle.onWillShutdown(event => event.join(this.whenSettled().then(() => this.saveState()), 'session editor layout')));
 		// The service scope outlives editor Parts; stop capturing state before those Parts are released.
@@ -144,11 +133,7 @@ export abstract class BaseLayoutController extends Disposable {
 					this.workingSets.set(to, saved);
 					this.workingSets.delete(from);
 				}
-				const panelView = this.panelViews.get(from);
-				if (panelView) {
-					this.panelViews.set(to, panelView);
-					this.panelViews.delete(from);
-				}
+
 				const visibility = this.chatVisibility.get(from);
 				if (visibility) {
 					this.chatVisibility.set(to, visibility);
@@ -156,9 +141,9 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 				if (this.editorSession === from) {
 					this.editorSession = to;
-					this.onSessionIdentityChanged(from, to);
 					this.revision++;
 				}
+				this.onSessionIdentityChanged(from, to);
 				if (this.requestedSession === from) {
 					this.requestedSession = to;
 				}
@@ -176,8 +161,7 @@ export abstract class BaseLayoutController extends Disposable {
 					// A newly selected scope adopts the current documents. A setting change must
 					// not close live editors before that scope has ever acquired a working set.
 					this.workingSets.set(key, this.getWorkingSet(key));
-					const panel = this.panelViews.get(this.editorSession);
-					if (panel) { this.panelViews.set(key, panel); }
+
 				}
 				this.requestedSession = key;
 				this.requestedThread = threadId;
@@ -189,14 +173,7 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 			workspaceChanged.read(reader);
 			partVisibilityChanged.read(reader);
-			if (selected.visibleSelections.length > 1) {
-				for (const visible of selected.visibleSelections) {
-					this.panelViews.delete(this.sessionKey(visible));
-				}
-			}
-			if (selection && selected.visibleSelections.length === 1 && this.layout.isPartVisible('panel')) {
-				void this.panes.openPaneComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal, ViewContainerLocation.Panel).catch(error => this.notifications.error(String(error)));
-			}
+
 			if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors()) {
 				this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), restoring: false, applying: false }, undefined);
 				return;
@@ -263,8 +240,8 @@ export abstract class BaseLayoutController extends Disposable {
 		} while (pending !== this.pendingRestore);
 	}
 
-	protected captureEditors(): void {
-		if (this.editorSession && this.canRestoreSessionEditors() && !this.isEditorAutoVisibilitySuppressed()) {
+	protected captureEditors(force = false): void {
+		if (this.editorSession && this.canRestoreSessionEditors() && (force || !this.isEditorAutoVisibilitySuppressed())) {
 			let snapshot = this.getWorkingSet(this.editorSession);
 			const previous = this.workingSets.get(this.editorSession);
 			if (previous && !this.layout.isPartVisible('editor') && this.retainedEditors.size && this.editor.groups.some(group => group.inputs.some(input => this.retainedEditors.has(input)))
@@ -283,9 +260,10 @@ export abstract class BaseLayoutController extends Disposable {
 	protected isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
 	protected shouldShowEditor(): boolean { return this.editors.visibleEditors.length > 0 || !this.layout.isPartVisible('sessions'); }
 	protected canRestoreSessionEditors(): boolean { return this.layout.isPartVisible('sessions'); }
-	protected applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
+	protected applyWorkingSet(saved: EditorWorkingSet | 'empty', _key?: string): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
 	protected async onSessionRestored(_selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> { }
 	protected onSessionIdentityChanged(_from: string, _to: string): void { }
+	protected onSessionLayoutRemoved(_key: string): void { }
 
 	/** User transitions share the restore queue so they never mutate an incoming working set. */
 	protected enqueueLayoutOperation(operation: () => Promise<void>): Promise<void> {
@@ -319,7 +297,7 @@ export abstract class BaseLayoutController extends Disposable {
 		const revision = this.revision;
 		this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), applying: true }, undefined);
 		try {
-			await this.applyWorkingSet(saved ?? 'empty');
+			await this.applyWorkingSet(saved ?? 'empty', key);
 			const visibility = revision === this.revision && this.chatLayoutPresentation.configured === 'chat' ? this.chatVisibility.get(key) : undefined;
 			if (visibility) {
 				for (const part of ['editor', 'auxiliarybar'] as const) {
@@ -335,11 +313,11 @@ export abstract class BaseLayoutController extends Disposable {
 		}
 	}
 
-	private saveState(): void {
+	protected saveState(): void {
 		this.pruneWorkingSets();
 		this.captureEditors();
-		const keys = new Set([...this.workingSets.keys(), ...this.panelViews.keys(), ...this.chatVisibility.keys()]);
-		this.storage.store(layoutStateKey, JSON.stringify([...keys].map(sessionResource => ({ sessionResource, editorWorkingSet: this.workingSets.get(sessionResource), panelViewContainerId: this.panelViews.get(sessionResource), partVisibility: this.chatVisibility.get(sessionResource) }))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const keys = new Set([...this.workingSets.keys(), ...this.chatVisibility.keys()]);
+		this.storage.store(layoutStateKey, JSON.stringify([...keys].map(sessionResource => ({ sessionResource, editorWorkingSet: this.workingSets.get(sessionResource), partVisibility: this.chatVisibility.get(sessionResource) }))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	private pruneWorkingSets(): void {
@@ -355,13 +333,10 @@ export abstract class BaseLayoutController extends Disposable {
 		for (const key of this.workingSets.keys()) {
 			if (!live.has(key)) {
 				this.workingSets.delete(key);
+				this.onSessionLayoutRemoved(key);
 			}
 		}
-		for (const key of this.panelViews.keys()) {
-			if (!live.has(key)) {
-				this.panelViews.delete(key);
-			}
-		}
+
 		for (const key of this.chatVisibility.keys()) {
 			if (!live.has(key)) { this.chatVisibility.delete(key); }
 		}

@@ -13,12 +13,13 @@ suite('sessionArchiveActions browser component', () => {
 				page.on('pageerror', error => errors.push(error.message));
 				await page.goto(`/chatTranscript.html${locale === 'en' ? '' : '?locale=zh-CN'}`);
 				await page.evaluate(wording => window.ashChatTranscriptIntegration.prepareSessionLifecycle(wording), wording);
-				await page.evaluate(() => { void window.ashChatTranscriptIntegration.runSessionAction('agentSession.archive'); });
+				const archiving = page.evaluate(() => window.ashChatTranscriptIntegration.runSessionAction('agentSession.archive'));
 				const dialog = page.getByRole('dialog');
 				await expect.poll(async () => { expect(errors).toEqual([]); return dialog.count(); }).toBe(1);
 				await expect(dialog).toContainText(locale === 'en' ? 'Running work in this session will be interrupted' : '正在运行的工作将被中断');
 				const archive = locale === 'en' ? wording === 'archive' ? 'Archive' : 'Mark as Done' : wording === 'archive' ? '归档' : '标记为完成';
 				await dialog.getByRole('button', { name: archive, exact: true }).press('Enter');
+				expect(await archiving).toBe(true);
 				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState().sessions[0]?.status)).toBe('archived');
 				await page.evaluate(() => { void window.ashChatTranscriptIntegration.runSessionAction('agentSession.restore'); });
 				const picker = page.getByRole('dialog');
@@ -32,6 +33,7 @@ suite('sessionArchiveActions browser component', () => {
 				const result = await page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState());
 				expect(errors).toEqual([]);
 				expect(result).toEqual({
+					activeThreadId: 'lifecycle',
 					requests: [{ operation: 'archive', sessionId: 'lifecycle' }, { operation: 'restore', sessionId: 'lifecycle' }],
 					opened: ['lifecycle/lifecycle'],
 					sessions: [{ id: 'lifecycle', status: 'active', threads: ['lifecycle/active', 'lifecycle-child/archived'] }],
@@ -39,5 +41,14 @@ suite('sessionArchiveActions browser component', () => {
 				});
 			});
 		}
+		test(`Cancelling archive reports no completed action in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?locale=${locale}`);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.prepareSessionLifecycle('done'));
+			const archiving = page.evaluate(() => window.ashChatTranscriptIntegration.runSessionAction('agentSession.archive'));
+			await page.getByRole('dialog').getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true }).click();
+			expect(await archiving).toBe(false);
+			expect((await page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState())).requests).toEqual([]);
+		});
 	}
 });

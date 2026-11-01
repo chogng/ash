@@ -23,7 +23,8 @@ import { IsWebContext } from '../../../../platform/contextkey/common/contextkeys
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID } from './fileConstants.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
+import { COPY_PATH_COMMAND_ID, COPY_RELATIVE_PATH_COMMAND_ID, NEW_UNTITLED_FILE_COMMAND_ID, OPEN_FILE_COMMAND_ID, REVEAL_IN_EXPLORER_COMMAND_ID, SAVE_FILE_COMMAND_ID, SAVE_FILE_AS_COMMAND_ID } from './fileConstants.js';
 import { copyFilePath, copyRelativeFilePath, resolveFileResource, revealInExplorer } from './fileCommands.js';
 import { cancelExplorerCut, CANCEL_CUT_COMMAND_ID, copyExplorerItems, COPY_FILE_COMMAND_ID, createNewFile, createNewFolder, CUT_FILE_COMMAND_ID, deleteExplorerItem, DELETE_FILE_COMMAND_ID, DOWNLOAD_COMMAND_ID, NEW_FILE_COMMAND_ID, NEW_FOLDER_COMMAND_ID, openExplorerItemToSide, OPEN_TO_SIDE_COMMAND_ID, pasteExplorerItems, PASTE_FILE_COMMAND_ID, renameExplorerItem, RENAME_FILE_COMMAND_ID } from './fileActions.js';
 import { FileDownload } from './fileImportExport.js';
@@ -144,6 +145,27 @@ registerAction2(class SaveActiveEditorAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		return accessor.get(IEditorPart).saveActiveEditor();
+	}
+});
+
+registerAction2(class SaveActiveEditorAsAction extends Action2 {
+	constructor() {
+		super({
+			id: SAVE_FILE_AS_COMMAND_ID,
+			title: localize2('files.saveAs', 'Save As...'),
+			f1: true,
+			precondition: EditorsVisibleContext.isEqualTo(true),
+			menu: { id: MenuId.MenubarFileMenu, group: '3_save', order: 2 },
+			keybinding: { primary: Keybinding.single(logicalKey('s', { primaryKey: true, shiftKey: true })) },
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const group = accessor.get(IEditorGroupsService).activeGroup;
+		const input = group.activeInput;
+		if (input) {
+			await accessor.get(IEditorService).save({ editor: input, groupId: group.id }, { saveAs: true });
+		}
 	}
 });
 

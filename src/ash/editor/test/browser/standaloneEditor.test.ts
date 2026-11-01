@@ -957,10 +957,15 @@ suite('standalone browser component', () => {
 		await editor.hover();
 		await page.mouse.wheel(0, 180);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
+		// Wheel dispatch returns before Chromium finishes its compositor hit testing.
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		await page.mouse.move(900, 600);
 		await input.focus();
-		// Focus reveal can produce a final scroll event; expire activity after focus settles.
+		// Native scroll and focus reveal finish across frame callbacks before their
+		// activity timer can be expired by the virtual clock.
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		await page.clock.runFor(800);
+		await page.clock.resume();
 		await expect(track).toHaveCSS('opacity', '0');
 		await editor.hover();
 		const thumb = track.locator('.ash-scrollbar-thumb');
@@ -1862,6 +1867,7 @@ suite('standalone browser component', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
 			const buttons = page.locator('#caller .stanza-editor-sticky-scroll-item');
 			await expect(buttons).toHaveText(['class Outer {', '  method() {']);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyState().ends)).toEqual([85, 84]);
 			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineHeight: 28 }));
 			await expect.poll(() => buttons.first().evaluate(element => element.getBoundingClientRect().height)).toBe(28);
 			await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200, 80));
@@ -1890,8 +1896,17 @@ suite('standalone browser component', () => {
 				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
 				await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
 				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
+				if (reason === 'provider') {
+					// Indentation can produce the same header text; its scope ends distinguish it from the stale outline.
+					await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().ends)).toEqual([86, 85]);
+				}
 				await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
-				await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).not.toHaveText(['class Outer {', '  method() {']);
+				if (reason === 'provider') {
+					await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+					expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyState().ends)).toEqual([86, 85]);
+				} else {
+					await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).not.toHaveText(['class Outer {', '  method() {']);
+				}
 			});
 		}
 
@@ -5147,6 +5162,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
+		await expect(page.locator('.ash-editor-lightbulb')).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 		const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
 		const lightbulb = page.getByRole('button', { name: 'Show code actions', exact: true });
@@ -6015,6 +6031,7 @@ suite('standalone browser component', () => {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+		await expect(page.locator('.stanza-editor-color-picker')).toHaveCount(0);
 		await page.keyboard.press('ControlOrMeta+Shift+c');
 		const picker = page.locator('.stanza-editor-color-picker').first();
 		await expect(picker).toBeVisible();

@@ -5,7 +5,7 @@ import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile }
 import { join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import ts from 'typescript';
-import { ProcessRun } from '../processes.ts';
+import { detachedProcess, ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
 import { prepareIncrementalOutput } from '../lib/incrementalOutput.ts';
 
@@ -245,7 +245,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
 		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], {
-			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
+			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: detachedProcess(),
 		});
 		const stdout = createInterface({ input: child.stdout });
 		const stderr = createInterface({ input: child.stderr });

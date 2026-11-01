@@ -161,6 +161,10 @@ placement 的 `menu`、`when`、`group`、`alt` 分别最多 128、2048、256、
 连接关闭或进程替换均取消调用，旧进程的迟到结果不会更新新链接。注册 regex 的语法由 Frontend 校验，
 Host 限制 pattern 为 2048 bytes 并验证展示 kind。
 
+健康维护沿用 Host RPC 的 Ping/Pong：每隔 `request_timeout` 派发探测，后续维护 tick
+以非阻塞方式检查响应；再超过同一预算则终止旧 incarnation 并按既有重启策略重新激活。
+探测不占用取消/停用的保留控制配额，不阻塞其他扩展撤权。停用清除在途探测，迟到结果不能恢复已停用实例。
+
 默认 `ExtensionHostLimits` 为：
 
 | 限制                                              |                                           默认值 |

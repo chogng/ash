@@ -12,6 +12,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import {
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
+	toFileSystemProviderErrorCode,
 	FileKind,
 	FileNotFoundError,
 	FileOperationNotSupportedError,
@@ -25,6 +26,7 @@ import {
 	type FileMissingTargetBehavior,
 	type IFileBytes,
 	type IFileChangeEvent,
+	type IFileRenameEvent,
 	type IFileContent,
 	type IFileEntry,
 	type IFileService,
@@ -54,6 +56,7 @@ interface WatchRegistration extends IDisposable {
 /** Owns scheme routing and subscriptions; providers retain their storage lifetimes. */
 export class FileService extends Disposable implements IFileService {
 	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
+	private readonly renameEmitter = this._register(new Emitter<IFileRenameEvent>());
 	private readonly registrationEmitter = this._register(new Emitter<IFileSystemProviderRegistrationEvent>());
 	private readonly capabilitiesEmitter = this._register(new Emitter<IFileSystemProviderCapabilitiesChangeEvent>());
 	private readonly pathIdentityEmitter = this._register(new Emitter<IFileSystemProviderPathIdentityChangeEvent>());
@@ -63,6 +66,7 @@ export class FileService extends Disposable implements IFileService {
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 
 	public readonly onDidChangeFiles = this.changeEmitter.event;
+	public readonly onDidRenameFile = this.renameEmitter.event;
 	public readonly onDidChangeFileSystemProviderRegistrations = this.registrationEmitter.event;
 	public readonly onDidChangeFileSystemProviderCapabilities = this.capabilitiesEmitter.event;
 	public readonly onDidChangeFileSystemProviderPathIdentity = this.pathIdentityEmitter.event;
@@ -296,7 +300,17 @@ export class FileService extends Disposable implements IFileService {
 		if (provider !== this.writableProvider(target, 'rename')) {
 			throw new Error('Renaming across file system providers is not supported');
 		}
-		return provider.rename(source, target, existing);
+		return provider.rename(source, target, existing).then(async () => {
+			if (extUri.isEqual(source, target)) { return; }
+			if (existing === 'ignore') {
+				// An ignored collision leaves the source in place; it must not redirect open editors.
+				try { await provider.stat(source); return; }
+				catch (error) {
+					if (!(error instanceof Error) || toFileSystemProviderErrorCode(error) !== FileSystemProviderErrorCode.FileNotFound) { return; }
+				}
+			}
+			this.renameEmitter.fire({ source, target });
+		});
 	}
 
 	public delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {

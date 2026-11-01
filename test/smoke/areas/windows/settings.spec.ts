@@ -1,6 +1,47 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
+test('Built-in Media Preview settings live under Features and retain existing profile values', { tag: ['@electron-app-server'] }, async ({ workbench }, testInfo) => {
+	const page = workbench.page;
+	const existing = await readUserSettings(page);
+	await writeUserSettings(page, '{\n  // Preview preferences\n  "mediaPreview.video.autoPlay": true,\n  "mediaPreview.video.loop": true,\n  "accessibility.verbosity.imagePreview": false,\n  "workbench.commandPalette.history": 12,\n}\n', existing.revision);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('media-preview');
+	const settings = workbench.settingsEditor.element;
+	await expect(settings.locator('[data-settings-group-id="features"]')).toBeVisible();
+	await expect(settings.locator('[data-tree-id="media-preview"]')).toHaveAttribute('aria-level', '2');
+	await expect(settings.getByRole('heading', { name: 'Media Preview', exact: true, level: 3 })).toBeVisible();
+	await expect(settings.locator('[data-settings-category-id="extension.ash.media-preview"]')).toHaveCount(0);
+	const autoplay = settings.locator('[data-configuration-key="mediaPreview.video.autoPlay"]');
+	const loop = settings.locator('[data-configuration-key="mediaPreview.video.loop"]');
+	await expect(autoplay).toHaveAttribute('aria-checked', 'true');
+	await expect(loop).toHaveAttribute('aria-checked', 'true');
+	await expect(settings.locator('[data-configuration-key^="accessibility.verbosity."]')).toHaveCount(0);
+	const fitPercentage = settings.locator('[data-configuration-key="mediaPreview.image.fitToWindowPercentage"]');
+	await expect(fitPercentage).toHaveValue('100');
+	await fitPercentage.fill('80');
+	await fitPercentage.press('Tab');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/"mediaPreview.image.fitToWindowPercentage":\s*80/u);
+	await expect(settings.locator('[data-configuration-key="mediaPreview.image.defaultZoom"]')).toBeVisible();
+	await loop.focus();
+	await loop.press('Space');
+	await expect(loop).toHaveAttribute('aria-checked', 'false');
+	await expect.poll(async () => (await readUserSettings(page)).content).not.toMatch(/"mediaPreview.video.loop":/u);
+	const saved = (await readUserSettings(page)).content;
+	expect(saved).toContain('// Preview preferences');
+	expect(saved).toMatch(/"workbench.commandPalette.history":\s*12/u);
+	await testInfo.attach('media-preview-settings', { body: await settings.screenshot(), contentType: 'image/png' });
+	await settings.getByRole('searchbox').fill('@id:mediaPreview.video.loop');
+	await expect(settings.locator('[data-configuration-key="mediaPreview.video.loop"]')).toHaveCount(1);
+	await settings.getByRole('searchbox').fill('');
+	await workbench.settingsEditor.selectCategory('accessibility');
+	await settings.getByRole('searchbox').fill('@id:accessibility.verbosity.imagePreview');
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.imagePreview"]')).toHaveAttribute('aria-checked', 'false');
+	await settings.getByRole('searchbox').fill('@id:accessibility.verbosity.mediaPreview');
+	await expect(settings.locator('[data-configuration-key="accessibility.verbosity.mediaPreview"]')).toBeVisible();
+});
+
 test('Path rule settings use editable lists and persist removal of default rules', async ({ workbench, application, restartWorkbench, reloadWorkbench, target }, testInfo) => {
 	test.setTimeout(120_000);
 	for (const chinese of [false, true]) {
@@ -183,8 +224,8 @@ test('Configure Editors opens workbench editor settings from the title menu in E
 test('accessibility signal settings validate modes and survive restart in Chinese', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('general');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibilitySignals');
 	let settings = workbench.settingsEditor.element;
 	let progress = settings.locator('[data-configuration-key="accessibility.signals.progress"]');
 	const sound = progress.getByRole('textbox', { name: 'Mode 1', exact: true });
@@ -219,8 +260,8 @@ test('accessibility signal settings validate modes and survive restart in Chines
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('general');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibilitySignals');
 	settings = workbench.settingsEditor.element;
 	progress = settings.locator('[data-configuration-key="accessibility.signals.progress"]');
 	await expect(progress).toContainText('进度提示');
@@ -338,9 +379,12 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	const application = settings.locator('[data-tree-id="general"]');
-	await expect(application).toHaveAttribute('aria-level', '2');
-	await expect(application).not.toHaveAttribute('aria-expanded');
+	const application = settings.locator('[data-tree-id="group.application"]');
+	await expect(application).toHaveAttribute('aria-level', '1');
+	await expect(application).toHaveAttribute('aria-expanded', 'true');
+	const language = settings.locator('[data-tree-id="display-language"]');
+	await expect(language).toHaveAttribute('aria-level', '2');
+	await expect(language).not.toHaveAttribute('aria-expanded');
 	await expect(settings.locator('[data-settings-category-id="dictation"]')).toHaveCount(0);
 	for (const group of ['workbench', 'agents']) {
 		await settings.locator(`[data-settings-group-id="${group}"]`).click();
@@ -375,10 +419,10 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 		await expect(settings.locator('[data-settings-category-id="voice-input"]')).toBeVisible();
 	}
 	await search.fill('');
-	await settings.locator('[data-settings-category-id="general"]').click();
-	await application.focus();
-	await application.press('ArrowRight');
-	await expect(application).not.toHaveAttribute('aria-expanded');
+	await workbench.settingsEditor.selectCategory('display-language');
+	await language.focus();
+	await language.press('ArrowRight');
+	await expect(language).not.toHaveAttribute('aria-expanded');
 });
 
 test('Dictation settings entry reveals Voice input in Features', async ({ workbench }) => {
@@ -689,10 +733,10 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.getByRole('heading', { name: 'Minimap', exact: true })).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
-		await page.locator('[data-settings-category-id="general"]').click();
+		await workbench.settingsEditor.selectCategory('display-language');
 		await expect(rootTitle).toBeHidden();
 		await expect(rootDescription).toHaveCount(0);
-		await expect(page.locator('.ash-settings-page h3')).toHaveText('Application');
+		await expect(page.locator('.ash-settings-page h3')).toHaveText('Display Language');
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('voice-input');
 		await expect(page.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
@@ -846,7 +890,8 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibility');
 	const row = settings.locator('[data-settings-item-id="accessibility.verbosity.memories"]');
 	const control = row.getByRole('switch', { name: 'Memories accessibility help' });
 	await expect(control).toBeVisible();
@@ -959,7 +1004,7 @@ test.describe('Manage menu', () => {
 		await workbench.menus.select(application, () => manageButton.click(), ['Settings']);
 		await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 		await expect(page.locator('.ash-settings-editor')).toBeVisible();
-		await page.locator('[data-settings-category-id="general"]').click();
+		await workbench.settingsEditor.selectCategory('updates');
 		if (target.kind === 'electron') {
 			const updatePolicy = page.locator('[data-configuration-key="update.policy"]').getByRole('combobox');
 			await expect(updatePolicy).toBeVisible();
@@ -976,6 +1021,9 @@ test.describe('Manage menu', () => {
 		await workbench.settingsEditor.selectCategory('source-control');
 		const quickDiffWhitespace = page.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]').getByRole('combobox');
 		await expect(quickDiffWhitespace).toHaveCSS('height', '24px');
+		await workbench.settingsEditor.selectGroup('extensions');
+		await workbench.settingsEditor.selectCategory('extension.ash.git');
+		await workbench.settingsEditor.selectCategory('extension.ash.git.group.git.sync');
 		const autoFetchPeriod = page.locator('[data-configuration-key="git.autofetchPeriod"]');
 		await expect(autoFetchPeriod).toHaveCSS('height', '24px');
 		await expect(autoFetchPeriod).toHaveCSS('width', '96px');
@@ -996,7 +1044,7 @@ test.describe('Manage menu', () => {
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
 		const appearanceGroups = page.locator('.ash-settings-content-group:not(.is-settings-root)');
-		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText(['Color theme', 'Editor tips']);
+		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText(['Workbench Style', 'Color theme', 'Editor tips']);
 		for (const card of await appearanceGroups.locator('.ash-settings-card').all()) {
 			await expect(card).toHaveCSS('border-radius', '8px');
 		}
@@ -1008,15 +1056,8 @@ test.describe('Manage menu', () => {
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
 			await expect(setting).toHaveCSS('height', '68px');
 		}
-		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
-		await page.locator('[data-settings-category-id="layout"]').click();
 		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
 		await expect(layoutStyle).toBeVisible();
-		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
-			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
-			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
-		}
-		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		const modernWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(modernWidth).toBeDefined();
 		expect(modernWidth!).toBeLessThan(120);
@@ -1039,11 +1080,22 @@ test.describe('Manage menu', () => {
 		});
 		expect(fontSizes.option).toBe(fontSizes.trigger);
 		await page.getByRole('option', { name: 'Flat' }).click();
+		await expect(layoutStyle.getByRole('combobox')).toHaveText('Flat');
+		await expect(workbench.element).toHaveAttribute('data-layout-style', 'flat');
 		const flatWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(flatWidth).toBeDefined();
-		expect(flatWidth!).toBeLessThan(modernWidth!);
+		// Both labels can fit inside the select's minimum width.
+		expect(flatWidth!).toBeLessThanOrEqual(modernWidth!);
 		await layoutStyle.getByRole('combobox').click();
 		await page.getByRole('option', { name: 'Modern' }).click();
+		await expect(workbench.element).toHaveAttribute('data-layout-style', 'modern');
+		await page.locator('[data-settings-category-id="layout"]').click();
+		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
+			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
+		}
+		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		if (target.kind === 'electron') {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
 		} else {

@@ -9,7 +9,7 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { ReconnectAppServerCommandId, AppServerRecoveryAvailableContext } from '../../browser/remoteActions.js';
 import '../../browser/remote.contribution.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { IRemoteConnectionApi, RemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -109,6 +109,8 @@ class TestQuickInputService implements IQuickInputService {
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;
+	createQuickTree = quickInputServiceTestControls.createQuickTree;
+	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
 	async input(): Promise<string | undefined> { return undefined; }
@@ -121,6 +123,20 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: IQuickInput['buttons'] = [];
+	enabled = true;
+	busy = false;
+	contextKey: string | undefined;
+	ignoreFocusOut = false;
+	readonly onWillHide = Event.None;
+	readonly onDispose = Event.None;
+	readonly onDidTriggerButton = Event.None;
+	willHide(): void { }
+	didHide(): void { }
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
 	focus(): void { }
@@ -133,7 +149,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	sortByLabel = true;
 	private readonly acceptEmitter = new Emitter<IQuickPickDidAcceptEvent>();
 	private readonly valueEmitter = new Emitter<string>();
-	private readonly hideEmitter = new Emitter<void>();
+	private readonly hideEmitter = new Emitter<IQuickInputHideEvent>();
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidChangeValue = this.valueEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;
@@ -152,7 +168,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	}
 
 	show(): void { }
-	hide(): void { this.hideEmitter.fire(); }
+	hide(): void { this.hideEmitter.fire({ reason: QuickInputHideReason.Other }); }
 	dispose(): void {
 		this.acceptEmitter.dispose();
 		this.valueEmitter.dispose();

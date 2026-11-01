@@ -1,0 +1,270 @@
+import '../../../../editor/test/browser/testEditorDom.js';
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { IQuickInputService, QuickInputHideReason, type IQuickInput, type IQuickTreeItem } from '../../common/quickInput.js';
+import { ContextKeyService } from '../../../contextkey/browser/contextKeyService.js';
+import { QuickInputTreeController } from '../../browser/tree/quickInputTreeController.js';
+import { TestQuickInputService } from './testQuickInputService.js';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../layout/browser/layoutService.js';
+import { AccessibleViewType } from '../../../accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../accessibility/browser/accessibleViewRegistry.js';
+import '../../../../workbench/contrib/accessibility/browser/accessibility.contribution.js';
+import { getParentNodeState } from '../../browser/tree/quickInputTree.js';
+
+suite('Quick Tree service behavior', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('the tree controller preserves mixed checkbox values in its public batch operation', () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const scope = resources.add(new InstantiationService());
+		resources.add(new TestQuickInputService({ container: root, instantiationService: scope }));
+		const controller = resources.add(scope.createInstance(QuickInputTreeController, root));
+		const child: IQuickTreeItem = { label: 'Child', checked: true };
+		const group: IQuickTreeItem = { label: 'Group', children: [child] };
+		controller.setTreeData([group]);
+		const states: (boolean | 'mixed')[] = [];
+		resources.add(controller.onDidChangeCheckboxState(event => states.push(event.checked)));
+		controller.checkAll('mixed');
+		assert.equal(child.checked, 'mixed');
+		assert.equal(group.checked, 'mixed');
+		assert.deepEqual(controller.getCheckedLeafItems(), []);
+		assert.deepEqual(states, ['mixed', 'mixed']);
+		controller.checkAll(true);
+		assert.equal(child.checked, true);
+		assert.deepEqual(controller.getCheckedLeafItems(), [child]);
+	});
+
+	for (const kind of ['pick', 'tree', 'widget'] as const) {
+		test(`shared title, buttons, enabled state and context reach the real ${kind} host`, async () => {
+			using resources = new DisposableStore();
+			const root = document.createElement('main');
+			document.body.append(root);
+			resources.add(toDisposable(() => root.remove()));
+			const contexts = resources.add(new ContextKeyService());
+			const service = resources.add(new TestQuickInputService({ container: root, contextKeyService: contexts }));
+			let input: IQuickInput;
+			let accepts = 0;
+			if (kind === 'pick') {
+				const pick = resources.add(service.createQuickPick());
+				pick.items = [{ label: 'One' }];
+				resources.add(pick.onDidAccept(() => accepts++));
+				input = pick;
+			} else if (kind === 'tree') {
+				const tree = resources.add(service.createQuickTree());
+				tree.setItemTree([{ label: 'One' }]);
+				resources.add(tree.onDidAccept(() => accepts++));
+				input = tree;
+			} else {
+				const widget = resources.add(service.createQuickWidget());
+				widget.widget = document.createElement('input');
+				input = widget;
+			}
+			const button = { tooltip: 'Toggle setting', toggle: { checked: false } };
+			const triggered: unknown[] = [];
+			resources.add(input.onDidTriggerButton(value => triggered.push(value)));
+			input.title = 'Configure';
+			input.description = 'Choose a value';
+			input.step = 2;
+			input.totalSteps = 3;
+			input.buttons = [button];
+			input.contextKey = 'testQuickInput';
+			input.busy = true;
+			input.show();
+			const surface = root.querySelector<HTMLElement>('.ash-quick-pick, .ash-quick-widget')!;
+			assert.equal(surface.querySelector('.ash-quick-input-title')!.textContent, 'Configure');
+			assert.equal(surface.querySelector('.ash-quick-input-steps')!.textContent, 'Step 2 of 3');
+			assert.equal(surface.querySelector('.ash-quick-tree-description-text')!.textContent, 'Choose a value');
+			assert.equal(surface.getAttribute('aria-busy'), 'true');
+			assert.equal(contexts.getContext(surface).getValue('testQuickInput'), true);
+			input.contextKey = 'replacementQuickInput';
+			assert.equal(contexts.getContext(surface).getValue('testQuickInput'), false);
+			assert.equal(contexts.getContext(surface).getValue('replacementQuickInput'), true);
+			const action = surface.querySelector<HTMLButtonElement>('.ash-quick-input-title-button')!;
+			action.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.deepEqual(triggered, [button]);
+			assert.equal(action.getAttribute('aria-pressed'), 'true');
+			input.enabled = false;
+			assert.equal(action.disabled, true);
+			await input.accept();
+			assert.equal(accepts, 0);
+			assert.equal(document.activeElement, surface);
+			input.enabled = true;
+			input.busy = false;
+			assert.equal(action.disabled, false);
+			assert.equal(surface.getAttribute('aria-busy'), 'false');
+			input.hide();
+			assert.equal(contexts.getContext(root).getValue('replacementQuickInput'), undefined);
+		});
+
+		test(`${kind} hide events surround unmounting and precede disposal`, async () => {
+			using resources = new DisposableStore();
+			const root = document.createElement('main');
+			const origin = document.createElement('button');
+			root.append(origin);
+			document.body.append(root);
+			resources.add(toDisposable(() => root.remove()));
+			const service = resources.add(new TestQuickInputService({ container: root }));
+			const input = resources.add(kind === 'pick' ? service.createQuickPick() : kind === 'tree' ? service.createQuickTree() : service.createQuickWidget());
+			if ('widget' in input) input.widget = document.createElement('input');
+			const events: string[] = [];
+			resources.add(input.onWillHide(({ reason }) => events.push(`will:${reason}:${root.querySelector('.ash-quick-input-host')!.childElementCount}`)));
+			resources.add(input.onDidHide(({ reason }) => events.push(`did:${reason}:${root.querySelector('.ash-quick-input-host')!.childElementCount}`)));
+			resources.add(input.onDispose(() => events.push('dispose')));
+			origin.focus();
+			input.show();
+			await service.cancel();
+			assert.deepEqual(events, [`will:${QuickInputHideReason.Gesture}:1`, `did:${QuickInputHideReason.Gesture}:0`]);
+			assert.equal(document.activeElement, origin);
+			input.show();
+			input.dispose();
+			input.dispose();
+			assert.deepEqual(events.slice(2), [`will:${QuickInputHideReason.Other}:1`, `did:${QuickInputHideReason.Other}:0`, 'dispose']);
+		});
+	}
+
+	test('a successor opened from onWillHide keeps its DOM, context and original focus destination', async () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		const origin = document.createElement('button');
+		root.append(origin);
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const contexts = resources.add(new ContextKeyService());
+		const service = resources.add(new TestQuickInputService({ container: root, contextKeyService: contexts }));
+		const first = resources.add(service.createQuickTree());
+		const next = resources.add(service.createQuickPick());
+		next.contextKey = 'nextInput';
+		resources.add(first.onWillHide(() => next.show()));
+		origin.focus();
+		first.show();
+		first.hide();
+		assert.equal(service.currentQuickInput, next);
+		const field = root.querySelector<HTMLInputElement>('.ash-quick-pick input')!;
+		assert.equal(document.activeElement, field);
+		assert.equal(contexts.getContext(field).getValue('nextInput'), true);
+		await service.cancel();
+		assert.equal(document.activeElement, origin);
+	});
+
+	test('preserves optional labels, placeholder fallback and programmatic acceptance', () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const service = resources.add(new TestQuickInputService({ container: root }));
+		const tree = resources.add(service.createQuickTree());
+		assert.equal(tree.ariaLabel, undefined);
+		assert.equal(tree.placeholder, undefined);
+		tree.placeholder = 'Choose a tool';
+		tree.show();
+		assert.equal(root.querySelector('input[role="combobox"]')?.getAttribute('aria-label'), 'Choose a tool');
+		tree.ariaLabel = 'Explicit label';
+		tree.placeholder = 'New placeholder';
+		assert.equal(root.querySelector('input[role="combobox"]')?.getAttribute('aria-label'), 'Explicit label');
+		tree.ariaLabel = undefined;
+		assert.equal(root.querySelector('input[role="combobox"]')?.getAttribute('aria-label'), 'New placeholder');
+		tree.hide();
+		let accepts = 0;
+		resources.add(tree.onDidAccept(() => accepts++));
+		tree.accept(true);
+		assert.equal(accepts, 1);
+		assert.equal(getParentNodeState([{ element: null }, { element: { label: 'Selected', checked: true } }]), 'mixed');
+	});
+
+	test('changes whole subtrees once and keeps hidden, disabled and unpickable leaves consistent', () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const service = resources.add(new TestQuickInputService({ container: root }));
+		const tree = resources.add(service.createQuickTree());
+		const first: IQuickTreeItem = { id: 'first', label: 'First', checked: true };
+		const second: IQuickTreeItem = { id: 'second', label: 'Second' };
+		const disabled: IQuickTreeItem = { id: 'disabled', label: 'Disabled', disabled: true };
+		const information: IQuickTreeItem = { id: 'information', label: 'Information', pickable: false };
+		const group: IQuickTreeItem = { id: 'group', label: 'Group', collapsed: true, children: [first, second, disabled, information] };
+		tree.setItemTree([group]);
+		assert.equal(group.checked, 'mixed');
+		assert.equal(tree.getParent(second), group);
+		assert.equal(tree.isCollapsed(group), true);
+		tree.show();
+		tree.value = 'Second';
+		assert.equal(tree.isCollapsed(group), false);
+		tree.activeItems = [second];
+		const changes: IQuickTreeItem[][] = [];
+		const checkboxChanges: IQuickTreeItem[] = [];
+		resources.add(tree.onDidChangeCheckboxState(item => checkboxChanges.push(item)));
+		resources.add(tree.onDidChangeCheckedLeafItems(items => changes.push([...items])));
+		service.toggle();
+		assert.equal(group.checked, true);
+		assert.deepEqual(tree.checkedLeafItems, [first, second]);
+		assert.deepEqual(changes, [[first, second]]);
+		assert.equal(disabled.checked, undefined);
+		assert.equal(information.checked, undefined);
+		tree.value = '';
+		assert.equal(tree.isCollapsed(group), true);
+		const replacement = { ...group, collapsed: undefined };
+		tree.setItemTree([replacement]);
+		assert.equal(tree.isCollapsed(replacement), true);
+		tree.activeItems = [replacement];
+		service.toggle();
+		assert.equal(replacement.checked, false);
+		assert.deepEqual(checkboxChanges, [second, replacement]);
+		assert.deepEqual(tree.checkedLeafItems, []);
+	});
+
+	test('replacing a tree retains stable focus and cancellation restores the originating control', async () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		const origin = document.createElement('button');
+		root.append(origin);
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const service = resources.add(new TestQuickInputService({ container: root }));
+		const tree = resources.add(service.createQuickTree());
+		origin.focus();
+		tree.setItemTree([{ id: 'one', label: 'One' }, { id: 'two', label: 'Two' }]);
+		tree.show();
+		tree.activeItems = [tree.itemTree[1]];
+		tree.setItemTree([{ id: 'two', label: 'Two updated' }, { id: 'three', label: 'Three' }]);
+		assert.equal(tree.activeItems[0]?.label, 'Two updated');
+		await service.cancel();
+		assert.equal(service.currentQuickInput, undefined);
+		assert.equal(document.activeElement, origin);
+	});
+
+	test('the registered accessibility providers describe tree actions and selection, and restore input focus', () => {
+		using resources = new DisposableStore();
+		const root = document.createElement('main');
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		const scope = resources.add(new InstantiationService());
+		const layout = resources.add(new BrowserLayoutService({ root }));
+		scope.registerInstance(ILayoutService, layout);
+		const service = resources.add(new TestQuickInputService({ container: root, instantiationService: scope, layoutService: layout }));
+		scope.registerInstance(IQuickInputService, service);
+		const tree = resources.add(service.createQuickTree());
+		tree.setItemTree([{ label: 'Group', children: [{ label: 'Read', checked: true }, { label: 'Write' }] }]);
+		tree.show();
+		const input = document.activeElement;
+		const other = document.createElement('button');
+		root.append(other);
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name === `quick-input-${type}`)!;
+			using provider = scope.invokeFunction(implementation.getProvider)!;
+			assert.ok(provider);
+			const content = provider.provideContent();
+			assert.match(content, type === AccessibleViewType.Help ? /Space.*children/ : /Group: Partly selected\n  Read: Selected\n  Write: Not selected/);
+			other.focus();
+			provider.dispose();
+			assert.equal(document.activeElement, input);
+		}
+	});
+});

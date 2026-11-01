@@ -22,8 +22,10 @@ REQUIREMENTS = SCRIPTS.parent / "requirements.txt"
 BUN = ROOT / "node_modules/bun" / ("bun.exe" if os.name == "nt" else "bun")
 COLOR_GLYPHS = {
     "claude": "Brand color", "csv-green": "File type color", "docx-blue": "File type color",
-    "layout-panel-off-1": "Fixed color/opacity", "layout-sidebar-left-off-1": "Fixed color/opacity",
-    "layout-sidebar-right-off-1": "Fixed color/opacity", "pdf-filled": "File type color",
+    "layout-panel-off": "Fixed color/opacity",
+    "layout-sidebar-left-off": "Fixed color/opacity",
+    "layout-sidebar-right-off": "Fixed color/opacity",
+    "pdf-filled": "File type color",
     "pdf-red": "File type color", "xls-green": "File type color",
     "inspect": "Fixed white fill with black outlines", "symbol-method": "Translucent stroke overlay",
 }
@@ -80,9 +82,10 @@ def generate(source, typescript=None):
 def write_manifest(path, table):
     # Match the repository formatter before publication so font rebuilds do not
     # alternate between expanded Python arrays and compact JSON coordinates.
-    # Staged paths under .build are ignored by the formatter. Use the shipped
-    # manifest's context while formatting stdin, without touching that live file.
-    formatted = subprocess.run([str(BUN), "fmt", "--config", str(ROOT / ".prettierrc.toml"), "--stdin-filepath", str(SOURCE / "font/manifest.json")],
+    # Both staged paths and the shipped manifest are ignored by bulk formatting.
+    # The generator still formats its own output before publication.
+    formatted = subprocess.run([str(BUN), "fmt", "--config", str(ROOT / ".prettierrc.toml"), "--ignore-path", os.devnull,
+                                "--stdin-filepath", str(SOURCE / "font/manifest.json")],
         input=(json.dumps(table, indent=2) + "\n").encode("utf-8"), stdout=subprocess.PIPE, cwd=ROOT, check=True)
     path.write_bytes(formatted.stdout)
 

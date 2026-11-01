@@ -1,4 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IPaneComposite } from '../../../common/panecomposite.js';
@@ -6,6 +7,12 @@ import type { IView, IViewContainerDescriptor, IViewDescriptor, IViewPaneContain
 
 /** Window-scoped access to registered views and their retained container instances. */
 export interface IViewsService {
+	/** Borrow a retained View hosted by an editor group. Its host owns creation, placement and disposal. */
+	registerView(view: IView & {
+		readonly onDidFocus: Event<void>;
+		readonly onDidBlur: Event<void>;
+		readonly onDidChangeBodyVisibility: Event<boolean>;
+	}, descriptor: IViewDescriptor, open: () => Promise<void>, close: () => void): IDisposable;
 	readonly onDidChangeViewContainerVisibility: Event<{ id: string; visible: boolean; location: ViewContainerLocation; }>;
 	readonly onDidChangeViewVisibility: Event<{ id: string; visible: boolean; }>;
 	readonly onDidChangeFocusedView: Event<void>;

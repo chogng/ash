@@ -1,5 +1,5 @@
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../../editor/standalone/browser/standaloneServices.js';
@@ -32,6 +32,20 @@ import { ExternalUriOpenerService, IExternalUriOpenerService, type IExternalUriO
 import '../../common/externalUriOpener.contribution.js';
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: IQuickInput['buttons'] = [];
+	enabled = true;
+	busy = false;
+	contextKey: string | undefined;
+	ignoreFocusOut = false;
+	readonly onWillHide = Event.None;
+	readonly onDispose = Event.None;
+	readonly onDidTriggerButton = Event.None;
+	willHide(): void { }
+	didHide(): void { }
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly T[] = [];
 	focus(): void { }
@@ -43,7 +57,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	private readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
-	private readonly hidden = this._register(new Emitter<void>());
+	private readonly hidden = this._register(new Emitter<IQuickInputHideEvent>());
 	public readonly onDidAccept = this.accepted.event;
 	public readonly onDidHide = this.hidden.event;
 	public readonly onDidChangeValue = Event.None;
@@ -56,7 +70,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	public valueSelection = { start: 0, end: 0 };
 	public filterValue = (value: string): string => value;
 	public show(): void { }
-	public hide(): void { this.hidden.fire(); }
+	public hide(): void { this.hidden.fire({ reason: QuickInputHideReason.Other }); }
 	public chooseItem(index: number): void { this.selectedItems = [this.items[index]!]; this.accepted.fire({ inBackground: false }); }
 }
 

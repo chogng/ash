@@ -27,6 +27,8 @@ For a specific target:
 
 The regular commands run their matching `pretest:smoke:*` preparation first. The `no-compile` commands require that preparation to have completed against the current source. Reuse valid preparation instead of rebuilding for another targeted run. CI runs preparation and execution separately.
 
+UI projects do not prepare or start App Server or require its runtime package. Frontend preparation consumes validated generated contracts; missing or stale contracts require explicit `pnpm protocol:generate` or a matching `ASH_PROTOCOL_PACKAGE`. Use connected projects only for behavior that crosses the backend boundary.
+
 ## Common options
 
 | Option                                   | Description                                    |

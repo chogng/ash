@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
@@ -10,7 +10,7 @@ import { UpdateMainService } from '../../electron-main/updateMainService.js';
 
 suite('Desktop update download cleanup', () => {
 	test('a new process removes owned downloads and preserves unknown content and worktrees', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ash-update-cleanup-'));
+		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-update-cleanup-')));
 		try {
 			const updates = join(directory, 'updates');
 			for (const name of [

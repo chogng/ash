@@ -1,5 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { Event } from '../../../../base/common/event.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
@@ -11,6 +12,19 @@ import type { IProgressIndicator } from '../../../../platform/progress/common/pr
 
 /** Descriptors own view identity, Parts own instances, and this service observes their runtime visibility and focus. */
 export class ViewsService extends Disposable implements IViewsService {
+	private readonly editorViews = new Map<string, { readonly view: IView; readonly descriptor: IViewDescriptor; readonly open: () => Promise<void>; readonly close: () => void; }>();
+	private readonly editorViewListeners = this._register(new DisposableMap<string, DisposableStore>());
+
+	public registerView(view: IView & { readonly onDidFocus: Event<void>; readonly onDidBlur: Event<void>; readonly onDidChangeBodyVisibility: Event<boolean>; }, descriptor: IViewDescriptor, open: () => Promise<void>, close: () => void): IDisposable {
+		if (this.editorViews.has(view.id)) throw new Error(`View is already hosted: ${view.id}`);
+		this.editorViews.set(view.id, { view, descriptor, open, close });
+		const listeners = this.editorViewListeners.set(view.id, new DisposableStore());
+		listeners.add(view.onDidFocus(() => this.setFocus(view.id)));
+		listeners.add(view.onDidBlur(() => this.clearFocus(view.id)));
+		listeners.add(view.onDidChangeBodyVisibility(visible => this.viewVisibility.fire({ id: view.id, visible })));
+		listeners.add(toDisposable(() => { this.editorViews.delete(view.id); this.clearFocus(view.id); }));
+		return toDisposable(() => this.editorViewListeners.deleteAndDispose(view.id));
+	}
 	private readonly containers = new Map<string, IPaneComposite>();
 	private readonly containerListeners = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly visibleViews = new Set<string>();
@@ -35,6 +49,7 @@ export class ViewsService extends Disposable implements IViewsService {
 			this.focusedViewId = undefined;
 			this.focusedViewContext.reset();
 			this.containers.clear();
+			this.editorViews.clear();
 			this.visibleViews.clear();
 		}));
 		this._register(this.panes.onDidPaneCompositeOpen(({ composite, viewContainerLocation }) => {
@@ -91,21 +106,25 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	public getFocusedView(): IViewDescriptor | null {
-		return this.focusedViewId ? this.descriptors.getViewDescriptorById(this.focusedViewId) : null;
+		return this.focusedViewId ? this.editorViews.get(this.focusedViewId)?.descriptor ?? this.descriptors.getViewDescriptorById(this.focusedViewId) : null;
 	}
 
 	public getFocusedViewName(): string {
+		if (this.focusedViewId && this.editorViews.has(this.focusedViewId)) return this.editorViews.get(this.focusedViewId)!.view.paneTitle;
 		const view = this.focusedViewId && this.getViewWithId(this.focusedViewId);
 		const container = view && this.descriptors.getViewContainerForView(view.id);
 		return container ? this.containers.get(container.id)?.getView(view.id)?.paneTitle ?? '' : '';
 	}
 
 	public isViewVisible(id: string): boolean {
+		if (this.editorViews.has(id)) return this.editorViews.get(id)!.view.isBodyVisible();
 		const container = this.descriptors.getViewContainerForView(id);
 		return container !== undefined && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)?.isBodyVisible() === true;
 	}
 
 	public async openView<T extends IView>(id: string, focus = false): Promise<T | null> {
+		const embedded = this.editorViews.get(id);
+		if (embedded) { await embedded.open(); if (focus) embedded.view.focus(); return embedded.view as T; }
 		const container = this.descriptors.getViewContainerForView(id);
 		if (!container || !this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.some(view => view.id === id)) {
 			return null;
@@ -119,6 +138,8 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	public closeView(id: string): void {
+		const embedded = this.editorViews.get(id);
+		if (embedded) { embedded.close(); return; }
 		const container = this.descriptors.getViewContainerForView(id);
 		const composite = container && this.getActiveViewPaneContainerWithId(container.id);
 		const view = composite?.getView(id);
@@ -135,11 +156,13 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	public getActiveViewWithId<T extends IView>(id: string): T | null {
+		if (this.editorViews.has(id)) return this.isViewVisible(id) ? this.editorViews.get(id)!.view as T : null;
 		const container = this.descriptors.getViewContainerForView(id);
 		return (container && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)) as T | undefined ?? null;
 	}
 
 	public getViewWithId<T extends IView>(id: string): T | null {
+		if (this.editorViews.has(id)) return this.editorViews.get(id)!.view as T;
 		const container = this.descriptors.getViewContainerForView(id);
 		return (container && this.containers.get(container.id)?.getView(id)) as T | undefined ?? null;
 	}

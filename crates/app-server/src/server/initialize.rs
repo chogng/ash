@@ -172,6 +172,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if self.plugins_manager.is_some() {
+            capabilities.contracts.insert(
+                "extensionUpdates".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.task_delivery.is_some() {
             capabilities.contracts.insert(
                 "taskDelivery".into(),

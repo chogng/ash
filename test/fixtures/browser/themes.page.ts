@@ -262,7 +262,7 @@ resources.add(new Button(styledButtons, {
 }));
 appendIcon(Lxicon.add, document.querySelector<HTMLElement>('#product-icon')!);
 // Reference SVGs belong to this comparison fixture, never the runtime icon catalog.
-const colorGlyphSources = import.meta.glob<string>('../../../resources/icons/{claude,csv-green,docx-blue,inspect,layout-panel-off-1,layout-sidebar-left-off-1,layout-sidebar-right-off-1,pdf-filled,pdf-red,symbol-method,xls-green,mic,search,git-branch,mic-filled,paperclip}.svg', { query: '?raw', import: 'default', eager: true });
+const colorGlyphSources = import.meta.glob<string>('../../../resources/icons/{claude,csv-green,docx-blue,inspect,layout-panel-off,layout-sidebar-left-off,layout-sidebar-right-off,pdf-filled,pdf-red,symbol-method,xls-green,mic,search,git-branch,mic-filled,paperclip}.svg', { query: '?raw', import: 'default', eager: true });
 for (const [path, source] of Object.entries(colorGlyphSources)) {
 	const id = path.split('/').at(-1)!.slice(0, -4);
 	const icon = appendIcon({ id }, document.querySelector<HTMLElement>('#color-glyphs')!);

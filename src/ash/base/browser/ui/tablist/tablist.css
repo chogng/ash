@@ -12,6 +12,12 @@
 	width: max-content;
 }
 
+/* The trailing whitespace remains a native drop target after the last tab. */
+.ash-tab-list-scroll-content > .ash-action-bar.ash-action-bar-dnd.horizontal {
+	box-sizing: border-box;
+	min-width: 100%;
+}
+
 .ash-tab-list-inset .ash-tab-list-scroll-content > .ash-action-bar {
 	padding: 0 var(--ash-tabList-contentInset);
 }
@@ -40,7 +46,7 @@
 	cursor: pointer;
 }
 
-.ash-tab.ash-dnd-draggable:active {
+.ash-tab.ash-dnd-draggable.ash-dnd-dragging {
 	cursor: grabbing;
 }
 
@@ -87,6 +93,15 @@
 
 .ash-tab.ash-dnd-drop-after::before {
 	right: -2px;
+}
+
+/* Keep boundary markers visible at both clipped scroll edges. */
+.ash-tab.ash-dnd-drop-before:first-child::before {
+	left: 0;
+}
+
+.ash-tab.ash-dnd-drop-after:last-child::before {
+	right: 0;
 }
 
 .ash-tab-label {

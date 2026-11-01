@@ -63,7 +63,7 @@ export class SessionsSearchModel extends Disposable {
 					id: `draft:${draft.untitledSessionId}`, category: 'sessions',
 					title: draft.title.trim() || localize('chat.sessions.new', 'New Session'),
 					description: localize('sessions.history.draft', 'Draft'),
-					icon: Lxicon.chat4, target: { kind: 'draft', id: draft.untitledSessionId },
+					icon: Lxicon.chat, target: { kind: 'draft', id: draft.untitledSessionId },
 				});
 			}
 			for (const session of sessions.sessions) {
@@ -74,7 +74,7 @@ export class SessionsSearchModel extends Disposable {
 						id: `session:${session.sessionId}:${thread.threadId}`, category: 'sessions',
 						title: (thread.origin.type === 'root' ? session.title : thread.title || session.title).trim() || localize('chat.sessions.new', 'New Session'),
 						description: [session.providerLabel, thread.origin.type !== 'root' ? session.title : undefined].filter(Boolean).join(' · '),
-						icon: Lxicon.chat4, target: { kind: 'session', sessionId: session.sessionId, threadId: thread.threadId },
+						icon: Lxicon.chat, target: { kind: 'session', sessionId: session.sessionId, threadId: thread.threadId },
 					});
 				}
 			}

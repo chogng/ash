@@ -16,7 +16,7 @@ export function registerChatSessionsActions(): void {
 				id: OPEN_CHAT_COMMAND_ID,
 				precondition: ChatContextKeys.enabled.isEqualTo(true),
 				title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatAction' }, 'Open Chat'),
-				icon: Lxicon.chat4,
+				icon: Lxicon.chat,
 				f1: true,
 			});
 		}

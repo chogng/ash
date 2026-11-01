@@ -1,6 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, toDisposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -31,7 +32,6 @@ import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 interface ConversationGroup {
 	readonly key: string;
@@ -80,7 +80,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		list.classList.add('ash-chatgpt-navigation-list');
 		list.setAttribute('role', 'navigation');
 		list.setAttribute('aria-label', localize('sessions.chatgpt.conversations', 'Conversations'));
-		const loading = this._register(new LoadingSkeleton(list, localize('sessions.loadingHistory', 'Loading history…')));
 		this._register(addDisposableListener(list, 'click', event => {
 			const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
 			if (item?.dataset.conversation) {
@@ -170,7 +169,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
 			const readingHistory = state.loading?.kind === 'history';
-			loading.setVisible(readingHistory && !state.conversations.length);
 			list.setAttribute('aria-busy', String(readingHistory));
 			scrollable.layout();
 			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }
@@ -208,6 +206,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
 export class ChatGPTNavigationView extends ViewPane {
+	private readonly bodySizeUpdate: AnimationFrameScheduler;
 	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly rows = this._register(new DisposableStore());
 	private conversations: readonly ChatGPTConversation[] = [];
@@ -222,6 +221,8 @@ export class ChatGPTNavigationView extends ViewPane {
 		@IClipboardService private readonly clipboard: IClipboardService,
 	) {
 		super(navigation, { ...options, headerSize: 32, minimumBodySize: 0 });
+		this.bodySizeUpdate = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.updateBodySize()));
+		this._register(observeResize(this.element, () => this.bodySizeUpdate.schedule()));
 		this.element.classList.add('ash-chatgpt-navigation-group');
 		this.element.dataset.group = key;
 		this.element.setAttribute('role', 'group');
@@ -232,6 +233,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			if (!this.isBodyVisible()) {
 				this.menuGeneration++; this.menuLoad.clear();
 				if (this.menuRow) { this.contextMenus.hideContextMenu(); }
+			} else {
+				this.bodySizeUpdate.schedule();
 			}
 		}));
 	}
@@ -256,11 +259,20 @@ export class ChatGPTNavigationView extends ViewPane {
 				else { button.removeAttribute('aria-current'); }
 			}
 		}
+		this.updateBodySize();
+	}
+
+	private updateBodySize(): void {
+		// The retained composite can render history before its DOM is mounted.
+		// Inherited row metrics become available on attachment; resize retries then.
+		if (!this.contentElement.isConnected) {
+			return;
+		}
 		// Pane sizing follows the host's row metric, including its text and action targets.
 		const styles = getWindow(this.contentElement).getComputedStyle(this.contentElement);
 		const gap = parseFloat(styles.rowGap) || 0;
 		const rowHeight = parseFloat(styles.getPropertyValue('--ash-list-rowHeight'));
-		const count = conversations.length;
+		const count = this.conversations.length;
 		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
 	}
 

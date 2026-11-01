@@ -21,7 +21,6 @@ Chat and Code are workspace shells selected by the titlebar switcher. Entry desc
 | Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                           |
 | Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                           |
 | Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor                      |
-| Optional tools                    | `PanelPart`        | Registered tool view containers and views                                                |
 
 The Agents Window has no Banner Part or reserved notice row. The Sessions workspace contribution presents restricted directory permissions only in the Code workspace, naming the window workspace and opening its existing Workspace Trust editor. Connection recovery remains available through a title bar action in every workspace. These controls read the owning services and do not own another permission or connection model. A terminal connection failure offers a sticky global notification with the existing Reload Window action; startup failures retain the host's recovery surface. Status changes do not move the content or enter saved session layouts. The regular IDE retains its Banner Part and notice producers.
 
@@ -51,7 +50,7 @@ Feature entry descriptors must express the retained product editor and conversat
 
 Sessions services and SessionsPart retain conversation identity, selection, live widgets, drafts, attachments and execution state. Creator's editor and working copy retain document identity, edits, history and save state. Features associate document and conversation identities through their owning contracts; a side View borrows the same editor content and selection. Showing, hiding or switching these hosts does not duplicate either model, discard unsent work, cancel a running Turn, archive a conversation or close a dirty document. Actual close and shutdown retain the existing save/discard/cancel lifecycle.
 
-PanelPart hosts optional tools such as terminal and build output. Presenter notes, bulk content tables, CMS editing and running previews remain content of the relevant EditorPane. ActivityBar owns the Creator product entry; Creator navigation selects its seven workspaces. TitlebarPart keeps window navigation and window-scoped actions.
+Agent Window does not register a Panel view host; Output and legacy terminal panel views stay unavailable, including restored visibility and diagnostic reveal requests. No PanelPart instance or panel Grid leaf is created. Code terminals use TerminalEditor in the shared EditorPart. Presenter notes, bulk content tables, CMS editing and running previews remain content of the relevant EditorPane. ActivityBar owns the Creator product entry; Creator navigation selects its seven workspaces. TitlebarPart keeps window navigation and window-scoped actions.
 
 Implementation must verify the composed entry path, independent host visibility, Creator selected state, retained editor and conversation state, focus and size restoration, and narrow-window behavior using Playwright in Browser, Electron UI and Electron. This specification records the target contract, not completed behavior tests.
 
@@ -109,7 +108,7 @@ Sessions supports multiple intended layout families over the shared Parts. Share
 | Layout controllers and strategies | Restore session document working sets and coordinate Code Editor/Details behavior                      |
 | Sessions services and Parts       | Own conversation identity, selection and content independently of the selected window layout           |
 
-In the Code composition, each tool card is one leaf of the shared SerializableGrid. Files is the DesktopMainEditorPart leaf, which owns its document groups and retained docked AuxiliaryBarPart explorer; Terminal hosts PanelPart. SplitView sashes own sizes, and moving a card changes its position in the same serialized Grid tree. Product-editor compositions keep independent properties beside their editor. DesktopWorkbenchLayout owns this composition while preserving Part instances, focus and saved geometry.
+Code composes independent tool EditorParts through DesktopEditorArea and DesktopEditorParts. The docking and layout ownership contract is described under [Editor presentation](#editor-presentation). Terminal and Browser services retain their runtime models; Sidebar, SessionsPart and product properties keep their existing window roles.
 
 Layout family and runtime are separate choices. Browser and Electron windows can use the same desktop layout. Chat, Code, Collaboration, Projects and Creator are compositions within that layout; changing pages does not by itself require another Workbench subclass. A separate implementation is justified by different Part containment, geometry or lifecycle, not by a page name or file length. Common mechanisms remain shared, and layout variants consume the same Sessions services without creating another conversation or selection model.
 
@@ -130,8 +129,7 @@ Title bar
 Content
 ├── Sidebar
 └── Main region
-    ├── Sessions Part | Editor | Auxiliary Bar | Custom View Grid
-    └── Panel
+    └── Sessions Part | Editor | Auxiliary Bar | Custom View Grid
 ```
 
 The workbench omits the standard Activity Bar, Status Bar and Banner. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
@@ -149,7 +147,7 @@ remains available to restore navigation in the current page. ActivityBar retains
 action ownership as its presentation moves between the configured hosts.
 
 Both workbenches open, hide and focus view containers through
-`IPaneCompositePartService`. Sidebar, Panel and Auxiliary Bar retain their
+`IPaneCompositePartService`. Sidebar and Auxiliary Bar retain their
 `PaneComposite` instances. Feature contributions supply the surrounding Part composition to the Sessions layout service. `DesktopLayoutController` restores session documents and coordinates Editor/Details behavior.
 The Sessions EditorPart retains a product-page group independently of the session document groups. `ISessionsService` owns a
 single conversation selection, visible arrangement and navigation history;
@@ -161,8 +159,7 @@ changing the surrounding layout never creates a second conversation or composer.
 | Sidebar          | Sessions list and Sessions-owned sidebar views                   |
 | Sessions Part    | One or more visible session surfaces                             |
 | Editor           | Code document groups and retained Projects / Creator EditorPanes |
-| Auxiliary Bar    | Code files and changes or the active canvas editor's properties  |
-| Panel            | Terminal and other panel views                                   |
+| Auxiliary Bar    | Properties and detail Views for the active product editor        |
 | Custom View Grid | Full-surface contributed views that replace session content      |
 
 Creator canvas modes use `SidebarPart | EditorPart | AuxiliaryBarPart`: the workspace conversation list, the retained CreatorEditorPane and Shape properties. Design can additionally show SessionsPart while retaining its editor and independent properties. Entry descriptors declare `conversation: 'optional'`; ISessionsLayoutService owns its visibility preference and conversation focus, while DesktopWorkbenchLayout independently selects the primary Part and remembers supporting conversation width. Creator home and Make retain the conversation sidebar and hide the canvas properties. Other workspaces still need their task-specific [Creator composition](#creator-conversation-and-editor-composition). Projects uses its retained EditorPane for the project list and project details, alongside the same conversation sidebar and without an auxiliary sidebar. Switching content keeps workspaces alive; the existing working-copy and shutdown services still check save/discard/cancel for hidden dirty documents. Product-page groups are excluded from per-session Code working sets.
@@ -177,7 +174,7 @@ The shared EditorPart used by Sessions retains user-established proportions even
 
 The primary surface absorbs general window resize: SessionsPart for conversations, or EditorPart for product editing, including a Creator composition with a supporting Agent conversation. Creator preserves supporting conversation and side-panel widths as the editor expands and shrinks. The owning layout remembers user-established sizes when a host is hidden and restores them when it reappears.
 
-The desktop presentation may place the Auxiliary Bar inside the Editor's grid node. Consumers must distinguish the actual Editor content area from the shared grid node when interpreting visibility or size.
+Files navigation is laid out inside its owning Editor Group. AuxiliaryBarPart remains an independent properties host for product editors; Code file navigation does not move or resize that Part.
 
 ## Sessions Part
 
@@ -217,11 +214,11 @@ Session geometry does not determine Editor, Details, or other side-pane visibili
 
 All non-phone Agents windows use the desktop detail layout. Phone viewports use the dedicated mobile presentation.
 
-Files and Terminal have independent card visibility. Files combines the retained explorer, document tabs and shared EditorPart inside one movable, resizable leaf. Opening a document reveals its editor inside Files; closing the last document hides that editor while retaining the tree. Closing Files hides both hosts without closing documents or working copies. DesktopMainEditorPart owns file-tree docking through DockedAuxiliaryBarController. Editor groups retain and render their own tabs, header actions and breadcrumbs; header menus expose editor and outer-card layout operations separately. Product pages restore the independent AuxiliaryBarPart title and layout. The internal sash adapts to the available Files width independently of the outer card tree. Session Changes retains an independent editor host and is excluded from the main editor’s managed tabs.
+DesktopEditorArea owns only the outer tool Grid. Files, Changes, Browser and Terminal have independent EditorPart instances, coordinated by DesktopEditorParts through the shared editor coordinator. Each Part owns its groups, tabs, panes, headers and internal split layout. DesktopWorkbenchLayout continues to compose the window's outer Parts. Ordinary title dragging moves groups within a tool; Alt-drag moves a whole tool workspace. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
 
-Card controls consume presentations supplied by their content owners: a title, header, retained root and layout callback. They do not infer card identity from Workbench Part IDs or create content models. Header dragging and keyboard arrangement both call the same outer Grid operations; separators resize its branches. Normal topology and dimensions are persistent. GridView owns maximization and its normal geometry; DesktopWorkbenchLayout derives the expanded card from Grid and excludes the titlebar and navigation from maximization. Auxiliary-window detachment retains its normal tree in DesktopWorkbenchLayout. Both operations retain the same content and restore its arrangement. Session information is another Sessions-owned Grid leaf. Changes remains an independent card with its retained shared editor input and pane, outside the main document groups.
+DesktopMainEditorPart owns and lazily creates DesktopAuxiliaryBarPart, its docked rectangle, sash, Details visibility and editor-content visibility. DesktopAuxiliaryBarPart uses a scoped view catalog and context; it hosts ordinary contributed views without a title strip. The Files contribution registers Explorer there and owns no editor layout or docking controller. Files navigation remains one retained view when file groups split or close. The window's AuxiliaryBarPart continues to host product-page properties independently.
 
-The Sessions EditorPart reuses the shared editor-group capabilities. It retains a locked product-page group and separate session document groups. Mode changes select their visibility; restoring session document groups keeps the product group, panes and documents alive. The independent conversation grid remains in SessionsPart.
+Session working sets serialize documents once, plus each Part's group membership and inner layout and the outer tool Grid. Session switches retain live groups and panes; entry switches temporarily hide them while preserving both layout levels. Legacy mixed groups are partitioned into tool Parts without dropping tabs. Restored groups use window-wide identities, avoiding collisions with retained sessions and product pages. BrowserView initializes before restoration; existing terminal models remain owned by the terminal service. The Files host retains the locked product-page group independently of session document restoration. The conversation grid remains owned by SessionsPart.
 
 The durable state and transition catalog lives in [DESKTOP.md](DESKTOP.md). Implementation behavior is covered by the layout-controller and desktop strategy tests.
 
@@ -270,6 +267,8 @@ Phone layouts are planned to replace selected parts and pickers with mobile subc
 ## Contributions and loading
 
 Layout contributions register through the appropriate `sessions.*.main.ts` entry point. Shared workbench code should change only when the capability is useful outside the Agents Window; Sessions-specific policy stays under `vs/sessions`.
+
+Shared Chat services and editor contributions load through `chat.shared.contribution.ts`; each renderer host registers its own window actions. Runtime Browser integration starts after the window's editor and view services are registered.
 
 ## Change policy
 

@@ -966,3 +966,83 @@ for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (c
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ busy: false });
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Workbench history picker loads its styles, layers its menu and selects a branch by keyboard in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareSessionLifecycle('archive'));
+		const picking = page.evaluate(() => window.ashChatTranscriptIntegration.runSessionAction('workbench.action.chat.showHistory'))
+			.catch(error => { errors.push(String(error)); });
+		const picker = page.locator('.ash-quick-pick');
+		await expect(picker).toBeVisible();
+		const rows = picker.locator('.ash-chat-history-item');
+		await expect(rows).toHaveCount(2);
+		await page.mouse.move(0, 0);
+		const backgroundActions = rows.last().locator('.ash-quick-pick-row-actions');
+		await expect(backgroundActions).toHaveCSS('visibility', 'hidden');
+		await rows.last().hover();
+		await expect(backgroundActions).toHaveCSS('visibility', 'visible');
+		await expect(backgroundActions).toHaveCSS('pointer-events', 'auto');
+		await rows.first().hover();
+		await rows.first().getByRole('button').last().click();
+		await expect(page.getByRole('menu')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		const input = picker.locator('.ash-quick-pick-input input');
+		await expect(input).toBeFocused();
+		await input.press('ArrowUp');
+		await input.press('ArrowUp');
+		await input.press('ArrowDown');
+		await input.press('Enter');
+		await picking;
+		await expect(picker).toHaveCount(0);
+		const state = await page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState());
+		expect(state.activeThreadId).toBe('lifecycle-child');
+		expect(state.requests).toEqual([]);
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`shared Chat auxiliary chrome mounts and returns the original draft in ${locale}`, async ({ page, context }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		const opened = context.waitForEvent('page');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.openChatAuxiliaryWindow());
+		const popup = await opened;
+		const root = popup.locator('.ash-chat-auxiliary-window');
+		await expect(root).toBeVisible();
+		await expect(root).not.toHaveClass(/ash-sessions-window/);
+		await expect(popup.locator('.ash-chat-auxiliary-titlebar')).toHaveCSS('height', '44px');
+		await expect(popup.locator('.ash-chat-auxiliary-content')).toHaveCSS('flex-grow', '1');
+		await expect(popup.getByRole('textbox', { name: 'Borrowed draft' })).toHaveValue('Preserved draft');
+		const closed = popup.waitForEvent('close');
+		await popup.getByRole('button').first().click();
+		await closed;
+		await expect(page.getByRole('textbox', { name: 'Borrowed draft' })).toHaveValue('Preserved draft');
+		await expect(page.locator('[data-test-chat-window]')).not.toHaveClass(/ash-chat-auxiliary-content/);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Workbench session lifecycle confirms archive and restores the root while preserving drafts in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareSessionLifecycle('archive'));
+		const archiving = page.evaluate(() => window.ashChatTranscriptIntegration.runSessionAction('agentSession.archive'))
+			.catch(error => { errors.push(String(error)); });
+		const dialog = page.locator('.ash-dialog');
+		await expect(dialog).toBeVisible();
+		await dialog.locator('.ash-dialog-actions button').first().click();
+		await archiving;
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runSessionAction('agentSession.restore', 'lifecycle'));
+		const state = await page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState());
+		expect(state.requests).toEqual([{ operation: 'archive', sessionId: 'lifecycle' }, { operation: 'restore', sessionId: 'lifecycle' }]);
+		expect(state.opened).toEqual(['lifecycle/lifecycle']);
+		expect(state.activeThreadId).toBe('lifecycle');
+		expect(state.drafts).toEqual(['Preserved synthetic draft']);
+		expect(errors).toEqual([]);
+	});
+}

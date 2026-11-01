@@ -158,6 +158,26 @@ for (const [scheme, themeId] of [
 			const sessionPage = await workbench.openAgentsWindow(target.kind);
 			await expect(sessionPage.locator('.ash-sessions-window')).toBeVisible();
 			await expect(sessionPage.locator('#app')).toHaveAttribute('data-color-theme', themeId);
+			const sidebar = sessionPage.locator('[data-part="sidebar"]');
+			const initialSidebar = (await sidebar.boundingBox())!;
+			let resized = false;
+			for (const sash of await sessionPage.getByRole('separator').all()) {
+				const bounds = await sash.boundingBox();
+				if (!bounds || bounds.height < 200 || Math.abs(bounds.x - initialSidebar.x - initialSidebar.width) > 8) continue;
+				if (await sash.getAttribute('aria-disabled') === 'true') continue;
+				const x = bounds.x + bounds.width / 2;
+				const y = bounds.y + bounds.height / 2;
+				await sessionPage.mouse.move(x, y);
+				await sessionPage.mouse.down();
+				await sessionPage.mouse.move(x + 80, y, { steps: 5 });
+				await sessionPage.mouse.up();
+				resized = true;
+				break;
+			}
+			expect(resized).toBe(true);
+			await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(initialSidebar.width);
+			const sidebarWidth = (await sidebar.boundingBox())!.width;
+			await expect.poll(async () => (await readSplash(sessionPage))?.layoutInfo?.partBounds.some(part => Math.abs(part.width - sidebarWidth) < 1 && part.top > 0)).toBe(true);
 			await expect.poll(async () => (await readSplash(sessionPage))?.layoutInfo?.partBounds.some(part => part.backgroundGradient !== undefined)).toBe(true);
 			const snapshot = (await readSplash(sessionPage))!;
 			expect(snapshot.layoutInfo!.width).toBe(await sessionPage.evaluate(() => innerWidth));
@@ -167,12 +187,17 @@ for (const [scheme, themeId] of [
 			expect(livePaint).toContain('linear-gradient');
 			await sessionPage.addInitScript(() => {
 				const paints: string[][] = [];
-				Object.assign(window, { ashSplashPaints: paints });
+				const frames: { left: number; top: number; width: number; height: number; }[][] = [];
+				Object.assign(window, { ashSplashPaints: paints, ashSplashFrames: frames });
 				const observer = new MutationObserver(records => {
 					for (const record of records) {
 						for (const node of record.addedNodes) {
 							if (node instanceof HTMLElement && node.id === 'ash-parts-splash') {
 								paints.push(Array.from(node.children, child => getComputedStyle(child).backgroundImage));
+								frames.push(Array.from(node.children, child => {
+									const style = (child as HTMLElement).style;
+									return { left: parseFloat(style.left), top: parseFloat(style.top), width: parseFloat(style.width), height: parseFloat(style.height) };
+								}));
 							}
 						}
 					}
@@ -185,6 +210,8 @@ for (const [scheme, themeId] of [
 			await expect(sessionPage.locator('#ash-parts-splash')).toHaveCount(0);
 			await expect(sessionPage.locator('.ash-initial-shell-colors')).toHaveCount(0);
 			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashPaints: string[][]; }).ashSplashPaints.flat())).toContain(livePaint);
+			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashFrames: object[][]; }).ashSplashFrames)).toEqual([snapshot.layoutInfo!.partBounds.map(({ left, top, width, height }) => ({ left, top, width, height }))]);
+			await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThan(1);
 			const marks = await sessionPage.evaluate(() => ({ shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime, removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime }));
 			expect(marks.shown).toBeDefined();
 			expect(marks.removed).toBeGreaterThanOrEqual(marks.shown!);

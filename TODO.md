@@ -4,6 +4,25 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Rust 后端生命周期 · Windows 验收
+
+- [ ] **验收 · Windows 用户实机** · 同步当前 Rust 改动和新增的 guard／watchdog／managed fixture 源文件，在已配置的 Windows 开发环境执行下列命令，保留完整输出、Windows 版本、架构及实际执行／跳过的测试数。macOS 原生测试及 Linux／Windows 交叉编译不能替代此项；Windows 的 Unix 专属 session/SIGSTOP 用例按 cfg 不执行。
+
+```powershell
+just verify ash-process-hardening --profile ci-test
+just verify ash-utils-pty --profile ci-test
+just verify ash-sandboxing --profile ci-test
+just verify ash-external-ext --profile ci-test
+just verify ash-arg0 --profile ci-test
+just verify ash-app-server-daemon --profile ci-test
+just verify ash-app-server-runtime --profile ci-test --lib --filter managed::tests
+just verify ash-app-server --profile ci-test --process-tests --test managed_lifecycle --test managed_initialize
+```
+
+Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Job Object 对 owned 子孙进程的回收、扩展探测超时后的旧代清理与恢复、停用后不被迟到探测重启，以及 daemon 显式停止后的连接／监听释放和同 profile 重启。另在隔离 profile 启动真实 App Server 与扩展宿主，强制结束 App Server，检查其 Job 内宿主及后代已退出、原监听端口可重新绑定；不要结束日常使用的 profile。只关闭客户端时，仍有有效 lease 的共享 daemon／后台任务应保持运行。命令和实机验收均通过后移除此节。
+
+2026-11-01 本机 Linux arm64 容器已通过上述 8 个包的 214 项定向测试及对应 check／rust-warnings；组合故障场景已验证后代退出、端口重绑及同 profile 重启。测试结束后无残留工作进程或 TCP 监听；Linux 线程枚举导致守护进程提前自杀的问题已修复，macOS PTY 和 daemon 回归通过。原始日志与范围见[验证记录](.build/lifecycle-linux-20261101/validation.json)。
+
 ## 窗口缩放布局 · Windows 验收
 
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
@@ -21,9 +40,9 @@
 
 ## Git 推送 · TODO
 
-- [ ] **修复候选 · 推送拒绝的稳定诊断**：`crates/git/src/remote.rs` 的 reviewed push 在非快进拒绝后产生 `CommandFailed`，但 `crates/app-server/src/server/request_processors/git.rs` 将其折叠为 `GitOperationFailed`，`extensions/git/src/api.rs`／`commands.rs` 因而只能显示泛化失败。参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），由 Git 执行 owner 对明确的 non-fast-forward／fetch-first 结果窄分类，沿既有协议与扩展给出先获取、审阅并整合远端变更后再推送的恢复方向；本项为静态链路缺口，未运行行为验收。
-  - 范围与风险：先核实机器可读 push 结果契约，不凭任意自然语言子串把认证、网络、hook 或 lease 拒绝误认作分支落后；未知错误保留安全回退，不透传原始 stderr、含凭据 URL 或路径。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新，不照搬上游 UI 或扩张为通用错误展示层。
-  - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 和 `extensions/git/src/api_tests.rs`／`runtime_tests.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类、本地化恢复提示、敏感输出不外泄、目标远端／ref 不变且无额外自动操作，并覆盖本地／SSH 及适用平台。
+- [ ] **修复候选 · 推送拒绝的稳定分类与恢复提示**：当前 `crates/app-server/src/server/request_processors/git.rs` 已保留有界 Git 命令诊断，`extensions/git/src/api.rs`／`commands.rs` 已提供单行错误、打开 Git 日志及只读命令输出，不能再列为“只能显示泛化失败”；参考 [Ash 诊断接线](https://github.com/chogng/ash/commit/e17eb2d3c9116cf9b45c4a569727f8b6ea3307d0)与[输出查看入口](https://github.com/chogng/ash/commit/e20fc992a2013b42e79f2257acd3e7be7fdd90c1)。剩余候选是 `crates/git/src/remote.rs` 的 reviewed push 仍未提供经核实的 non-fast-forward／fetch-first 类型化结果；参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先确认机器可读结果契约，再由执行 owner 窄分类，沿既有协议补充先获取、审阅并整合远端变更后再推送的恢复方向。本轮仅静态复核，不标为完成。
+  - 范围与风险：保留现有一般诊断及用户选择的日志／只读输出入口，不重做通用错误展示层；类型化判断不依赖任意自然语言子串，不把认证、网络、hook 或 lease 拒绝误认作分支落后。未知结果保持既有回退，新分类与本地化恢复提示不增加原始 stderr、含凭据 URL 或路径披露；检查现有诊断边界但不扩大输出采集或持久化范围。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新。
+  - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 与 `extensions/git/tests/host.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类与本地化恢复提示不泄露新增敏感信息，目标远端／ref 不变且无额外自动操作。复用现有扩展进程反馈测试，保持状态先落定、取消静默、只提示一次、日志与只读输出查看可用，并覆盖本地／SSH 及适用平台；现有合成一般错误测试不等同于推送拒绝分类验收。
 
 ## SCM 普通文件点击 · 残余极端往返
 
@@ -143,6 +162,10 @@
 - [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。现有 `AppServerTextDocumentHost` 仅闭合普通文本快照和 WorkspaceEdit；须先定义结构化编辑的真实 producer／领域端口及审阅行为，不能把 `.ash-doc` 的共享模型再解析成第二份普通文本模型。
 - [ ] **Ash 产品 · Stanza 基础之后** · 将 Academy 的插件消费限定在 Agent Window，沿产品装配收敛 IDE 既有文档贡献、菜单与恢复接线；共享编辑器桥、文件和工作副本服务继续复用。独立 Activity Bar 图标与界面仍为待定方案，不先实现入口；选定入口后沿现有 Parts 和生命周期验证资源、未保存内容、会话与恢复，不恢复模式注册表或第二份配置。2026-10-22 已同步目标设计；本轮未改宿主准入或运行时接线，既有备份的退出／恢复策略及真实宿主范围验收仍待闭合。
 
+## 多文件审阅 · WebGPU
+
+- [ ] **Ash 产品 · WebGPU 渲染演进** · 沿现有 `src/ash/editor/browser/gpu/` 的 `ViewGpuContext`、字形图集和可见区渲染接入多文件审阅，先验证可见文本与差异背景这一切片。继续复用 TextModel、DiffModel 和现有虚拟布局，编辑仍进入现有完整编辑器；保留 DOM 无障碍视图、键盘选择／复制、主题与高对比度，以及设备丢失或不支持 WebGPU 时的 DOM 回退。以冻结的真实仓库代码改动对照完整编辑器，覆盖快速反向滚动、遍历全部文件、进入编辑、未保存内容、Undo／Redo、保存与 Git 刷新；分别记录输入到可见更新、帧分布、图层／绘制和 GPU 资源，明确冷暖状态。当前原生预览使用 DOM，浏览器 GPU 合成启用不代表此项已完成；本轮真实负载证据保留在 `.build/ash-playwright-mcp/multidiff-real/`。
+
 ## Desktop 启动性能 · TODO
 
 - [ ] **评估** · 基于已采集的入口清单和四组 CPU 证据，验证选定语言资源的惰性加载生命周期；候选需比较静态 JS、首次功能成本及四组重复启动，不凭 87.6% 静态语言资源占比宣称启动收益。
@@ -237,3 +260,7 @@
 - [ ] **候选／链路补齐（未排期）· Desktop 文件粘贴的路径回退**：现有 `src/ash/editor/browser/controller/editContext/clipboardUtils.ts` 在无文本、无编辑器元数据而有文件时只插入 `File.name`；EditContext 与 TextArea 共用此入口。补齐文件管理器复制文件后在普通文本编辑器粘贴可定位路径的操作链路，参考 [VS Code 文件粘贴路径回退](https://github.com/microsoft/vscode/pull/342695)（2026-10-19 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)）。这是现有文件名回退的增强，不是已复现的文件内容丢失缺陷。
   - 范围与前提：复用 `src/ash/platform/dnd/browser/dnd.ts` 的既有宿主 File 路径解析边界，保持 editor → platform 依赖方向，不直接引入 Electron；不让浏览器读取本地路径，不读取文件内容、不自动打开文件、不改变 URI-list provider、普通文本及编辑器元数据的优先级。无宿主路径时仍回退文件名。
   - 验收：扩展 `src/ash/editor/contrib/dropOrPasteInto/test/browser/copyPasteController.test.ts`，覆盖单／多文件、空格与非 ASCII 路径、宿主无路径或异常、文本与元数据优先，并保留“不读取文件内容”断言；分别走 EditContext／TextArea，补真实 Electron 文件管理器复制粘贴与 Web 回退验收，记录平台差异。
+
+## Chat accessibility · 缺失宿主入口
+
+- [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。

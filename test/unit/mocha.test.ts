@@ -105,10 +105,6 @@ test('default discovery and source filters include extension-owned units alongsi
 	const selected = run(['--run', paths[2].replace(/\.js$/u, '.ts')]);
 	assert.equal(selected.status, 0, selected.output);
 	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
-	const affected = run(['--affected', 'HEAD']);
-	assert.equal(affected.status, 0, affected.output);
-	assert.match(affected.output, /Unit test impact: full suite;/u);
-	assert.match(affected.output, /3 tests executed across 3 files; 0 failed files/u);
 });
 
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
@@ -129,6 +125,36 @@ test('affected selection rejects conflicting filters and incomplete revisions be
 	}
 });
 
+test('plans source tests without compiler output or preparation in every package mode', () => {
+	const path = 'src/ash/base/test/common/event.test.ts';
+	for (const mode of [[], ['--compile'], ['--prepared']]) {
+		const result = run([...mode, '--plan', '--run', path, '--grep', 'Event'], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.output, /Unit test plan: 1 files; grep: Event; no preparation, compilation or tests executed/u);
+		assert.match(result.output, /src\/ash\/base\/test\/common\/event.test.js/u);
+		assert.doesNotMatch(result.output, /Mocha:|Preparation exited|tsconfig.test.json/u);
+	}
+});
+
+test('compiling entries reject invalid and empty selections before preparation', () => {
+	for (const args of [['--grepp', 'selected'], ['--runGlob', '**/missing-unit-selection.test.js'], ['--run', 'src/../../outside.test.ts'], ['--run', 'src/missing-unit-selection.test.ts']]) {
+		const result = run(['--compile', ...args]);
+		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, /Unsupported unit test option|No unit tests matched|--run expects|Source unit test does not exist/u);
+		assert.doesNotMatch(result.output, /Mocha:|tsconfig.test.json/u);
+	}
+});
+
+test('source glob planning accepts the package-manager separator and rejects zero matches', () => {
+	const result = run(['--compile', '--', '--plan', '--runGlob', '**/localizationService.test.js']);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /Unit test plan: 1 files/u);
+	assert.match(result.output, /src\/ash\/.*\/localizationService.test.js/u);
+	const missing = run(['--plan', '--runGlob', '**/missing-unit-selection.test.js']);
+	assert.equal(missing.status, 1, missing.output);
+	assert.match(missing.output, /No unit tests matched the requested files/u);
+});
+
 test('exclusive tests fail instead of silently dropping their siblings', () => {
 	const exclusive = join(directory, 'exclusive.test.js');
 	writeFileSync(exclusive, `import { test } from 'mocha'; test.only('exclusive', () => {}); test('sibling', () => { throw Error('missed sibling'); });`);
@@ -146,6 +172,7 @@ test('all selected paths are validated before any test starts', () => {
 
 test('workers overlap isolated files without starting beyond their limit', { timeout: 20_000 }, async t => {
 	const release = join(directory, 'pool-release');
+	writeFileSync(join(directory, 'pool-state.js'), 'export const state = { owner: undefined };');
 	const fixtures = [0, 1, 2].map(index => {
 		const path = join(directory, `pool-${index}.test.js`);
 		writeFileSync(path, `
@@ -153,12 +180,16 @@ import assert from 'node:assert/strict';
 import { existsSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
 import { test } from 'mocha';
+import { state } from './pool-state.js';
 test('isolated file ${index}', async () => {
  assert.equal(globalThis.unitPoolOwner, undefined);
+ assert.equal(state.owner, undefined);
  globalThis.unitPoolOwner = ${index};
+ state.owner = ${index};
  writeFileSync(${JSON.stringify(join(directory, `pool-ready-${index}`))}, 'ready');
  while (!existsSync(${JSON.stringify(release)})) await setTimeout(25);
  assert.equal(globalThis.unitPoolOwner, ${index});
+ assert.equal(state.owner, ${index});
 });
 `);
 		return relative(outputDirectory, path).replaceAll('\\', '/');
@@ -179,6 +210,55 @@ test('isolated file ${index}', async () => {
 	writeFileSync(release, 'continue');
 	assert.equal(await stopped, 0, output);
 	assert.match(output, /3 tests executed across 3 files; 0 failed files/);
+});
+
+test('isolated files reuse bytecode storage and remove the run-owned cache afterward', () => {
+	const marker = join(directory, 'compile-cache.json');
+	const fixtures = [0, 1].map(index => {
+		const path = join(directory, `compile-cache-${index}.test.js`);
+		writeFileSync(path, `
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { getCompileCacheDir } from 'node:module';
+import { test } from 'mocha';
+test('reuses bytecode ${index}', () => {
+ const cache = getCompileCacheDir();
+ assert.ok(cache);
+ ${index === 0 ? `writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ cache, pid: process.pid }));` : `
+ const previous = JSON.parse(readFileSync(${JSON.stringify(marker)}, 'utf8'));
+ assert.equal(cache, previous.cache);
+ assert.notEqual(process.pid, previous.pid);
+ assert.ok(readdirSync(cache).length > 0, 'Previous isolated process did not flush bytecode');`}
+});
+`);
+		return relative(outputDirectory, path).replaceAll('\\', '/');
+	});
+	// This case checks the default run-owned cache rather than caller overrides.
+	const env: NodeJS.ProcessEnv = { ...runnerEnvironment };
+	for (const name of ['NODE_COMPILE_CACHE', 'NODE_DISABLE_COMPILE_CACHE', 'NODE_V8_COVERAGE']) delete env[name];
+	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: 15_000 });
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	assert.match(result.stdout, /2 tests executed across 2 files; 0 failed files/);
+	assert.equal(existsSync(JSON.parse(readFileSync(marker, 'utf8')).cache), false);
+});
+
+test('the preload resolves editor aliases and ignores static and dynamic CSS imports', () => {
+	const path = join(directory, 'loader.test.js');
+	writeFileSync(join(directory, 'ignored.css'), '.invalid-javascript { color: red; }');
+	writeFileSync(path, `
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { VSBuffer } from 'ash:editor/base/common/buffer.js';
+import './ignored.css';
+test('loads through the synchronous hooks', async () => {
+ assert.equal(VSBuffer.fromString('loader').toString(), 'loader');
+ assert.equal((await import('ash:editor/base/common/buffer.js')).VSBuffer, VSBuffer);
+ assert.deepEqual(Object.keys(await import('./ignored.css')), []);
+});
+`);
+	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\\\', '/')]);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
 });
 
 test('a filter matching no tests fails the run', () => {

@@ -836,7 +836,13 @@ export class ThemeEditor extends EditorPane {
 		const state = this.inspectorStates.get(this.inspectorScope);
 		// Search expansion is temporary; restore each scene's ordinary category state first.
 		this.filtering = false;
-		const defaultGroups = this.preview!.selection.scene === 'scm' ? ['scm'] : ['surface', 'syntax', 'diff', 'sessions'];
+		const scene = this.preview!.selection.scene;
+		let defaultGroups = ['surface', 'syntax', 'diff', 'sessions'];
+		if (scene === 'scm') {
+			defaultGroups = ['scm'];
+		} else if (scene === 'chat') {
+			defaultGroups = ['chat', 'editor', 'tabs', 'panel'];
+		}
 		for (const [index, group] of this.groups.entries()) {
 			group.setFiltering(false);
 			group.setExpanded(state?.expanded[index] ?? defaultGroups.includes(group.id));
@@ -855,6 +861,10 @@ export class ThemeEditor extends EditorPane {
 		const groupId = getThemeColorGroup(id);
 		if (selection?.scene === 'scm') {
 			return groupId === 'scm' || /^(?:sideBar\.|list\.|tree\.|badge\.|foreground$|description\.|focusBorder$|contrast|scrollbar|scrollShadow)/u.test(id);
+		}
+		if (selection?.scene === 'chat') {
+			return groupId === 'chat' || groupId === 'tabs' || groupId === 'controls' || groupId === 'lists' || groupId === 'text'
+				|| /^(?:editor\.(?:background|foreground)$|auxiliaryBar\.|sideBar\.|panel\.|widget\.|scrollbar|scrollShadow)/u.test(id);
 		}
 		const syntax = groupId === 'syntax';
 		const diff = groupId === 'diff';

@@ -1,8 +1,11 @@
+import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import type { IRendererAgentHostConnection, IRendererAgentHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { BrowserLayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { QuickInputService } from '../../../../../../platform/quickinput/browser/quickInputService.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
@@ -53,7 +56,7 @@ import { IAutomationRunner } from '../../../../../../workbench/contrib/chat/comm
 import { ViewsRegistry } from '../../../../../../workbench/common/views.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../../workbench/common/contributions.js';
 import { ISessionsService, SessionsService } from '../../../../../services/sessions/browser/sessionsService.js';
-import type { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../../services/sessions/common/session.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../../services/sessions/common/sessionsProvider.js';
@@ -77,6 +80,9 @@ await import('../../../../sessions/browser/sessions.contribution.js');
 const resources = new DisposableStore();
 
 const services = resources.add(new InstantiationService());
+
+const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
 
 const root = document.createElement('main');
 root.className = 'ash-sessions-window ash-workbench';
@@ -247,13 +253,14 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 		onDidChangeConnections: endpointChanges.event,
 		disconnect: id => { [...endpoints.values()].find(entry => entry.id === id)?.host?.dispose(); },
 		reconnect: async () => { },
+		listWSLDistros: async () => [],
 		connect: async target => {
 			const key = agentHostConnectionAddress(target);
 			const existing = endpoints.get(key)?.host;
 			if (existing) return existing;
 			hostChanges.push(`open:${target.name}`);
 			const host: IRendererAgentHost = {
-				id: target.name, connection: target,
+				id: target.name, connection: target, directory: { uri: remoteAgentHostRoot(target, target.name), target: { type: 'environment', dirId: target.name } },
 				api: {
 					...disconnected,
 					appServer: { ...disconnected.appServer, getConnectionState: async () => 'ready' },
@@ -321,6 +328,7 @@ const management = {
 	},
 } as unknown as ISessionsManagementService;
 const sessions = resources.add(new SessionsService(management, services.get(IStorageService), custom));
+services.registerInstance(ISessionsManagementService, management);
 services.registerInstance(ISessionsService, sessions);
 await sessions.initialize();
 
@@ -346,6 +354,7 @@ if (parameters.has('hosts')) {
 		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 		showContextMenu() { throw new Error('Unexpected Quick Input context menu'); }, hideContextMenu() { },
 	});
+	services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected host picker link'); } } as unknown as IOpenerService);
 	services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 	services.registerInstance(IRemoteConnectionApi, {
 		available: true, list: async () => hostTargets,
@@ -353,12 +362,12 @@ if (parameters.has('hosts')) {
 		connect: async () => { throw new Error('The Agents host picker must retain this window'); },
 	});
 	services.registerInstance(IRemoteConnectionService, resources.add(services.createInstance(RemoteConnectionService)));
+	const { RemoteAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
+	resources.add(services.createInstance(RemoteAgentHostContribution));
 	const { SSHAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
 	resources.add(services.createInstance(SSHAgentHostContribution));
 }
 
-const commands = resources.add(new CommandService(services));
-services.registerInstance(ICommandService, commands);
 
 services.registerInstance(IMenuService, new MenuService(commands, contexts));
 

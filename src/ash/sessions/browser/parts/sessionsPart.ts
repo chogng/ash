@@ -1,5 +1,3 @@
-import type { ICodeCardLayout } from '../codeCardLayout.js';
-import { SessionInfoRail } from './sessionInfoRail.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../platform/actions/common/actions.js';
 import { ContextKeyExpr, RawContextKey, type IContextKey } from '../../../platform/contextkey/common/contextkey.js';
@@ -7,23 +5,17 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Menus } from '../menus.js';
 import { localize2 } from '../../../nls.js';
-import { ISessionProviderScopeService } from '../agentHost/sessionProviderScopeService.js';
-import { ScopedSessionConversationPane } from './scopedSessionConversationPane.js';
-import { LoadingSkeleton } from '../ui/loadingSkeleton.js';
+import { NewChatView } from '../../contrib/chat/browser/chatView.js';
 import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import './media/sessionsPart.css';
 import { Dimension, h } from '../../../base/browser/dom.js';
-import type { ICommandService } from '../../../platform/commands/common/commands.js';
-import { type IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
-import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import type { IContextViewService } from '../../../platform/contextview/browser/contextView.js';
-import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
-import { SessionView, SessionAuxiliaryWindow, type ISessionsConversationPane } from './sessionView.js';
+import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
@@ -32,10 +24,6 @@ import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import type { IChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { ChatWidgetModel } from '../chatWidgetModel.js';
-import { ChatWidget } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import {
@@ -50,20 +38,8 @@ import type {
 } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
-	readonly codeCards?: ICodeCardLayout;
 	readonly sessionService: ISessionsManagementService;
-	readonly chatService: IChatService;
-	readonly contextMenuService: IContextMenuService;
-	readonly contextViewService: IContextViewService;
-	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
-	readonly commandService: ICommandService;
-	readonly createInputPart: (
-		container: HTMLElement,
-		delegate: ChatInputDelegate,
-		model: ChatWidgetModel,
-		scope: IInstantiationService,
-	) => IChatInputPart;
 	readonly createCoworkPane: (
 		container: HTMLElement,
 		panelId: string,
@@ -87,7 +63,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private switching = Promise.resolve();
 	private readonly popouts = new Map<
 		SessionView,
-		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow; }
+		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: ChatAuxiliaryWindow; }
 	>();
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
@@ -101,18 +77,16 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IInstantiationService private readonly services: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
-		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, 'sessions', themeService, storageService);
 		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
 		this._register(toDisposable(() => this.infoVisible.reset()));
-		if (options.codeCards) this._register(options.codeCards.onDidChangeCards(() => this.updateInfoContext()));
 		this._register(
 			CommandsRegistry.register('ash.sessions.toggleInfo', () => {
 				const pane = this.activeView?.activeChat;
-				if (pane instanceof CodeSessionConversationPane) pane.info.toggle();
+				if (pane instanceof NewChatView) pane.toggleInfo();
 			}),
 		);
 		const infoCommand = {
@@ -211,9 +185,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		}
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(this.services.createInstance(SessionAuxiliaryWindow, window, title));
+			const shell = resources.add(this.services.createInstance(ChatAuxiliaryWindow, window, title));
 			const { header } = shell;
-			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
+			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
 			resources.add(
 				new Button(placeholder, {
 					...defaultButtonStyles,
@@ -263,7 +237,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				),
 			);
 			this.reconcileGrid();
-			window.container.append(view.element);
+			window.container.classList.add('ash-sessions-window');
+			shell.mount(view.element);
 			view.setVisible(true);
 			window.window.document.title = title;
 			window.layout();
@@ -437,10 +412,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 
 	private updateInfoContext(): void {
 		const pane = this.activeView?.activeChat;
-		this.options.codeCards?.setInformation(
-			pane instanceof CodeSessionConversationPane ? pane.info.element : undefined,
-		);
-		this.infoVisible.set(pane instanceof CodeSessionConversationPane && pane.info.visible);
+		this.infoVisible.set(pane instanceof NewChatView && pane.infoVisible);
 	}
 
 	private createPane(
@@ -451,44 +423,13 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
-		const scope = this.providerScopes.createScope(
-			selection.kind === 'session' ? selection.active.session.sessionId : undefined,
-			selection.kind === 'untitled' ? selection.session.providerId : undefined,
-		);
+		const view = this.services.createInstance(NewChatView, container.ownerDocument, panelId, selection,
+			options.createNewSession, () => this.updateInfoContext());
 		try {
-			const model = scope.createInstance(
-				ChatWidgetModel,
-				options.chatService,
-				selection.kind === 'session'
-					? { kind: 'session', active: selection.active }
-					: { kind: 'untitled', session: selection.session },
-				options.sessionService,
-			);
-			const host = h(container.ownerDocument, 'div');
-			host.className = 'ash-code-conversation';
-			container.append(host);
-			const pane = scope.createInstance<ChatWidget<ChatWidgetModel>>(
-				ChatWidget,
-				host,
-				panelId,
-				model,
-				options.createNewSession,
-				options.contextMenuService,
-				options.contextViewService,
-				options.commandService,
-				options.accessibleViewService,
-				options.notifications,
-				undefined,
-				undefined,
-				undefined,
-				(inputContainer: HTMLElement, delegate: ChatInputDelegate) =>
-					options.createInputPart(inputContainer, delegate, model, scope),
-			);
-			return new CodeSessionConversationPane(pane, scope, model, host, options.codeCards, () =>
-				this.updateInfoContext(),
-			);
+			view.render(container);
+			return view;
 		} catch (error) {
-			scope.dispose();
+			view.dispose();
 			throw error;
 		}
 	}
@@ -502,7 +443,6 @@ class SessionsChatEmptyView extends Disposable implements IView {
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
-	private readonly loading: LoadingSkeleton;
 
 	constructor(
 		container: HTMLElement,
@@ -515,14 +455,6 @@ class SessionsChatEmptyView extends Disposable implements IView {
 		this.heading = h(ownerDocument, 'h2');
 		this.description = h(ownerDocument, 'p');
 		this.element.append(this.heading, this.description);
-		this.loading = this._register(
-			new LoadingSkeleton(
-				this.element,
-				localize('sessions.empty.restoring', 'Restoring your agent workspace…'),
-				'transcript',
-				3,
-			),
-		);
 		container.append(this.element);
 		this.update('ready', undefined);
 	}
@@ -530,10 +462,7 @@ class SessionsChatEmptyView extends Disposable implements IView {
 	layout(_bounds: IPositionedRectangle): void { }
 
 	update(state: ISessionsManagementService['state'], error: string | undefined): void {
-		this.loading.setVisible(state === 'loading' && !error);
-		this.element.classList.toggle('loading', !this.loading.element.hidden);
 		this.element.setAttribute('aria-busy', String(state === 'loading'));
-		this.heading.hidden = this.description.hidden = !this.loading.element.hidden;
 		if (state === 'loading') {
 			this.heading.textContent = localize('sessions.empty.loading', 'Loading sessions');
 			this.description.textContent = localize('sessions.empty.restoring', 'Restoring your agent workspace…');
@@ -562,28 +491,4 @@ function selectionKey(selection: SessionsViewSelection): string {
 
 function sessionKey(sessionId: SessionId): string {
 	return `session:${sessionId}`;
-}
-
-class CodeSessionConversationPane extends ScopedSessionConversationPane {
-	readonly info: SessionInfoRail;
-	constructor(
-		pane: ISessionsConversationPane,
-		scope: IInstantiationService,
-		model: ChatWidgetModel,
-		private readonly host: HTMLElement,
-		cards: ICodeCardLayout | undefined,
-		changed: () => void,
-	) {
-		super(pane, scope, model);
-		this.info = this._register(scope.createInstance(SessionInfoRail, host, model, () => pane.focus(), cards));
-		this._register(this.info.onDidChange(changed));
-		this._register(toDisposable(() => host.remove()));
-	}
-	override get element(): HTMLElement {
-		return this.host;
-	}
-	override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		this.info.setVisible(visible);
-	}
 }

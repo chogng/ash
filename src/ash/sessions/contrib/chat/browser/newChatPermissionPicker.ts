@@ -44,8 +44,11 @@ export class NewChatPermissionPicker extends Disposable {
 		this._register(toDisposable(() => { if (this.visible) this.views.hide(); }));
 	}
 
-	private show(): void {
-		if (this.visible) return;
+	public hide(): void { if (this.visible) this.views.hide(); }
+
+	public show(): void {
+		if (this.isDisposed || this.visible || this.model.inputState.aiDisabled) return;
+		this.button.focus();
 		const menu = h(this.button.ownerDocument, 'div');
 		menu.className = 'ash-sessions-permission-menu';
 		menu.setAttribute('role', 'menu');

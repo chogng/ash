@@ -1,3 +1,4 @@
+import { getToolSpecificDataDescription } from '../../../accessibility/chatResponseAccessibleView.js';
 import { ChatMcpAppSubPart, type IChatMcpAppDelegate } from './chatMcpAppSubPart.js';
 import { ChatResourceGroupWidget } from '../chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
@@ -7,7 +8,6 @@ import { addDisposableListener, h } from '../../../../../../../base/browser/dom.
 import { Emitter } from '../../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
-import type { ChatToolCallBinding } from '../../../../../../services/chat/common/chatService.js';
 import type { IChatListItem } from '../../chatListItems.js';
 import { ChatImageGenerationProgressPart } from './chatImageGenerationProgressPart.js';
 import { ChatGeneratedImageResultSubPart } from './chatGeneratedImageResultSubPart.js';
@@ -107,7 +107,7 @@ export class ChatToolInvocationPart extends Disposable {
 		}) ?? [];
 		if (call.binding?.caller.type === 'codeMode') sources.push(localize('chat.tool.parent', 'Parent call: {0}', call.binding.caller.parentToolCallId));
 		this.setText(this.source, sources.join(' · '));
-		this.setText(this.activity, activityText(call.binding?.activity));
+		this.setText(this.activity, getToolSpecificDataDescription(call.binding?.activity));
 		this.setText(this.parameters, call.argumentsJson, localize('chat.tool.input', 'Input'));
 		this.setText(this.stdout, output.filter(value => value.stream === 'stdout').map(value => value.text).join('\n'), localize('chat.tool.stdout', 'Standard output'));
 		this.setText(this.stderr, output.filter(value => value.stream === 'stderr').map(value => value.text).join('\n'), localize('chat.tool.stderr', 'Standard error'));
@@ -156,21 +156,5 @@ export class ChatToolInvocationPart extends Disposable {
 		const value = text && label ? `${label}\n${text}` : text;
 		if (element.textContent !== value) element.textContent = value;
 		element.hidden = !text;
-	}
-}
-
-function activityText(activity: ChatToolCallBinding['activity']): string {
-	if (!activity) return '';
-	switch (activity.type) {
-		case 'command': return localize('chat.tool.command', 'Command: {0}\nArguments: {1}\nDirectory: {2}', activity.program, JSON.stringify(activity.arguments), activity.workingDirectory);
-		case 'fileRead': return localize('chat.tool.read', 'Read: {0}', activity.path);
-		case 'fileSearch': return localize('chat.tool.search', 'Search: {0}\nDirectory: {1}', activity.pattern, activity.path);
-		case 'fileList': return localize('chat.tool.list', 'List: {0}\nDirectory: {1}', activity.pattern, activity.path);
-		case 'fileEdit': return localize('chat.tool.edit', 'Edit: {0}', activity.path);
-		case 'read': return localize('chat.tool.read', 'Read: {0}', activity.target);
-		case 'search': return localize('chat.tool.searchTarget', 'Search: {0}', activity.target);
-		case 'list': return localize('chat.tool.listTarget', 'List: {0}', activity.target);
-		case 'edit': return localize('chat.tool.edit', 'Edit: {0}', activity.target);
-		case 'run': return localize('chat.tool.run', 'Run');
 	}
 }

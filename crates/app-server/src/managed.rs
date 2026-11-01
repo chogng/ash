@@ -33,6 +33,10 @@ pub(crate) fn run(
     diff_handler: crate::DiffRequestHandler,
     build_info: build_info::BuildInfo,
 ) -> Result<(), String> {
+    // Keep progress enforcement alive while profile owners and connection workers
+    // are being dropped as well as while the endpoint loop is serving traffic.
+    let watchdog = process_hardening::ProcessWatchdog::start(Duration::from_secs(60))
+        .map_err(|error| error.to_string())?;
     let startup_trace = ash_app_server_daemon::startup_trace::StartupTrace::from_environment();
     let _trace = ash_app_server_daemon::startup_trace::StartupTrace::enter(startup_trace);
     let startup = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-startup");
@@ -94,6 +98,7 @@ pub(crate) fn run(
     let mut idle_since = None;
     let mut stopping_since = None;
     loop {
+        watchdog.tick();
         connection_workers.reap();
         if endpoint.is_stopping() {
             // Keep lifecycle status observable during the grace period. The

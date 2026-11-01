@@ -86,7 +86,10 @@
   "git.switchBranchCommandTitle": "Git: 切换分支",
   "git.integrationConflicts": "Git 因冲突暂停。请在源代码管理中解决文件冲突，然后运行“Git: 继续”。可运行“Git: 中止”取消正在进行的合并、变基或拣选。",
   "git.commandCompleted": "Git 操作已完成。",
-  "git.commandFailed": "Git 操作失败：{0}",
+  "git.commandFailed": "Git: {0}",
+  "git.openGitLog": "打开 Git 日志",
+  "git.showCommandOutput": "显示命令输出",
+  "git.commandOutput": "Git 命令输出",
   "git.valueRequired": "请输入内容。",
   "git.confirmOperation": "确认 Git 操作",
   "git.confirmOperationButton": "继续",
@@ -785,5 +788,14 @@
   "git.status.pushTooltip": "向 {1} 推送 {0} 个提交",
   "command.git.getChangesSummary": "获取工作区变更摘要",
   "command.git.openWorkspaceChanges": "打开工作区变更",
-  "git.workspaceChanges": "工作区变更"
+  "git.workspaceChanges": "工作区变更",
+  "git.settings.repositories": "仓库与克隆",
+  "git.settings.commit": "提交说明与行为",
+  "git.settings.commitChecks": "提交检查与签名",
+  "git.settings.branches": "分支与工作树",
+  "git.settings.sync": "获取、拉取与推送",
+  "git.settings.changes": "更改、储藏与合并",
+  "git.settings.authentication": "终端与身份验证",
+  "git.settings.environment": "Git 环境与诊断",
+  "git.settings.presentation": "源代码管理显示"
 }

@@ -2,7 +2,7 @@
 	cursor: grab;
 }
 
-.ash-dnd-draggable:active {
+.ash-dnd-draggable.ash-dnd-dragging {
 	cursor: grabbing;
 }
 

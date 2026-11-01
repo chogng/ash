@@ -128,6 +128,45 @@ export class SessionsChatService extends Disposable implements IChatService {
 			return result;
 		});
 	}
+	getPendingRequests(...args: Parameters<IChatService['getPendingRequests']>): ReturnType<IChatService['getPendingRequests']> {
+		const [sessionId, threadId] = args;
+		return this.run(sessionId, async scope => (await scope.services.chat.getPendingRequests(scope.backendIdentity(sessionId), scope.backendIdentity(threadId))).map(value => pair(value, scope)));
+	}
+	pausePendingRequest(...args: Parameters<IChatService['pausePendingRequest']>): ReturnType<IChatService['pausePendingRequest']> {
+		const [target, ...rest] = args;
+		return this.run(target.sessionId, async scope => {
+			const result = await scope.services.chat.pausePendingRequest(backendOptions(target, scope), ...rest);
+			return pair(result, scope);
+		});
+	}
+	resumePendingRequest(...args: Parameters<IChatService['resumePendingRequest']>): ReturnType<IChatService['resumePendingRequest']> {
+		const [target, ...rest] = args;
+		return this.run(target.sessionId, async scope => {
+			const result = await scope.services.chat.resumePendingRequest(backendOptions(target, scope), ...rest);
+			return pair(result, scope);
+		});
+	}
+	editPendingRequest(...args: Parameters<IChatService['editPendingRequest']>): ReturnType<IChatService['editPendingRequest']> {
+		const [target, ...rest] = args;
+		return this.run(target.sessionId, async scope => {
+			const result = await scope.services.chat.editPendingRequest(backendOptions(target, scope), ...rest);
+			return pair(result, scope);
+		});
+	}
+	removePendingRequest(...args: Parameters<IChatService['removePendingRequest']>): ReturnType<IChatService['removePendingRequest']> {
+		const [target, ...rest] = args;
+		return this.run(target.sessionId, async scope => {
+			const result = await scope.services.chat.removePendingRequest(backendOptions(target, scope), ...rest);
+			return pair(result, scope);
+		});
+	}
+	sendPendingRequestImmediately(...args: Parameters<IChatService['sendPendingRequestImmediately']>): ReturnType<IChatService['sendPendingRequestImmediately']> {
+		const [target, ...rest] = args;
+		return this.run(target.sessionId, async scope => {
+			const result = await scope.services.chat.sendPendingRequestImmediately(backendOptions(target, scope), ...rest);
+			return result;
+		});
+	}
 	listTurnChanges(...args: Parameters<IChatService['listTurnChanges']>): ReturnType<IChatService['listTurnChanges']> {
 		return this.run(args[0], async scope => {
 			const [sessionId, threadId, ...rest] = args;

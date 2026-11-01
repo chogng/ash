@@ -113,6 +113,12 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             ash_app_server_protocol::protocol::queue::QueueEditAction::Pause => {
                 queue::QueueEdit::Pause
             }
+            ash_app_server_protocol::protocol::queue::QueueEditAction::Resume => {
+                queue::QueueEdit::Resume
+            }
+            ash_app_server_protocol::protocol::queue::QueueEditAction::ReplaceText { text } => {
+                queue::QueueEdit::ReplaceText { text }
+            }
             ash_app_server_protocol::protocol::queue::QueueEditAction::Move { direction } => {
                 queue::QueueEdit::Move { direction }
             }
@@ -267,7 +273,12 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             .read_session_thread(&params.session_id, &params.thread_id)?;
         let cancelled = self
             .queue_store()?
-            .cancel(&params.session_id, &params.thread_id, &params.command_id)
+            .cancel(
+                &params.session_id,
+                &params.thread_id,
+                &params.command_id,
+                params.expected_revision,
+            )
             .map_err(error)?;
         self.updates.publish_queue_changed();
         result(&cancelled)

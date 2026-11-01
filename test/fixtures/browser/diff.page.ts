@@ -109,6 +109,7 @@ async function createGitMultiDiffEditorInput(_fixture: typeof titleGit, scope: s
 }
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { TextResourceEditor, CODE_EDITOR_ID } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
 import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
 import { EditorInputSerializers } from '../../../src/ash/workbench/services/editor/common/editorInputSerializer.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -208,6 +209,10 @@ let dynamicSecond: DocumentDiffItem | undefined;
 let completeDeferredComparison: (() => void) | undefined;
 let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
+const reusableResources = resources.add(new MutableDisposable<DisposableStore>());
+let reusableEditor: MultiDiffEditorWidget | undefined;
+let reusableModels: DiffModel[] = [];
+const reusedControls = new Set<DiffEditorWidget>();
 let lastHunkAction: { text: string; originalStart: number; modifiedStart: number; } | undefined;
 let themeBinding: IDisposable | undefined;
 const sessionPane = resources.add(new MutableDisposable<SessionChangesEditor>());
@@ -379,7 +384,7 @@ resources.add(registerAction2(ChangeEOLAction));
 resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' | 'paths' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' | 'paths' | 'review' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -390,6 +395,7 @@ const harness = {
 		document.body.prepend(host);
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
+		if (kind === 'review') await titleConfiguration.updateValue(CodeEditorConfiguration.diffReviewPreview, true);
 		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
 		if (kind === 'paths' || kind === 'git') {
 			(parentServices.get(IWorkspaceContextService) as TestWorkspaceService).updateWorkspace({ id: 'paths', uri: URI.file('/workspace') });
@@ -476,6 +482,11 @@ const harness = {
 							case 'status': value = { ...titleGitStatus, path: '' }; break;
 							case 'catalog': value = { tags: [], stashes: [], remotes: ['origin'], upstreamReadOnly: false, operation: null }; break;
 							case 'changeFile': value = await titleGit.changeFile(String(params.path)); break;
+							case 'changeFiles': {
+								if (!Array.isArray(params.paths)) throw new TypeError('Expected Git comparison paths');
+								value = { files: await Promise.all(params.paths.map(path => titleGit.changeFile(String(path)))) };
+								break;
+							}
 							case 'indexDiff': value = await titleGit.indexDiff(String(params.path)); break;
 							case 'editIndex': value = { status: await titleGit.editIndex(String(params.path), String(params.comparison), { original: params.expectedOriginal, modified: params.expectedModified, hunks: [] }, params.selection, String(params.repositoryId)) }; break;
 							default: throw new Error(`Unexpected Rust Git backend method ${operation.method}`);
@@ -548,6 +559,11 @@ const harness = {
 		} as IViewsService);
 		const registry = new EditorPaneRegistry();
 		resources.add(registry.registerEditorPane({
+			id: CODE_EDITOR_ID, name: 'Text editor',
+			canOpen: input => isDiffEditorInput(input) || isMultiDiffEditorInput(input) ? EditorPaneMatch.None : EditorPaneMatch.Default,
+			create: () => services.createInstance(TextResourceEditor, store, {}),
+		}));
+		resources.add(registry.registerEditorPane({
 			id: DIFF_EDITOR_ID,
 			name: 'Diff editor',
 			canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
@@ -606,6 +622,18 @@ const harness = {
 					modified: { resource: URI.parse('snapshot:/new?revision=2'), preferredResource: URI.file('/workspace/src/renamed folder/包含空格的目录/second.ts') },
 				},
 			], 'Path review'), { pinned: true });
+			return;
+		}
+		if (kind === 'review') {
+			const before = Array.from({ length: 400 }, (_, line) => `const line${line} = "中文 😀 ${line}";`);
+			const after = [...before];
+			after[100] = 'const changed = "审阅 🤖";';
+			after[200] = 'const longLine = "' + 'long source '.repeat(100) + '";';
+			writableTitleInput = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/review'), ['first', 'second'].map(name => ({
+				label: `${name}.ts`, original: { resource: URI.parse(`snapshot:/${name}.ts`), initialText: before.join('\n'), readOnly: true },
+				modified: { resource: URI.file(`/workspace/${name}.ts`), initialText: after.join('\n') },
+			})), 'Native review');
+			await titleEditor.openEditor(writableTitleInput, { pinned: true });
 			return;
 		}
 		if (kind === 'writable' || kind === 'binary') {
@@ -689,12 +717,28 @@ const harness = {
 	get gitGutterCalls() { return gitGutterCalls; },
 	expireGitGutterSnapshot(): void { titleGitStatus = { ...titleGitStatus, revision: titleGitStatus.revision + 1 }; },
 	selectTitleModified(range: [number, number, number, number]): void {
-		const editor = titleServices!.get(ICodeEditorService).listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget) as DiffEditorWidget;
+		const pane = titleEditor!.activePane;
+		const editor = pane instanceof TextDiffEditor || pane instanceof MultiDiffEditor ? pane.getControl() : undefined;
+		if (!editor) throw new Error('Expected an active comparison');
 		editor.modifiedEditor.setSelection(new Range(...range));
 	},
 	async updateTitleEditorConfiguration(key: string, value: unknown, languageId?: string): Promise<void> {
 		await titleConfiguration!.updateValue(key, value, { overrideIdentifier: languageId });
 	},
+	readReviewState() {
+		const pane = titleEditor!.activePane;
+		const model = titleServices!.get(IFileTextModelService).getModel(URI.file('/workspace/first.ts'));
+		const control = pane instanceof TextResourceEditor ? pane.getControl() : undefined;
+		return { shared: !!control && control.getModel() === model, text: model?.getValue(), canUndo: model?.canUndo(),
+			preview: pane instanceof MultiDiffEditor && pane.preview, selection: control?.getSelections(),
+			fullEditors: titleServices!.get(ICodeEditorService).listCodeEditors().filter(editor => editor.getModel() !== null).length };
+	},
+	async returnToReview(): Promise<void> { await titleEditor!.openEditor(writableTitleInput!, { pinned: true }); },
+	editReviewInFullEditor(text: string): void {
+		const control = (titleEditor!.activePane as TextResourceEditor).getControl()!;
+		control.executeEdits('review-fixture', [{ range: new Range(101, 1, 101, control.getModel()!.getLineMaxColumn(101)), text }]);
+	},
+	undoReviewInFullEditor(): void { (titleEditor!.activePane as TextResourceEditor).getControl()!.getModel()!.undo(); },
 	updateTitleGit(paths: string[], revision: number, delay = 0, repositoryId = 'repo'): void {
 		titleGitDelay = delay;
 		titleGitStatus = makeTitleGitStatus(paths, revision, repositoryId);
@@ -703,7 +747,11 @@ const harness = {
 	readMultiDiffFoundation(): { active: string | undefined; activeCodeEditor: boolean; contents: string[]; fonts: number[]; lines: number[]; inspected: string[]; state: unknown; } {
 		const pane = titleEditor?.activePane;
 		const service = titleServices!.get(ICodeEditorService);
-		const editors = service.listDiffEditors().map(editor => editor.getModifiedEditor());
+		// Pool registration order records creation, while the DOM records current file order.
+		const editors = service.listDiffEditors().map(editor => editor.getModifiedEditor()).filter(editor => editor.getModel() !== null).sort((a, b) => {
+			const order = a.getContainerDomNode().compareDocumentPosition(b.getContainerDomNode());
+			return order & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : order & Node.DOCUMENT_POSITION_PRECEDING ? 1 : 0;
+		});
 		return {
 			active: pane instanceof MultiDiffEditor ? pane.getActiveDiffItem()?.label : undefined,
 			activeCodeEditor: service.getActiveCodeEditor() !== null && pane instanceof MultiDiffEditor && service.getActiveCodeEditor() === pane.getControl()?.getModifiedEditor(),
@@ -974,6 +1022,60 @@ const harness = {
 	get layoutEventCount(): number { return layoutEventCount; },
 	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
 		single.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited, inlineBreakpoint);
+	},
+	async showReusableComparisons(style: 'flat' | 'modern'): Promise<void> {
+		const store = new DisposableStore();
+		reusableResources.value = store;
+		reusedControls.clear();
+		reusableModels = Array.from({ length: 16 }, (_, index) => {
+			const before = store.add(new TextModel(Array.from({ length: 120 }, (_, line) => `before file ${index} line ${line} ` + 'wide text '.repeat(30)).join('\n')));
+			const after = store.add(new TextModel(before.getValue().replaceAll('before', 'after')));
+			return store.add(new DiffModel({ original: before, modified: after, diffProvider: computation, diffOptions }));
+		});
+		reusableEditor = store.add(editorServices.createInstance(MultiDiffEditorWidget, {
+			container: document.getElementById('many')!, layoutStyle: style, overscanRowCount: 0,
+			model: store.add(new MultiDiffEditorModel(reusableModels.map((model, index) => store.add(new DocumentDiffItem({
+				id: `reusable-${index}`, label: `reusable-${index}.txt`, readOnly: index % 2 === 1,
+				originalUri: model.original.uri, modifiedUri: model.modified.uri,
+				originalLabel: `Before ${index}`, modifiedLabel: `After ${index}`,
+			}, model))))),
+		}));
+		reusableEditor.layout({ width: 700, height: 240 });
+		await reusableEditor.resolveVisible();
+		reusedControls.add(reusableEditor.getActiveControl()!);
+	},
+	async revealReusableComparison(index: number): Promise<void> {
+		const model = reusableModels[index]!;
+		reusableEditor!.reveal({ original: model.original.uri, modified: model.modified.uri });
+		await reusableEditor!.resolveVisible();
+		reusedControls.add(reusableEditor!.getActiveControl()!);
+	},
+	async editReusableComparison(): Promise<void> {
+		const editor = reusableEditor!.getActiveControl()!.modifiedEditor;
+		editor.setPosition({ lineNumber: 20, column: 12 });
+		editor.executeEdits('integration', [{ range: new Range(1, 1, 1, 1), text: 'unsaved ' }]);
+		await reusableEditor!.resolveVisible();
+		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		editor.setScrollLeft(100);
+	},
+	focusReusableComparison(): void { reusableEditor!.getActiveControl()!.modifiedEditor.focus(); },
+	collapseReusableComparisons(): void { reusableEditor!.collapseAll(); },
+	closeReusableComparisons(): void {
+		reusableResources.clear();
+		reusableEditor = undefined;
+		reusableModels = [];
+	},
+	readReusableComparison(): { id?: string; text?: string; position?: { lineNumber: number; column: number; }; left: number; readOnly: boolean; label?: string; controlCount: number; registered: number; attached: number; } {
+		const active = reusableEditor?.getActiveControl();
+		const controls = [...reusedControls];
+		return {
+			id: active?.getId(), text: active?.modifiedEditor.getModel()?.getValue(),
+			position: active?.modifiedEditor.getPosition() ?? undefined, left: active?.modifiedEditor.getScrollLeft() ?? 0,
+			readOnly: active?.modifiedEditor.getOption(EditorOption.readOnly) ?? false,
+			label: active?.modifiedEditor.getOption(EditorOption.ariaLabel), controlCount: controls.length,
+			registered: editorServices.get(ICodeEditorService).listDiffEditors().filter(editor => controls.some(control => control === editor)).length,
+			attached: controls.filter(control => control.modifiedEditor.getModel() !== null).length,
+		};
 	},
 	showManyComparisons(count: number): void {
 		const manyResources = resources.add(new DisposableStore());

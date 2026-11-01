@@ -588,6 +588,9 @@ function outputChannelId(value: unknown): string {
 }
 
 function utf8Length(value: string): number {
+	// Most source snapshots and package manifests are ASCII. Let the native
+	// regexp scan them instead of visiting every character on the UI thread.
+	if (value.length >= 1024 && !/[^\x00-\x7f]/.test(value)) return value.length;
 	let length = value.length;
 	for (let index = 0; index < value.length; index++) {
 		const code = value.charCodeAt(index);
@@ -603,6 +606,15 @@ function utf8Length(value: string): number {
  * Counting during normalization avoids a second full tree serialization and buffer.
  */
 function jsonStringLength(value: string): number {
+	if (value.length >= 1024 && !/[^\x00-\x7f]/.test(value)) {
+		// JSON's native string escaping is faster for large ASCII documents.
+		// Bound temporary strings even for a payload close to the wire quota.
+		let length = 2;
+		for (let start = 0; start < value.length; start += 8192) {
+			length += JSON.stringify(value.slice(start, start + 8192)).length - 2;
+		}
+		return length;
+	}
 	let length = 2;
 	for (let index = 0; index < value.length; index++) {
 		const code = value.charCodeAt(index);

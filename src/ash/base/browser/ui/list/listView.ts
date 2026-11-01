@@ -347,7 +347,13 @@ export class ListView<T> extends Disposable {
 			row.classList.add(DndCssClasses.Draggable);
 		}
 		this.updateAccessibility(row, item, true);
-		this.renderer.renderElement(item, index, row);
+		try {
+			this.renderer.renderElement(item, index, row);
+		} catch (error) {
+			// A failed render never enters renderedRows, so release its element resources here.
+			this.releaseRow(row, item, index);
+			throw error;
+		}
 		return row;
 	}
 
@@ -417,6 +423,8 @@ export class ListView<T> extends Disposable {
 		this.setNumericAria(row, 'aria-posinset', accessibility?.getAriaPosInSet?.(item));
 		const expanded = accessibility?.isExpanded?.(item);
 		setAriaAttribute(row, 'expanded', expanded);
+		setAriaAttribute(row, 'checked', accessibility?.isChecked?.(item));
+		setAriaAttribute(row, 'disabled', accessibility?.isDisabled?.(item));
 		const ariaLabel = accessibility?.getAriaLabel?.(item);
 		setAriaAttribute(row, 'label', ariaLabel || undefined);
 	}

@@ -30,6 +30,7 @@ import { IAccountService } from '../../../../platform/accounts/common/accountSer
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { signInChatGPT } from './chatGPTLogin.js';
+import '../../chat/browser/chat.contribution.js';
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);

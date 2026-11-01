@@ -1,20 +1,24 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../base/browser/dom.js';
 import { onWillUnregisterWindow } from '../../../base/browser/window.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILayoutService } from '../../layout/browser/layoutService.js';
 import type { IQuickAccessController } from '../common/quickAccess.js';
-import { QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
+import { QuickInputHideReason, QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickWidget } from '../common/quickInput.js';
 import { endOfQuickInputBoxContext, inQuickInputContext, quickInputFocusContext, quickInputTypeContextKey } from './quickInput.js';
 import { QuickAccessController } from './quickAccess.js';
 import { QuickInputController } from './quickInputController.js';
+import type { IQuickTree, IQuickTreeItem } from '../common/quickInput.js';
+import { QuickTree } from './tree/quickTree.js';
 
 /** Owns Quick Access and the shared input host within an application's service scope. */
 export class QuickInputService extends Disposable implements IQuickInputService {
 	private readonly inputControllers = this._register(new DisposableMap<HTMLElement, QuickInputController>());
+	private readonly modalListeners = this._register(new DisposableMap<HTMLElement, IDisposable>());
 	private accessController: QuickAccessController | undefined;
 	private readonly shown = this._register(new Emitter<void>());
 	private readonly hidden = this._register(new Emitter<void>());
@@ -32,17 +36,21 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		this.inQuickInput = inQuickInputContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.inQuickInput.reset()));
 		this._register(layoutService.onDidLayoutActiveContainer(() => {
-			this.inputControllers.get(layoutService.activeContainer)?.layout(layoutService.activeContainerDimension, layoutService.activeContainerOffset.quickInputTop);
+			const container = this.getInputContainer();
+			this.inputControllers.get(container)?.layout(layoutService.activeContainerDimension, container === layoutService.activeContainer ? layoutService.activeContainerOffset.quickInputTop : 0);
 		}));
 		this._register(layoutService.onDidChangeActiveContainer(() => {
 			// A provider captures the editor at invocation; dismiss it before another window takes over.
 			for (const [container, controller] of this.inputControllers) {
-				if (container !== layoutService.activeContainer) controller.currentQuickInput?.hide();
+				if (container !== layoutService.activeContainer && !layoutService.activeContainer.contains(container)) controller.currentQuickInput?.hide();
 			}
 		}));
 		this._register(onWillUnregisterWindow(({ window }) => {
 			for (const [container] of this.inputControllers) {
-				if (container.ownerDocument.defaultView === window) this.inputControllers.deleteAndDispose(container);
+				if (container.ownerDocument.defaultView === window) {
+					this.inputControllers.deleteAndDispose(container);
+					this.modalListeners.deleteAndDispose(container);
+				}
 			}
 		}));
 	}
@@ -54,8 +62,19 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 
 	protected get controller(): QuickInputController {
 		this.assertNotDisposed();
+		const container = this.getInputContainer();
+		return this.inputControllers.get(container) ?? this.inputControllers.set(container, this.createController(undefined, container));
+	}
+
+	private getInputContainer(): HTMLElement {
 		const container = this.layoutService.activeContainer;
-		return this.inputControllers.get(container) ?? this.inputControllers.set(container, this.createController());
+		const focused = getActiveElement(container.ownerDocument);
+		const widget = isHTMLElement(focused) ? focused.closest<HTMLElement>('.ash-quick-widget') : undefined;
+		if (widget && container.contains(widget)) return widget;
+		const modal = isHTMLElement(focused) ? focused.closest<HTMLElement>('dialog[open]') : undefined;
+		// Native modal dialogs make overlays outside their subtree inert. Keep the window's
+		// single Quick Input service and its command handlers, but host the controller inside it.
+		return modal && container.contains(modal) ? modal : container;
 	}
 
 	protected createController(className?: string, container = this.layoutService.activeContainer): QuickInputController {
@@ -63,23 +82,43 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		let type: IContextKey<string>;
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
+		let widgetContext: IContextKey<boolean> | undefined;
+		const updateContext = (input: IQuickInput): void => {
+			widgetContext?.reset();
+			widgetContext = input.contextKey ? scope.createKey(input.contextKey, false) : undefined;
+			widgetContext?.set(true);
+		};
 		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, container, className, {
 			onShow: input => {
-				for (const [, controller] of this.inputControllers) {
+				for (const [owner, controller] of this.inputControllers) {
+					// An embedded surface stays alive while its attachment or history picker is open.
+					if (controller.currentQuickInput?.type === QuickInputType.QuickWidget && owner.contains(container)) continue;
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();
 				}
 				this.visibleInputs.add(input);
+				updateContext(input);
 				type.set(input.type);
 				this.inQuickInput.set(true);
 				this.shown.fire();
 			},
 			onHide: input => {
+				if (input.type === QuickInputType.QuickWidget) {
+					const content = (input as IQuickWidget).widget;
+					for (const [child] of this.inputControllers) {
+						if (child !== container && isHTMLElement(content) && child.contains(content)) this.inputControllers.deleteAndDispose(child);
+					}
+				}
 				this.visibleInputs.delete(input);
-				type.reset(); focus.reset(); end.reset();
+				if (!controller.currentQuickInput) {
+					widgetContext?.reset();
+					widgetContext = undefined;
+					type.reset(); focus.reset(); end.reset();
+				}
 				if (!this.visibleInputs.size) this.inQuickInput.reset();
 				this.hidden.fire();
 			},
 			onFocus: (withinInput, atEnd) => { focus.set(withinInput); end.set(atEnd); },
+			onContextKeyChange: updateContext,
 			getContext: target => this.contextKeyService.getContext(target),
 			// Dismissing an overlay during a window switch must leave focus in the new window.
 			shouldRestoreFocus: () => this.layoutService.activeContainer.contains(controller.getDomNode()),
@@ -90,16 +129,31 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		type = quickInputTypeContextKey.bindTo(scope);
 		focus = quickInputFocusContext.bindTo(scope);
 		end = endOfQuickInputBoxContext.bindTo(scope);
-		controller.layout(this.layoutService.activeContainerDimension, this.layoutService.activeContainerOffset.quickInputTop);
+		controller.layout(this.layoutService.activeContainerDimension, container === this.layoutService.activeContainer ? this.layoutService.activeContainerOffset.quickInputTop : 0);
+		if (container.tagName === 'DIALOG') {
+			this.modalListeners.set(container, addDisposableListener(container, 'close', () => {
+				this.inputControllers.deleteAndDispose(container);
+				this.modalListeners.deleteAndDispose(container);
+			}));
+		}
 		return controller;
 	}
 
 	public get currentQuickInput(): IQuickInput | undefined {
-		return this.inputControllers.get(this.layoutService.activeContainer)?.currentQuickInput;
+		return this.inputControllers.get(this.getInputContainer())?.currentQuickInput
+			?? this.inputControllers.get(this.layoutService.activeContainer)?.currentQuickInput;
 	}
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		return this.controller.createQuickPick<TItem>();
+	}
+
+	public createQuickWidget(): IQuickWidget {
+		return this.controller.createQuickWidget();
+	}
+
+	public createQuickTree<T extends IQuickTreeItem>(): IQuickTree<T> {
+		return this.controller.createQuickTree<T>();
 	}
 
 	public input(options: IInputOptions = {}, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
@@ -113,10 +167,15 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 	}
 
 	public toggle(): void {
+		if (this.currentQuickInput instanceof QuickTree) this.currentQuickInput.toggle();
 		if (this.currentQuickInput?.type === QuickInputType.QuickPick) (this.currentQuickInput as IQuickPick<IQuickPickItem>).toggle();
 	}
 
 	public navigate(next: boolean): void {
+		if (!this.currentQuickInput?.enabled) return;
+		if (this.currentQuickInput?.type === QuickInputType.QuickTree) {
+			(this.currentQuickInput as IQuickTree<IQuickTreeItem>).focus(next ? QuickPickFocus.Next : QuickPickFocus.Previous);
+		}
 		if (this.currentQuickInput?.type === QuickInputType.QuickPick) {
 			(this.currentQuickInput as IQuickPick<IQuickPickItem>).focus(next ? QuickPickFocus.Next : QuickPickFocus.Previous);
 		}
@@ -128,5 +187,5 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		await current?.accept();
 	}
 
-	public async cancel(): Promise<void> { this.currentQuickInput?.hide(); }
+	public async cancel(): Promise<void> { this.currentQuickInput?.hide(QuickInputHideReason.Gesture); }
 }

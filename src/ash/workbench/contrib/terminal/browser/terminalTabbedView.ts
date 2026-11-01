@@ -29,6 +29,7 @@ export class TerminalTabbedView extends Disposable {
 	readonly onDidFocusInstance: Event<void>;
 	readonly terminalContainer: HTMLDivElement;
 	private snapping = false;
+	private resizingTabs = false;
 	private readonly tabsNarrow;
 
 	constructor(
@@ -77,7 +78,12 @@ export class TerminalTabbedView extends Disposable {
 		this.element.classList.add('ash-terminal-tabs-layout');
 		this.splitView.addView(splitViewItem(this.terminalContainer, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, LayoutPriority.High), { type: 'distribute' });
 		this.splitView.addView(splitViewItem(this.tabList.element, TerminalTabsListSizes.NarrowViewWidth, TerminalTabsListSizes.MaximumWidth, LayoutPriority.Low), this.savedTabsWidth());
-		this.splitView.getSash(TERMINAL_VIEW_INDEX)?.element.setAttribute('aria-label', localize('terminal.tabs.resize', 'Resize terminal instance list'));
+		const sash = this.splitView.getSash(TERMINAL_VIEW_INDEX);
+		sash?.element.setAttribute('aria-label', localize('terminal.tabs.resize', 'Resize terminal instance list'));
+		if (sash) {
+			this._register(sash.onDidStart(() => { this.resizingTabs = true; }));
+			this._register(sash.onDidEnd(() => { this.resizingTabs = false; }));
+		}
 		this._register(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
 		this._register(this.splitView.onDidSashChange(() => {
 			if (this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
@@ -95,7 +101,8 @@ export class TerminalTabbedView extends Disposable {
 		// Hidden panels report zero bounds; do not shrink and persist the user's tab width.
 		if (width <= 0 || height <= 0) return;
 		this.splitView.layout(width, height);
-		if (this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
+		// Resize observers can run before the sash commits its new width to storage.
+		if (!this.resizingTabs && this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
 			this.splitView.resizeView(TABS_VIEW_INDEX, this.savedTabsWidth());
 		}
 		this.updateTabsWidth();

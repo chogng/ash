@@ -507,15 +507,17 @@ suite('terminal browser component', () => {
 			if (action === 'move focus') {
 				await expect(page.locator('.xterm')).toHaveCount(1);
 			} else {
-				expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(0);
-				await expect(page.locator('.xterm')).toHaveCount(0);
+				// Hiding a view retains creation already admitted through trust; disposal cancels it.
+				expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(action === 'hide' ? 1 : 0);
+				if (action === 'hide') await expect(page.locator('.xterm')).toBeHidden();
+				else await expect(page.locator('.xterm')).toHaveCount(0);
 			}
 			await expect(page.locator('#outside')).toBeFocused();
 			await page.evaluate(() => window.ashTerminalIntegration.dispose());
 		});
 	}
 
-	test('a terminal arriving during profile discovery prevents an extra default process', async function () {
+	test('a terminal arriving during connection initialization prevents an extra default process', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/terminal.html?pane&incoming');
@@ -524,7 +526,7 @@ suite('terminal browser component', () => {
 			window.ashTerminalPaneIntegration.hold();
 			window.ashTerminalPaneIntegration.panel(true);
 		});
-		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 0 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
 		await page.evaluate(async () => {
 			await window.ashTerminalPaneIntegration.receive();
 			window.ashTerminalPaneIntegration.release();
@@ -1138,6 +1140,7 @@ suite('terminal browser component', () => {
 		await expect(toolbar.locator('.ash-terminal-active-action')).toHaveCount(0);
 		await expect(toolbar.getByRole('button', { name: '终止终端', exact: true })).toHaveCount(0);
 		const sash = page.getByRole('separator', { name: '调整终端实例列表大小', exact: true });
+		await sash.hover();
 		const bounds = (await sash.boundingBox())!;
 		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
 		await page.mouse.down();

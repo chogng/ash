@@ -181,9 +181,17 @@ use crate::protocol::extension_host::ExtensionClientRequestParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAddSourceParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAvailableUpdateDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSetSourceEnabledParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSetUpdatePolicyParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSourcesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpdatePolicyDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpdatesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
 #[cfg(any(test, feature = "export"))]
@@ -424,6 +432,16 @@ use crate::protocol::browser::BrowserPerformParams;
 use crate::protocol::browser::BrowserPerformResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserSharingSetParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpOpenParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpWriteResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserTextInputTargetDto;
 #[cfg(any(test, feature = "export"))]
@@ -1184,6 +1202,10 @@ use crate::protocol::git::GitChangeFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangeFilesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangeFilesResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangesSummaryResult;
@@ -1621,6 +1643,18 @@ use crate::protocol::github::GitHubLabelsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryResult;
 
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogDirection;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogFrame;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogFrameKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogPage;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::WireLogReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAcquireCapabilityParams;
 #[cfg(any(test, feature = "export"))]
@@ -3765,6 +3799,10 @@ client_methods! {
         // Capability negotiation belongs to one connection; domain mutations must not gate it.
         serialization: ConnectionExclusive("initialize"),
     },
+    BrowserTcpOpen => "browser/tcp/open" { params: BrowserTcpOpenParams, response: (), serialization: None, },
+    BrowserTcpRead => "browser/tcp/read" { params: BrowserTcpParams, response: BrowserTcpReadResult, serialization: None, },
+    BrowserTcpWrite => "browser/tcp/write" { params: BrowserTcpWriteParams, response: BrowserTcpWriteResult, serialization: None, },
+    BrowserTcpClose => "browser/tcp/close" { params: BrowserTcpParams, response: (), serialization: None, },
     BrowserConfigure => "browser/configure" {
         params: BrowserConfigureParams,
         response: (),
@@ -3967,6 +4005,15 @@ client_methods! {
         params: SessionReadParams,
         response: SessionResult,
         serialization: SessionSharedRead,
+    },
+    WireLogStart => "diagnostics/wireLog/start" {
+        params: WireLogParams, response: (), serialization: None,
+    },
+    WireLogStop => "diagnostics/wireLog/stop" {
+        params: WireLogParams, response: (), serialization: None,
+    },
+    WireLogRead => "diagnostics/wireLog/read" {
+        params: WireLogReadParams, response: WireLogPage, serialization: None,
     },
     SessionTraceRead => "session/trace/read" {
         params: SessionTraceReadParams,
@@ -4379,6 +4426,21 @@ client_methods! {
     ExtensionsSources => "extensions/sources/list" {
         params: EmptyParams,
         response: ExtensionsSourcesResult,
+        serialization: None,
+    },
+    ExtensionsUpdates => "extensions/updates/read" {
+        params: EmptyParams,
+        response: ExtensionsUpdatesResult,
+        serialization: None,
+    },
+    ExtensionsSetUpdatePolicy => "extensions/updates/setPolicy" {
+        params: ExtensionsSetUpdatePolicyParams,
+        response: ExtensionsUpdatesResult,
+        serialization: GlobalExclusive,
+    },
+    ExtensionsCheckUpdates => "extensions/updates/check" {
+        params: EmptyParams,
+        response: ExtensionsUpdatesResult,
         serialization: None,
     },
     ExtensionsAddSource => "extensions/sources/add" {
@@ -5454,6 +5516,11 @@ client_methods! {
         response: GitChangeFileResult,
         serialization: RepositoryChangeFile,
     },
+    GitChangeFiles => "git/changeFiles" {
+        params: GitChangeFilesParams,
+        response: GitChangeFilesResult,
+        serialization: RepositoryExclusive,
+    },
     GitConflictFile => "git/conflictFile" {
         params: GitConflictFileParams,
         response: GitConflictFileResult,
@@ -6448,6 +6515,10 @@ typescript_bindings! {
     ExtensionsSearchPageParams,
     ExtensionsSearchPageResult,
     ExtensionsSourcesResult,
+    ExtensionsUpdatesResult,
+    ExtensionsSetUpdatePolicyParams,
+    ExtensionsUpdatePolicyDto,
+    ExtensionsAvailableUpdateDto,
     ExtensionsSourceDto,
     ExtensionRegistryKindDto,
     ExtensionsAddSourceParams,
@@ -6509,6 +6580,11 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
+    BrowserTcpParams,
+    BrowserTcpOpenParams,
+    BrowserTcpWriteParams,
+    BrowserTcpReadResult,
+    BrowserTcpWriteResult,
     BrowserConfigureParams,
     BrowserCdpOperationDto,
     DirectoryGrantsHostCapability,
@@ -6942,6 +7018,12 @@ typescript_bindings! {
     SessionRuntimeResult,
     SessionRuntimeRequest,
     SessionReadParams,
+    WireLogParams,
+    WireLogReadParams,
+    WireLogPage,
+    WireLogDirection,
+    WireLogFrameKind,
+    WireLogFrame,
     SessionTraceReadParams,
     SessionTraceReadResult,
     AgentHostDebugLogsResult,
@@ -7717,6 +7799,8 @@ typescript_bindings! {
     GitChangeFileComparisonDto,
     GitChangeFileParams,
     GitChangeFileResult,
+    GitChangeFilesParams,
+    GitChangeFilesResult,
     GitConflictFileParams,
     GitConflictFileResult,
     GitConflictResolutionDto,

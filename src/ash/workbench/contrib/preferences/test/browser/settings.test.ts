@@ -1,3 +1,5 @@
+import { IChatWidgetService } from '../../../chat/browser/chat.js';
+import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
@@ -51,6 +53,7 @@ import type { SettingsSectionReference } from '../../browser/settingsTreeModels.
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
@@ -158,6 +161,10 @@ const GitConfiguration = {
 	rebaseWhenSync: 'git.rebaseWhenSync',
 };
 await import('../../../scm/browser/scm.contribution.js');
+await import('../../../../../platform/update/common/update.config.contribution.js');
+await import('../../../../../platform/meteredConnection/common/meteredConnection.config.contribution.js');
+await import('../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js');
+await import('../../../mediaPreview/browser/mediaPreview.contribution.js');
 
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
@@ -196,6 +203,9 @@ const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
 await import('../../../extensions/browser/extensions.contribution.js');
+await import('../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js');
+await import('../../../../../platform/update/common/update.config.contribution.js');
+await import('../../../../../platform/meteredConnection/common/meteredConnection.config.contribution.js');
 await import('../../../canvases/electron-browser/canvases.contribution.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
@@ -684,6 +694,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 								description: 'Enable sample',
 								tags: ['preview'],
 							},
+							'git.showCommitInput': { type: 'boolean', default: true },
 							'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
 							'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
 							'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
@@ -703,6 +714,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 		defaults.all.map(setting => [setting.id, setting.valueType]),
 		[
 			['editor.sample.enabled', 'boolean'],
+			['git.showCommitInput', 'boolean'],
 			['sample.count', 'number'],
 			['sample.mode', 'select'],
 			['sample.text', 'text'],
@@ -721,6 +733,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 	);
 	assert.equal(extension.descriptor.label, '示例扩展');
 	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
+	assert.equal(findSettingCategory(layout, 'git.showCommitInput'), extension.id, 'product placement requires the declared extension owner, not just a matching key');
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
@@ -733,7 +746,38 @@ test('Extension settings use catalog identities and standard schemas without a p
 	);
 });
 
+test('Image preview preferences belong to Features with validated defaults and Chinese labels', async () => {
+	using reset = toDisposable(resetNlsResolver);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	const defaults = new DefaultSettings();
+	const zoom = defaults.get('mediaPreview.image.defaultZoom');
+	const percentage = defaults.get('mediaPreview.image.fitToWindowPercentage');
+	const information = defaults.get('mediaPreview.image.showImageInfo');
+	assert.equal(zoom.title, '默认图片缩放');
+	assert.equal(percentage.title, '适应区域占比（%）');
+	assert.equal(information.title, '显示图片信息');
+	assert.equal(zoom.configuration.defaultValue, 'fit');
+	assert.equal(percentage.configuration.defaultValue, 100);
+	assert.equal(zoom.configuration.scope, ConfigurationScope.WINDOW);
+	assert.equal(information.configuration.defaultValue, true);
+	assert.equal(information.configuration.scope, ConfigurationScope.WINDOW);
+	const layout = createSettingsLayout(defaults.all);
+	for (const setting of [zoom, percentage, information]) assert.equal(findSettingCategory(layout, setting.id), 'media-preview');
+	using configuration = new InMemoryConfigurationService();
+	await assert.rejects(configuration.updateValue(zoom.id, 'fill'), TypeError);
+	for (const value of [0, 101, NaN, '50']) await assert.rejects(configuration.updateValue(percentage.id, value), TypeError);
+	for (const value of ['false', 0, null]) await assert.rejects(configuration.updateValue(information.id, value), TypeError);
+	await configuration.updateValue(information.id, false);
+	assert.equal(configuration.getValue(information.id), false);
+	await configuration.updateValue(percentage.id, 50);
+	assert.equal(configuration.getValue(percentage.id), 50);
+});
+
 test('Built-in Git, Markdown and Media settings localize, persist and reset through the canonical registry', async () => {
+	using reset = toDisposable(resetNlsResolver);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	const registry = new ConfigurationRegistry();
 	for (const name of ['git', 'markdown-language-features', 'media-preview']) {
 		const manifest = JSON.parse(await readFile(`extensions/${name}/package.json`, 'utf8'));
@@ -751,17 +795,49 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 			remove: [],
 		});
 	}
+	for (const key of ['mediaPreview.video.autoPlay', 'mediaPreview.video.loop']) {
+		const definition = configurationRegistry.getConfiguration(key) as IRegisteredConfiguration<boolean>;
+		assert.ok(definition.setting?.valueType === 'boolean');
+		assert.equal(definition.source, undefined, `${key} belongs to Workbench`);
+		registry.registerConfiguration<boolean>({ ...definition, setting: definition.setting });
+	}
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
 	assert.deepEqual(
 		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
-			['extension.ash.git', 103],
+			['extension.ash.git', 82],
 			['extension.ash.markdown-language-features', 18],
-			['extension.ash.media-preview', 2],
 		],
 	);
+	const git = layout.find(category => category.id === 'extension.ash.git')!;
+	assert.deepEqual(git.groups.map(group => [group.id, group.title]), [
+		['git.repositories', '仓库与克隆'],
+		['git.commit', '提交说明与行为'],
+		['git.commitChecks', '提交检查与签名'],
+		['git.branches', '分支与工作树'],
+		['git.sync', '获取、拉取与推送'],
+		['git.changes', '更改、储藏与合并'],
+		['git.authentication', '终端与身份验证'],
+		['git.environment', 'Git 环境与诊断'],
+	]);
+	const sourceControl = layout.find(category => category.id === 'source-control')!;
+	assert.equal(sourceControl.groups.flatMap(group => group.settings).length, 21);
+	assert.equal(findSettingCategory(layout, 'git.openDiffOnClick'), sourceControl.id);
+	assert.equal(findSettingCategory(layout, 'git.blame.editorDecoration.enabled'), sourceControl.id);
+	assert.equal(findSettingCategory(layout, 'git.closeDiffOnOperation'), git.id);
+	assert.equal(findSettingCategory(layout, 'git.mergeEditor'), git.id);
+	assert.deepEqual(
+		layout.flatMap(category => category.groups.flatMap(group => group.settings.map(setting => setting.id))).sort(),
+		defaults.all.map(setting => setting.id).sort(),
+		'every registered setting has exactly one editing location',
+	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
+	const media = layout.find(category => category.id === 'media-preview')!;
+	assert.equal(media.groups.flatMap(group => group.settings).length, 2);
+	for (const setting of media.groups.flatMap(group => group.settings)) {
+		assert.equal(findSettingCategory(layout, setting.id), media.id);
+	}
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
 	assert.deepEqual(['fontFamily', 'codeFontFamily', 'blockquoteFontFamily'].map(key => defaults.get(`markdown.preview.${key}`).title), ['正文字体', '代码字体', '引用字体']);
 	const markdown = layout.find(category => category.id === 'extension.ash.markdown-language-features')!;
@@ -772,6 +848,12 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	]);
 	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
 	tree.setChildren(settingsRootNodes(layout));
+	const gitToc = new TOCTreeModel(tree, () => [git.descriptor, sourceControl.descriptor]);
+	assert.equal([...gitToc.children[0].children!].length, 8);
+	tree.setQuery('@id:git.openDiffOnClick');
+	assert.deepEqual(gitToc.children.map(node => node.element.id), ['source-control']);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['git.openDiffOnClick']);
+	tree.setQuery('');
 	const toc = new TOCTreeModel(tree, () => [markdown.descriptor]);
 	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), [
 		'extension.ash.markdown-language-features.group.markdown',
@@ -786,6 +868,7 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
 	using configuration = new WorkspaceService({ registry });
 	await configuration.updateValue('mediaPreview.video.loop', true);
+	await assert.rejects(configuration.updateValue('mediaPreview.video.loop', 'true'), /true.*false/);
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	await configuration.updateValue('markdown.preview.fontFamily', '"Microsoft YaHei", sans-serif');
@@ -853,7 +936,7 @@ for (const locale of ['en', 'zh-CN']) {
 					triggerPaste() { }, read: async () => [],
 					readText: async () => '', writeText: async () => { },
 					readFindText: async () => '', writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { }, hasResources: async () => false,
 				},
@@ -930,7 +1013,7 @@ for (const locale of ['en', 'zh-CN']) {
 						writeText: async () => { },
 						readFindText: async () => '',
 						writeFindText: async () => { },
-						readImage: async () => new Uint8Array(),
+						readImage: async () => new Uint8Array(), writeImage: async () => { },
 						readResources: async () => ({ resources: [], operation: 'copy' }),
 						writeResources: async () => { },
 						hasResources: async () => false,
@@ -1019,7 +1102,7 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 				writeText: async () => { },
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1147,7 +1230,7 @@ test('URL rule suggestions follow extension registration without changing saved 
 				read: async () => [],
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1217,7 +1300,7 @@ test('Configured markers follow explicit local user overrides and expose one acc
 					writeText: async () => { },
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1391,7 +1474,7 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 					},
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1482,7 +1565,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 				},
 				readFindText: async () => '',
 				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
+				readImage: async () => new Uint8Array(), writeImage: async () => { },
 				readResources: async () => ({ resources: [], operation: 'copy' }),
 				writeResources: async () => { },
 				hasResources: async () => false,
@@ -1577,7 +1660,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 					writeText: async () => { },
 					readFindText: async () => '',
 					writeFindText: async () => { },
-					readImage: async () => new Uint8Array(),
+					readImage: async () => new Uint8Array(), writeImage: async () => { },
 					readResources: async () => ({ resources: [], operation: 'copy' }),
 					writeResources: async () => { },
 					hasResources: async () => false,
@@ -1839,7 +1922,7 @@ test('editor line height displays pixels and preserves automatic settings until 
 			writeText: async () => { },
 			readFindText: async () => '',
 			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
+			readImage: async () => new Uint8Array(), writeImage: async () => { },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { },
 			hasResources: async () => false,
@@ -1910,10 +1993,12 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
 		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
-		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
-		assert.equal(input.groups[0]?.title, '消息输入');
+		const appearance = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-appearance')!;
+		assert.equal(appearance.descriptor.label, '外观');
+		assert.equal(appearance.descriptor.description, '设置消息输入框和回复中代码块的显示方式。');
+		assert.deepEqual(appearance.groups.map(group => group.title), ['消息输入', '代码块']);
 		assert.deepEqual(
-			input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
@@ -1922,10 +2007,8 @@ test('font preferences show translated labels and the actual platform defaults',
 		);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
-		const blocks = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
-		assert.equal(blocks.groups[0]?.title, '代码块');
 		assert.deepEqual(
-			blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -1948,9 +2031,6 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(
 		SettingsCategories.map(category => category.id),
 		[
-			'general',
-			'github',
-			'network',
 			'appearance',
 			'layout',
 			'debugging',
@@ -1968,13 +2048,18 @@ test('settingsLayout is the single projection from registered settings to catego
 			'editor-opening',
 			'accessibilitySignals',
 			'accessibility',
+			'media-preview',
 			'explorer',
 			'search',
 			'source-control',
+			'extensions',
 			'terminal',
 			'voice-input',
-			'chat-input',
-			'chat-code-blocks',
+			'display-language',
+			'updates',
+			'network',
+			'interaction',
+			'chat-appearance',
 			'agents',
 			'teams',
 			'agent-defaults',
@@ -1983,6 +2068,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'sandbox',
 			'execution-trace',
 			'hooks',
+			'github',
 		],
 	);
 	assert.deepEqual(
@@ -2006,18 +2092,20 @@ test('settingsLayout is the single projection from registered settings to catego
 	const features = new TOCTreeModel(tree).children.find(node => node.element.id === 'group.features');
 	assert.ok(features);
 	assert.deepEqual(
-		[...features.children!].slice(0, 2).map(node => node.element.id),
-		['accessibilitySignals', 'accessibility'],
+		[...features.children!].slice(0, 3).map(node => node.element.id),
+		['accessibilitySignals', 'accessibility', 'media-preview'],
 	);
-	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
-	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
+	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'display-language');
+	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'interaction');
 	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
-		assert.equal(findSettingCategory(layout, key), 'general');
+		assert.equal(findSettingCategory(layout, key), 'extensions');
 	}
+	assert.equal(findSettingCategory(layout, 'chat.customizations.marketplace.enabled'), 'extensions');
+	assert.ok([...features.children!].some(node => node.element.id === 'extensions'));
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
-	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
-	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
+	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'interaction');
+	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'interaction');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
@@ -2051,6 +2139,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
 	assert.equal(findSettingCategory(layout, 'workbench.editor.restoreEditors'), 'startup');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	assert.equal(chinese?.bundles['ash.settings']?.['categories.extensions.label'], '扩展');
+	assert.equal(chinese?.bundles['ash.settings']?.['categories.extensions.description'], '设置扩展管理和推荐行为。');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
@@ -2169,9 +2259,9 @@ test('Settings layout matching preserves literal dots, wildcard groups and input
 	const locale = defaults.get(LocalizationConfiguration.locale);
 	const projected = (settings: readonly ISetting[]) => createSettingsLayout(settings).flatMap(category => category.groups.flatMap(group => group.settings.map(setting => [category.id, setting.id, setting.title])));
 	assert.deepEqual(projected([second, locale, first]), [
-		['general', locale.id, locale.title],
 		['editor-display', second.id, second.title],
 		['editor-display', first.id, first.title],
+		['display-language', locale.id, locale.title],
 	]);
 	assert.deepEqual(projected([{ ...first, title: 'Updated metadata' }]), [['editor-display', first.id, 'Updated metadata']]);
 	assert.throws(() => createSettingsLayout([{ ...locale, id: 'workbenchXlocale' }]), /missing from settingsLayout/u);
@@ -2187,6 +2277,11 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
 		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
 		assert.equal(layout.SettingsCategories.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style')?.label, '工作台样式');
+		const application = layout.SettingsNavigation.find(group => group.id === 'application');
+		assert.ok(application);
+		assert.equal(application.label, '应用');
+		assert.deepEqual(application.categories.map(category => category.label), ['显示语言', '更新', '网络', '交互']);
+		assert.equal(application.categories.find(category => category.id === 'interaction')?.description, '调整悬停反馈和调整大小手柄。');
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
@@ -2196,6 +2291,7 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(group?.description, category.description);
 		for (const [id, title, description] of [
 			['accessibilitySignals', '辅助功能信号', '设置工作台事件的声音提示和播报。'],
+			['media-preview', '媒体预览', '设置图片缩放和媒体播放。'],
 			['accessibility', '辅助功能', '设置屏幕阅读器支持、辅助功能帮助、动态效果、透明度和链接可见性。'],
 		]) {
 			const feature = layout.createSettingsLayout(new DefaultSettings().all).find(category => category.id === id)!;
@@ -2414,7 +2510,7 @@ test('Settings search categories follow matched settings for text and ID filters
 	assert.deepEqual(categories(), ['editor-fonts']);
 	tree.setQuery('');
 	assert.equal(tree.isSearching, false);
-	assert.ok(categories().includes('general'));
+	assert.ok(categories().includes('display-language'));
 });
 
 test('Models Settings requires a separately registered secret storage status service', () => {
@@ -2554,7 +2650,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	assert.equal(refreshes, 1, 'Connection metadata changes still update their Settings section');
 });
 
-test('Models Settings orders enabled models first in a unified list', async () => {
+test('Models Settings sorts enabled models on entry and keeps their order until the next visit', async () => {
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
@@ -2565,7 +2661,7 @@ test('Models Settings orders enabled models first in a unified list', async () =
 		{ model: { provider: 'second', model: 'newest' }, displayName: 'Second', longContext: null },
 		{ model: { provider: 'third', model: 'newest' }, displayName: 'Third', longContext: null },
 	];
-	const enabled = new Set<string>();
+	const enabled = new Set<string>(['Third']);
 	const changed = resources.add(new Emitter<void>());
 	const models: ILanguageModelsService = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
@@ -2656,25 +2752,30 @@ test('Models Settings orders enabled models first in a unified list', async () =
 		content.getNodes(query);
 		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
-	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
-	// Enable in reverse order so activation order cannot masquerade as catalog order.
-	await models.setModelVisible(catalog[3].model, true);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[2].model, true);
-	assert.deepEqual(names(), ['Second', 'Third', 'First newest', 'First older']);
-	await models.setModelVisible(catalog[2].model, false);
 	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[3].model, false);
-	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second'], 'Rerendering the same visit does not reset its order');
+	content.setVisible(false);
 	await models.setModelVisible(catalog[1].model, true);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['First older', 'Second', 'First newest', 'Third']);
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
 	search.value = 'first';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(), ['First older', 'First newest']);
 	await models.setModelVisible(catalog[1].model, false);
-	assert.deepEqual(names(), ['First newest', 'First older']);
+	assert.deepEqual(names(), ['First older', 'First newest']);
 	search.value = '';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(new SettingsSearchQuery('older')), ['First older']);
+	assert.deepEqual(names(new SettingsSearchQuery('')), ['First older', 'Second', 'First newest', 'Third']);
+	content.setVisible(false);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['Second', 'First newest', 'First older', 'Third']);
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {
@@ -2784,7 +2885,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		read: async () => [],
 		readFindText: async () => '',
 		writeFindText: async () => { },
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		readResources: async () => ({ resources: [], operation: 'copy' }),
 		writeResources: async () => { },
 		hasResources: async () => false,
@@ -2861,6 +2962,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const advisorWrites: (typeof advisor | null)[] = [];
 	let rejectAdvisorSave = false;
 	const chatService = {
+		onDidBecomeReady: Event.None,
+		onDidUpdateThread: Event.None,
 		onDidChangeModels: modelsChanged.event,
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => {
@@ -3012,6 +3115,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
 	});
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(IChatWidgetService, disposables.add(services.createInstance(ChatWidgetService)));
 	services.registerInstance(IAgentModelsService, {
 		...createDisconnectedAgentModelsService(async operation => { throw new Error(`Unexpected ${operation}`); }),
 		readDefaults: () => (chatService as unknown as ILanguageModelsService).readModelDefaults(),
@@ -3149,6 +3253,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	const prompts: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
 		getConversations: () => [],
@@ -3259,19 +3364,40 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(host);
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions must not leak into Display Language settings');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network'],
+		['display-language', 'updates', 'network', 'interaction'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
 	assert.equal(workbenchGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
-	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
+	workbenchGroup.closest<HTMLElement>('.ash-tree-row')!.click();
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>('[data-settings-group-id]')].map(element => element.dataset.settingsGroupId),
+		['workbench', 'editor', 'features', 'application', 'agents', 'extensions'],
+	);
+	const applicationGroup = root.querySelector<HTMLElement>('[data-settings-group-id="application"]');
+	assert.ok(applicationGroup);
+	assert.equal(applicationGroup.textContent, 'Application');
+	assert.equal(applicationGroup.closest('.ash-tree-row')?.getAttribute('aria-level'), '1');
+	assert.equal(applicationGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
+		['appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser', 'display-language', 'updates', 'network', 'interaction'],
 	);
-	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	for (const categoryId of ['display-language', 'updates', 'network', 'interaction']) {
+		assert.equal(root.querySelector(`[data-settings-category-id="${categoryId}"]`)?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	}
+	await preferences.openSettings({ section: 'updates' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Updates');
+	assert.ok(root.querySelector('[data-settings-item-id="update.policy"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="network.meteredConnection"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="workbench.locale"]'), null);
+	await preferences.openSettings({ section: 'interaction' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Interaction');
+	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	assert.equal(root.querySelector('[data-settings-item-id="update.policy"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="startup"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -3284,6 +3410,39 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
+	await preferences.openSettings({ section: 'chat-usage' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Usage');
+	assert.ok(root.querySelector('[data-settings-item-id="chat.usage"]'));
+	assert.match(root.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
+	await preferences.openSettings({ section: 'chat-appearance' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Appearance');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-appearance"]')?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-appearance"]')?.closest('.ash-tree-row')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-input"]'), null);
+	assert.equal(root.querySelector('[data-settings-category-id="chat-code-blocks"]'), null);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
+		['Appearance', 'Message input', 'Code blocks'],
+	);
+	for (const key of ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
+		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
+	}
+	await preferences.openSettings({ section: 'extensions' });
+	const extensionCategory = root.querySelector('[data-settings-category-id="extensions"]')!;
+	assert.equal(extensionCategory.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('[data-settings-group-id="features"]')?.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Extensions');
+	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
+		assert.ok(root.querySelector(`[data-settings-item-id="${key}"] [role="switch"]`));
+	}
+	await preferences.openSettings({ section: 'github' });
+	assert.equal(root.querySelectorAll('[data-settings-group-id="extensions"]').length, 1);
+	assert.equal(root.querySelector('[data-settings-group-id="extensions"]')?.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelector('[data-settings-category-id="github"]')?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'GitHub');
+	assert.deepEqual([...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent).filter(title => title === 'Codex PR cloud review'), ['Codex PR cloud review']);
+	assert.equal(root.querySelector('.ash-settings-content-tree .ash-settings-section h5'), null);
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'GitHub settings must not contain Agent definitions');
 	await nextTurn();
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
 	await preferences.openSettings({ section: 'extension.ash.snapshot' });
@@ -3363,9 +3522,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(searchEngine.textContent, 'ripgrep');
 	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
-	await preferences.openSettings({ section: 'general' });
+	await preferences.openSettings({ section: 'display-language' });
 	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`), null);
-	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`), null);
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
@@ -3439,6 +3598,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(rebaseWhenSync, false);
 	assert.equal(rebaseControl.getAttribute('aria-checked'), 'false');
 	assert.equal(autoFetch, 'all');
+	root.querySelector<HTMLElement>('[data-settings-category-id="extension.ash.git"]')!.click();
+	root.querySelector<HTMLElement>('[data-settings-category-id="extension.ash.git.group.git.commitChecks"]')!.click();
+	assert.ok(root.querySelector('[data-settings-item-id="git.enableCommitSigning"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="git.autofetch"]'), null);
+	assert.equal(root.querySelector('[data-settings-item-id="git.showCommitInput"]'), null);
+	await preferences.openSettings({ section: 'source-control' });
+	assert.ok(root.querySelector('[data-settings-item-id="git.showCommitInput"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="git.enableCommitSigning"]'), null);
+	await preferences.openSettings({ query: '@id:git.openDiffOnClick' });
+	assert.equal(root.querySelectorAll('[data-settings-item-id="git.openDiffOnClick"]').length, 1);
+	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.git"]'), null);
 
 	const extensionNodes = [
 		...parseExtensionManifest(
@@ -3474,7 +3644,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
 		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]'), null);
 		assert.equal(root.querySelector('[data-settings-item-id="live.enabled"]'), null);
-		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Application');
+		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Display Language');
 		assert.equal(JSON.parse((await configuration.read()).source)['live.enabled'], true, 'withdrawal preserves saved extension values');
 	} finally {
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
@@ -3493,7 +3663,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(underlineIndicator?.hidden, true);
 	assert.equal(underlineIndicator?.textContent, '');
 
-	await preferences.openSettings({ section: 'general' });
+	await preferences.openSettings({ section: 'interaction' });
 	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay}"]`);
 	assert.ok(hoverDelay);
 	hoverDelay.value = '750';
@@ -3529,13 +3699,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		),
 		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
-	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-tree-id="interaction"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
 	assert.deepEqual(skillScopes, []);
 	assert.deepEqual(skillMutations, []);
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
+	assert.ok(root.querySelector('.ash-settings-content-tree [data-settings-item-id="agents.definitions"] .ash-agent-roles-actions'));
 	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
 	const selectAdvisor = (label: string): void => {
 		root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')!.click();
@@ -3589,6 +3760,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="tools"]'), null);
 	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
 	await nextTurn();
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions leave the page when navigating away');
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /\/workspace/);
 	const sandboxPanel = root.querySelector('.ash-agent-capabilities-settings')!;
 	assert.match(sandboxPanel.textContent ?? '', /Policy unsupported/);
@@ -3948,7 +4120,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, scopedSearch);
 	await preferences.openSettings({ section: 'models', sectionQuery: '', focusSearch: false });
 	assert.equal(ownerDocument.activeElement, scopedSearch);
-	await assert.rejects(preferences.openSettings({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+	await assert.rejects(preferences.openSettings({ section: 'interaction', sectionQuery: 'unsupported' }), /does not provide its own search/);
 
 
 	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });
@@ -4405,7 +4577,7 @@ test('Chinese editor tab styles link to Workbench Style and retain keyboard focu
 			writeText: async () => { },
 			readFindText: async () => '',
 			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
+			readImage: async () => new Uint8Array(), writeImage: async () => { },
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { },
 			hasResources: async () => false,

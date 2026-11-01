@@ -1,5 +1,6 @@
 import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
 import { localize } from '../../../../../nls.js';
+import type { ChatResponseFeedbackTarget } from '../../common/chatResponseFeedback.js';
 
 export type ChatTurnErrorAction =
 	| { readonly type: 'retry'; readonly label: string; readonly turnId: string; }
@@ -13,6 +14,7 @@ interface ChatTurnErrorListItemOptions {
 
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
+	readonly feedbackSource?: ChatResponseFeedbackTarget;
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
 	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
 	readonly id: string;
@@ -61,6 +63,7 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 
 /** Associates backend tool evidence within a Turn while preserving transcript order. */
 export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = [], source?: { readonly sessionId: string; readonly threadId: string; }): readonly IChatListItem[] {
+	const completedTurns = new Set(turns.filter(turn => turn.status === 'completed').map(turn => turn.turnId));
 	const editableRequests = new Map(turns
 		.filter(turn => !turn.kind || turn.kind === 'coding' || turn.kind === 'review')
 		.map(turn => [turn.turnId, turn.items.find(item => item.type === 'userMessage')?.itemId]));
@@ -129,6 +132,9 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			return [{ id: entry.entryId, type: 'advisor' as const, text: advice, transient: false, isError: item.isError, label: localize('chat.advisor.modelLabel', 'Advisor · {0}', modelLabel), detail: details }];
 		}
 		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		if (source && entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && completedTurns.has(entry.turnId)) {
+			item = { ...item, feedbackSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId } };
+		}
 		if (source && entry.type === 'item' && entry.item.type === 'userMessage' && !entry.transient) {
 			if (editableRequests.get(entry.turnId) === entry.item.itemId) {
 				item = { ...item, requestSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId } };

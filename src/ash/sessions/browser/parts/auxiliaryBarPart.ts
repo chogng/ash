@@ -12,24 +12,11 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../../workbenc
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 
-/** Hosts independently selected Code tools and Design properties. */
+/** Hosts retained view composites, either in the window or beside a tool's editor groups. */
 export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly fallbackTitle: HTMLElement;
-	private embedded = false;
 	override get minimumWidth(): number {
-		return this.embedded ? 180 : 270;
-	}
-
-	/** Docked Files actions are rendered by the editor header; product pages retain this Part title. */
-	public setDocked(docked: boolean): void {
-		if (this.embedded === docked) { return; }
-		this.embedded = docked;
-		this.titleDomNode.hidden = docked;
-		this.notifyConstraintsChanged();
-	}
-
-	override get minimumHeight(): number {
-		return this.embedded ? 120 : super.minimumHeight;
+		return 270;
 	}
 
 	override get maximumWidth(): number {
@@ -42,6 +29,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 
 	constructor(
 		container: HTMLElement,
+		options: { readonly id: string; },
 		@IViewDescriptorService descriptors: IViewDescriptorService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
@@ -54,7 +42,8 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		super(
 			container,
 			{
-				id: 'auxiliarybar',
+				id: options.id,
+				activeCompositeStorageKey: options.id === 'auxiliarybar' ? undefined : `${options.id}.activeViewContainer`,
 				location: ViewContainerLocation.AuxiliaryBar,
 				ariaLabel: 'Auxiliary sidebar',
 				ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },

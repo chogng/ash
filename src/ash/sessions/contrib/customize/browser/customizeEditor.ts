@@ -66,7 +66,6 @@ import {
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
 import './customizeEditor.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 
 type Category = 'skills' | 'connectors' | 'plugins';
@@ -104,7 +103,6 @@ export class CustomizeEditorPane extends EditorPane {
 	private readonly detailResources = this._register(new DisposableStore());
 	private panel!: HTMLElement;
 	private grid!: HTMLElement;
-	private loading!: LoadingSkeleton;
 	private message!: HTMLElement;
 	private heading!: HTMLElement;
 	private count!: CountBadge;
@@ -558,14 +556,9 @@ export class CustomizeEditorPane extends EditorPane {
 			this.countContainer.hidden = true;
 		}
 		this.panel.setAttribute('aria-busy', 'true');
-		this.loading ??= this._register(
-			new LoadingSkeleton(this.panel, localize('customize.loading', 'Loading resources…'), 'cards', 6),
-		);
-		this.grid.before(this.loading.element);
-		this.loading.setVisible(!this.cards.length);
 		this.more.enabled = false;
 		this.retry.domNode.hidden = true;
-		this.setMessage(this.cards.length ? localize('customize.loading', 'Loading resources…') : '', false);
+		this.setMessage(localize('customize.loading', 'Loading resources…'), !this.cards.length);
 		try {
 			const result =
 				this.collection === 'discover'
@@ -592,7 +585,6 @@ export class CustomizeEditorPane extends EditorPane {
 		} finally {
 			if (this.request === request && !request.token.isCancellationRequested) {
 				this.panel.setAttribute('aria-busy', 'false');
-				this.loading.setVisible(false);
 				this.more.enabled = true;
 			}
 		}
@@ -1150,7 +1142,7 @@ export class CustomizeEditorPane extends EditorPane {
 					...this.menuAction('createWithAsh', localize('customize.createWithAsh', 'Create with Ash'), () =>
 						this.skillActions.createWithAsh(),
 					),
-					icon: Lxicon.chat1,
+					icon: Lxicon.chat,
 				},
 			];
 		return [

@@ -1,5 +1,5 @@
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import { observeResize } from '../../../../../base/browser/observer.js';
+import { observeElementSize } from '../../../../../base/browser/observer.js';
 import { StandardWheelEvent } from '../../../../../base/browser/mouseEvent.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
@@ -174,9 +174,12 @@ export class DiffEditorGutter extends Disposable {
 		const store = new DisposableStore();
 		node.className = 'ash-diff-gutter-item';
 		node.classList.toggle('ash-diff-revert', this.canRevert);
+		const gutter = this;
 		const context: DiffEditorSelectionHunkToolbarContext = {
 			mapping,
-			originalWithModifiedChanges: this.computeStagedValue(mapping),
+			// Most visible toolbars are never invoked. Keep full-document text
+			// preparation out of scrolling; the action receives the current snapshot.
+			get originalWithModifiedChanges() { return gutter.computeStagedValue(mapping); },
 			originalUri: this.model.original.uri,
 			modifiedUri: this.model.modified.uri,
 		};
@@ -197,10 +200,8 @@ export class DiffEditorGutter extends Disposable {
 			menuOptions: { arg: context, shouldForwardArgs: true },
 			toolbarOptions: { primaryGroup: group => group.startsWith('primary') || group === 'navigation' },
 		}));
-		item.height = toolbar.element.offsetHeight;
-		store.add(observeResize(toolbar.element, () => {
+		store.add(observeElementSize(toolbar.element, ({ height }) => {
 			if (node.hidden) return;
-			const height = toolbar.element.offsetHeight;
 			if (height === item.height) return;
 			item.height = height;
 			this.renderedItems.set([...this.items]);

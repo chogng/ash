@@ -1,3 +1,6 @@
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/taskService.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
@@ -5,7 +8,7 @@ import { IFileService, FileSystemProviderError, FileSystemProviderErrorCode } fr
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -30,6 +33,20 @@ import { RUN_BUILD_TASK_COMMAND_ID, RUN_TASK_COMMAND_ID, RUN_TEST_TASK_COMMAND_I
 interface TaskItem extends IQuickPickItem { readonly task: IWorkspaceTask; }
 
 class Picker extends Disposable implements IQuickPick<TaskItem> {
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: IQuickInput['buttons'] = [];
+	enabled = true;
+	busy = false;
+	contextKey: string | undefined;
+	ignoreFocusOut = false;
+	readonly onWillHide = Event.None;
+	readonly onDispose = Event.None;
+	readonly onDidTriggerButton = Event.None;
+	willHide(): void { }
+	didHide(): void { }
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TaskItem[] = [];
 	focus(): void { }
@@ -41,7 +58,7 @@ class Picker extends Disposable implements IQuickPick<TaskItem> {
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	sortByLabel = true;
 	readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
-	readonly hidden = this._register(new Emitter<void>());
+	readonly hidden = this._register(new Emitter<IQuickInputHideEvent>());
 	readonly onDidAccept = this.accepted.event;
 	readonly onDidHide = this.hidden.event;
 	readonly onDidChangeValue = Event.None;
@@ -55,7 +72,7 @@ class Picker extends Disposable implements IQuickPick<TaskItem> {
 	valueSelection = { start: 0, end: 0 };
 	filterValue = (value: string) => value;
 	show(): void { void this.shown.complete(); }
-	hide(): void { this.hidden.fire(); }
+	hide(): void { this.hidden.fire({ reason: QuickInputHideReason.Other }); }
 }
 
 suite('Tasks command catalog and async service lifetime', () => {
@@ -97,6 +114,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 	for (const failure of [false, true]) {
 		test(`Run Task uses the latest open picker catalog and ${failure ? 'reports failure' : 'leaves presentation to the execution owner'} after command invocation ends`, async () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
+			using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'task-actions', flushInterval: 0 });
 			using picker = new Picker();
 			using services = new InstantiationService();
 			services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -121,6 +139,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
 				terminate: async () => { }, dispose() { }, [Symbol.dispose]() { },
 			};
+			services.registerInstance(IStorageService, storage);
 			services.registerInstance(ITaskService, tasks);
 			services.registerInstance(IQuickInputService, {
 				...quickInputServiceTestControls,

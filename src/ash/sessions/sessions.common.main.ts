@@ -1,3 +1,4 @@
+import './contrib/splash/browser/splash.contribution.js';
 import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
@@ -32,7 +33,6 @@ import '../workbench/contrib/limitIndicator/browser/limitIndicator.contribution.
 import '../workbench/contrib/languageStatus/browser/languageStatus.contribution.js';
 import '../workbench/contrib/opener/browser/opener.contribution.js';
 import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
-import '../workbench/contrib/chat/browser/chat.contribution.js';
 import '../workbench/contrib/webview/browser/webview.contribution.js';
 import '../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import './contrib/sessions/browser/views/sessionsViewActions.js';
@@ -56,8 +56,6 @@ import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
-import './browser/turnMultiDiffSource.contribution.js';
-import './contrib/editor/browser/emptyFileEditor.contribution.js';
 import './contrib/creator/browser/creatorEditor.contribution.js';
 import './contrib/creator/browser/creator.contribution.js';
 import './contrib/creator/contrib/design/browser/design.contribution.js';
@@ -115,10 +113,7 @@ MenusRegistry.appendMenuItems([
 		id: Menus.CodeActivityBar,
 		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
 	},
-	{
-		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.open.teams', title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), icon: Lxicon.agent, toggled: ContextKeyExpr.has('sessions.activity.teamsSelected') }, group: 'navigation', order: 35 },
-	},
+
 ]);
 
 registerTerminalView(SessionsViewRegistry);

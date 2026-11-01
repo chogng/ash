@@ -4,7 +4,6 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
 import { Dimension, h, addDisposableListener, type IDimension } from '../../../../base/browser/dom.js';
 import './media/sessionChangesEditor.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -54,7 +53,6 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private readonly split = this._register(new MutableDisposable<SplitView>());
 	private comparisonDimension: IDimension = Dimension.Zero;
 	private messageDomNode!: HTMLParagraphElement;
-	private skeleton!: LoadingSkeleton;
 	private input: IResourceEditorInput | undefined;
 	private comparisonInput: MultiDiffEditorInput | undefined;
 	private viewState: unknown;
@@ -124,7 +122,6 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.details.setHeaderVisible(false);
 			this.details.setVisible(false);
 		}
-		this.skeleton = this._register(new LoadingSkeleton(this.comparisonDomNode, localize('sessions.changes.loading', 'Loading changes…'), 'diff', 6));
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -169,7 +166,6 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.revision++;
 		this.pending.clear();
 		this.comparison.clear();
-		this.skeleton?.setVisible(false);
 		this.domNode?.setAttribute('aria-busy', 'false');
 	}
 
@@ -339,8 +335,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		this.messageDomNode.textContent = localize('sessions.changes.loading', 'Loading changes…');
-		this.skeleton.setVisible(!this.comparison.value);
-		this.messageDomNode.hidden = true;
+		this.messageDomNode.hidden = false;
 		this.domNode.setAttribute('aria-busy', 'true');
 		const controller = new AbortController();
 		const abortListener = signal ? addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }) : undefined;
@@ -438,7 +433,6 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.
 			abortListener?.dispose();
 			if (!this.isDisposed && revision === this.revision) {
-				this.skeleton.setVisible(false);
 				this.domNode.setAttribute('aria-busy', 'false');
 				this.layout(this.dimension);
 			}

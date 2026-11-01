@@ -117,7 +117,7 @@ const SANITIZER_CONFIG: DomSanitizerConfig = {
 const ALERT_ICON_IDS = {
 	note: 'info',
 	tip: 'lightning',
-	important: 'chat-1',
+	important: 'chat',
 	warning: 'warning',
 	caution: 'error',
 } as const;

@@ -1,5 +1,5 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
+import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -30,7 +30,7 @@ test('permission command uses stable IDs and keeps bypass confirmation on the re
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	const choices: string[] = [];
-	const model = { selectApprovalMode: (mode: string) => choices.push(mode) } as unknown as IChatWidgetModel;
+	const model = { inputState: { aiDisabled: false }, composerGeneration: 1, selectApprovalMode: (mode: string) => choices.push(mode) } as unknown as IChatWidgetModel;
 	await commands.executeCommand('chat.permission', model, 'auto');
 	await assert.rejects(commands.executeCommand('chat.permission', model, '1'), /Use \/permission/);
 	let confirmed = false;
@@ -43,6 +43,20 @@ test('permission command uses stable IDs and keeps bypass confirmation on the re
 });
 
 class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<T> {
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: IQuickInput['buttons'] = [];
+	enabled = true;
+	busy = false;
+	contextKey: string | undefined;
+	ignoreFocusOut = false;
+	readonly onWillHide = Event.None;
+	readonly onDispose = Event.None;
+	readonly onDidTriggerButton = Event.None;
+	willHide(): void { }
+	didHide(): void { }
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly T[] = [];
 	focus(): void { }
@@ -53,7 +67,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	selectedItems: readonly T[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	private readonly accepted = this._register(new Emitter<IQuickPickDidAcceptEvent>());
-	private readonly hidden = this._register(new Emitter<void>());
+	private readonly hidden = this._register(new Emitter<IQuickInputHideEvent>());
 	readonly onDidAccept = this.accepted.event;
 	readonly onDidHide = this.hidden.event;
 	readonly onDidChangeValue = Event.None;
@@ -68,7 +82,7 @@ class Picker<T extends IQuickPickItem> extends Disposable implements IQuickPick<
 	filterValue = (value: string): string => value;
 	constructor(private readonly select: (picker: Picker<T>) => void) { super(); }
 	show(): void { queueMicrotask(() => this.select(this)); }
-	hide(): void { this.hidden.fire(); }
+	hide(): void { this.hidden.fire({ reason: QuickInputHideReason.Other }); }
 	choose(label: string): void { const item = this.items.find(item => item.label === label); assert.ok(item, `Missing choice: ${label}`); this.selectedItems = [item]; this.accepted.fire({ inBackground: false }); }
 }
 

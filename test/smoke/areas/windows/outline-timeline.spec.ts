@@ -37,7 +37,7 @@ test.describe('Explorer empty views', () => {
 		let page = workbench.page;
 		await page.keyboard.press('ControlOrMeta+,');
 		const settings = page.locator('.ash-settings-editor');
-		await settings.locator('[data-settings-category-id="general"]').click();
+		await settings.locator('[data-settings-category-id="display-language"]').click();
 		const language = settings.getByRole('combobox', { name: 'Interface language', exact: true });
 		await language.focus();
 		await language.press('Enter');

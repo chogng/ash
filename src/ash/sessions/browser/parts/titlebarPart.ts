@@ -60,12 +60,6 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		this.domNode.classList.add('ash-sessions-titlebar');
 		const left = h(container.ownerDocument, 'div');
 		left.className = 'ash-sessions-titlebar-left';
-		if (environment.runtime === 'electron' && environment.os === 'mac') {
-			const spacer = h(container.ownerDocument, 'div');
-			spacer.className = 'ash-sessions-window-controls-spacer';
-			spacer.setAttribute('aria-hidden', 'true');
-			left.append(spacer);
-		}
 		this.contentDomNode.append(left);
 		const titlebarContext = this._register(contextKeys.createScoped(left));
 		const menubar = this._register(new BrowserMenubarControl(left, menuService, contextMenus, undefined, {
@@ -109,13 +103,15 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			const width = Math.ceil(children.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0)
 				+ Math.max(0, children.length - 1) * pixels(style.columnGap)
 				+ pixels(style.paddingLeft) + pixels(style.paddingRight)
-				+ pixels(ownerWindow.getComputedStyle(this.contentDomNode).paddingLeft));
+				+ pixels(ownerWindow.getComputedStyle(this.contentDomNode).paddingLeft)
+				// Native window controls occupy titlebar padding outside the left controls.
+				+ pixels(ownerWindow.getComputedStyle(this.domNode).paddingLeft));
 			if (width !== this.sidebarMinimumWidth) {
 				this.sidebarMinimumWidth = width;
 				this.notifyConstraintsChanged();
 			}
 		};
-		this._register(observeResize(Array.from(left.children), updateSidebarMinimumWidth, { box: 'border-box' }));
+		this._register(observeResize([this.contentDomNode, left, ...Array.from(left.children)], updateSidebarMinimumWidth, { box: 'border-box' }));
 		updateSidebarMinimumWidth();
 		this.pageContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-page-content' });
 		this.contentDomNode.append(this.pageContent);

@@ -1,7 +1,9 @@
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { ITaskService } from '../common/taskService.js';
 import type { IWorkspaceTask } from '../common/tasks.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { showWithPinnedItems } from '../../../../platform/quickinput/browser/quickPickPin.js';
 
 export interface ITaskQuickPickEntry extends IQuickPickItem {
 	readonly task: IWorkspaceTask | undefined | null;
@@ -13,16 +15,28 @@ export class TaskQuickPick extends Disposable {
 		private readonly selectTasks: (catalog: readonly IWorkspaceTask[]) => readonly IWorkspaceTask[],
 		@ITaskService private readonly tasks: ITaskService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IStorageService private readonly storage: IStorageService,
 	) { super(); }
 
 	show(placeHolder: string, defaultEntry?: ITaskQuickPickEntry): Promise<IWorkspaceTask | undefined | null> {
 		return new Promise(resolve => {
 			const lifetime = this._register(new DisposableStore());
 			const picker = lifetime.add(this.quickInput.createQuickPick<ITaskQuickPickEntry>());
+			const pins = lifetime.add(new MutableDisposable());
 			picker.ariaLabel = picker.placeholder = placeHolder;
+			let shown = false;
 			const update = (): void => {
-				picker.items = this.selectTasks(this.tasks.tasks).map(task => ({ task, label: task.label, description: task.source, detail: task.detail ?? task.command }));
+				const selection = shown ? picker.valueSelection : undefined;
+				const activeId = picker.activeItems[0]?.id;
+				pins.clear();
+				picker.sortByLabel = true;
+				picker.items = this.selectTasks(this.tasks.tasks).map(task => ({ id: task.id, task, label: task.label, description: task.source, detail: task.detail ?? task.command }));
 				if (defaultEntry) picker.items = [...picker.items, defaultEntry];
+				pins.value = showWithPinnedItems(this.storage, 'workbench.tasks.pinnedTasks', picker, true);
+				if (selection) picker.valueSelection = selection;
+				const retained = activeId && picker.items.find(item => !('type' in item) && item.id === activeId);
+				if (retained && !('type' in retained)) picker.activeItems = [retained];
+				shown = true;
 			};
 			let selected: IWorkspaceTask | undefined | null;
 			lifetime.add(this.tasks.onDidChangeTasks(update));
@@ -43,7 +57,6 @@ export class TaskQuickPick extends Disposable {
 			lifetime.add(picker.onDidHide(() => { resolve(selected); lifetime.dispose(); }));
 			lifetime.add(toDisposable(() => resolve(undefined)));
 			update();
-			picker.show();
 		});
 	}
 }

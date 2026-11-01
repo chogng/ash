@@ -65,6 +65,24 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	assert.equal(speech.hasActiveSpeechToTextSession, false);
 });
 
+test('Sessions common entry supplies shared Chat services and startup contributions without IDE window actions', async () => {
+	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
+	const { WorkbenchContributionsRegistry } = await import('../../../workbench/common/contributions.js');
+	const { IChatEditingService } = await import('../../../workbench/contrib/chat/common/editing/chatEditingService.js');
+	const { IDictationOnboardingService } = await import('../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js');
+	const { IChatDebugService } = await import('../../../workbench/contrib/chat/common/chatDebugService.js');
+	const { IChatResponseResourceFileSystemProvider } = await import('../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js');
+	const registrations = getSingletonServiceDescriptors();
+	for (const id of [IChatEditingService, IDictationOnboardingService, IChatDebugService, IChatResponseResourceFileSystemProvider]) {
+		assert.equal(registrations.filter(([candidate]) => candidate === id).length, 1, String(id));
+	}
+	using services = new InstantiationService();
+	using host = WorkbenchContributionsRegistry.createHost(services, undefined, [
+		'chatResponseResourceWorkbenchContribution', 'chat.edits.editorOverlay', 'chat.promptLanguageFeatures',
+	]);
+	assert.equal(host.phase, undefined);
+});
+
 test('Sessions common entry supplies the shared editor Worker service in each window scope', async () => {
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
 	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');
@@ -338,17 +356,17 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Symphony', 'Customize']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.collaboration"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {
@@ -370,7 +388,7 @@ test('workspace mode controls switch retained pages and follow their owner selec
 	using chatCommand = CommandsRegistry.register('sessions.open.chat', () => { opened.push('agents'); active.set('agents'); });
 	using control = services.createInstance(WindowModeControl, ownerDocument.body, active, { agents: 'sessions.open.chat', code: 'sessions.open.code' });
 	const buttons = [...ownerDocument.querySelectorAll<HTMLButtonElement>('.ash-window-mode-control .ash-segmented-control-option')];
-	assert.equal(buttons[0]!.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'chat-1');
+	assert.equal(buttons[0]!.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'chat');
 	buttons[0]!.click();
 	assert.deepEqual(opened, ['agents']);
 	buttons[1]!.click();

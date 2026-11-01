@@ -15,6 +15,33 @@
 	width: 100%;
 }
 
+.ash-chat-models-list > .ash-models-settings-expand {
+	box-sizing: border-box;
+	width: 100%;
+	justify-content: flex-start;
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+	border: 0;
+	color: var(--ash-link-foreground);
+}
+
+.ash-models-settings-expand:not(:disabled):hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+/* Keep keyboard focus clear of the card separator and outer corners. */
+.ash-chat-models-list > .ash-models-settings-expand:focus-visible {
+	outline: 0;
+}
+
+.ash-models-settings-expand:focus-visible::after {
+	position: absolute;
+	inset: var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-small);
+	content: "";
+	pointer-events: none;
+}
+
 .ash-chat-models-catalog .ash-models-settings-model-row {
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
@@ -89,13 +116,13 @@
 	visibility: hidden;
 }
 
-.ash-model-context-button[aria-pressed="true"] .ash-model-context-default {
+.ash-model-context-button.checked .ash-model-context-default {
 	transform: translateY(-50%) rotateX(90deg);
 	opacity: 0;
 	visibility: hidden;
 }
 
-.ash-model-context-button[aria-pressed="true"] .ash-model-context-extended {
+.ash-model-context-button.checked .ash-model-context-extended {
 	transform: translateY(0) rotateX(0);
 	opacity: 1;
 	visibility: visible;

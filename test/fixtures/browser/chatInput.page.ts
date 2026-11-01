@@ -22,7 +22,7 @@ import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import '../../../src/ash/workbench/common/theme.js';
 import '../../../src/ash/workbench/browser/media/style.css';
-import '../../../src/ash/sessions/browser/media/chatViewPane.css';
+import '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -215,7 +215,7 @@ services.registerSingleton(IMenuService, () => services.createInstance(MenuServi
 const footerStatusVisible = contextKeys.createKey<boolean>('test.chat.status.visible', false);
 const footerStatus = new URLSearchParams(location.search).has('footerStatus')
 	? resources.add(MenusRegistry.appendMenuItem(extensionMenuId('chat/input/status'), {
-		command: { id: 'test.chat.status', title: 'Extension status', icon: Lxicon.chat4 },
+		command: { id: 'test.chat.status', title: 'Extension status', icon: Lxicon.chat },
 		when: ContextKeyExpr.has('test.chat.status.visible'), group: 'status',
 	})) : undefined;
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));
@@ -225,6 +225,7 @@ services.registerInstance(IClipboardService, {
 	readFindText: async () => '',
 	writeFindText: async () => { },
 	readImage: async () => new URLSearchParams(location.search).has('emptyClipboard') ? new Uint8Array() : png,
+	writeImage: async () => { },
 	readText: async () => '', writeText: async () => { }, readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 });
 let screenshotCalls = 0;
@@ -281,6 +282,7 @@ services.registerInstance(IInstructionService, {
 	},
 });
 services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
@@ -949,7 +951,7 @@ window.ashChatInputIntegration = {
 	},
 	releaseInstructions: () => { for (const resolve of instructionWaiters.splice(0)) resolve(); },
 	showModels: renderModels,
-	openModels: () => part.openModelSelector(),
+	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({

@@ -78,6 +78,29 @@
 .ash-sash:focus-visible::after {
 	background: var(--ash-sash-hoverBackground);
 }
+.ash-sash-handle-scope .ash-sash-vertical::after {
+	left: calc(50% + var(--ash-sash-feedback-cross-offset, 0px));
+	top: calc(50% + var(--ash-sash-feedback-center-offset, 0px));
+	bottom: auto;
+	width: max(3px, var(--ash-sash-hoverFeedbackSize, 1px));
+	height: min(60px, 100%);
+	transform: translate(-50%, -50%);
+}
+.ash-sash-handle-scope .ash-sash-horizontal::after {
+	left: calc(50% + var(--ash-sash-feedback-center-offset, 0px));
+	top: calc(50% + var(--ash-sash-feedback-cross-offset, 0px));
+	right: auto;
+	width: min(60px, 100%);
+	height: max(3px, var(--ash-sash-hoverFeedbackSize, 1px));
+	transform: translate(-50%, -50%);
+}
+.ash-sash-handle-scope .ash-sash-hover::after,
+.ash-sash-handle-scope .ash-sash-active::after {
+	background: var(--ash-contrastBorder, var(--ash-description-foreground));
+}
+.ash-sash-handle-scope .ash-sash:focus-visible::after {
+	background: var(--ash-focusBorder);
+}
 .ash-sash-vertical {
 	cursor: col-resize;
 }
@@ -95,6 +118,13 @@
 }
 .ash-sash-horizontal.ash-sash-maximum {
 	cursor: n-resize;
+}
+/* Handle feedback keeps the normal resize cursor at either size constraint. */
+.ash-sash-handle-scope .ash-sash-vertical:not(.ash-sash-disabled) {
+	cursor: col-resize;
+}
+.ash-sash-handle-scope .ash-sash-horizontal:not(.ash-sash-disabled) {
+	cursor: row-resize;
 }
 .ash-sash-disabled {
 	cursor: default;

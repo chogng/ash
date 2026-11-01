@@ -41,6 +41,13 @@ export interface InsetSashPresentation {
 
 export type SashPresentation = InsetSashPresentation | undefined;
 
+/** Selects feedback for existing and future Sashes without changing placement or input geometry. */
+export function bindSashFeedbackPresentation(container: HTMLElement, presentation: 'handle'): IDisposable {
+	const scopeClass = `ash-sash-${presentation}-scope`;
+	container.classList.add(scopeClass);
+	return toDisposable(() => container.classList.remove(scopeClass));
+}
+
 /** Visual and interaction settings applied to every Sash below one element. */
 export interface SashSettings {
 	readonly dragAreaSize: number;
@@ -133,6 +140,7 @@ export class Sash extends Disposable {
 	private _orthogonalEndSash: Sash | undefined;
 	private _linkedSash: Sash | undefined;
 	private _presentation: SashPresentation;
+	private feedbackOffset = 0;
 	readonly orientation: Orientation;
 
 	constructor(
@@ -198,6 +206,13 @@ export class Sash extends Disposable {
 			if (provider.getHorizontalSashLeft) this.element.style.left = `${provider.getHorizontalSashLeft(this)}px`;
 			if (provider.getHorizontalSashWidth) this.element.style.width = `${provider.getHorizontalSashWidth(this)}px`;
 		}
+	}
+
+	/** Moves the feedback center along the separator without changing its input geometry. */
+	setFeedbackOffset(offset: number): void {
+		if (offset === this.feedbackOffset) return;
+		this.feedbackOffset = offset;
+		this.element.style.setProperty('--ash-sash-feedback-center-offset', `${offset}px`);
 	}
 
 	onDidStart(listener: (event: ISashEvent) => void): IDisposable {

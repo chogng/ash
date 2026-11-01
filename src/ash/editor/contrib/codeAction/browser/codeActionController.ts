@@ -1,7 +1,7 @@
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { EditSources } from '../../../common/textModelEditSource.js';
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
 import * as languages from '../../../common/languages.js';
@@ -29,7 +29,8 @@ export class CodeActionController extends Disposable {
 	private readonly tabbedMenu: TabbedActionListWidget;
 	private menuContext: languages.LanguageCodeActionRequest | undefined;
 	private readonly model: CodeActionModel;
-	private readonly lightbulb: LightBulbWidget;
+	private lightbulb: LightBulbWidget | undefined;
+	private readonly lightbulbResources = this._register(new DisposableStore());
 	private readonly keybindings: CodeActionKeybindingResolver;
 	private actions: readonly CodeActionItem[] = [];
 	private get context(): languages.LanguageCodeActionRequest | undefined {
@@ -43,7 +44,7 @@ export class CodeActionController extends Disposable {
 		private readonly diagnostics: TextDecorationCollection<languages.LanguageDiagnostic>,
 		private readonly applyWorkspaceEdit: ((edit: languages.LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined,
 		private readonly onError: (error: unknown) => void,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 		@IBulkEditService private readonly bulkEditService: IBulkEditService,
 		@IAccessibilitySignalService private readonly signals: IAccessibilitySignalService,
@@ -53,21 +54,18 @@ export class CodeActionController extends Disposable {
 			throw new TypeError('Code action dependencies must share one text model');
 		}
 		this.model = this._register(instantiationService.createInstance(CodeActionModel, editor, diagnostics, onError));
-		this.lightbulb = this._register(instantiationService.createInstance(LightBulbWidget, editor));
 		this.keybindings = instantiationService.createInstance(CodeActionKeybindingResolver);
 		this.tabbedMenu = this._register(instantiationService.createInstance(TabbedActionListWidget));
 		this._register(this.model.onDidChangeState(state => {
 			this.hideMenu();
-			this.lightbulb.hide();
+			this.lightbulb?.hide();
 			if (state.type === CodeActionsState.Type.Triggered && state.trigger.type === CodeActionTriggerType.Auto) {
 				void state.actions.then(actions => {
-					if (this.model.state === state) { this.lightbulb.update(actions, state.trigger, state.position); }
+					if (this.model.state === state && actions.validActions.length > 0) {
+						this.getLightbulb().update(actions, state.trigger, state.position);
+					}
 				}).catch(onError);
 			}
-		}));
-		this._register(this.lightbulb.onClick(trigger => {
-			void this.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'),
-				CodeActionTriggerSource.Lightbulb, { ...trigger.filter, includeSourceActions: true }).catch(onError);
 		}));
 		this._register(toDisposable(() => this.close()));
 		this._register(addDisposableListener(input, 'keydown', event => {
@@ -85,6 +83,17 @@ export class CodeActionController extends Disposable {
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
 		this._register(editor.onDidScrollChange(() => this.close()));
 		this._register(editor.onDidLayoutChange(() => this.close()));
+	}
+
+	private getLightbulb(): LightBulbWidget {
+		if (!this.lightbulb) {
+			this.lightbulb = this.lightbulbResources.add(this.instantiationService.createInstance(LightBulbWidget, this.editor));
+			this.lightbulbResources.add(this.lightbulb.onClick(trigger => {
+				void this.manualTriggerAtCurrentPosition(localize('codeAction.empty', 'No code actions available.'),
+					CodeActionTriggerSource.Lightbulb, { ...trigger.filter, includeSourceActions: true }).catch(this.onError);
+			}));
+		}
+		return this.lightbulb;
 	}
 
 	public async manualTriggerAtCurrentPosition(notAvailableMessage: string, triggerAction: CodeActionTriggerSource, filter?: CodeActionFilter, autoApply = CodeActionAutoApply.Never): Promise<void> {
@@ -227,6 +236,6 @@ export class CodeActionController extends Disposable {
 	private close(): void {
 		this.hideMenu();
 		this.model.reset();
-		this.lightbulb.hide();
+		this.lightbulb?.hide();
 	}
 }

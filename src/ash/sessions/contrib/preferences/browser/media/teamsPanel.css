@@ -1,0 +1,66 @@
+.ash-teams-panel {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	padding: 0;
+	color: var(--ash-foreground);
+}
+
+.ash-teams-panel[hidden] {
+	display: none;
+}
+.ash-teams-panel h2,
+.ash-teams-panel h3,
+.ash-teams-panel h4 {
+	margin: var(--ash-spacing-size120) 0 var(--ash-spacing-size80);
+}
+.ash-teams-content {
+	min-height: 0;
+	overflow: visible;
+}
+.ash-teams-toolbar,
+.ash-teams-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+.ash-teams-list,
+.ash-teams-detail,
+.ash-teams-members {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+.ash-teams-list {
+	margin-top: var(--ash-spacing-size120);
+}
+.ash-teams-detail {
+	margin-top: var(--ash-spacing-size160);
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+}
+.ash-teams-list-item {
+	width: 100%;
+	justify-content: flex-start;
+	text-align: left;
+}
+.ash-teams-panel .ash-button.ash-teams-list-item.selected {
+	background: var(--ash-sessions-selectionBackground);
+}
+.ash-teams-member {
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+.ash-teams-member p,
+.ash-teams-detail p {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.ash-teams-member button {
+	margin: var(--ash-spacing-size80) var(--ash-spacing-size80) 0 0;
+}
+.ash-teams-status {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}

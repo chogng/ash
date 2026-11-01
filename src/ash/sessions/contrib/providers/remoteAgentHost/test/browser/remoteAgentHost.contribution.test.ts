@@ -1,3 +1,12 @@
+import { projectSession } from '../../../../../services/sessions/common/sessionIdentity.js';
+import { sessionWorkspaceUri } from '../../../../../common/sessionWorkspace.js';
+import { WSLAgentHostContribution } from '../../browser/wslAgentHost.contribution.js';
+import { TunnelAgentHostContribution } from '../../browser/tunnelAgentHost.contribution.js';
+import { RemoteAgentHostContribution } from '../../browser/remoteAgentHost.contribution.js';
+import { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
+import type { ISession } from '../../../../../services/sessions/common/session.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -58,6 +67,9 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	services.registerInstance(INotificationService, notifications);
 	const errors: string[] = [];
 	lifetime.add(notifications.model.onDidAdd(item => errors.push(String(item.message))));
+	const catalogChanges = lifetime.add(new Emitter<void>());
+	let canonicalSessions: readonly ISession[] = [];
+	services.registerInstance(ISessionsManagementService, { get sessions() { return canonicalSessions; }, onDidChange: catalogChanges.event } as ISessionsManagementService);
 	const registry = lifetime.add(new SessionsProvidersService());
 	services.registerInstance(ISessionsProvidersService, registry);
 	services.registerInstance(IRemoteConnectionApi, {
@@ -70,8 +82,10 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const closed: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
-	let openResult: ((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
+	let openResult: ((target: RemoteAgentHostConnection, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
 	const renderer = createDisconnectedRendererApi();
+	let containerSessions = false;
+	const sessionDirectoryRequests: unknown[] = [];
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined,
@@ -109,6 +123,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			onDidChangeConnections: hostChanges.event,
 			disconnect,
 			reconnect: async () => { },
+			listWSLDistros: async () => [],
 			connect: async (target, signal) => {
 				const key = agentHostConnectionAddress(target);
 				const existing = hosts.get(key);
@@ -116,6 +131,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 				opened.push(target.name);
 				const session: AgentSession = {
 					sessionId: 'same-session', title: target.name, status: 'active',
+					executionTarget: containerSessions ? { type: 'provider', providerId: 'ash.dev-containers', workspace: '/Source', root: '/workspace', hostAuthority: remoteAgentHostRoot(target, target.name).authority } : undefined,
 					manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [],
 				};
 				const plan: Automation = {
@@ -178,13 +194,15 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						...renderer.fs,
 						readFile: async params => {
 							fileRequests.push({ host: target.name, operation: 'read', path: params.path });
-							assert.equal(params.dirId, `agent-host:${target.name}`);
+							if (params.sessionDirectory) sessionDirectoryRequests.push({ host: target.name, ...params.sessionDirectory });
+							else assert.equal(params.dirId, `agent-host:${target.name}`);
 							const stored = readStored(params.path);
 							return { content: stored.bytes.toString('utf8'), revision: stored.revision };
 						},
 						readBinaryFile: async params => {
 							fileRequests.push({ host: target.name, operation: 'read', path: params.path });
-							assert.equal(params.dirId, `agent-host:${target.name}`);
+							if (params.sessionDirectory) sessionDirectoryRequests.push({ host: target.name, ...params.sessionDirectory });
+							else assert.equal(params.dirId, `agent-host:${target.name}`);
 							const stored = readStored(params.path);
 							const bytes = Buffer.from(stored.bytes);
 							// Hosts deliberately reuse opaque IDs; only their allocating connection can consume them.
@@ -197,12 +215,14 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						},
 						writeBinaryFile: async params => {
 							fileRequests.push({ host: target.name, operation: 'write', path: params.path });
-							assert.equal(params.dirId, `agent-host:${target.name}`);
+							if (params.sessionDirectory) sessionDirectoryRequests.push({ host: target.name, ...params.sessionDirectory });
+							else assert.equal(params.dirId, `agent-host:${target.name}`);
 							return writeStored(params.path, Buffer.from(params.dataBase64, 'base64'));
 						},
 						writeFile: async params => {
 							fileRequests.push({ host: target.name, operation: 'write', path: params.path });
-							assert.equal(params.dirId, `agent-host:${target.name}`);
+							if (params.sessionDirectory) sessionDirectoryRequests.push({ host: target.name, ...params.sessionDirectory });
+							else assert.equal(params.dirId, `agent-host:${target.name}`);
 							return writeStored(params.path, Buffer.from(params.content));
 						},
 					},
@@ -214,7 +234,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 					},
 				};
 				const host: IRendererAgentHost = {
-					id: target.name, connection: target, api, ...toDisposable(() => {
+					id: target.name, connection: target, api, directory: { uri: remoteAgentHostRoot(target, target.name), target: { type: 'environment', dirId: `agent-host:${target.name}` } }, ...toDisposable(() => {
 						closed.push(target.name);
 						if (hosts.get(key)?.host === host) { hosts.delete(key); hostChanges.fire(); }
 					})
@@ -230,8 +250,12 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		},
 	});
 	services.registerInstance(IAgentHostConnectionsService, lifetime.add(services.createInstance(AgentHostConnectionsService)));
-	const contribution = lifetime.add(services.createInstance(SSHAgentHostContribution));
 	const commands = lifetime.add(new CommandService(services));
+	services.registerInstance(ICommandService, commands);
+	const scopeOwner = lifetime.add(services.createInstance(RemoteAgentHostContribution));
+	const contribution = lifetime.add(services.createInstance(SSHAgentHostContribution));
+	lifetime.add(services.createInstance(WSLAgentHostContribution));
+	lifetime.add(services.createInstance(TunnelAgentHostContribution));
 	const automations = lifetime.add(services.createInstance(ProviderAutomationService));
 	function picker(): IQuickPick<IQuickPickItem> {
 		assert.ok(quickInput.currentQuickInput);
@@ -256,8 +280,11 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	}
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
-		services, commands, contribution, registry, automations, quickInput, errors,
-		opened, closed, renamed, deleted, connect, choose, picker, files, fileRequests, primaryRequests, resourceRequests, openResources,
+		services, commands, contribution, scopeOwner, registry, automations, quickInput, errors,
+		opened, closed, renamed, deleted, connect, choose, picker, sessionDirectoryRequests,
+		containerSessions: () => { containerSessions = true; },
+		connectTarget: (target: RemoteAgentHostConnection) => services.get(IRendererHostService).agentHosts!.connect(target, new AbortController().signal), files, fileRequests, primaryRequests, resourceRequests, openResources,
+		publishSessions: (sessions: readonly ISession[]) => { canonicalSessions = sessions; catalogChanges.fire(); },
 		changeFiles: (name: string, path: string) => hostEvents.get(name)!.fire({ method: 'fs/changed', params: { type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] } }),
 		deferOpen: (next: typeof openResult) => { openResult = next; },
 	};
@@ -281,6 +308,47 @@ test('Agents host command registers independent providers and routes equal backe
 	await context.automations.deleteAutomation(plans.find(plan => plan.target.providerId === second.id)!.id);
 	assert.deepEqual(context.deleted, ['build-b:same-automation']);
 	assert.deepEqual(context.errors, []);
+});
+
+test('SSH, WSL and Tunnel scopes mount identical container roots on their source host and retire removed Session routes', async () => {
+	using context = fixture();
+	context.containerSessions();
+	await context.connectTarget(targets[0]!);
+	await context.connectTarget({ type: 'wsl', name: 'Ubuntu', distro: 'Ubuntu', workspace: '/srv/project' });
+	await context.connectTarget({ type: 'tunnel', name: 'Tunnel', endpoint: 'http://127.0.0.1:5174/', workspace: '/srv/project' });
+	const sessions: ISession[] = [];
+	for (const provider of context.registry.getProviders()) {
+		const listed = await provider.list();
+		sessions.push(projectSession(listed[0]!, provider.id, provider.label, 'local-agent-host'));
+	}
+	context.publishSessions(sessions);
+	const roots = sessions.map(session => sessionWorkspaceUri(session.workspace!));
+	assert.equal(new Set(roots.map(root => root.authority)).size, 3);
+	for (const [index, root] of roots.entries()) {
+		assert.equal((await context.files.readFile(URI.joinPath(root, 'main.ts'))).content, `${['build-a', 'Ubuntu', 'Tunnel'][index]}:main.ts`);
+	}
+	assert.deepEqual(context.sessionDirectoryRequests, [
+		{ host: 'build-a', sessionId: 'same-session', path: '/workspace' },
+		{ host: 'Ubuntu', sessionId: 'same-session', path: '/workspace' },
+		{ host: 'Tunnel', sessionId: 'same-session', path: '/workspace' },
+	]);
+	context.publishSessions(sessions.slice(1));
+	await assert.rejects(context.files.readFile(URI.joinPath(roots[0]!, 'main.ts')));
+	assert.equal((await context.files.readFile(URI.joinPath(roots[1]!, 'main.ts'))).content, 'Ubuntu:main.ts');
+	context.scopeOwner.dispose();
+	await assert.rejects(context.files.readFile(URI.joinPath(roots[1]!, 'main.ts')));
+	assert.deepEqual(context.primaryRequests, []);
+});
+
+test('WSL command reports unavailable hosts in Chinese without creating an SSH scope', async () => {
+	using context = fixture();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(chinese.locale, chinese.bundles);
+	try {
+		await context.commands.executeCommand('sessions.action.connectWSLAgentHost');
+		assert.deepEqual(context.errors, ['没有可用的 WSL 2 分发版。WSL 连接需要 Windows，并在分发版中安装 Ash Remote 运行时。']);
+		assert.deepEqual(context.opened, []);
+	} finally { resetNlsResolver(); }
 });
 
 test('disconnecting one Agents host unregisters its provider and retains the other host', async () => {
@@ -367,7 +435,7 @@ test('connected Agents hosts route identical file paths through their own filesy
 	await disconnect;
 	await assert.rejects(context.files.readFile(first));
 	assert.equal((await context.files.readFile(second)).content, updated);
-	context.contribution.dispose();
+	context.scopeOwner.dispose();
 	await assert.rejects(context.files.readFile(second));
 	assert.deepEqual(context.primaryRequests, []);
 	assert.equal(context.openResources.size, 0);

@@ -152,7 +152,13 @@ Thread sequence、诊断 sequence 和 OTel span 身份各自保留语义。关�
 
 Chat Debug 位于 `workbench/contrib/chat/browser/chatDebug`，复用编辑器、虚拟树、正文和关系页面。默认不占据常驻侧栏；显式打开时加载实现和样式，关闭后释放读取与订阅。
 
-只读契约为 Chat contribution 的 `IChatDebugService`，由 `AppServerChatDebugService` 借用既有 `IAgentThreadService`；底层沿用同一连接和订阅 owner，不建立执行状态副本。
+证据读取与显式传输采集契约为 Chat contribution 的 `IChatDebugService`，由 `AppServerChatDebugService` 借用既有 `IAgentThreadService`；底层沿用同一连接和订阅 owner，不建立执行状态副本。
+
+调试首页通过同一适配器读取 `IAgentSessionService` 的会话目录，仅缓存 URI 与标题用于展示，并通过编辑器服务打开所选会话。目录读取失败可显式重试；迟到的旧目录不能覆盖新结果。Overview 使用后端概览；Logs 保留执行树与按需正文；Flow Chart 只投影已保存关系，过滤与 Logs 共享，节点可定位回原事件；Cache Explorer 在同一 Thread、同一请求边界内比较相邻的已保存语义请求，导入捕获缺失的正文不会读取在线 Session。请求差异不证明提供方缓存未命中。Wire Log 通过 `diagnostics/wireLog/start`、`read`、`stop` 读取独立的后端连接级采集，语义模型请求不会冒充协议帧。采集默认关闭，显式开始后记录 renderer 与 App Server 的原始 JSONL 帧（不含换行符），覆盖 managed gateway 路由后的响应、通知和反向请求；输入在路由前观测，输出在成功写入后观测，序号表示观测顺序，不是跨线程因果顺序。它包含该连接所有会话；会话仅用于前端选择 provider 连接，不过滤或改写正文。后端按方向和 JSON-RPC ID 配对响应，采集外的关联保持未知。每连接最多一份原始正文总计 2 MiB / 2000 帧的内存采集，单帧保留最多 64 KiB UTF-8 前缀；分页最多 100 帧 / 256 KiB，截断和淘汰计数随结果返回。控制采集的请求及响应不记录。停止确认后不再追加，已停止的采集仍可读取；新采集替换旧采集，连接关闭释放全部内容，隐藏或关闭界面会停止采集。前端只保存可替换的展示快照，导入/导出 rollout trace 不混入此连接级数据。
+
+会话定位 URI 可以保留 `viewHint`（Overview、Logs、Flow Chart、Cache、Wire Log）与文本 `filter`，恢复打开时仍指向同一视图。Overview 的当前会话标题、状态、执行位置和时间由现有 Session 服务读取，与捕获中的历史指标分开呈现；返回 Chat 通过原有会话导航服务完成。Logs 的树形与列表视图共用事件身份、过滤和选区，支持展开、折叠与复制已保存记录。Cache 可按需调用共享只读 Diff 编辑器，差异计算和文本模型随视图隐藏释放，不会写回原始请求，也不会将文本差异解释成缓存未命中。
+
+Wire Log 的导出先确认后端采集停止，再读取全部保留帧；当前文本和方向筛选不限制导出。产物包含版本、连接身份、原始 UTF-8 帧、截断信息和丢弃计数；分页读取未完成时不保存部分产物。这里的连接内存采集和显式导出替代客户端的 AHP 文件监听机制；不在前端添加执行事件写入口或第二个诊断状态 owner。
 
 页面绑定明确的来源：当前会话、保存捕获或评测运行。切换 Chat 不替换正在审阅的 Trace。IDE 和 Agents Window 共享后端证据，分别持有视图状态；TUI 和 CI 可只使用导出与报告。取消、隐藏、关闭、断连和迟到结果的处理沿用现有契约。
 

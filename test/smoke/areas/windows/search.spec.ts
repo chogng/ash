@@ -784,7 +784,8 @@ test.describe('Search with a granted browser folder', () => {
 
 test('Search translates query options and file filters into Chinese', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	await workbench.page.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ application, workbench } = await restartWorkbench());

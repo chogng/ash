@@ -2,6 +2,8 @@ import type { Event } from '../../../base/common/event.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
+import type { URI } from '../../../base/common/uri.js';
+import type Severity from '../../../base/common/severity.js';
 import type { IQuickAccessController } from './quickAccess.js';
 import {
 	createServiceIdentifier,
@@ -9,6 +11,8 @@ import {
 
 /** Presentation shared by searchable Quick Pick providers. */
 export interface IQuickPickItem {
+	readonly id?: string;
+	readonly ariaLabel?: string;
 	readonly label: string;
 	readonly description?: string;
 	readonly detail?: string;
@@ -37,7 +41,18 @@ export interface IKeyMods {
 	readonly shift: boolean;
 }
 
-export interface IQuickPickItemButton {
+export interface IQuickInputButton {
+	readonly iconPath?: { readonly dark: URI; readonly light?: URI; };
+	readonly alwaysVisible?: boolean;
+	readonly label?: string;
+	readonly tooltip?: string;
+	readonly iconClass?: string;
+	readonly secondary?: boolean;
+	readonly toggle?: { checked: boolean; };
+	readonly hasPopup?: 'menu';
+}
+
+export interface IQuickPickItemButton extends IQuickInputButton {
 	readonly id: string;
 	readonly label: string;
 	readonly iconClass?: string;
@@ -68,16 +83,53 @@ export enum QuickPickFocus {
 
 export enum QuickInputType {
 	QuickPick = 'quickPick',
+	QuickTree = 'quickTree',
 	InputBox = 'inputBox',
+	QuickWidget = 'quickWidget',
+}
+
+export enum QuickInputHideReason {
+	Blur = 1,
+	Gesture,
+	Other,
+}
+
+export interface IQuickInputHideEvent {
+	readonly reason: QuickInputHideReason;
 }
 
 /** The active control, including prompts that do not contain a result list. */
 export interface IQuickInput extends IDisposable {
 	readonly type: QuickInputType;
-	readonly onDidHide: Event<void>;
+	readonly onDidHide: Event<IQuickInputHideEvent>;
+	readonly onWillHide: Event<IQuickInputHideEvent>;
+	readonly onDispose: Event<void>;
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: readonly IQuickInputButton[];
+	readonly onDidTriggerButton: Event<IQuickInputButton>;
+	enabled: boolean;
+	busy: boolean;
+	contextKey: string | undefined;
+	ignoreFocusOut: boolean;
+	/** HTMLElement or viewport coordinates. */
+	anchor?: unknown | { x: number; y: number; };
+	anchorPosition?: 'above' | 'below' | 'overlay';
+	show(): void;
 	focus(): void;
 	accept(inBackground?: boolean): void | Promise<void>;
-	hide(): void;
+	hide(reason?: QuickInputHideReason): void;
+	willHide(reason?: QuickInputHideReason): void;
+	didHide(reason?: QuickInputHideReason): void;
+}
+
+/** A caller-owned interactive surface using the window's Quick Input lifetime. */
+export interface IQuickWidget extends IQuickInput {
+	readonly type: QuickInputType.QuickWidget;
+	widget: unknown | undefined;
+	show(): void;
 }
 
 export interface IQuickPickDidAcceptEvent {
@@ -92,7 +144,6 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidAccept: Event<IQuickPickDidAcceptEvent>;
 	activeItems: readonly TItem[];
 	readonly onDidChangeValue: Event<string>;
-	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
 	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>;
 
@@ -102,15 +153,11 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	canSelectMany: boolean;
 	selectedItems: readonly TItem[];
 	readonly onDidChangeSelection: Event<readonly TItem[]>;
-	busy?: boolean;
-	/** Keeps the picker open while an owned action menu has focus. */
-	ignoreFocusOut?: boolean;
 	canAcceptInBackground?: boolean;
 	keyMods?: IKeyMods;
 	ariaLabel: string;
 	/** An optional HTMLElement anchor; unanchored pickers retain the window's default placement. */
 	anchor?: unknown;
-	anchorPosition?: 'above' | 'below';
 	/** Preferred edge alignment; placement can flip to remain inside the viewport. */
 	anchorAlignment?: 'left' | 'right';
 	/** Preferred anchored-picker width in CSS pixels, capped by the available viewport. */
@@ -149,8 +196,62 @@ export interface IQuickInputService {
 	accept(keyMods?: IKeyMods): Promise<void>;
 	cancel(): Promise<void>;
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
+	createQuickTree<TItem extends IQuickTreeItem>(): IQuickTree<TItem>;
+	createQuickWidget(): IQuickWidget;
 	input(options: IInputOptions, token?: CancellationToken): Promise<string | undefined>;
 }
 
 export const IQuickInputService =
 	createServiceIdentifier<IQuickInputService>('quickInputService');
+
+/** Checkbox state belongs to these items; the tree projects it without a second selection model. */
+export interface IQuickTreeItem extends Omit<IQuickPickItem, 'buttons' | 'picked'> {
+	checked?: boolean | 'mixed';
+	collapsed?: boolean;
+	readonly children?: readonly IQuickTreeItem[];
+	readonly pickable?: boolean;
+	readonly disabled?: boolean;
+	readonly buttons?: readonly IQuickInputButton[];
+}
+
+export interface IQuickTreeCheckboxEvent<T extends IQuickTreeItem> {
+	readonly item: T;
+	readonly checked: boolean | 'mixed';
+}
+
+export interface IQuickTreeItemButtonEvent<T extends IQuickTreeItem> {
+	readonly item: T;
+	readonly button: IQuickInputButton;
+}
+
+/** Searchable hierarchical selection hosted by the window's existing Quick Input service. */
+export interface IQuickTree<T extends IQuickTreeItem> extends IQuickInput {
+	readonly type: QuickInputType.QuickTree;
+	value: string;
+	ariaLabel: string | undefined;
+	placeholder: string | undefined;
+	description: string | undefined;
+	matchOnDescription: boolean;
+	matchOnLabel: boolean;
+	sortByLabel: boolean;
+	activeItems: readonly T[];
+	validationMessage: string | undefined;
+	severity: Severity;
+	readonly itemTree: readonly T[];
+	readonly checkedLeafItems: readonly T[];
+	readonly onDidChangeValue: Event<string>;
+	readonly onDidAccept: Event<void>;
+	readonly onDidChangeActive: Event<readonly T[]>;
+	readonly onDidChangeCheckedLeafItems: Event<readonly T[]>;
+	readonly onDidChangeCheckboxState: Event<T>;
+	readonly onDidTriggerItemButton: Event<IQuickTreeItemButtonEvent<T>>;
+	setItemTree(items: T[]): void;
+	getParent(item: T): T | undefined;
+	expand(item: T): void;
+	collapse(item: T): void;
+	isCollapsed(item: T): boolean;
+	focusOnInput(): void;
+	reveal(item: T): void;
+	focus(what?: QuickPickFocus): void;
+	show(): void;
+}

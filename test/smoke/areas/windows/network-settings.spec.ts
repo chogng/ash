@@ -25,7 +25,8 @@ test('Network Settings supports search, keyboard help and Chinese labels while d
 	await search.fill('DNS');
 	await expect(settings.getByRole('button', { name: 'Run diagnostic', exact: true })).toBeVisible();
 	await search.fill('');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ workbench } = await restartWorkbench());

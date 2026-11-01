@@ -141,7 +141,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	expand(element: T): boolean;
 	expandTo(element: T): boolean;
 	isCollapsed(element: T): boolean | undefined;
-	rerender(element: T): void;
+	rerender(element?: T): void;
 	openFind(): void;
 	setFindPattern(pattern: string): void;
 	findNext(): T | undefined;
@@ -207,6 +207,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
 	public layout(height: number, width?: number): void { this.tree.layout(height, width); }
+	public rerender(element?: T): void { this.tree.rerender(element); }
 
 	getInput(): TInput | undefined { return this.input; }
 	get onContextMenu(): Event<TreeContextMenuEvent<T>> { return this.tree.onContextMenu; }
@@ -625,7 +626,10 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		expand: (element) => tree.expand(getId(element)),
 		expandTo: (element) => tree.expandTo(getId(element)),
 		isCollapsed: (element) => tree.model.getNode(getId(element))?.collapsed,
-		rerender: (element) => { if (tree.model.has(getId(element))) tree.rerender(getId(element)); },
+		rerender: (element) => {
+			if (element === undefined) tree.rerender();
+			else if (tree.model.has(getId(element))) tree.rerender(getId(element));
+		},
 		openFind: () => tree.openFind(),
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
@@ -669,7 +673,7 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		expand: (element) => tree.expand(element),
 		expandTo: (element) => tree.expandTo(element),
 		isCollapsed: (element) => tree.model.getNode(element)?.collapsed,
-		rerender: (element) => { if (tree.model.getNode(element)) tree.rerender(element); },
+		rerender: (element) => { if (element === undefined || tree.model.getNode(element)) tree.rerender(element); },
 		openFind: () => tree.openFind(),
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),

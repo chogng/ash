@@ -142,6 +142,40 @@ impl QueueStore {
         };
         match edit {
             crate::QueueEdit::Pause => status = "paused",
+            crate::QueueEdit::Resume => {
+                if message.status != QueueStatus::Paused {
+                    return Err(QueueError::Invalid(
+                        "only paused messages can resume".into(),
+                    ));
+                }
+                status = "pending";
+            }
+            crate::QueueEdit::ReplaceText { text } => {
+                if message.status != QueueStatus::Paused || text.trim().is_empty() {
+                    return Err(QueueError::Invalid(
+                        "pause the message before editing nonempty text".into(),
+                    ));
+                }
+                let mut replaced = false;
+                message.request.input.retain_mut(|item| {
+                    if let protocol::UserInput::Text { text: previous } = item {
+                        if replaced {
+                            return false;
+                        }
+                        *previous = text.clone();
+                        replaced = true;
+                    }
+                    true
+                });
+                if !replaced {
+                    message
+                        .request
+                        .input
+                        .push(protocol::UserInput::Text { text: text.clone() });
+                }
+                message.request.steer_turn = None;
+                status = "pending";
+            }
             crate::QueueEdit::Replace { input } => {
                 if message.status != QueueStatus::Paused || input.is_empty() {
                     return Err(QueueError::Invalid(
@@ -289,12 +323,16 @@ impl QueueStore {
         session: &SessionId,
         thread: &ThreadId,
         id: &CommandId,
+        expected_revision: Option<i64>,
     ) -> Result<QueuedMessage, QueueError> {
         let mut connection = self.lock()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let message = read(&transaction, id)?.ok_or(QueueError::NotFound)?;
         if &message.request.session_id != session || &message.request.thread_id != thread {
             return Err(QueueError::NotFound);
+        }
+        if expected_revision.is_some_and(|revision| revision != message.revision) {
+            return Err(QueueError::Conflict);
         }
         match message.status {
             QueueStatus::Cancelled => return Ok(message),

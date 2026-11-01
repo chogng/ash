@@ -4,7 +4,7 @@ import { decodeAppServerRequestParams, decodeAppServerServerRequestResult } from
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
-import type { BrowserViewEvent } from '../../browserView/common/browserView.js';
+import type { BrowserViewEvent, IBrowserViewOwner, IBrowserViewNetwork } from '../../browserView/common/browserView.js';
 import type { IPlaywrightService } from '../../browserView/common/playwrightService.js';
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
 import type { Event } from '../../../base/common/event.js';
@@ -13,7 +13,7 @@ import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../browserVie
 import { CanvasesEnabledSettingId, type IAgentCanvasHost } from '../common/agentService.js';
 import { ChatAIDisabledSettingId } from '../../chat/common/chatSettings.js';
 
-export function registerAppServerBrowserHost(client: AppServerProtocolClient, playwrightService: IPlaywrightService, mainProcessService: IMainProcessService, configuration: IConfigurationService, canvases?: IAgentCanvasHost): IDisposable {
+export function registerAppServerBrowserHost(client: AppServerProtocolClient, playwrightService: IPlaywrightService, mainProcessService: IMainProcessService, configuration: IConfigurationService, canvases?: IAgentCanvasHost, resolveNetwork?: (owner: IBrowserViewOwner) => IBrowserViewNetwork | undefined): IDisposable {
 	const handlers = new DisposableStore();
 	mainProcessService.registerChannel('browserSharing', {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
@@ -85,8 +85,9 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 		catch (error) { sharedPages.delete(params.targetId); throw error; }
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (params, context) => {
+		const network = resolveNetwork ? resolveNetwork({ type: 'agent', sessionId: params.threadId }) ?? null : undefined;
 		await ready();
-		if (!params.canvas) { return decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params }))); }
+		if (!params.canvas) { return decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params, ...(network !== undefined ? { network } : {}) }))); }
 		canvasReady();
 		const request = { sessionId: params.canvas.sessionId, threadId: params.threadId, instanceId: params.canvas.instanceId };
 		const state = { id: generateUuid(), succeeded: false };
@@ -103,7 +104,7 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 			resolved = { ...params, url: source.url, canvas: { ...params.canvas, title: source.title ?? params.canvas.title } };
 		}
 		context.signal.throwIfAborted();
-		const result = decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params: resolved })));
+		const result = decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params: resolved, ...(network !== undefined ? { network } : {}) })));
 		canvases?.acceptCanvasOpen(request, { ...state, succeeded: true }, presentation);
 		return result;
 	}));

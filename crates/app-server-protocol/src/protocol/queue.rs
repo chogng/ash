@@ -41,6 +41,11 @@ pub struct QueueCancelParams {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub command_id: CommandId,
+    /// Older clients may cancel by identity; editors cancel the revision they displayed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0))]
+    #[ts(optional = nullable, type = "number")]
+    pub expected_revision: Option<i64>,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +72,10 @@ pub struct QueueEditParams {
 )]
 pub enum QueueEditAction {
     Pause,
+    Resume,
+    ReplaceText {
+        text: String,
+    },
     Replace {
         input: Vec<InputItem>,
     },

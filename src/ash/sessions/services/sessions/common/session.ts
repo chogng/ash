@@ -132,17 +132,18 @@ export type SessionWorkspaceSelection =
 	| { readonly type: 'current'; }
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
-	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
+	| { readonly type: 'remote'; readonly authority: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; readonly hostAuthority?: string; }
 	| { readonly type: 'multiple'; readonly folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]; };
 
-export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'provider'; }>;
+export type SessionExecutionTarget = Extract<SessionWorkspaceSelection, { readonly type: 'local' | 'ssh' | 'remote' | 'provider'; }>;
 
 /** Execution directory supplied by the Session or hydrated Thread domain snapshot. */
 export interface ISessionWorkspace {
 	/** Local sentinel or canonical remote URI authority, never a bare SSH alias. */
 	readonly authorityId: string;
 	readonly root: string;
-	readonly runtime?: { readonly providerId: string; readonly workspace: string; };
+	readonly runtime?: { readonly providerId: string; readonly workspace: string; readonly hostAuthority?: string; };
 }
 
 /** Product application serving the Session catalog, independent of its execution authority. */
@@ -186,6 +187,8 @@ export interface IUntitledChatSession {
 	readonly modelSelectionKind?: 'manual';
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
+	/** Prepare the source workspace's container before creating the first durable Session. */
+	readonly devContainer?: boolean;
 }
 
 /** Repository-backed resources remain independent of Session execution directories. */

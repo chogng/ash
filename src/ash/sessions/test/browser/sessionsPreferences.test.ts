@@ -1,3 +1,10 @@
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
+import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
+import { constObservable } from '../../../base/common/observable.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -50,6 +57,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
@@ -86,7 +94,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
 	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
 	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
-	const browser = new JSDOM('<!doctype html><body></body>');
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-preferences.test/' });
 	const { window } = browser;
 	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -122,6 +130,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
 	const advisorWrites: (typeof advisor | null)[] = [];
 	const chat = {
+		onDidBecomeReady: Event.None,
+		onDidUpdateThread: Event.None,
 		onDidChangeModels: changed.event,
 		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherModel, displayName: 'Claude Test' }],
 		readAdvisorDefault: async () => advisor,
@@ -154,6 +164,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using transcription = new NullLocalTranscriptionService();
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
+	using chatWidgets = services.createInstance(ChatWidgetService);
+	services.registerInstance(IChatWidgetService, chatWidgets);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -188,7 +200,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		read: async () => [],
 		readText: async () => '', writeText: async text => { copied.push(text); }, readFindText: async () => '',
 		writeFindText: async () => { },
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 	} satisfies IClipboardService);
 	services.registerInstance(IKeybindingService, {
@@ -235,7 +247,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
 		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
-	services.registerInstance(IChatSessionNavigationService, { revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
+	services.registerInstance(IChatSessionNavigationService, { createNewConversation: () => { throw new Error('Unexpected draft creation'); }, revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
+	using storage = new BrowserStorageService({ ownerWindow: window as unknown as Window, workspaceId: 'sessions-preferences', flushInterval: 0 });
+	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IAgentSessionService, { listAgents: async () => ({ agents: [], diagnostics: [] }), readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
+	services.registerInstance(ITeamsManagementService, { teams: constObservable([]), refresh: async () => { } } as unknown as ITeamsManagementService);
+	services.registerInstance(ISessionsService, { onDidChange: Event.None, openThread: async () => { throw new Error('Unexpected team conversation navigation'); } } as unknown as ISessionsService);
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
@@ -291,44 +308,30 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
 	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
-	const resourceEditorToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="accessibility.verbosity.resourceEditor"]');
-	assert.ok(resourceEditorToggle, 'Agents Window General exposes the resource reader preference');
-	assert.equal(resourceEditorToggle.checked, true);
-	const resourceEditorChanged = new Promise<void>(resolve => {
-		const listener = configuration.onDidChangeConfiguration(event => {
-			if (!event.affectsConfiguration('accessibility.verbosity.resourceEditor')) return;
-			listener.dispose();
-			resolve();
-		});
-	});
-	resourceEditorToggle.click();
-	await resourceEditorChanged;
-	assert.equal(configuration.getValue('accessibility.verbosity.resourceEditor'), false);
-	const aiToggle = window.document.querySelector<HTMLInputElement>('input[data-configuration-key="chat.disableAIFeatures"]');
-	assert.ok(aiToggle, 'General exposes the registered AI preference so disabled Chat can be restored');
-	assert.equal(aiToggle.getAttribute('aria-label'), 'Disable AI features');
-	const aiChanged = new Promise<void>(resolve => {
-		const listener = configuration.onDidChangeConfiguration(event => {
-			if (!event.affectsConfiguration('chat.disableAIFeatures')) return;
-			listener.dispose();
-			resolve();
-		});
-	});
-	aiToggle.click();
-	await aiChanged;
-	assert.equal(configuration.getValue('chat.disableAIFeatures'), true);
-	await configuration.updateValue('chat.disableAIFeatures', undefined);
-	await configuration.updateValue('chat.disableAIFeatures', true);
+	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null, 'General keeps voice settings on their own page');
+	for (const key of ['accessibility.verbosity.sessionsActivityBar', 'accessibility.verbosity.sessionsSettings', 'accessibility.verbosity.executionSettings', 'accessibility.verbosity.resourceEditor']) {
+		assert.equal(window.document.querySelector(`[data-configuration-key="${key}"]`), null, 'General omits per-surface accessibility hint switches');
+		assert.equal(configuration.getValue(key), true, 'accessibility hints stay enabled by default');
+	}
+	assert.equal(window.document.querySelector('[data-settings-item-id="workbench.settings.editor"]'), null, 'the default editor preference belongs to IDE settings');
+	assert.equal(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'), null, 'AI disablement belongs to IDE settings');
+	await preferences.open({ query: '@id:chat.disableAIFeatures' });
+	assert.equal(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'), null, 'Sessions search excludes the IDE-only AI preference');
+	await preferences.open({ query: '' });
+	await configuration.updateValue('accessibility.verbosity.designCanvas', false);
 	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);
-	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'projects', 'design', 'customize', 'general']) {
+	assert.equal(categoryButton('projects'), null);
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'design', 'customize', 'dictation', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
 	}
 	await preferences.open({ section: 'dictation' });
-	assert.equal(categoryButton('general').getAttribute('aria-current'), 'page');
+	assert.equal(categoryButton('dictation').getAttribute('aria-current'), 'page');
+	assert.equal(categoryButton('dictation').textContent, 'Voice');
+	assert.ok(window.document.querySelector('.ash-local-transcription-model-controls'), 'dictation deep links open the Voice page');
 	await preferences.open({ section: 'unavailable' });
 	assert.equal(categoryButton('general').getAttribute('aria-current'), 'page');
 	await preferences.open({ section: 'hooks' });
@@ -348,10 +351,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	categoryButton('keyboard-shortcuts').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(window.document.activeElement, categoryButton('general'));
 	await preferences.open({ section: 'general' });
-	const openCopyMenu = (category = 'General', copyLabel = 'Copy Setting as JSON') => {
+	const openCopyMenu = (category = 'Design', copyLabel = 'Copy Setting as JSON') => {
 		const dialog = window.document.querySelector<HTMLDialogElement>('dialog')!;
 		[...dialog.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === category)!.click();
-		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="chat.disableAIFeatures"] .ash-setting-item-actions-trigger')!;
+		const more = dialog.querySelector<HTMLButtonElement>('[data-settings-item-id="accessibility.verbosity.designCanvas"] .ash-setting-item-actions-trigger')!;
 		more.focus();
 		more.click();
 		const menu = dialog.querySelector<HTMLElement>('[role="menu"]')!;
@@ -368,7 +371,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const firstMenu = openCopyMenu();
 	firstMenu.copy.click();
 	await Promise.resolve();
-	assert.deepEqual(copied, ['"chat.disableAIFeatures": true']);
+	assert.deepEqual(copied, ['"accessibility.verbosity.designCanvas": false']);
 	assert.equal(firstMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, firstMenu.more);
 	const cancelledMenu = openCopyMenu();
@@ -376,6 +379,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
 	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
+	await preferences.open({ section: 'chat-usage' });
+	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
+	assert.ok(usageButton?.querySelector('.ash-icon-dashboard'));
+	assert.ok(window.document.querySelector('[data-settings-item-id="chat.usage"]'));
+	assert.match(window.document.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();
@@ -398,7 +406,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	modelsButton.click();
 	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null);
 	await Promise.resolve();
-	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'General');
+	const voiceButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Voice');
 	assert.ok(voiceButton);
 	voiceButton.click();
 	assert.equal(window.document.querySelector('[data-configuration-key="dictation.model"]'), null);
@@ -437,40 +445,31 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await assert.rejects(preferences.open({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
 
 	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
-	await commands.executeCommand('workbench.action.openSettings', 'chat.disableAIFeatures');
+	await commands.executeCommand('workbench.action.openSettings', 'accessibility.verbosity.designCanvas');
 	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);
-	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
+	assert.equal(modelSearch.value, 'accessibility.verbosity.designCanvas');
 	assert.equal(window.document.activeElement, modelSearch);
 	assert.equal(window.document.querySelectorAll('.ash-sessions-settings-content-tree [data-settings-item-id]').length, 1);
 	await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 'changed', target: 4 }));
-	assert.equal(modelSearch.value, 'chat.disableAIFeatures');
+	assert.equal(modelSearch.value, 'accessibility.verbosity.designCanvas');
 	await commands.executeCommand('workbench.action.openSettings', { query: '' });
 	assert.equal(modelSearch.value, '');
 	assert.equal(window.document.activeElement, modelSearch);
-	modelSearch.value = '@id:chat.disableAIFeatures';
+	assert.equal(window.document.querySelector('.ash-sessions-settings-search button'), null);
+	modelSearch.value = '@id:accessibility.verbosity.designCanvas @modified';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-	const filter = window.document.querySelector<HTMLButtonElement>('.ash-sessions-settings-search .ash-settings-search-filter');
-	assert.ok(filter);
-	assert.equal(filter.getAttribute('aria-label'), 'Filter Settings');
-	filter.click();
-	const filterMenu = window.document.querySelector<HTMLDialogElement>('dialog')!.querySelector<HTMLElement>('[role="menu"]');
-	assert.ok(filterMenu);
-	const modified = [...filterMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Modified');
-	assert.ok(modified);
-	modified.click();
-	assert.equal(filterMenu.isConnected, false);
-	assert.equal(modelSearch.value, '@id:chat.disableAIFeatures @modified');
+	assert.equal(modelSearch.value, '@id:accessibility.verbosity.designCanvas @modified');
 	assert.equal(window.document.activeElement, modelSearch);
-	assert.ok(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'));
+	assert.ok(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.designCanvas"]'));
 	assert.equal(window.document.querySelector('.ash-models-settings-model-row'), null);
 	modelSearch.focus();
-	await configuration.updateValue('chat.disableAIFeatures', undefined);
+	await configuration.updateValue('accessibility.verbosity.designCanvas', undefined);
 	assert.deepEqual(unexpectedErrors, [], 'configuration changes must refresh Preferences without listener errors');
-	assert.equal(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'), null);
+	assert.equal(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.designCanvas"]'), null);
 	assert.equal(window.document.querySelector<HTMLElement>('.ash-sessions-settings-empty')?.hidden, false);
 	assert.equal(window.document.activeElement, modelSearch);
-	await configuration.updateValue('chat.disableAIFeatures', true);
-	assert.ok(window.document.querySelector('[data-settings-item-id="chat.disableAIFeatures"]'));
+	await configuration.updateValue('accessibility.verbosity.designCanvas', false);
+	assert.ok(window.document.querySelector('[data-settings-item-id="accessibility.verbosity.designCanvas"]'));
 	modelSearch.value = '';
 	modelSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 	assert.equal(window.document.querySelectorAll('input[type="search"]').length, 2);
@@ -522,28 +521,31 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await opened;
 	assert.equal(closingMenu.menu.isConnected, false);
 	assert.equal(window.document.querySelector('dialog'), null);
-	await configuration.updateValue('chat.disableAIFeatures', false);
+	await configuration.updateValue('accessibility.verbosity.designCanvas', true);
 	assert.equal(window.document.querySelector('dialog'), null);
-	await configuration.updateValue('chat.disableAIFeatures', true);
+	await configuration.updateValue('accessibility.verbosity.designCanvas', false);
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
-		const reopened = preferences.open({ query: 'chat.disableAIFeatures' });
+		const reopened = preferences.open({ query: 'accessibility.verbosity.designCanvas' });
 		const reopenedSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]')!;
-		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
+		assert.equal(reopenedSearch.value, 'accessibility.verbosity.designCanvas');
 		assert.equal(window.document.activeElement, reopenedSearch);
 		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { query: 1 }), /设置查询必须是字符串/u);
 		await assert.rejects(commands.executeCommand('workbench.action.openSettings', { target: 4 }), /此设置编辑器支持本地用户、工作区和文件夹设置/u);
-		assert.equal(reopenedSearch.value, 'chat.disableAIFeatures');
-		assert.equal(window.document.querySelector('.ash-settings-search-filter')?.getAttribute('aria-label'), '筛选设置');
-		const reopenedMenu = openCopyMenu('通用', '复制设置为 JSON');
+		assert.equal(reopenedSearch.value, 'accessibility.verbosity.designCanvas');
+		assert.equal(window.document.querySelector('.ash-sessions-settings-search button'), null);
+		const reopenedMenu = openCopyMenu('设计', '复制设置为 JSON');
 		reopenedMenu.copy.click();
 		await Promise.resolve();
-		assert.deepEqual(copied, ['"chat.disableAIFeatures": true', '"chat.disableAIFeatures": true']);
+		assert.deepEqual(copied, ['"accessibility.verbosity.designCanvas": false', '"accessibility.verbosity.designCanvas": false']);
 		assert.equal(reopenedMenu.menu.isConnected, false);
 		assert.equal(window.document.activeElement, reopenedMenu.more);
+		await preferences.open({ section: 'dictation' });
+		assert.equal(categoryButton('dictation').textContent, '语音');
+		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));
 		const translatedDesign = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === '设计');
 		assert.ok(translatedDesign);
 		translatedDesign.click();
@@ -609,26 +611,32 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const editSettingMenu = openCopyMenu();
 	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
 	assert.ok(editSetting, 'ordinary settings expose the shared JSON entry');
-	editSettingMenu.menu.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	const jsonSwitch = window.document.querySelector<HTMLButtonElement>('.ash-settings-open-json')!;
-	assert.equal(jsonSwitch.getAttribute('aria-label'), 'Open Settings (JSON)');
-	jsonSwitch.click();
+	editSetting.click();
 	await editSettingOpen;
 	await Promise.resolve();
-	assert.deepEqual(preferenceOpens.at(-1), { user: { jsonEditor: true, query: '' } });
+	assert.deepEqual(preferenceOpens.at(-1), { user: { jsonEditor: true, revealSetting: { key: 'accessibility.verbosity.designCanvas', edit: true } } });
 	await configuration.updateValue('workbench.settings.editor', 'json');
-	await preferences.open();
+	const callsBeforeDefaultUI = preferenceOpens.length;
+	const defaultUI = preferences.open();
+	assert.ok(window.document.querySelector('dialog[open]'), 'Sessions defaults to UI even when IDE settings default to JSON');
+	assert.equal(preferenceOpens.length, callsBeforeDefaultUI);
+	await preferences.open({ query: '@id:workbench.settings.editor' });
+	assert.equal(window.document.querySelector('[data-settings-item-id="workbench.settings.editor"]'), null, 'Sessions search excludes the IDE-only preference');
+	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
+	await defaultUI;
+	assert.equal(configuration.getValue('workbench.settings.editor'), 'json');
+	await preferences.open({ jsonEditor: true });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { jsonEditor: true } });
 	assert.equal(editorReveals, 4);
 	const explicitUI = preferences.open({ jsonEditor: false });
 	assert.ok(window.document.querySelector('dialog[open]'), 'explicit UI remains available with a JSON default');
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
 	await explicitUI;
-	await configuration.updateValue('workbench.settings.editor', 'ui');
-	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false });
+	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize' });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
 	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');
 	assert.equal(editorReveals, 4);
+	await configuration.updateValue('workbench.settings.editor', 'ui');
 	await preferences.open({ groupId: 7, query: '@id:editor.fontSize', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { groupId: 7, query: '@id:editor.fontSize', jsonEditor: false } });
 	assert.equal(editorReveals, 5, 'explicit group requests reveal the document host');

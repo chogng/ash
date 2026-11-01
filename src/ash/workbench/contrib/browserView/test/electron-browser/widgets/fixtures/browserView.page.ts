@@ -114,6 +114,8 @@ services.registerInstance(IBrowserViewWorkbenchService, {
 	getContextualBrowserViews: () => new Map(),
 	registerContextualFilter: () => toDisposable(() => { }),
 	registerOpenHandler: () => toDisposable(() => { }),
+		registerNetworkResolver: () => toDisposable(() => { }), resolveNetwork: () => undefined,
+		replaceBrowserView: async input => input,
 	getOrCreateLazy: () => { throw new Error('This fixture owns one browser input'); },
 	createBrowserView: async () => { throw new Error('This fixture owns one browser input'); },
 });

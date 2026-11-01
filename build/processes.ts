@@ -7,6 +7,11 @@ import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
 
+/** Supervised development helpers inherit the worker's private POSIX group. */
+export function detachedProcess(environment: NodeJS.ProcessEnv = process.env): boolean {
+	return process.platform !== 'win32' && environment.ASH_DEV_PROCESS_SUPERVISED !== '1';
+}
+
 /** Checks OS liveness; an exited Windows process can retain a CIM entry while handles remain open. */
 export function isProcessRunning(pid: number): boolean {
 	try { process.kill(pid, 0); return true; }
@@ -29,7 +34,7 @@ interface RunResource {
 	daemon?: { readonly executable: string; readonly profile: string; };
 }
 
-/** Registers resources that can outlive a Playwright worker, before they start. */
+/** Registers resources that can outlive their owning worker, before they start. */
 export async function registerRunResource(daemon?: RunResource['daemon'] | (() => NonNullable<RunResource['daemon']>), directory = process.env.ASH_SMOKE_RUN_DIRECTORY): Promise<{ process(child: ChildProcess): Promise<void>; dispose(): Promise<void>; }> {
 	const path = directory ? join(directory, `resource-${randomUUID()}.json`) : undefined;
 	// Other launcher consumers can prepare their package during launch. Resolve
@@ -59,6 +64,7 @@ export class ProcessRun {
 	private closing: Promise<void> | undefined;
 	private finishGrace: (() => void) | undefined;
 	private readonly owned = new Map<number, ProcessIdentity>();
+	private readonly registrations: Awaited<ReturnType<typeof registerRunResource>>[] = [];
 	public stopped = false;
 
 	private readonly cwd: string;
@@ -68,7 +74,7 @@ export class ProcessRun {
 
 	public async command(command: string, args: readonly string[], env: NodeJS.ProcessEnv, capture = false): Promise<{ code: number; output: string; }> {
 		if (this.stopped) throw new Error('Process run was stopped; refusing to start another command.');
-		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: process.platform !== 'win32', windowsHide: true });
+		const child = spawn(command, args, { cwd: this.cwd, env, stdio: capture ? ['ignore', 'pipe', 'inherit'] : 'inherit', detached: detachedProcess(env), windowsHide: true });
 		let output = '';
 		child.stdout?.on('data', (data: Buffer) => { output += data.toString(); });
 		const result = new Promise<{ code: number; output: string; }>((resolveExit, reject) => {
@@ -79,6 +85,7 @@ export class ProcessRun {
 		// Retain every command for cleanup even if metadata collection fails or
 		// its root exits while descendants still hold the process group.
 		await this.rememberTree();
+		await this.register(child);
 		return await result;
 	}
 
@@ -89,7 +96,17 @@ export class ProcessRun {
 		this.children.set(child, child.exitCode !== null || child.signalCode !== null || !child.pid
 			? Promise.resolve() : new Promise<void>(resolveExit => { child.once('exit', () => resolveExit()); child.once('error', () => resolveExit()); }));
 		await this.rememberTree();
+		await this.register(child);
 		if (spawnError) throw spawnError;
+	}
+
+	private async register(child: ChildProcess): Promise<void> {
+		// The independent supervisor also needs roots that use separate groups,
+		// and Windows has no POSIX group to retain after a worker is killed.
+		if (process.env.ASH_DEV_PROCESS_SUPERVISED !== '1' || !child.pid) return;
+		const resource = await registerRunResource();
+		this.registrations.push(resource);
+		await resource.process(child);
 	}
 
 	public stop(signal: NodeJS.Signals): Promise<void> {
@@ -139,7 +156,13 @@ export class ProcessRun {
 			if (child.pid && child.exitCode === null && child.signalCode === null && current.has(child.pid)) roots.add(child.pid);
 		}
 		for (const resource of await this.resources()) {
-			if (resource.process && current.get(resource.process.pid)?.started === resource.process.started) roots.add(resource.process.pid);
+			if (!resource.process) continue;
+			const active = current.get(resource.process.pid);
+			if (active && active.started !== resource.process.started) continue;
+			// A worker may die before this supervisor ever observes its registered
+			// roots. Retain exited roots as group/ancestry anchors for their helpers.
+			this.owned.set(resource.process.pid, resource.process);
+			roots.add(resource.process.pid);
 		}
 		for (const identity of this.owned.values()) {
 			if (current.get(identity.pid)?.started === identity.started) roots.add(identity.pid);
@@ -147,12 +170,19 @@ export class ProcessRun {
 		let changed = true;
 		while (changed) {
 			changed = false;
-			const groups = new Set([...this.owned.values(), ...[...roots].map(pid => current.get(pid)!)].filter(identity => identity.group === identity.pid).map(identity => identity.pid));
+			const groups = new Set([...this.owned.values()].filter(identity => identity.group === identity.pid && (!current.has(identity.pid) || current.get(identity.pid)?.started === identity.started)).map(identity => identity.pid));
+			for (const pid of roots) {
+				const identity = current.get(pid);
+				if (identity?.group === pid) groups.add(pid);
+			}
 			for (const identity of current.values()) {
 				if (!roots.has(identity.pid) && (roots.has(identity.parent) || (identity.group !== undefined && groups.has(identity.group)))) { roots.add(identity.pid); changed = true; }
 			}
 		}
-		for (const pid of roots) this.owned.set(pid, current.get(pid)!);
+		for (const pid of roots) {
+			const identity = current.get(pid);
+			if (identity) this.owned.set(pid, identity);
+		}
 		return current;
 	}
 
@@ -205,6 +235,7 @@ export class ProcessRun {
 		}));
 		for (const result of stops) if (result.status === 'rejected') errors.push(result.reason);
 		if (errors.length) throw new AggregateError(errors, 'Process resource cleanup failed');
+		await Promise.all(this.registrations.map(resource => resource.dispose()));
 	}
 }
 
@@ -234,12 +265,12 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
  * Pass the supplied environment to children; callbacks creating temporary files
  * or registering resources in this process must use its directories explicitly.
  */
-export async function withProcessRun(cwd: string, action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>): Promise<void> {
+export async function withProcessRun(cwd: string, action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>, options: { graceMs?: number; } = {}): Promise<void> {
 	const inherited = process.env.ASH_SMOKE_RUN_DIRECTORY;
 	// Keep the path short enough for Chromium's temporary Unix sockets.
 	const directory = inherited ?? await mkdtemp(join(tmpdir(), 'ash-run-'));
 	const temporaryDirectory = join(directory, 'tmp');
-	const run = new ProcessRun(cwd, directory);
+	const run = new ProcessRun(cwd, directory, options.graceMs);
 	let interruption: number | undefined;
 	const interrupt = (signal: NodeJS.Signals): void => {
 		interruption ??= signal === 'SIGINT' ? 130 : 143;

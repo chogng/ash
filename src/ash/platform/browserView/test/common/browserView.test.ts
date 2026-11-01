@@ -181,3 +181,19 @@ test('browser view proxies preserve validated commands, subscriptions and backen
 	assert.throws(() => channel.listen('window:1', 'disposeCore'), /Unknown browser view event/);
 	assert.deepEqual(calls, ['create', 'layout', 'visibility', 'navigate']);
 });
+
+
+test('browser creation validates network identity and workspace affinity at IPC', () => {
+	const session = { scope: BrowserViewStorageScope.Workspace, affinity: '["ssh+host","/repo"]', network: { authority: 'ssh+host' } };
+	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options: { ...options, session } }).options.session, session);
+	for (const invalid of [
+		{ ...session, network: { authority: '' } },
+		{ ...session, network: { authority: 'ssh+host\nother' } },
+		{ ...session, network: { authority: 'ssh+host', credentials: 'secret' } },
+		{ ...session, affinity: 123 },
+		{ ...session, scope: BrowserViewStorageScope.Global },
+		{ ...session, scope: BrowserViewStorageScope.Ephemeral },
+	]) {
+		assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...options, session: invalid } }));
+	}
+});

@@ -1,131 +1,11 @@
-import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
+// Legacy Card state is decoded only during the one-way migration into Editor Group layout.
 import { Orientation } from '../../base/browser/ui/sash/sash.js';
+import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { validateSerializedGridViewDescriptor } from '../../base/browser/ui/grid/gridview.js';
-import { h, type IDimension } from '../../base/browser/dom.js';
-import { type Direction, type ISerializableView, type SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
-import { Emitter, Event } from '../../base/common/event.js';
-import { type IDisposable } from '../../base/common/lifecycle.js';
-import { AGENTS_FLOATING_PANEL_GAP } from '../common/sizes.js';
-import { localize } from '../../nls.js';
-import type { MenuId } from '../../platform/actions/common/actions.js';
-import type { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
-import type { EditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
+import type { SerializedGridDescriptor } from '../../base/browser/ui/grid/grid.js';
+import type { EditorWorkingSetLayout } from '../../workbench/services/editor/common/editorWorkingSet.js';
 
-export type CodeCardId = 'terminal' | 'files' | 'changes' | 'info';
-export type CodeCardTarget = CodeCardId | 'sessions';
-
-/** Card chrome consumes a retained content host, independently of the Workbench Part that supplies it. */
-export interface ICodeCardPresentation {
-	readonly title: string;
-	readonly domNode: HTMLElement;
-	readonly header: HTMLElement | undefined;
-	readonly layoutMenuId?: MenuId;
-	layout(dimension: IDimension): void;
-}
-
-/** Window-local presentation of retained content. The desktop Grid owns topology and geometry. */
-export interface ICodeCardLayout {
-	readonly active: boolean;
-	readonly onDidChangeCards: Event<void>;
-	readonly information: CodeInformationView;
-	readonly files: DockedAuxiliaryBarController;
-	readonly changes: CodeChangesView;
-	setChangesPart(part: EditorPart): void;
-	setChangesVisible(visible: boolean): void;
-	readonly expandedCard: CodeCardId | undefined;
-	isCardVisible(id: CodeCardId): boolean;
-	setInformation(element: HTMLElement | undefined): void;
-	toggleInformation(): void;
-	closeCard(id: CodeCardId): void;
-	moveCard(id: CodeCardId, target: CodeCardTarget, direction: Direction): void;
-	expandCard(id: CodeCardId): void;
-	detachCard(id: CodeCardId, detached: boolean): void;
-}
-
-const filesCardHeaderHeight = 36;
-const filesCardBorderSize = 2;
-const filesCardFrameSize = 2 * AGENTS_FLOATING_PANEL_GAP;
-
-/** Hosts the retained Changes editor independently of the Files document groups. */
-export class CodeChangesView implements ISerializableView {
-	public readonly element: HTMLElement;
-	public readonly card: HTMLElement;
-	public readonly header: HTMLElement;
-	public readonly minimumWidth = 360;
-	public readonly minimumHeight = 240;
-	public readonly maximumWidth = Infinity;
-	public readonly maximumHeight = Infinity;
-	private readonly body: HTMLElement;
-	private part: EditorPart | undefined;
-
-	constructor(document: Document) {
-		this.element = h(document, 'div', { className: 'ash-workbench-part-frame ash-code-changes-frame' });
-		this.card = h(document, 'section', { className: 'ash-code-changes-card ash-sessions-tool-card' });
-		this.card.setAttribute('role', 'region');
-		const title = localize('sessions.changes.title', 'Changes');
-		this.card.setAttribute('aria-label', title);
-		this.header = h(document, 'header', { className: 'ash-code-card-header' });
-		const label = h(document, 'span', { className: 'ash-code-card-title' });
-		label.textContent = title;
-		this.header.append(label);
-		this.body = h(document, 'div', { className: 'ash-code-changes-body' });
-		this.card.append(this.header, this.body);
-		this.element.append(this.card);
-	}
-
-	public mount(part: EditorPart): void {
-		this.part = part;
-		this.body.append(part.domNode);
-	}
-
-	public setVisible(visible: boolean): void {
-		this.part?.setVisible(visible);
-		this.part?.setEditorContentVisible(visible);
-	}
-
-	public layout(dimension: IDimension): void {
-		this.layoutCard({ width: dimension.width - filesCardFrameSize, height: dimension.height - filesCardFrameSize });
-	}
-
-	public layoutCard(dimension: IDimension): void {
-		this.part?.layout({
-			width: Math.max(0, dimension.width - filesCardBorderSize),
-			height: Math.max(0, dimension.height - filesCardBorderSize - filesCardHeaderHeight),
-		});
-	}
-
-	public toJSON(): string { return 'changes'; }
-}
-
-/** A Grid leaf, not a second session model or a shared Workbench Part. */
-export class CodeInformationView implements ISerializableView {
-	readonly element: HTMLElement;
-	readonly card: HTMLElement;
-	readonly header: HTMLElement;
-	readonly body: HTMLElement;
-	readonly minimumWidth = 236;
-	readonly minimumHeight = 140;
-	readonly maximumWidth = Infinity;
-	readonly maximumHeight = Infinity;
-	constructor(document: Document) {
-		this.element = h(document, 'div', { className: 'ash-workbench-part-frame' });
-		this.element.style.padding = '4px';
-		this.card = h(document, 'section', { className: 'ash-code-information-card ash-sessions-tool-card' });
-		this.card.dataset.codeCard = 'info';
-		this.header = h(document, 'header', { className: 'ash-code-card-header' });
-		const title = h(document, 'span', { className: 'ash-code-card-title' });
-		title.textContent = localize('sessions.cards.information', 'Session information');
-		this.card.setAttribute('aria-label', title.textContent);
-		this.header.append(title);
-		this.body = h(document, 'div', { className: 'ash-code-information-body' });
-		this.card.append(this.header, this.body);
-		this.element.append(this.card);
-	}
-	layout(): void { }
-	toJSON(): string {
-		return 'info';
-	}
-}
+type CodeCardId = 'terminal' | 'files' | 'changes' | 'browser' | 'info';
 
 /** Validate the persisted tree once, at the storage boundary, before attaching retained views. */
 export function readCodeCardLayout(
@@ -166,4 +46,87 @@ export function readCodeCardLayout(
 	} catch {
 		return undefined;
 	}
+}
+
+const codeLayoutIds = ['sessions', 'panel', 'files', 'changes', 'browser', 'info'];
+
+export interface CodeCardLayoutSnapshot {
+	readonly tree: SerializedGridDescriptor;
+	/** A hidden, previously placed pane retains its slot instead of using the first-open policy. */
+	readonly placed: readonly CodeCardId[];
+}
+
+export interface CodeCardLayoutState {
+	readonly fallback: CodeCardLayoutSnapshot | undefined;
+	readonly sessions: ReadonlyMap<string, CodeCardLayoutSnapshot>;
+	readonly widths: ReadonlyMap<CodeCardId, number>;
+	readonly browserVisible: boolean;
+}
+
+/** A bounded, versioned UI-state envelope is decoded before any retained views are attached. */
+export function readCodeCardLayoutState(value: string | undefined): CodeCardLayoutState {
+	const sessions = new Map<string, CodeCardLayoutSnapshot>();
+	const widths = new Map<CodeCardId, number>();
+	let fallback: CodeCardLayoutSnapshot | undefined;
+	let browserVisible = false;
+	if (!value) return { fallback, sessions, widths, browserVisible };
+	try {
+		const state: unknown = JSON.parse(value);
+		if (!state || typeof state !== 'object' || !('version' in state) || state.version !== 1) return { fallback, sessions, widths, browserVisible };
+		const record = state as Record<string, unknown>;
+		browserVisible = record.browserVisible === true;
+		const snapshot = (candidate: unknown): CodeCardLayoutSnapshot | undefined => {
+			if (!candidate || typeof candidate !== 'object') return undefined;
+			const item = candidate as Record<string, unknown>;
+			const tree = readCodeCardLayout(JSON.stringify(item.tree), codeLayoutIds);
+			if (!tree || !Array.isArray(item.placed) || item.placed.some(id => !isCodeCardId(id))) return undefined;
+			return { tree, placed: [...new Set(item.placed as CodeCardId[])] };
+		};
+		fallback = snapshot(record.fallback);
+		if (Array.isArray(record.sessions)) {
+			for (const entry of record.sessions.slice(-100)) {
+				if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0].length > 2048) continue;
+				const layout = snapshot(entry[1]);
+				if (layout) sessions.set(entry[0], layout);
+			}
+		}
+		if (Array.isArray(record.widths)) {
+			for (const entry of record.widths) {
+				if (Array.isArray(entry) && isCodeCardId(entry[0]) && typeof entry[1] === 'number'
+					&& Number.isFinite(entry[1]) && entry[1] > 0 && entry[1] <= 100000) widths.set(entry[0], entry[1]);
+			}
+		}
+	} catch { /* Invalid reconstructable UI state falls back to the current window's default arrangement. */ }
+	return { fallback, sessions, widths, browserVisible };
+}
+
+function isCodeCardId(value: unknown): value is CodeCardId {
+	return value === 'terminal' || value === 'files' || value === 'changes' || value === 'browser' || value === 'info';
+}
+
+/** Replace legacy tool leaves with live group identities; the EditorPart owns the resulting tree. */
+export function migrateCodeCardLayout(tree: SerializedGridDescriptor, groups: ReadonlyMap<string, EditorWorkingSetLayout>): EditorWorkingSetLayout | undefined {
+	const seen = new Set<number>();
+	const visit = (node: SerializedGridDescriptor): EditorWorkingSetLayout | undefined => {
+		if (node.type === 'leaf') {
+			const replacement = groups.get(String(node.data));
+			if (!replacement) return undefined;
+			const claim = (part: EditorWorkingSetLayout): EditorWorkingSetLayout | undefined => {
+				if (part.type === 'leaf') {
+					if (seen.has(part.data.groupId)) return undefined;
+					seen.add(part.data.groupId);
+					return { ...part, visible: node.visible && part.visible };
+				}
+				const children = part.children.map(claim).filter((child): child is EditorWorkingSetLayout => child !== undefined);
+				return children.length ? { ...part, children } : undefined;
+			};
+			const claimed = claim(replacement);
+			return claimed ? { ...claimed, size: node.size } : undefined;
+		}
+		const children = node.children.map(visit).filter((child): child is EditorWorkingSetLayout => child !== undefined);
+		if (!children.length) return undefined;
+		if (children.length === 1) return { ...children[0]!, size: node.size };
+		return { ...node, children };
+	};
+	return visit(tree);
 }

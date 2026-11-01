@@ -1,5 +1,5 @@
+import '../workbench/contrib/splash/browser/browserSplashStorageService.js';
 import '../workbench/contrib/terminal/browser/terminal.web.contribution.js';
-import '../workbench/contrib/splash/browser/splash.contribution.js';
 import '../workbench/contrib/update/browser/update.contribution.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IUpdateService } from '../platform/update/common/updateService.js';

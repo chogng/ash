@@ -1,4 +1,3 @@
-import type { ICodeCardLayout } from '../codeCardLayout.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import {
 	AccessibleContentProvider,
@@ -48,7 +47,6 @@ export class SessionInfoRail extends Disposable {
 		private readonly host: HTMLElement,
 		private readonly model: ChatWidgetModel,
 		private readonly focusChat: () => void,
-		private readonly cards: ICodeCardLayout | undefined,
 		@IStorageService private readonly storage: IStorageService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ISCMService private readonly scm: ISCMService,
@@ -57,11 +55,9 @@ export class SessionInfoRail extends Disposable {
 		const document = host.ownerDocument;
 		this.element = h(document, 'aside');
 		this.element.className = 'ash-session-info';
-		this.element.classList.toggle('managed', !!cards);
 		this.element.setAttribute('aria-label', localize('sessions.info.title', 'Session information'));
 		this.closeButton = h(document, 'button');
 		this.closeButton.type = 'button';
-		this.closeButton.hidden = !!cards;
 		this.closeButton.className = 'ash-session-info-close';
 		this.closeButton.title = localize('sessions.info.close', 'Close session information');
 		this.closeButton.setAttribute('aria-label', this.closeButton.title);
@@ -130,7 +126,7 @@ export class SessionInfoRail extends Disposable {
 								type === AccessibleViewType.Help
 									? localize(
 										'sessions.info.help',
-										'The Code toolbar independently toggles Terminal, Files and session information. Closing the Terminal panel keeps its sessions running. Drag a card header onto an edge of another card to arrange it. Separators resize cards. Tab reaches Open in new window, Expand and Close. Expanding preserves the layout; closing a separate window returns the card. Enter or Space expands Environment and Context. Escape cancels dragging. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.',
+										"The Code toolbar toggles Terminal, Files and session information. Tool editors share one editor group layout. Drag a tab or group title to arrange tools; separators resize groups. With a header action focused, Alt+Shift+Arrow moves the group. Hiding a terminal retains its process. Enter or Space expands Environment and Context. Escape closes floating information and returns focus. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.",
 									)
 									: this.environment.textContent + '\n' + this.summary.textContent,
 							() => (focused.isConnected ? focused.focus() : this.focusChat()),
@@ -142,7 +138,6 @@ export class SessionInfoRail extends Disposable {
 	}
 
 	get visible(): boolean {
-		if (this.cards) return this.cards.isCardVisible('info');
 		return this.fits ? this.storage.getBoolean(pinnedKey, StorageScope.PROFILE, false) : this.popup;
 	}
 
@@ -154,10 +149,6 @@ export class SessionInfoRail extends Disposable {
 	}
 
 	toggle(): void {
-		if (this.cards) {
-			this.cards.toggleInformation();
-			return;
-		}
 		if (this.visible) {
 			this.close(true);
 			return;
@@ -229,10 +220,6 @@ export class SessionInfoRail extends Disposable {
 	}
 
 	private renderVisibility(restoreFocus = true): void {
-		if (this.cards) {
-			this.element.hidden = false;
-			return;
-		}
 		const hadFocus = this.element.contains(this.host.ownerDocument.activeElement);
 		this.element.hidden = !this.visible;
 		if (!this.visible) this.interaction.clear();

@@ -94,7 +94,7 @@ suite('Customize page', () => {
 				try {
 					await expect(panel).toHaveAttribute('aria-busy', 'true');
 					await expect(badge).toBeHidden();
-					expect((await root.locator('.ash-sessions-loading.cards').boundingBox())!.y).toBe(gridTop);
+					await expect(root.getByRole('status')).toHaveText(chinese ? '正在加载资源…' : 'Loading resources…');
 					expect(await collection.boundingBox()).toEqual(collectionBounds);
 				} finally {
 					await page.evaluate(() => window.ashSessionsIntegration.completeCustomizeDetails());

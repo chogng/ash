@@ -18,6 +18,10 @@ texts.
 | [Visual Studio Code](https://github.com/microsoft/vscode) editor source | commit `004a1fbb1658e61048b29d76e2ce380adfa18680` | MIT                                               | [`third_party/vscode/LICENSE.txt`](third_party/vscode/LICENSE.txt)                                       |
 | [Seti UI](https://github.com/jesseweed/seti-ui)                         | commit `2d6c5e68b4ded73c92dac291845ee44e1182d511` | MIT                                               | [`extensions/theme-seti/icons/ThirdPartyNotices.txt`](extensions/theme-seti/icons/ThirdPartyNotices.txt) |
 
+[Codicons](https://github.com/microsoft/vscode-codicons) by Microsoft supplies
+`resources/icons/comment-discussion.svg` under [CC BY 4.0](licenses/Codicons.txt).
+Ash normalizes the SVG and adjusts its Sessions outline for the icon font.
+
 The component-owned paths above are the canonical repository sources. Release packaging must copy their contents into the application license staging directory alongside this notice instead of maintaining duplicate source-controlled copies.
 
 Transitive dependencies and third-party material distributed by Electron or

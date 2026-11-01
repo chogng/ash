@@ -33,8 +33,8 @@ test('An unavailable selection keeps its exact ID and disabled controls remain d
 		assert.equal(button.tabIndex, -1);
 		models = [{ model: selected, displayName: 'Retired Model', longContext: null }];
 		changes.fire();
-		assert.equal(button.textContent, 'vendor/retired');
-		assert.equal(button.getAttribute('aria-label'), 'vendor/retired');
+		assert.equal(button.textContent, 'Retired Model');
+		assert.equal(button.getAttribute('aria-label'), 'Retired Model');
 		automatic = true; changes.fire();
 		assert.equal(button.textContent, 'Auto');
 		assert.equal(button.getAttribute('aria-disabled'), 'true');

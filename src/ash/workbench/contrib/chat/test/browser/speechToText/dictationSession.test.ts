@@ -230,6 +230,17 @@ function commandFixture() {
 		domNode: f.editor.getContainerDomNode(), inputEditor: f.editor, visible: true,
 		isTranscriptProgressActive: false, onDidHide: hidden.event, onDidChangeViewModel: changed.event,
 		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
+		getFindController: () => undefined,
+		get input(): never { throw new Error('Unexpected composer operation'); },
+		retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
+		focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
+		acceptInput: async () => { },
+		focusInput: () => { },
+		getFocus: () => undefined,
+		getSibling: () => undefined,
+		focus: () => { },
+		reveal: () => { },
+		focusResponseItem: () => { },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	const registration = resources.add(widgets.register(widget));
@@ -269,7 +280,7 @@ suite('Chat dictation command targeting', () => {
 		f.widget.isTranscriptProgressActive = true;
 		await f.run('holdToSpeechToText');
 		f.widget.isTranscriptProgressActive = false;
-		await f.run('toggleSpeechToText', { widget: { ...f.widget } });
+		await f.run('toggleSpeechToText', { widget: Object.create(f.widget) });
 		f.registration.dispose();
 		await f.run('toggleSpeechToText', { widget: f.widget });
 		assert.equal(f.speech.starts, 0);

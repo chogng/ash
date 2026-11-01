@@ -214,6 +214,44 @@ pub struct ExtensionsUpdateParams {
     pub version: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionsUpdatePolicyDto {
+    pub auto_check_updates: bool,
+    pub auto_update: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionsSetUpdatePolicyParams {
+    pub policy: ExtensionsUpdatePolicyDto,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsAvailableUpdateDto {
+    pub installation_id: String,
+    pub current: ExtensionsPackageRefDto,
+    pub available: ExtensionsPackageRefDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionsUpdatesResult {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub policy: ExtensionsUpdatePolicyDto,
+    pub can_manage: bool,
+    pub checking: bool,
+    #[ts(type = "number | null")]
+    pub last_checked_at: Option<u64>,
+    pub available: Vec<ExtensionsAvailableUpdateDto>,
+    pub updated: Vec<ExtensionsPackageRefDto>,
+    pub failures: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionsInstallationStateDto {

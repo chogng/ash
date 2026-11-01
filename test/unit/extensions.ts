@@ -23,4 +23,4 @@ await runUnitTests([
 	'src/ash/workbench/services/untitled/test/common/untitledTextEditorService.test.js',
 	'src/ash/workbench/test/browser/workbench-theme.test.js',
 	'src/ash/workbench/test/common/theme.test.js',
-], false);
+], false, 'tsconfig.extensions-test.json');

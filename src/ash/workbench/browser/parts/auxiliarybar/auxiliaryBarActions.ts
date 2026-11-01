@@ -15,12 +15,12 @@ export class ToggleAuxiliaryBarAction extends Action2 {
 			id: ToggleAuxiliaryBarAction.ID,
 			title: localize2({ bundle: 'ash.actions', key: 'showSecondarySidebar' }, 'Show Secondary Side Bar'),
 			tooltip: localize2({ bundle: 'ash.actions', key: 'showSecondarySidebar' }, 'Show Secondary Side Bar'),
-			icon: Lxicon.layoutSidebarRightOff1,
+			icon: Lxicon.layoutSidebarRightOff,
 			toggled: {
 				condition: AuxiliaryBarVisibleContext.isEqualTo(true),
 				title: localize2({ bundle: 'ash.actions', key: 'hideSecondarySidebar' }, 'Hide Secondary Side Bar'),
 				tooltip: localize2({ bundle: 'ash.actions', key: 'hideSecondarySidebar' }, 'Hide Secondary Side Bar'),
-				icon: Lxicon.layoutSidebarRight1,
+				icon: Lxicon.layoutSidebarRight,
 			},
 			menu: [
 				{

@@ -10,6 +10,65 @@ suite('textModel browser component', () => {
 	const browserTests = useBrowserTests();
 	const pageErrors = new WeakMap<object, string[]>();
 
+	test('restoring view state updates geometry immediately and renders the restored viewport on the next frame', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		const state = await page.evaluate(async () => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue(Array.from({ length: 300 }, (_, index) => `line ${index}`).join('\n'));
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ lineHeight: 20, wordWrap: 'off' });
+			editor.layout({ width: 600, height: 200 });
+			editor.setPosition({ lineNumber: 45, column: 2 });
+			editor.setScrollTop(800);
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			const state = editor.saveViewState();
+			editor.setPosition({ lineNumber: 1, column: 1 });
+			editor.setScrollTop(0);
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			return state;
+		});
+		const restored = await page.evaluate(state => {
+			const editor = window.ashTextModelIntegration.getControl();
+			const observer = new MutationObserver(() => { });
+			observer.observe(editor.getDomNode().querySelector('.view-lines')!, { childList: true, characterData: true, subtree: true });
+			try {
+				editor.restoreViewState(state);
+				return { top: editor.getScrollTop(), position: editor.getPosition(), textMutations: observer.takeRecords().length };
+			} finally {
+				observer.disconnect();
+			}
+		}, state);
+		expect(restored).toEqual({ top: 800, position: { lineNumber: 45, column: 2 }, textMutations: 0 });
+		await expect(page.locator('.view-line .stanza-editor-line-text').filter({ hasText: /^line 40$/ })).toBeVisible();
+	});
+
+	test('restored scrolling supersedes a deferred cursor reveal on a long line', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		const restored = await page.evaluate(async () => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue(Array.from({ length: 100 }, (_, index) => `line-${index} ` + 'long text '.repeat(100)).join('\n'));
+			editor.getModel()!.setLanguage('plaintext');
+			editor.updateOptions({ lineHeight: 20, wordWrap: 'off', smoothScrolling: false });
+			editor.layout({ width: 600, height: 200 });
+			editor.setPosition({ lineNumber: 45, column: 500 });
+			editor.setScrollPosition({ scrollTop: 800, scrollLeft: 0 });
+			const state = editor.saveViewState();
+			editor.setPosition({ lineNumber: 1, column: 1 });
+			editor.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			editor.restoreViewState(state);
+			const immediate = { top: editor.getScrollTop(), left: editor.getScrollLeft() };
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			const painted = { top: editor.getScrollTop(), left: editor.getScrollLeft() };
+			editor.setScrollTop(0);
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			return { immediate, painted, leftAfterScrolling: editor.getScrollLeft(), cursor: editor.getPosition() };
+		});
+		expect(restored).toEqual({ immediate: { top: 800, left: 0 }, painted: { top: 800, left: 0 }, leftAfterScrolling: 0, cursor: { lineNumber: 45, column: 500 } });
+	});
+
 	test('plain ASCII widths agree with DOM measurement across fonts, weights and host scales', async function () {
 		const { page } = browserTests;
 
@@ -38,6 +97,55 @@ suite('textModel browser component', () => {
 			await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ disableMonospaceOptimizations: false }));
 			const optimized = await read();
 			expect(Math.abs(optimized - measured), JSON.stringify({ fontFamily, fontWeight, scale, measured, optimized })).toBeLessThanOrEqual(1);
+		}
+	});
+
+	test('ASCII selection geometry avoids range reads and agrees with shaping across fonts and scales', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		for (const [fontFamily, fontWeight, letterSpacing, scale, text] of [
+			['monospace', 'normal', 0, 1, '0123456789'.repeat(20)],
+			['monospace', 'normal', 1.5, 1.25, '0123456789'.repeat(20)],
+			['monospace', '700', 0, 0.75, '0123456789'.repeat(20)],
+			['Arial', 'normal', 0, 1.25, 'iiii WWWW <> 0123456789 '.repeat(5)],
+			['monospace', 'normal', 0, 1, 'ASCII\t中文 e\u0301 👩‍💻 العربية '.repeat(3)],
+		] as const) {
+			const result = await page.evaluate(async options => {
+				window.ashTextModelIntegration.setTheme('light');
+				const editor = window.ashTextModelIntegration.getControl();
+				editor.getModel()!.setLanguage('plaintext');
+				editor.updateOptions({ ...options, fontSize: 16, fontLigatures: false, wordWrap: 'off', smoothScrolling: false, roundedSelection: false, minimap: { enabled: false } });
+				editor.getDomNode().style.transform = `scale(${options.scale})`;
+				editor.getDomNode().style.transformOrigin = 'top left';
+				editor.setValue(options.text);
+				editor.layout({ width: 700, height: 200 });
+				editor.setSelection({ startLineNumber: 1, startColumn: 11, endLineNumber: 1, endColumn: 31 });
+				const settle = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+				await settle();
+				const getClientRects = Range.prototype.getClientRects;
+				let rangeReads = 0;
+				Range.prototype.getClientRects = function () { rangeReads++; return getClientRects.call(this); };
+				const measure = async (disabled: boolean) => {
+					rangeReads = 0;
+					editor.updateOptions({ disableMonospaceOptimizations: disabled });
+					editor.setScrollLeft(40);
+					await settle();
+					const selection = editor.getDomNode().querySelector('.stanza-editor-selection')!.getBoundingClientRect();
+					return { left: selection.left, width: selection.width, rangeReads };
+				};
+				try {
+					const measured = await measure(true);
+					const optimized = await measure(false);
+					return { measured, optimized, selectedText: editor.getModel()!.getValueInRange(editor.getSelection()!) };
+				} finally { Range.prototype.getClientRects = getClientRects; }
+			}, { fontFamily, fontWeight, letterSpacing, scale, text });
+			expect(result.selectedText).toBe(text.slice(10, 30));
+			expect(Math.abs(result.optimized.left - result.measured.left), JSON.stringify({ fontFamily, fontWeight, letterSpacing, scale, result })).toBeLessThanOrEqual(1);
+			expect(Math.abs(result.optimized.width - result.measured.width)).toBeLessThanOrEqual(1);
+			if (fontFamily === 'monospace' && fontWeight === 'normal' && letterSpacing === 0 && text.startsWith('0123')) {
+				expect(result.measured.rangeReads).toBeGreaterThan(0);
+				expect(result.optimized.rangeReads).toBe(0);
+			}
 		}
 	});
 

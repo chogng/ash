@@ -1,0 +1,21 @@
+.ash-sessions-agents {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+	min-width: 0;
+}
+
+.ash-agents-view[hidden] {
+	display: none;
+}
+
+.ash-agents-tabs,
+.ash-agents-view {
+	min-width: 0;
+}
+
+.ash-agents-roles {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+}

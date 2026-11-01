@@ -1,6 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import type { ExtensionUpdatePolicy, ExtensionUpdatesSnapshot } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { ExtensionsPackageSummaryDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions, ExtensionsRecommendationEnvironment } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -19,6 +20,18 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	private readonly _onDidChangeInstalled = this._register(new Emitter<void>());
 
 	readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
+
+	async updates(): Promise<ExtensionUpdatesSnapshot> {
+		return updateSnapshot(await this.api.updates());
+	}
+
+	async setUpdatePolicy(policy: ExtensionUpdatePolicy, expectedRevision: number): Promise<ExtensionUpdatesSnapshot> {
+		return updateSnapshot(await this.api.setUpdatePolicy({ policy, expectedRevision }));
+	}
+
+	async checkForUpdates(): Promise<ExtensionUpdatesSnapshot> {
+		return updateSnapshot(await this.api.checkForUpdates());
+	}
 
 	async recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment> {
 		const environment = await this.api.recommendationEnvironment();
@@ -185,6 +198,10 @@ export class AppServerExtensionManagementService extends Disposable implements I
 
 function browseKey(query: string, options: ExtensionsSearchOptions = {}): string {
 	return JSON.stringify([query, options.packageType ?? null, options.limit ?? null, options.capabilityKind ?? null, options.languageId ?? null]);
+}
+
+function updateSnapshot(value: import('../../../../../../.build/protocol/typescript/index.js').ExtensionsUpdatesResult): ExtensionUpdatesSnapshot {
+	return { revision: value.revision, policy: value.policy, canManage: value.canManage, checking: value.checking, lastCheckedAt: value.lastCheckedAt ?? undefined, available: value.available, updated: value.updated, failures: value.failures };
 }
 
 function uiTargets(value: readonly ('ide' | 'agents')[]): readonly ExtensionUiTarget[] {

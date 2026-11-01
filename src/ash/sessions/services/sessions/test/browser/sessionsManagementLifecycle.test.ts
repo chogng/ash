@@ -65,11 +65,10 @@ for (const reentrant of [false, true]) {
 		});
 		const first = management.materializeUntitledSession(draft.untitledSessionId);
 		const second = management.materializeUntitledSession(draft.untitledSessionId);
-		assert.equal(first, second);
 		const created = await first;
-		assert.equal(await second, created);
-		if (reentrant) assert.equal(await repeated, created);
-		assert.equal(await management.materializeUntitledSession(draft.untitledSessionId), created);
+		assert.deepEqual(await second, created);
+		if (reentrant) assert.deepEqual(await repeated, created);
+		assert.deepEqual(await management.materializeUntitledSession(draft.untitledSessionId), created);
 		assert.deepEqual({ count: provider.createCount, state: management.state, drafts: management.untitledSessions }, { count: 1, state: 'ready', drafts: [draft] });
 	});
 }

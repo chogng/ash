@@ -189,17 +189,7 @@ impl GitRuntime {
         let file = self
             .api
             .change_file(repository, &change.path, comparison, token)?;
-        let (original_uri, modified_uri, original_path) =
-            change_resources(repository, status, change, comparison)?;
-        let mut original = content_input(&file.original, original_uri, original_path);
-        let mut modified = content_input(&file.modified, modified_uri, &change.path);
-        // Snapshot URIs own versioned contents; labels and navigation follow the file.
-        original["preferredResource"] = json!(file_uri(
-            &repository.root_uri,
-            &RepoPath::parse(original_path)?
-        )?);
-        modified["preferredResource"] = json!(file_uri(&repository.root_uri, &change.path)?);
-        Ok((original, modified))
+        change_content_inputs(repository, status, change, comparison, &file)
     }
     pub(crate) fn multi_diff(
         &self,
@@ -230,8 +220,7 @@ impl GitRuntime {
             return Err(invalid("Invalid Git change scope"));
         }
         let status = self.api.status(repository, Some(token))?;
-        let mut items = vec![];
-        for change in status.changes.iter().filter(|change| {
+        let changes = status.changes.iter().filter(|change| {
             !change.conflicted
                 && (scope != "staged" || change.index_status != "unmodified")
                 && (scope != "unstaged" || change.worktree_status != "unmodified")
@@ -242,26 +231,72 @@ impl GitRuntime {
                         && (change.worktree_status != "untracked"
                             || repository.configuration.text("untrackedChanges", "mixed") == "mixed"))
                 && (scope != "untracked" || change.worktree_status == "untracked")
-        }) {
-            let staged = matches!(scope, "staged" | "uncommitted")
-                && change.index_status != "unmodified";
+        }).collect::<Vec<_>>();
+        let mut staged_inputs = vec![None; changes.len()];
+        let mut unstaged_inputs = vec![None; changes.len()];
+        for (comparison, inputs) in [
+            (Comparison::Staged, &mut staged_inputs),
+            (Comparison::Unstaged, &mut unstaged_inputs),
+        ] {
+            let selected = changes
+                .iter()
+                .enumerate()
+                .filter_map(|(index, change)| {
+                    let needed = match comparison {
+                        Comparison::Staged => {
+                            scope == "staged"
+                                || scope == "uncommitted" && change.index_status != "unmodified"
+                        }
+                        Comparison::Unstaged => {
+                            scope != "staged"
+                                && (scope != "uncommitted"
+                                    || change.worktree_status != "unmodified")
+                        }
+                    };
+                    needed.then_some(index)
+                })
+                .collect::<Vec<_>>();
+            // Bound response size and native read concurrency while avoiding a
+            // synchronous extension/host round trip for every changed file.
+            for indices in selected.chunks(16) {
+                token.check_cancelled()?;
+                let paths = indices
+                    .iter()
+                    .map(|&index| &changes[index].path)
+                    .collect::<Vec<_>>();
+                let files = self
+                    .api
+                    .change_files(repository, &paths, comparison, token)?;
+                for (&index, file) in indices.iter().zip(files) {
+                    inputs[index] = Some(change_content_inputs(
+                        repository,
+                        &status,
+                        changes[index],
+                        comparison,
+                        &file,
+                    )?);
+                }
+            }
+        }
+        let mut items = Vec::with_capacity(changes.len());
+        for (index, change) in changes.into_iter().enumerate() {
+            let staged =
+                matches!(scope, "staged" | "uncommitted") && change.index_status != "unmodified";
             let unstaged = change.worktree_status != "unmodified";
-            let (mut original, modified) = self.change_inputs(
-                repository,
-                &status,
-                change,
+            let (mut original, modified) =
                 if scope == "staged" || scope == "uncommitted" && !unstaged {
-                    Comparison::Staged
+                    staged_inputs[index]
+                        .take()
+                        .expect("selected staged comparison")
                 } else {
-                    Comparison::Unstaged
-                },
-                token,
-            )?;
-            // An unchanged comparison is absent from the backend's change list. If only
-            // one side changed, its other endpoint already equals HEAD or the working file.
+                    unstaged_inputs[index]
+                        .take()
+                        .expect("selected unstaged comparison")
+                };
             if scope == "uncommitted" && staged && unstaged {
-                original = self
-                    .change_inputs(repository, &status, change, Comparison::Staged, token)?
+                original = staged_inputs[index]
+                    .take()
+                    .expect("selected HEAD comparison")
                     .0;
             }
             let key = if staged {
@@ -915,6 +950,26 @@ impl GitRuntime {
         Ok(result)
     }
 }
+fn change_content_inputs(
+    repository: &Repository,
+    status: &Status,
+    change: &Change,
+    comparison: Comparison,
+    file: &crate::model::FileComparison,
+) -> Result<(Value, Value), ExtensionError> {
+    let (original_uri, modified_uri, original_path) =
+        change_resources(repository, status, change, comparison)?;
+    let mut original = content_input(&file.original, original_uri, original_path);
+    let mut modified = content_input(&file.modified, modified_uri, &change.path);
+    // Snapshot URIs own versioned contents; labels and navigation follow the file.
+    original["preferredResource"] = json!(file_uri(
+        &repository.root_uri,
+        &RepoPath::parse(original_path)?
+    )?);
+    modified["preferredResource"] = json!(file_uri(&repository.root_uri, &change.path)?);
+    Ok((original, modified))
+}
+
 /// Comparison identity is independent of loading its potentially large contents.
 fn change_resources<'a>(
     repository: &Repository,

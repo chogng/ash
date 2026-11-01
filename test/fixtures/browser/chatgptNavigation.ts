@@ -24,7 +24,6 @@ import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/ex
 import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
 import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';
 import '../../../src/ash/sessions/browser/media/style.css';
@@ -57,9 +56,11 @@ import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/d
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -153,10 +154,10 @@ services.registerInstance(IClipboardService, { writeText: async (value: string) 
 registerCodeEditorServices(services);
 
 resources.add(bindTestColorTheme(services.get(IThemeService), document.body));
-services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(new ChatResponseResourceFileSystemProvider()));
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
 window.ashChatGPTIntegration = {
+	setConfiguration: (key, value) => configuration.updateValue(key, value),
 	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
 	setMathMacros: macros => services.get(IConfigurationService).updateValue('markdown.math.macros', macros),
 	newChat: () => chat.newChat(),
@@ -167,6 +168,8 @@ window.ashChatGPTIntegration = {
 	setVisible: visible => widget.setVisible(visible),
 };
 widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));
+if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
+widget.setVisible(true);
 const host = document.getElementById('navigation')!;
 const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatGPTNavigationViewPaneContainer) };
 resources.add(SessionsViewRegistry.registerViewContainer(descriptor));

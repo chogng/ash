@@ -234,13 +234,11 @@ services.registerInstance(IChatAttachmentResolveService, {
 	resolveImageEditorAttachContext: unexpectedAttachment,
 	resolveImageAttachContext: unexpectedAttachment,
 });
-registerCodeEditorServices(services);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 setARIAContainer(document.body);
 const inputContainer = document.createElement('div');
 inputContainer.style.width = '600px';
 document.body.append(inputContainer);
-const editor = resources.add(services.createInstance(ChatInputEditor, { container: inputContainer, ariaLabel: 'Dictation draft', placeholder: '', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
 const preview = document.createElement('div');
 preview.id = 'dictation-preview';
 document.body.append(preview);
@@ -275,6 +273,8 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, new URLSearchPa
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
+registerCodeEditorServices(services);
+const editor = resources.add(services.createInstance(ChatInputEditor, { container: inputContainer, ariaLabel: 'Dictation draft', placeholder: '', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() }));
 services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 const codeContainer = document.createElement('div');

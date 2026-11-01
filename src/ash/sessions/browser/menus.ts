@@ -15,5 +15,4 @@ export const Menus = {
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),
-	ChatSessionsLayout: new MenuId('chatAgentSessionsOrientationSubmenu'),
 } as const;

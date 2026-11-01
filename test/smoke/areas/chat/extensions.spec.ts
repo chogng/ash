@@ -667,8 +667,8 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 		await expect(lsp).toHaveAttribute('aria-busy', 'false');
 		await expect(lsp.getByRole('button', { name: 'Use default configuration', exact: true })).toBeDisabled();
 	}
-	await workbench.settingsEditor.selectGroup('workbench');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	const locale = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await locale.click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();

@@ -1,5 +1,4 @@
-import { IOutputService } from '../../../../workbench/services/output/common/output.js';
-import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../workbench/common/views.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -21,7 +20,7 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
-import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editorPart.js';
+import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
@@ -36,7 +35,6 @@ export const documentEntry: ISessionsEntry = {
 
 interface EntryVisibility {
 	readonly details: boolean;
-	readonly panel: boolean;
 	readonly documents: boolean;
 }
 
@@ -48,6 +46,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public get editorWorkingSetState() { return this.controller.editorWorkingSetState; }
 	public retainEditor(input: IResourceEditorInput) { return this.controller.retainEditor(input); }
 	public suppressEditorAutoVisibility() { return this.controller.suppressEditorAutoVisibility(); }
+	public checkpointEditorLayout(): Promise<void> { return this.controller.checkpointEditorLayout(); }
 	private readonly conversationChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeConversationVisibility = this.conversationChanged.event;
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
@@ -70,7 +69,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@IEditorService private readonly editors: IEditorService,
 		@IViewsService private readonly views: IViewsService,
 		@IViewDescriptorService private readonly viewDescriptors: IViewDescriptorService,
-		@IOutputService output: IOutputService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
 		@IStorageService private readonly storage: IStorageService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
@@ -82,7 +80,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@ICustomViewService private readonly customViews: ICustomViewService,
 	) {
 		super();
-		this.pageGroupId = (editor as SessionsEditorPart).pageGroupId;
+		this.pageGroupId = (editor as DesktopEditorParts).pageGroupId;
 		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
@@ -90,10 +88,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			for (const [id, state] of Object.entries(value)) {
-				if (!isRecord(state) || ['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
+				if (!isRecord(state) || ['details', 'documents'].some(field => typeof state[field] !== 'boolean')) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 				}
-				this.visibility.set(id, { details: state.details, panel: state.panel, documents: state.documents } as EntryVisibility);
+				this.visibility.set(id, { details: state.details, documents: state.documents } as EntryVisibility);
 			}
 			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.layout.modeState', StorageScope.PROFILE);
@@ -105,28 +103,13 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 			}
 			if (!this.visibility.has(documentEntry.id)) {
-				this.visibility.set(documentEntry.id, { details: value.details, panel: false, documents: value.editor });
+				this.visibility.set(documentEntry.id, { details: value.details, documents: value.editor });
 			}
 			storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 			storage.remove('sessions.singlePane.sidePaneVisibility', StorageScope.WORKSPACE);
 		}
 		this.controller = this._register(instantiation.createInstance(DesktopLayoutController, this.pageGroupId, this));
 		this.controller.start();
-		this._register(output.onDidRequestShowChannel(() => {
-			this.layout.updateParts(() => {
-				this.layout.setPartAvailable('panel', true);
-				this.layout.showPart('panel');
-			});
-		}));
-		this._register(views.onDidChangeViewContainerVisibility(event => {
-			if (!event.visible || event.location !== ViewContainerLocation.Panel || event.id !== WorkbenchViewContainerId.Output) return;
-			// Output is a diagnostic surface for the current conversation as well as documents.
-			// Revealing it must not navigate away or clear the selected session.
-			this.layout.updateParts(() => {
-				this.layout.setPartAvailable('panel', true);
-				this.layout.showPart('panel');
-			});
-		}));
 		this._register(instantiation.createInstance(EditorTitleMenuBridgeContribution, this.controller, this));
 		this._register(storage.onWillSaveState(() => this.saveVisibility()));
 		this._register(lifecycle.onWillShutdown(event => event.join(this.navigationQueue.then(() => this.saveVisibility()), 'Sessions entry layout')));
@@ -140,14 +123,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				void this.openEntry(entry).then(() => {
 					if (explicit && !this.isDisposed && this.isDocumentContent) return this.runOperation(() => this.controller.showEditor());
 				}).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
-			} else if (entry.content === 'documents') {
-				void this.runOperation(() => explicit ? this.controller.showEditor() : this.controller.updateDetails(true)).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
+			} else if (entry.content === 'documents' && explicit) {
+				void this.runOperation(() => this.controller.showEditor()).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			}
 		};
-		this._register((editor as SessionsEditorPart).onDidRevealActiveEditor(() => revealActiveEditor(true)));
+		this._register((editor as DesktopEditorParts).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
 			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
-			if (event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) revealActiveEditor();
+			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
+			else if (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged') { revealActiveEditor(true); }
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
 		const workspaceMode = SessionsWorkspaceModeContext.bindTo(this.contextKeys);
@@ -213,22 +197,24 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				// Navigation visibility belongs to the window, independently of the page's side content.
 				const sidebarVisible = this.layout.isPartVisible('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
-					details: documents || entry.detailsContainerId !== undefined,
-					panel: false, documents: documents && this.controller.hasDocumentEditors,
+					details: entry.detailsContainerId !== undefined,
+					documents: documents && this.controller.hasDocumentEditors,
 				};
-				for (const group of this.editor.groups) { this.editor.setGroupVisible(group.id, (group.id === this.pageGroupId) === productEditor); }
+				this.controller.setDocumentGroupsVisible(documents);
+				this.editor.setGroupVisible(this.pageGroupId, productEditor);
 				this.editor.groups.find(group => group.id === this.pageGroupId)!.setTitleVisible(entry.showEditorTabs !== false);
-				if (!productEditor) { this.editor.activateGroup(this.editor.groups.find(group => group.id !== this.pageGroupId)!.id); }
+				if (!productEditor && this.editor.activeGroup.id === this.pageGroupId) {
+					const group = this.editor.groups.find(group => group.id !== this.pageGroupId && this.editor.isGroupVisible(group.id));
+					if (group) this.editor.activateGroup(group.id);
+				}
 				this.layout.updateParts(() => {
 					// Hide an outgoing conversation before separating editor details so transient minimum widths cannot shrink navigation.
 					if (!productEditor) { this.layout.setPrimaryPart('sessions'); }
-					this.layout.setPartAvailable('panel', documents);
 					// Optional conversations require a new user action on each entry, including window restoration.
 					this.layout.setPartAvailable('sessions', !productEditor);
 					if (productEditor) { this.layout.setPrimaryPart('editor'); }
 					this.setVisible('editor', productEditor || (documents && state.documents));
-					this.setVisible('auxiliarybar', state.details);
-					this.setVisible('panel', documents && state.panel);
+					this.setVisible('auxiliarybar', !documents && state.details);
 				});
 				const focusSidebar = entry.focus === 'sidebar' && sidebarVisible && !this.customViews.activeCustomView.get();
 				// Keep the workspace sidebar attached while only the central page changes.
@@ -239,7 +225,12 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.setVisible('sidebar', sidebarVisible);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
-				if (documents && !this.customViews.activeCustomView.get()) { await this.controller.activate(state.details); }
+				if (documents && !this.customViews.activeCustomView.get()) {
+					const filesDetailsOpen = (this.editor as DesktopEditorParts).filesDetailsOpen
+						|| this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, false);
+					// A retained Files preference must not open a side pane that is closed.
+					await this.controller.activate(state.documents && filesDetailsOpen);
+				}
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -261,7 +252,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		});
 	}
 
-	private setVisible(id: 'sidebar' | 'editor' | 'auxiliarybar' | 'panel', visible: boolean): void {
+	private setVisible(id: 'sidebar' | 'editor' | 'auxiliarybar', visible: boolean): void {
 		if (visible) { this.layout.showPart(id); }
 		else { this.layout.hidePart(id); }
 	}
@@ -269,9 +260,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private saveVisibility(): void {
 		const entry = this.activeEntry.get();
 		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
+		const files = this.isDocumentContent ? (this.editor as DesktopEditorParts) : undefined;
 		this.visibility.set(entry.id, {
-			details: this.layout.isPartVisible('auxiliarybar'),
-			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
+			// File navigation belongs to the retained editor group, independently of properties.
+			details: files?.filesDetailsOpen ?? this.layout.isPartVisible('auxiliarybar'),
+			documents: this.isDocumentContent && (this.layout.isPartVisible('editor')),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}

@@ -7,6 +7,20 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.QuickInput,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('quickInput.verbosityInvalid', 'Quick Input accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('quickInput.verbosityTitle', 'Quick Input accessibility help'); },
+		get description() { return localize('quickInput.verbosityDescription', 'Announce how to open accessibility help in Quick Pick and Quick Tree.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Hover,
 	defaultValue: true,
 	parse(value: unknown): boolean {
@@ -378,6 +392,34 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.QuickChat,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Quick Chat accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('quickChat.verbosityTitle', 'Quick Chat Accessibility Help'),
+		description: localize('quickChat.verbosityDescription', 'Announce how to open accessibility help when Quick Chat receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ChatUsage,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Chat usage accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('chat.usage.verbosityTitle', 'Chat usage accessibility help'),
+		description: localize('chat.usage.verbosityDescription', 'Announce how to open accessibility help for Usage settings.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatModelConfiguration,
 	defaultValue: true,
 	parse(value: unknown): boolean {
@@ -578,4 +620,11 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		title: localize('treeView.verbosityTitle', 'Extension tree accessibility help'),
 		description: localize('treeView.verbosityDescription', 'Announce how to open accessibility help when an extension tree receives focus.'),
 	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.AgentTrace,
+	defaultValue: true,
+	parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.')); } return value; },
+	setting: { valueType: 'boolean', title: localize('agentTrace.verbosity', 'Agent Debug Logs accessibility help'), description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when Agent Debug Logs receives focus.') },
 });

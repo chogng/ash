@@ -205,7 +205,10 @@ class TestWindow implements IWorkbenchWindow<TestWindow> {
 	public toggleTabBar(): void { this.calls.push('toggleBar'); }
 	public addTabbedWindow(window: TestWindow): void { this.calls.push(`tab:${window.id}`); }
 	public emitZoomChanged(): void { for (const listener of this.zoomListeners) listener(); }
-	public emitFullscreenChanged(fullscreen: boolean): void { this.fullscreen = fullscreen; for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener(); }
+	public emitFullscreenChanged(fullscreen: boolean): void {
+		for (const listener of this.fullscreenListeners.get(fullscreen ? 'enter-full-screen' : 'leave-full-screen') ?? []) listener();
+		this.fullscreen = fullscreen;
+	}
 	public emitRendererEvent(event: 'did-start-loading' | 'render-process-gone'): void {
 		if (event === 'did-start-loading') this.emitNavigation(false, true);
 		for (const listener of this.rendererListeners.get(event) ?? []) {
@@ -786,7 +789,7 @@ test('WindowsMainService sends zoom changes and releases its window listener', a
 	assert.equal(window.messages.length, 2);
 });
 
-test('WindowsMainService reports fullscreen changes and releases its window listeners', () => {
+test('WindowsMainService reports fullscreen transitions before the native flag updates and releases its listeners', () => {
 	const window = new TestWindow(1, 'First');
 	using service = createWindowsService(() => [window], async () => undefined);
 	assert.equal(service.perform(window, { kind: 'getFullscreen' }), false);

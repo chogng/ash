@@ -3,6 +3,7 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	QuickInput = 'quickInput',
 	Hover = 'hover',
 	TreeView = 'treeView',
 	ChatScreenshot = 'chatScreenshot',
@@ -31,6 +32,7 @@ export const enum AccessibleViewProviderId {
 	Outline = 'outline',
 	Timeline = 'timeline',
 	SessionsActivityBar = 'sessionsActivityBar',
+	SessionsAgents = 'sessionsAgents',
 	SessionsSearch = 'sessionsSearch',
 	DesignCanvas = 'designCanvas',
 	SessionCanvas = 'sessionCanvas',
@@ -44,9 +46,11 @@ export const enum AccessibleViewProviderId {
 	MediaPreview = 'mediaPreview',
 	AgentSessions = 'agentSessions',
 	ChatModelConfiguration = 'chatModelConfiguration',
+	ChatUsage = 'chatUsage',
 	AgentRolesSettings = 'agentRolesSettings',
 	ChatEditing = 'chatEditing',
 	SessionsChat = 'sessionsChat',
+	QuickChat = 'quickChat',
 	SessionsSettings = 'sessionsSettings',
 	HooksSettings = 'hooksSettings',
 	NetworkSettings = 'networkSettings',
@@ -83,6 +87,7 @@ export const enum AccessibleViewProviderId {
 	IssueReporter = 'issueReporter',
 	Output = 'output',
 	TerminalFindHelp = 'terminalFindHelp',
+	ChatFindHelp = 'chatFindHelp',
 	Terminal = 'terminal',
 	TerminalHelp = 'terminal-help',
 }
@@ -93,6 +98,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	QuickInput = 'accessibility.verbosity.quickInput',
 	Hover = 'accessibility.verbosity.hover',
 	TreeView = 'accessibility.verbosity.treeView',
 	ChatScreenshot = 'accessibility.verbosity.chatScreenshot',
@@ -120,6 +126,7 @@ export const enum AccessibilityVerbositySettingId {
 	Outline = 'accessibility.verbosity.outline',
 	Timeline = 'accessibility.verbosity.timeline',
 	SessionsActivityBar = 'accessibility.verbosity.sessionsActivityBar',
+	SessionsAgents = 'accessibility.verbosity.sessionsAgents',
 	SessionsSearch = 'accessibility.verbosity.sessionsSearch',
 	DesignCanvas = 'accessibility.verbosity.designCanvas',
 	SessionCanvas = 'accessibility.verbosity.sessionCanvas',
@@ -133,9 +140,11 @@ export const enum AccessibilityVerbositySettingId {
 	MediaPreview = 'accessibility.verbosity.mediaPreview',
 	AgentSessions = 'accessibility.verbosity.agentSessions',
 	ChatModelConfiguration = 'accessibility.verbosity.chatModelConfiguration',
+	ChatUsage = 'accessibility.verbosity.chatUsage',
 	AgentRolesSettings = 'accessibility.verbosity.agentRolesSettings',
 	ChatEditing = 'accessibility.verbosity.chatEditing',
 	Chat = 'accessibility.verbosity.chat',
+	QuickChat = 'accessibility.verbosity.quickChat',
 	SessionsSettings = 'accessibility.verbosity.sessionsSettings',
 	HooksSettings = 'accessibility.verbosity.hooksSettings',
 	NetworkSettings = 'accessibility.verbosity.networkSettings',

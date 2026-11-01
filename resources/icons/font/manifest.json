@@ -327,7 +327,32 @@
     "whole-word": "E144",
     "case-sensitive": "E145",
     "chat-session": "E146",
-    "open-in-product": "E147"
+    "open-in-product": "E147",
+    "global": "E148",
+    "progress": "E149",
+    "chat-filled": "E14A",
+    "chat-mode-filled": "E14B",
+    "chat-mode": "E14C",
+    "chat": "E14D",
+    "comment-discussion": "E14E",
+    "issue-draft": "E14F",
+    "issue-reopened": "E150",
+    "layout-panel-off": "E151",
+    "layout-panel": "E152",
+    "layout-sidebar-left-off-session": "E153",
+    "layout-sidebar-left-off": "E154",
+    "layout-sidebar-left-session": "E155",
+    "layout-sidebar-left": "E156",
+    "layout-sidebar-right-off-session": "E157",
+    "layout-sidebar-right-off": "E158",
+    "layout-sidebar-right-session": "E159",
+    "layout-sidebar-right": "E15A",
+    "dashboard": "E15B",
+    "image-session": "E15C",
+    "thumbsup-filled": "E15D",
+    "thumbsdown-filled": "E15E",
+    "thumbsdown": "E15F",
+    "thumbsup": "E160"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -339,7 +364,7 @@
     "align-justified": "8672c66771f069ae4e4ef0897a692f47f9352fd02ede453669d6e8d8fc0b6605",
     "align-left": "0f70a46f64dd36c0d4b958216c6ea677ea2afaee600003bcc4460e83e0c8e409",
     "align-right": "835c5ac98d628cadd6de23151f3936fd6582ad928985685462ea77ec67fe6292",
-    "appearance": "365a6aecbbe74a02f2398025e47eaac84345d618b7a4e5432aa0dc0dcb4fd4a3",
+    "appearance": "3ae9d997f27565a542324205e95be7b476b4e638178eacd2336a47273cfeb407",
     "archive": "37f8cee0be060a348f4dd1bca0284aa1c03048fa01ea3be13154c6a11b9c73ec",
     "arrow-down": "3de326f3431dd60e138b492a9734c5e2bcd5ff0c0bda2f2c9eeb6683da2a1cf9",
     "arrow-left": "afe3d785df9762912d15eafe06c79db720f1021d17890942c698d64b61472947",
@@ -348,7 +373,7 @@
     "arrow-up": "ac3d09f47fa97b06dfda18bd85a5a73141a62a97d30ac92521f6ad14fdab420c",
     "artifacts": "8ec17a378d3d65c65764e16315b91bcb76139a141a1dccfcbabe23396f962748",
     "ash-mark": "7941c365eb7b3cd3e98435315ef71ba1c8366b45785c89aa238686f9ff449514",
-    "ask": "54c423dfc247eb347dda55370f2af31a6d0ffd210825a519255f5731bc5c54ab",
+    "ask": "a4cb35d2c7f12f6a892b243931cccfe4fb463836f7ac58ce3e72909e5bbde840",
     "beaker": "928c66fa964d8974a2e1e25047db4031dcdf99a9dab1ae25fad343ed84334366",
     "bell-dot": "b6e467ce1ac38da0374dce31c8f2e3b4bf30b19535b0d5a6473fd250ab88f73f",
     "bell-slash-dot": "a041a4804c2c73def9632a79e4fc703df72502809ab14a34a75a31ae80befc0b",
@@ -360,20 +385,19 @@
     "briefcase-filled": "f9088259f0062ecd1ee868c689672d432c67f58f96f68c3bc3dec398c3f601a9",
     "briefcase": "31e88f8d27ec97d1a898f73d434d0bd1124d1c4e435be0f4098074d1ae66219c",
     "browser-explore": "d405e4dad1fe1d4861879973fdf7f9a9325f9477c4477740cde9f67bfd779815",
-    "browser-web": "061e5acab9bc1ab97d4fd2ef67e5c42f62b5a44b8062477b82e3baf39cd067d8",
     "bug": "d10e41671a5c7e7992d5cd51043c7f507958a8eb66352ddb28011e015a6149fa",
     "calendar": "b113998d40027162e4409f9f598f185552ab739cb64669189b3decb4758494bb",
     "case-sensitive": "7bc7cf30a1eda83ac7807397434e5fe5c91c6ddc1a5bb42fabfb8240c39cb675",
     "chart": "02e067923ff5c0d7922cb6d383a96d42667fbd90856aa6a935d75fbf1dd14d0e",
-    "chat-1-filled": "40501b102b7b12ffc9ee142ec5b1a332ce65fe6e49b25aba43587a3d1329bd8d",
-    "chat-1": "dcce90e4f1b605dedf4c4d570dfe45f4330e7ade67d75fa76273474a93899c72",
     "chat-2-filled": "d31f5d163a847a8c5861011e39a96a228949eef204d395c12234486932b592e4",
     "chat-2": "923792639ff8beabc496d86c631bcc40eec271f535cbf7c770dd85a34595341e",
     "chat-3-filled": "e6c3379105361dfeb260927aa8a2a8fa25d7ad72f48946137cef2d447a8516bc",
     "chat-3": "5a2ecabf49bdfba33465024b4b193544b30de73c5c55c69740ac43534fbfce2f",
-    "chat-4-filled": "9ff91ce5f30d163a0a9bfd94aa516d200447bcf088e73a2a774d7f5c70b549a7",
-    "chat-4": "5dccd58446288e7b3bcb95a128c3e4a3974301aed81b91f59583e9de6fc58d31",
-    "chat-session": "1b83c160240f8f8045dbd8c7dcd08241f360eb8c509117109dbb65b971f09ee0",
+    "chat-filled": "9ff91ce5f30d163a0a9bfd94aa516d200447bcf088e73a2a774d7f5c70b549a7",
+    "chat-mode-filled": "40501b102b7b12ffc9ee142ec5b1a332ce65fe6e49b25aba43587a3d1329bd8d",
+    "chat-mode": "dcce90e4f1b605dedf4c4d570dfe45f4330e7ade67d75fa76273474a93899c72",
+    "chat-session": "c733af2e63a2605b43ee84b8843f25069bc29dc015422df8ca274851e9c75f3f",
+    "chat": "e2d75d4728428cf1b6476aad59b9715676c40590c4cf446e07ce49a403091abc",
     "check": "bdb331a36dd7c9daa4b7e661d5042f112b118a2e40636914957f385323b3708d",
     "chevron-down": "9eefa364523e803f38ddf298ac785f2337b9a29ca318cf8af5fdf6c6dd097c9c",
     "chevron-left": "7005b07169e51f396c4336c513464f7d1e8cccc874ac496700d468020640e283",
@@ -397,6 +421,7 @@
     "collab": "e1938457c40875b7d569ff283e3bd7ab4d2744bb8408c4f57fc90b8d30149b8b",
     "collapse-all": "57ae0aab711d8757a0278dc3d1311007125f52bfa545d477efd940b202c0f95a",
     "command": "e87233276480a94e00f3c7a30bedf7204e0a7b54d95dbd95fa60565c39db484b",
+    "comment-discussion": "60ccbcadb79e7efc340adfa8080136b60e8dbdfb0b385a6e7cac4ff2499d73b0",
     "connectors": "57bf7fad7ac01a97eef64f41529b55788d6874dafd85c27f7956c6d1565320a9",
     "copy-code": "2c55910bb037e5c713a0bba1f98fdb7f8aecf233408506dcc46495ccc57cf4f9",
     "copy": "b56c999f69c8a2f89b48a5b2c03be1ad695d98f1205f846eef6a9d5a11d575d7",
@@ -409,6 +434,7 @@
     "cursor-2": "e73df3f6ef1d7b881a0adc94041981ccbd5e7b768d6a0a17568b38deab2b5695",
     "cursor-filled": "cf8284bb7eeb55a94461a8776fd13ff5a4969e0ce535fdee2e2dff0906fac0f2",
     "cursor": "c6c37a9449d2f954fb0e4c50ebd2d06a328a8d3a89679849369c8c68fbb3bb2b",
+    "dashboard": "62890b9eea99d5e723067871a4632e1c90c139f561e046e8a56461d9c70589cf",
     "database-flat": "872752313b3d506d8cf09ab4da8e47d5ecfdfd5f3c6f6e42d993cf582893df7b",
     "database": "15b0a7834ce691e526b0b84d339e4139ac76d540acb55b20dad51f7d1026ad62",
     "debug-alt": "bffaea5a151dbd4fac1aa8ba6931548a277126f1826095f23ab6656b66e69691",
@@ -478,6 +504,7 @@
     "git-pull-request": "8b643eec88d30dbfa77b5eab64ebae43800cda3f9f05180067bc69bbd54cc2fb",
     "git": "5321b1613a9a939b28298fd7a1d8e3d121ff6bf5c346cb8f15c023dd121694ba",
     "github": "123388e994eab2995a612e8388af330a5d10578e3686c391a3053c6a1986012c",
+    "global": "b0436b33687597a8758c5a155925d1c687dfdffff570acc8a2399fe6d53c4845",
     "go-to-file": "f9df6182b5b57d3403cde2c1702b800a40213ce97083639cb3277dd64b5eb2cd",
     "h1": "37d28a8fa7bb1e1002b5db8d8054b04f17e54ebef7f75c90ab1cd3861ac6d89c",
     "h2": "4442a5fb5382967756641a0c3bcd18223ce4cd01a5dc1105dc7268f6aea2aecc",
@@ -488,28 +515,29 @@
     "history": "14cf0c7547cc45a6faae4561eae8b83985ca94bc33dcd2ca3e25a456a76c666f",
     "home-filled": "531fe971016beb848655c5db24583662809e6610c93e174faff39d4e6c5ae125",
     "home": "2bb49b66560f7307632c9b2cb049d3a8b25c2c8b74529cfffd9eec92615142dd",
-    "image-filled": "09e7460f5962266a6ff1b2d47587ea01848238cc3e0536ec3640e8c841229855",
-    "image": "a78db325681730c62c8c36991b91cf797336de4ba17e4740b1a2d73bf658f76e",
+    "image-filled": "fd3946f119d3e559f907cbba97058d6bc920f79ed130bcd90449e20e67c21b6f",
+    "image-session": "516b52d6a22812a53989c73bdf38c40c4cf2a45932cf859efc34cfb130a91f4a",
+    "image": "042e8d9296272fce8c09318cf379388949557c769e2ce90206a52f714c962ac9",
     "info": "9aa637884722838ba53238992e560569c9df12bf4f918e2404fbce11d40178d5",
     "inspect": "b92172aa91de23b36c765e4a43f4059c7086bd83b27b435541c2fff1c99da76d",
-    "issue-closed": "151a28fe444b1e993292883c2d28ee6b1a46705118af7d6da12b24c8147e4aad",
-    "issue-opened": "4f940e0b55de78d447a4c31e424bfbeb267fa99821b9258f7132271278d697ce",
+    "issue-draft": "e0ed832579f75eacea32f79b3281e026ab54f6ec2b7d2b7c1985c82ebd8271c9",
+    "issue-reopened": "98468e943e5e651f54e01f26ecc51437fdd89651eab7c13c6f77c98bfce68289",
     "issues": "395b8c3063d79730c29631a307870b05a9a53fb76a031c7acefb611d3490889e",
     "italics": "21bc1a379f91dab6943cd24086b5e5e8bc9d3944b04b4ebe05117dc685d0cff9",
     "kebab-vertical": "3406c85d1c928683ae6f4140cc891fb24ae9e12cd959f67098b5efee5efdfd4f",
     "keyboard-tab": "de33482d3f27e9f5ee44da3afbc6d375ad2b0039170f10303046bed224f93b6f",
     "language-server": "93e7940f2a542062b411e96470ec3355f684a034ebf530804ffa42ac55a3a9dd",
     "layout-grid": "db667b6387f02f69112ffff25cd03485fe9f78b146b6e6f95ac00213f668990a",
-    "layout-panel-1": "cf03f884110877fcaf99747daa998dfe6d274a6696e4971ad851142d4bafd46b",
-    "layout-panel-off-1": "50ebfa180343e8c268aa33b6e2cba44a207b7d466f8a8fdf2d8dcf991b6bbe59",
-    "layout-sidebar-left-1": "abcc02d7dabc22760ff6e3337ee014f119d356e2324c778deb2aae5ba9560c9c",
-    "layout-sidebar-left-2": "9a454910a9a0ce5601dc9974ea18ac65c329e48bea7d94fd82607675af02c85b",
-    "layout-sidebar-left-off-1": "6e217f9e1b0a89e21a59139da1d1dbb1dcc93659947891eae7f25943eefe9532",
-    "layout-sidebar-left-off-2": "bda9ded40d333ec7d5def9fd430423c286417f2564c78cc3aa4dc762b7df609f",
-    "layout-sidebar-right-1": "2620bb5d1fa35294593e2788d4b7de17f682bc2afd859a7e9cce80a70812b474",
-    "layout-sidebar-right-2": "a81c2901addf468b7af3d3e928252e8e527f15d664ea0d5118ba68a95833398c",
-    "layout-sidebar-right-off-1": "be6583dbbc13fb62f9059b2861f1371f10c743a57652f151b70a55fee374ed6b",
-    "layout-sidebar-right-off-2": "ceebf3cb330c38196d7a4fc3a42970b328d18e145c5277f50759f43bff118369",
+    "layout-panel-off": "fca5c87c7fa90597a016838200ac41f9a78b35f481b7896c3b37b64b07e06627",
+    "layout-panel": "02b9448297364a6960376d5891379c78b8d961a65fc8ab38c92c3a91dc25af1e",
+    "layout-sidebar-left-off-session": "699b34abab5d833b62338f33359db88410d55b684c711a63c346141f5b2f451d",
+    "layout-sidebar-left-off": "d62ae35d27569596f7913ea051a5fd298a05cdbb9a1af0356f8aa645f08ab443",
+    "layout-sidebar-left-session": "7069f9f5dac9209bbdf0971d1d6e138f3dc8f15de9b3a0602d96a22cbcc93e10",
+    "layout-sidebar-left": "00ad22d60d2f6a5c0cdcf15b30285463d2c83584b8ebf6d62749630370737784",
+    "layout-sidebar-right-off-session": "68e79bb3c4e263fe11350c3118ecf46bd5aa256d68f15b9330f765ba5dc891b7",
+    "layout-sidebar-right-off": "d9741c7222a399d575d548fcff06d00df15b1207c8183431094b36cee903d24b",
+    "layout-sidebar-right-session": "329b6b5e87cfd6b9c3d339c675132eef5feb3f7353dcc2addd8b09adb4e268c3",
+    "layout-sidebar-right": "dbf4736c660e9215bd27a5972d7ad9beff8a7b008f6381a80d5da59f7f02ba76",
     "layout": "b87d329ba8ab188774467cd1191bfae64a3b6cc1189a34762d2574601de5c495",
     "legend": "4981835f917bed4934d18cbdf555b6320c83917d47314a04fb4c6c4fae56c8d9",
     "letter-b": "0d8a24630be6438221e34201b88a3ed84b7ab9ec864f2185f4cad12be7d900f7",
@@ -562,6 +590,7 @@
     "preserve-case": "d230c5f7b95a2571e27026b6d3d139fe0f28506dc13b7b332eecbdcde707bfa8",
     "preview": "bd40c6821d8c030c4687687b900c39d9046481cfd76168e66f865fcf92fa635e",
     "primitive-square": "5baa0fc62fe952bf4c8a76e4ba6abfc99ecf89937ba0493e4498c9a3af46faac",
+    "progress": "41630335c7f00f1c3e0549bdae9e820703144cb8f1dacb4d262b66124fd55cf5",
     "projects-filled": "feb1176166ca551e515e793aae003fe7e8e7a01250235879aa75e9031e4ce28a",
     "projects": "273b87d7ce6f4c528a834fbac5cb1157278175cfcb1260b502872c02d7ebf786",
     "question": "35eefe38fb71cf59c185d7343fbab02b903327e458f034c72af16a973c13ab12",
@@ -619,6 +648,10 @@
     "terminal": "da8230a0f70a37dfa791217bc17697fce6c99d1ced68fc92e7ebb77abe7dc5ea",
     "text-2": "8095be0ad3ba4d0f15e0510cac5484964b308fbad7b1536b2febbaa80c1fb462",
     "text": "9dc6ef9dbf5f84e207b20c978ad8fc4f01c501cf6b9ab9b05f4689f0dc0e5480",
+    "thumbsdown-filled": "c607bf65d12ad3d75ca69843350525ff8adabbbd15147f5a4446758bfb1104fc",
+    "thumbsdown": "0b1aaa34f51c1cf0d522127463ce6ade3c00ddd900680d709eb0c9da27629d8f",
+    "thumbsup-filled": "af7c7606213a3ebf9a376cad2496c069f558757d93dff25c47fe5bb2709bf74b",
+    "thumbsup": "1dc01a3318e4df69d1263af39e5ca6b39d041a28debc2ade04d330e9914e7a6c",
     "translate": "08a217cbe272ac8f3b94cf2133bd064017ffa6b9c31f652737417a52408805ec",
     "trash-flat": "ec938448beac60481578d50b27f6dc6d2ff05d77167860918bf2c66a31406485",
     "trash": "42c566e80e8d41ace902efd889abac97519ea73d2e5bae16e903e72167fb99a2",
@@ -654,9 +687,9 @@
     "csv-green": "File type color",
     "docx-blue": "File type color",
     "inspect": "Fixed white fill with black outlines",
-    "layout-panel-off-1": "Fixed color/opacity",
-    "layout-sidebar-left-off-1": "Fixed color/opacity",
-    "layout-sidebar-right-off-1": "Fixed color/opacity",
+    "layout-panel-off": "Fixed color/opacity",
+    "layout-sidebar-left-off": "Fixed color/opacity",
+    "layout-sidebar-right-off": "Fixed color/opacity",
     "pdf-filled": "File type color",
     "pdf-red": "File type color",
     "symbol-method": "Translucent stroke overlay",
@@ -667,74 +700,47 @@
       {
         "id": "petal-north",
         "glyph": "ash-mark-petal-north",
-        "origin": [
-          0.5,
-          0.2333984375
-        ]
+        "origin": [0.5, 0.2333984375]
       },
       {
         "id": "petal-northwest",
         "glyph": "ash-mark-petal-northwest",
-        "origin": [
-          0.30078125,
-          0.33544921875
-        ]
+        "origin": [0.30078125, 0.33544921875]
       },
       {
         "id": "petal-northeast",
         "glyph": "ash-mark-petal-northeast",
-        "origin": [
-          0.6982421875,
-          0.3349609375
-        ]
+        "origin": [0.6982421875, 0.3349609375]
       },
       {
         "id": "petal-west",
         "glyph": "ash-mark-petal-west",
-        "origin": [
-          0.23193359375,
-          0.50048828125
-        ]
+        "origin": [0.23193359375, 0.50048828125]
       },
       {
         "id": "petal-east",
         "glyph": "ash-mark-petal-east",
-        "origin": [
-          0.76611328125,
-          0.5
-        ]
+        "origin": [0.76611328125, 0.5]
       },
       {
         "id": "petal-center",
         "glyph": "ash-mark-petal-center",
-        "origin": [
-          0.49853515625,
-          0.49951171875
-        ]
+        "origin": [0.49853515625, 0.49951171875]
       },
       {
         "id": "petal-southwest",
         "glyph": "ash-mark-petal-southwest",
-        "origin": [
-          0.302734375,
-          0.66162109375
-        ]
+        "origin": [0.302734375, 0.66162109375]
       },
       {
         "id": "petal-southeast",
         "glyph": "ash-mark-petal-southeast",
-        "origin": [
-          0.6953125,
-          0.6611328125
-        ]
+        "origin": [0.6953125, 0.6611328125]
       },
       {
         "id": "petal-south",
         "glyph": "ash-mark-petal-south",
-        "origin": [
-          0.49951171875,
-          0.7529296875
-        ]
+        "origin": [0.49951171875, 0.7529296875]
       }
     ]
   }

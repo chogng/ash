@@ -4,6 +4,8 @@ use std::io;
 
 mod exit_cleanup;
 pub use exit_cleanup::register_exit_cleanup;
+mod watchdog;
+pub use watchdog::ProcessWatchdog;
 
 // Release builds sanitize inherited loader configuration before threads start.
 // Development builds preserve debugger and toolchain configuration.

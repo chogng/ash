@@ -99,14 +99,23 @@
 	color: var(--ash-description-foreground);
 }
 
+.ash-sessions-chat-input-footer > .ash-sessions-chat-input-workspace {
+	flex: 0 1 auto;
+}
+
 .ash-sessions-chat-input-workspace[hidden] {
 	display: none;
 }
 
 .ash-sessions-chat-input-workspace > span:last-child {
+	min-width: 0;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
+}
+
+.ash-sessions-chat-input-workspace > .lxicon {
+	flex-shrink: 0;
 }
 
 .ash-sessions-permission-menu {

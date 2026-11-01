@@ -538,7 +538,7 @@ const connectorHostServices = {
 		read: async () => [],
 		readFindText: async () => '',
 		writeFindText: async () => { },
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		readText: async () => '',
 		writeText: async () => undefined,
 		readResources: async () => ({ resources: [], operation: 'copy' as const }),

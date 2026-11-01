@@ -150,7 +150,7 @@ export class ScreenshotContextValuePick implements IChatContextValueItem {
 
 export class SessionReferenceContextPickerPick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
-	public readonly icon = Lxicon.chat4;
+	public readonly icon = Lxicon.chat;
 	public get label(): string { return localize('chat.context.sessions', 'Sessions…'); }
 	constructor(
 		private readonly current: { readonly sessionId: string; readonly threadId: string; } | undefined,
@@ -190,7 +190,7 @@ interface GitHubPick extends IQuickPickItem {
 
 export class GitHubContextValuePick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
-	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.circleLarge : Lxicon.gitPullRequest; }
+	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.issues : Lxicon.gitPullRequest; }
 	public get label(): string { return this.kind === 'issue' ? localize('chat.context.issue', 'Issue…') : localize('chat.context.pullRequest', 'Pull Request…'); }
 	constructor(
 		private readonly kind: 'issue' | 'pullRequest',
@@ -341,7 +341,11 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			// Quick Input preserves the active item by identity when results change.
 			// Start empty so the completed catalog selects its first actual source.
 			const active = retainActive ? picker.activeItems[0] : undefined;
-			if (!retainActive) picker.items = [];
+			if (!retainActive) {
+				// Removing a focused pagination row would blur-close an anchored picker.
+				picker.focus();
+				picker.items = [];
+			}
 			picker.busy = true;
 			try {
 				const items = await provide(query, token);

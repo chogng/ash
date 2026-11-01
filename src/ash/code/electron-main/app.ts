@@ -1,3 +1,8 @@
+import { BrowserNetworkProxy } from '../../platform/browserView/electron-main/browserNetworkProxy.js';
+import { WSLRemoteAgentHostService } from '../../platform/agentHost/node/wslRemoteAgentHostService.js';
+import { TunnelAgentHostService } from '../../platform/agentHost/node/tunnelAgentHostService.js';
+import { isSSHAgentHost, remoteAgentHostRoot, canonicalAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
+import { REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { TerminalWindowLifetimeHost } from '../../platform/terminal/electron-main/terminalWindowLifetimeHost.js';
 import { parseJsonc } from '../../base/common/jsonc.js';
 import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
@@ -576,7 +581,9 @@ export class AshApplication extends Disposable {
 			}
 			return service;
 		}));
-		const remoteExecutable = remoteExecutablePath({
+		// Runtime binaries are needed only when inbound hosting actually starts.
+		// UI-only windows must not require a prepared backend package at startup.
+		const remoteExecutable = () => remoteExecutablePath({
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
@@ -584,8 +591,8 @@ export class AshApplication extends Disposable {
 		});
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
-			executable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'),
-			backendExecutable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'),
+			get executable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'); },
+			get backendExecutable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
 			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 			assets: this.rendererRoot,
 			environment: { ...process.env, ASH_HOME: this.profileRoot },
@@ -1857,7 +1864,14 @@ export class AshApplication extends Disposable {
 		return channel;
 	}
 
-	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay, contextMenu: ElectronContextMenu): InstantiationService {
+	private createBrowserServices(
+		window: BrowserWindow,
+		workspaceContext: WorkspaceContextMainService,
+		remotePortForwardingService: SshPortForwardingService,
+		windowDisposables: DisposableStore,
+		supervisor: AppServerConnectionRelay,
+		contextMenu: ElectronContextMenu,
+	): InstantiationService {
 		const context = `window:${window.id}`;
 		const secrets = windowDisposables.add(new BaseSecretStorageService());
 		const windowSessionId = this.workbenchWindowData.get(window.id)?.windowSessionId;
@@ -1877,10 +1891,14 @@ export class AshApplication extends Disposable {
 			contextMenu,
 			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
-			getRemoteNetwork: () => {
+			getWindowNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
-				return authority ? { authority, tunnels: remotePortForwardingService } : undefined;
+				return authority ? { authority } : undefined;
 			},
+			getRemoteNetwork: (network: import('../../platform/browserView/common/browserView.js').IBrowserViewNetwork) => ({
+				authority: network.authority,
+				tunnels: new BrowserNetworkProxy(this.mainProcessIpcServer.getChannel('browserNetwork', client => client.ctx === context), network),
+			}),
 			createSession: (partition: string) => {
 				const session = electronSession.fromPartition(partition);
 				return session;
@@ -2056,13 +2074,21 @@ export class AshApplication extends Disposable {
 						webContents: window.webContents,
 						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
 					};
-					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, (target, id) => {
+					const wslHosts = new WSLRemoteAgentHostService();
+					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, async (target, id, signal, ticket) => {
 						const resources = new DisposableStore();
 						try {
-							const workspace = { id: `agent-host:${id}`, uri: createSshRemoteWorkspaceUri(target.host, target.workspace) };
-							const relay = resources.add(this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id }));
+							let tunnel: TunnelAgentHostService | undefined;
+							if (!isSSHAgentHost(target) && target.type === 'tunnel') {
+								tunnel = resources.add(new TunnelAgentHostService(target.endpoint, ticket));
+								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
+							}
+							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
+							const relay = resources.add(isSSHAgentHost(target)
+								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id })
+								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
 							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
-							return resources;
+							return Object.assign(resources, { connection: target });
 						} catch (error) {
 							resources.dispose();
 							throw error;
@@ -2079,6 +2105,7 @@ export class AshApplication extends Disposable {
 						...this.mainProcessIpcRoutes(window),
 						...this.terminalLifetimeRoutes(windowDisposables),
 						...agentHosts.routes(),
+						{ channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL, validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters'); return undefined; }, invoke: () => wslHosts.listDistros() },
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),

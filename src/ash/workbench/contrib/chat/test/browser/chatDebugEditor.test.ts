@@ -1,3 +1,6 @@
+import { IDiffService } from '../../../../services/diff/common/diffService.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IChatDebugService } from '../../common/chatDebugService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -27,6 +30,59 @@ import { createAgentTraceResource } from '../../browser/chatDebug/chatDebugEdito
 
 suite('Execution Trace editor', () => {
 
+	test('refreshes a graph invalidated by durable events arriving during the graph read', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = new InstantiationService();
+			using updates = new Emitter<ThreadUpdateEnvelope>();
+			using configuration = new InMemoryConfigurationService();
+			using context = new ContextKeyService();
+			services.registerInstance(IConfigurationService, configuration);
+			services.registerInstance(IContextKeyService, context);
+			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+			services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } as unknown as IContextMenuService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatService, {
+				onDidChangeSession: Event.None, onDidUpdateThread: updates.event, onDidBecomeReady: Event.None,
+				subscribeThread: async () => ({ thread: { sequence: 1 } }), unsubscribeThread: async () => { },
+			} as unknown as IChatService);
+			const firstGraph = new DeferredPromise<import('../../common/chatDebugEvents.js').AgentTraceGraph>();
+			const pageRead = new DeferredPromise<void>();
+			let reads = 0;
+			let graphReads = 0;
+			const graph = (label: string) => ({ nodes: { root: { id: 'root', kind: 'thread', label, threadId: 'root', turnId: null, eventKey: null } }, edges: [], warnings: [] });
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				readTrace: async () => {
+					const sequence = ++reads;
+					if (sequence === 2) { void pageRead.complete(); }
+					return { trace: { formatVersion: 3, sessionId: 's', threads: [{ threadId: 'root', events: [{ eventId: `event-${sequence}`, sequence, recordedAt: sequence, event: { type: 'threadCreated', threadId: 'root' } }] }], historyPrefixes: [] }, cursors: { root: sequence }, hasMore: false };
+				},
+				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+				readTraceGraph: () => ++graphReads === 1 ? firstGraph.p : Promise.resolve(graph('Newest graph')),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
+			registerCodeEditorServices(services);
+			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
+			pane.create(dom.window.document.body);
+			measureTreeViewport(dom.window.document);
+			await pane.setInput({ resource: createAgentTraceResource('s') }, new AbortController().signal);
+			[...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Flow Chart')!.click();
+			assert.equal(graphReads, 1);
+			updates.fire({ sessionId: 's', threadId: 'root', durableSequence: 2 } as ThreadUpdateEnvelope);
+			await pageRead.p;
+			await new Promise(resolve => setImmediate(resolve));
+			await firstGraph.complete(graph('Stale graph'));
+			await new Promise(resolve => setImmediate(resolve));
+			assert.equal(graphReads, 2);
+			assert.match(pane.getAccessibleContent(), /Newest graph/);
+			assert.doesNotMatch(pane.getAccessibleContent(), /Stale graph/);
+		} finally { dom.window.close(); }
+	});
+
 	test('explains loop decisions and message phases in the timeline and accessible view', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
@@ -49,7 +105,15 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 3 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -113,7 +177,15 @@ suite('Execution Trace editor', () => {
 				},
 				unsubscribeThread: async (_session: string, threadId: string) => { released.push(threadId); },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -156,7 +228,15 @@ suite('Execution Trace editor', () => {
 				readTracePayload: async (session: string, capture: string, payload: string) => { assert.deepEqual([session, capture, payload], ['s', 'capture', 'payload-1']); payloadReads++; void requested.complete(); return evidence.p; },
 				subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -206,7 +286,15 @@ suite('Execution Trace editor', () => {
 				subscribeThread: async (_session: string, _thread: string, _after: number, owner: object) => { owners.push(owner); return { thread: { sequence: 2 } } as ThreadSubscription; },
 				unsubscribeThread: async (_session: string, threadId: string) => { released.push(threadId); },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -255,7 +343,15 @@ suite('Execution Trace editor', () => {
 				subscribeThread: () => { void subscribing.complete(); return result.p; },
 				unsubscribeThread: async (_session: string, _thread: string, owner: object) => { released.add(owner); },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -315,7 +411,15 @@ suite('Execution Trace editor', () => {
 					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }),
 					unsubscribeThread: async (_session: string, thread: string) => { released.push(thread); },
 				} as unknown as IChatService);
-				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+				services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+				services.registerInstance(IChatDebugService, {
+					onDidChangeAvailableSessionResources: Event.None,
+					getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+					refreshAvailableSessions: async () => { },
+					...services.get(IChatService),
+				} as unknown as IChatDebugService);
+				services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+				services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -380,7 +484,15 @@ suite('Execution Trace editor', () => {
 				services.registerInstance(IContextKeyService, context);
 				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 				services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
-				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+				services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+				services.registerInstance(IChatDebugService, {
+					onDidChangeAvailableSessionResources: Event.None,
+					getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+					refreshAvailableSessions: async () => { },
+					...services.get(IChatService),
+				} as unknown as IChatDebugService);
+				services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+				services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -478,7 +590,15 @@ suite('Execution Trace editor', () => {
 					readTraceGraph: async () => { graphReads++; return graph; },
 					subscribeThread: async (_session: string, _thread: string, after: number) => ({ thread: { sequence: after } }), unsubscribeThread: async () => { },
 				} as unknown as IChatService);
-				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+				services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+				services.registerInstance(IChatDebugService, {
+					onDidChangeAvailableSessionResources: Event.None,
+					getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+					refreshAvailableSessions: async () => { },
+					...services.get(IChatService),
+				} as unknown as IChatDebugService);
+				services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+				services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body);
@@ -544,7 +664,15 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 2000 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -568,7 +696,15 @@ suite('Execution Trace editor', () => {
 			services.registerInstance(IContextKeyService, new ContextKeyService());
 			services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 			services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body);
@@ -597,7 +733,15 @@ suite('Execution Trace editor', () => {
 				}),
 				subscribeThread: async () => ({ thread: { sequence: 1 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -625,7 +769,15 @@ suite('Execution Trace editor', () => {
 				readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 				subscribeThread: async () => ({ thread: { sequence: 1 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -674,7 +826,15 @@ suite('Execution Trace editor', () => {
 					readTracePayload: async () => { payloadReads++; return payloadReads === 1 ? first.p : second.p; },
 					subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 				} as unknown as IChatService);
-				services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+				services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+				services.registerInstance(IChatDebugService, {
+					onDidChangeAvailableSessionResources: Event.None,
+					getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+					refreshAvailableSessions: async () => { },
+					...services.get(IChatService),
+				} as unknown as IChatDebugService);
+				services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+				services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 				registerCodeEditorServices(services);
 				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 				pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);
@@ -719,7 +879,15 @@ suite('Execution Trace editor', () => {
 				readTracePayload: async (_session: string, _capture: string, id: string) => { reads.push(id); return id === 'payload-1' ? first.p : second.p; },
 				subscribeThread: async () => ({ thread: { sequence: 0 } }), unsubscribeThread: async () => { },
 			} as unknown as IChatService);
-			services.registerInstance(IChatDebugService, services.get(IChatService) as unknown as IChatDebugService);
+			services.registerInstance(IEditorService, { openEditor: async () => { } } as unknown as IEditorService);
+			services.registerInstance(IChatDebugService, {
+				onDidChangeAvailableSessionResources: Event.None,
+				getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+				refreshAvailableSessions: async () => { },
+				...services.get(IChatService),
+			} as unknown as IChatDebugService);
+			services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+			services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
 			registerCodeEditorServices(services);
 			using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
 			pane.create(dom.window.document.body); measureTreeViewport(dom.window.document);

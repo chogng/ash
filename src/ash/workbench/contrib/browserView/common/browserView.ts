@@ -2,7 +2,7 @@ import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { IBrowserViewDevToolsStateEvent, IBrowserViewFindInPageOptions, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions } from '../../../../platform/browserView/common/browserView.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewOwner, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
+import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewOwner, type IBrowserViewNetwork, type IBrowserViewSessionOptions, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { BrowserEditorInput, IBrowserEditorInputData } from './browserEditorInput.js';
 import type { IntegratedBrowserOpenSource } from '../../../../platform/browserView/common/browserViewTelemetry.js';
@@ -23,7 +23,23 @@ export interface IBrowserViewContextualFilter {
 	readonly onDidChange?: Event<void>;
 }
 
+export interface IBrowserViewNetworkStatus {
+	readonly label: string;
+	readonly connected: boolean;
+	readonly proxySupported: boolean | undefined;
+}
+
+/** Sessions supplies opening policy; the shared Workbench never inspects Session models. */
+export interface IBrowserViewNetworkResolver {
+	resolveNetwork(owner: IBrowserViewOwner): IBrowserViewNetwork | null | undefined;
+	resolveStorageAffinity?(owner: IBrowserViewOwner): string | undefined;
+	getNetworkStatus(network: IBrowserViewNetwork): IBrowserViewNetworkStatus;
+	readonly onDidChangeNetworkStatus: Event<void>;
+}
+
 export interface IBrowserViewOpenHandler {
+	/** Capture context before asynchronous creation. The callback receives the opened tab, or undefined on failure. */
+	onWillCreateBrowserView?(owner: IBrowserViewOwner, id: string, replaces?: BrowserEditorInput): ((input: BrowserEditorInput | undefined) => void) | undefined;
 	shouldOpenEditor(input: BrowserEditorInput, owner: IBrowserViewOwner, editorOptions: EditorOpenOptions): boolean;
 }
 
@@ -38,6 +54,9 @@ export interface IBrowserViewWorkbenchService {
 	getContextualBrowserViews(context?: IBrowserViewFilterContext): Map<string, BrowserEditorInput>;
 	registerContextualFilter(filter: IBrowserViewContextualFilter): IDisposable;
 	registerOpenHandler(handler: IBrowserViewOpenHandler): IDisposable;
+	registerNetworkResolver(resolver: IBrowserViewNetworkResolver): IDisposable;
+	resolveNetwork(owner: IBrowserViewOwner): IBrowserViewNetwork | undefined;
+	replaceBrowserView(input: BrowserEditorInput, session: IBrowserViewSessionOptions): Promise<BrowserEditorInput>;
 	getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput;
 	createBrowserView(options: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput>;
 }

@@ -243,9 +243,30 @@ export interface IBrowserViewStorageKeys {
 	readonly favicons?: string;
 }
 
+/** A native loopback proxy lease; outbound transport is owned by the selected backend connection. */
+export interface IBrowserViewNetworkProxyProvider {
+	openProxy(signal: AbortSignal): Promise<IDisposable & { readonly localPort: number; readonly signal: AbortSignal; }>;
+}
+
+/** Network identity is independent of storage and remains fixed for a page's lifetime. */
+export interface IBrowserViewNetwork {
+	readonly root?: string;
+	readonly authority: string;
+}
+
 export type IBrowserViewSessionOptions =
-	| { readonly scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral; }
-	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
+	| { readonly scope: BrowserViewStorageScope.Global; }
+	| { readonly scope: BrowserViewStorageScope.Workspace; readonly affinity?: string; readonly network?: IBrowserViewNetwork; }
+	| { readonly scope: BrowserViewStorageScope.Ephemeral; readonly network?: IBrowserViewNetwork; }
+	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; readonly network?: IBrowserViewNetwork; };
+
+export function getBrowserViewSessionNetwork(session: IBrowserViewSessionOptions): IBrowserViewNetwork | undefined {
+	return session.scope === BrowserViewStorageScope.Global ? undefined : session.network;
+}
+
+export function getBrowserViewSessionAffinity(session: IBrowserViewSessionOptions): string | undefined {
+	return session.scope === BrowserViewStorageScope.Workspace || session.scope === BrowserViewStorageScope.Agent ? session.affinity : undefined;
+}
 
 export interface IBrowserViewInfo {
 	readonly canvas?: IBrowserCanvasPresentation;
@@ -400,20 +421,40 @@ function validateBrowserViewOwner(value: unknown): IBrowserViewOwner {
 	return { type: 'agent', sessionId: owner.sessionId };
 }
 
-function validateBrowserViewSessionOptions(value: unknown): IBrowserViewSessionOptions {
-	const session = value as Record<string, unknown> | null;
-	if (session?.scope === BrowserViewStorageScope.Agent) {
-		exactRecord(value, ['scope', 'affinity'], 'browser session');
-		if (typeof session.affinity !== 'string' || !session.affinity.trim()) {
-			throw new Error('Invalid browser storage affinity');
-		}
-		return { scope: BrowserViewStorageScope.Agent, affinity: session.affinity };
-	}
-	exactRecord(value, ['scope'], 'browser session');
-	if (session?.scope !== BrowserViewStorageScope.Global && session?.scope !== BrowserViewStorageScope.Workspace && session?.scope !== BrowserViewStorageScope.Ephemeral) {
+/** Used at both native IPC and saved-editor boundaries. */
+export function validateBrowserViewSessionOptions(value: unknown): IBrowserViewSessionOptions {
+	const session = exactRecord(value, ['scope'], 'browser session', ['affinity', 'network']);
+	const { scope, affinity } = session;
+	if (!Object.values(BrowserViewStorageScope).includes(scope as BrowserViewStorageScope)) {
 		throw new Error('Invalid browser storage scope');
 	}
-	return { scope: session.scope };
+	if (affinity !== undefined && (typeof affinity !== 'string' || !affinity.trim() || affinity.length > 32768)) {
+		throw new Error('Invalid browser storage affinity');
+	}
+	if (scope === BrowserViewStorageScope.Global) {
+		if (affinity !== undefined || session.network !== undefined) { throw new Error('Global browser storage cannot use a network or affinity'); }
+		return { scope };
+	}
+	const network = session.network === undefined ? undefined : validateBrowserViewNetwork(session.network);
+	const routing = network ? { network } : {};
+	if (scope === BrowserViewStorageScope.Agent) {
+		if (typeof affinity !== 'string' || !affinity.trim()) { throw new Error('Invalid browser storage affinity'); }
+		return { scope, affinity, ...routing };
+	}
+	if (scope === BrowserViewStorageScope.Workspace) {
+		return { scope, ...(affinity !== undefined ? { affinity: affinity as string } : {}), ...routing };
+	}
+	if (affinity !== undefined) { throw new Error('Ephemeral browser storage cannot use an affinity'); }
+	return { scope: BrowserViewStorageScope.Ephemeral, ...routing };
+}
+
+export function validateBrowserViewNetwork(value: unknown): IBrowserViewNetwork {
+	const network = exactRecord(value, ['authority'], 'browser network', ['root']);
+	if (typeof network.authority !== 'string' || !network.authority.trim() || network.authority.length > 32768 || /[\x00-\x20\x7f]/u.test(network.authority)) {
+		throw new Error('Invalid browser network authority');
+	}
+	if (network.root !== undefined && (typeof network.root !== 'string' || network.root.length > 32768 || network.root.includes('\0'))) { throw new Error('Invalid browser network root'); }
+	return { authority: network.authority, ...(network.root !== undefined ? { root: network.root as string } : {}) };
 }
 
 export function validateBrowserViewTargetRequest(

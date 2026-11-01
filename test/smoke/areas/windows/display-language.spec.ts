@@ -197,7 +197,7 @@ test('display language startup recovers from missing and damaged Ash packs and r
 		await expect(workbench.page.getByRole('button', { name: 'Manage', exact: true })).toBeVisible();
 		await workbench.settingsEditor.openUserSettingsUI();
 		const settings = workbench.settingsEditor.element;
-		await settings.locator('[data-settings-category-id="general"]').click();
+		await settings.locator('[data-settings-category-id="display-language"]').click();
 		const languageLabel = state === 'restored' ? 'Langue de l’interface' : 'Interface language';
 		await expect(settings.getByRole('combobox', { name: languageLabel, exact: true })).toHaveText('fr-CA');
 		await settings.locator('.ash-modal-editor-close').click();
@@ -208,7 +208,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	let settings = page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await settings.locator('[data-settings-category-id="display-language"]').click();
 	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox', { name: 'Interface language', exact: true });
 	await language.focus();
 	await language.press('Enter');
@@ -265,7 +265,7 @@ test('display language stays unchanged until restart and initializes Chinese com
 	await page.keyboard.press('Escape');
 	await page.keyboard.press('ControlOrMeta+,');
 	settings = page.getByRole('dialog', { name: 'Ash 设置' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await settings.locator('[data-settings-category-id="display-language"]').click();
 	const chinese = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox', { name: '界面语言', exact: true });
 	await expect(chinese).toHaveText('简体中文');
 	const search = settings.getByRole('searchbox');
@@ -340,7 +340,7 @@ test('command palette saves and clears a pending display language without changi
 	await workbench.quickaccess.runCommand('workbench.action.clearLocalePreference');
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await settings.locator('[data-settings-category-id="display-language"]').click();
 	await expect(settings.getByRole('combobox', { name: 'Interface language', exact: true })).toHaveText('English');
 });
 

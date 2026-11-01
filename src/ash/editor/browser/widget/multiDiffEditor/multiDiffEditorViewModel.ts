@@ -3,6 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCodeEditorViewState, type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
 import { type DiffEditorItemViewState } from './diffEditorItemTemplate.js';
+import { Range } from '../../../common/core/range.js';
 
 export interface MultiDiffEditorLocation {
 	readonly itemId: string;
@@ -11,12 +12,14 @@ export interface MultiDiffEditorLocation {
 
 export interface MultiDiffEditorViewState {
 	readonly scrollTop: number;
+	readonly scrollAnchor?: { readonly itemId: string; readonly offset: number; };
 	readonly activeItemId?: string;
 	readonly collapsedItemIds: readonly string[];
 	readonly itemViewStates: readonly {
 		readonly id: string;
 		readonly original: CodeEditorViewState | null;
 		readonly modified: CodeEditorViewState | null;
+		readonly preview?: DiffEditorItemViewState['preview'];
 	}[];
 }
 
@@ -102,7 +105,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 			...(this.activeItemId ? { activeItemId: this.activeItemId } : {}),
 			collapsedItemIds: [...this.collapsedItemIds],
 			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) =>
-				state.original || state.modified ? [{ id, ...state }] : []),
+				state.original || state.modified || state.preview ? [{ id, ...state }] : []),
 		};
 	}
 
@@ -112,7 +115,9 @@ export class MultiDiffEditorViewModel extends Disposable {
 		for (const id of value.collapsedItemIds) if (this.itemIds.has(id)) this.collapsedItemIds.add(id);
 		this.itemViewStates.clear();
 		for (const state of value.itemViewStates) {
-			if (this.itemIds.has(state.id)) this.itemViewStates.set(state.id, state);
+			if (this.itemIds.has(state.id)) this.itemViewStates.set(state.id, {
+				...state, ...(state.preview ? { preview: { ...state.preview, range: Range.lift(state.preview.range) } } : {}),
+			});
 		}
 		this.selectedChange = undefined;
 		this.activeItemId = value.activeItemId && this.itemIds.has(value.activeItemId) ? value.activeItemId : undefined;
@@ -125,6 +130,8 @@ function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorVie
 	if (!value || typeof value !== 'object') return false;
 	const state = value as Partial<MultiDiffEditorViewState>;
 	return isFiniteNumber(state.scrollTop) && state.scrollTop >= 0
+		&& (state.scrollAnchor === undefined || state.scrollAnchor !== null && typeof state.scrollAnchor === 'object'
+			&& typeof state.scrollAnchor.itemId === 'string' && isFiniteNumber(state.scrollAnchor.offset) && state.scrollAnchor.offset >= 0)
 		&& (state.activeItemId === undefined || typeof state.activeItemId === 'string')
 		&& Array.isArray(state.collapsedItemIds) && state.collapsedItemIds.every((id: unknown) => typeof id === 'string')
 		&& Array.isArray(state.itemViewStates) && state.itemViewStates.every((item: unknown) => {
@@ -132,6 +139,9 @@ function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorVie
 			const entry = item as MultiDiffEditorViewState['itemViewStates'][number];
 			return typeof entry.id === 'string'
 				&& (entry.original === null || isCodeEditorViewState(entry.original))
-				&& (entry.modified === null || isCodeEditorViewState(entry.modified));
+				&& (entry.modified === null || isCodeEditorViewState(entry.modified))
+				&& (entry.preview === undefined || (entry.preview.side === 'original' || entry.preview.side === 'modified')
+					&& Range.isIRange(entry.preview.range)
+					&& [entry.preview.range.startLineNumber, entry.preview.range.startColumn, entry.preview.range.endLineNumber, entry.preview.range.endColumn].every(value => Number.isSafeInteger(value) && value > 0));
 		});
 }

@@ -1,3 +1,4 @@
+import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
@@ -2663,6 +2664,47 @@ suite('chatInput browser component', () => {
 				await expect(page.getByRole('tooltip')).toBeHidden();
 				await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' })).toBeVisible();
 			});
+
+			test(`Context usage details opens Usage settings and preserves keyboard focus in ${locale} ${theme}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const ring = page.locator('.ash-chat-context-usage-button');
+				await ring.focus();
+				await page.keyboard.press('Enter');
+				const details = page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' });
+				const breakdown = details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' });
+				await expect(details).toBeFocused();
+				await expect(details.getByRole('button')).toHaveCount(1);
+				await expect(details.locator('.ash-chat-context-details-notes, .ash-chat-context-details-close')).toHaveCount(0);
+				await expect(details.getByRole('table')).toBeVisible();
+				const bounds = (await details.boundingBox())!;
+				const anchor = (await ring.boundingBox())!;
+				expect(bounds.y >= anchor.y + anchor.height || bounds.y + bounds.height <= anchor.y).toBe(true);
+				expect(bounds.y).toBeGreaterThanOrEqual(0);
+				expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+				await page.keyboard.press('Tab');
+				await expect(breakdown).toBeFocused();
+				await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 600));
+				await expect(details.locator('.ash-chat-context-details-summary')).toContainText('60%');
+				await expect(breakdown).toBeFocused();
+				await details.screenshot({ path: browserTests.info.outputPath('context-usage.png') });
+				await breakdown.press('Enter');
+				await expect(details).toBeHidden();
+				await expect(page.getByLabel('Opened sources')).toContainText('"section":"chat-usage"');
+				await expect(ring).toBeFocused();
+				await ring.press('Enter');
+				await expect(details).toBeVisible();
+				await page.keyboard.press('Escape');
+				await expect(details).toBeHidden();
+				await expect(ring).toBeFocused();
+				await ring.click();
+				const input = page.locator('.ash-chat-textarea-input');
+				await input.click({ position: { x: 8, y: 8 } });
+				await expect(details).toBeHidden();
+				await expect(input).toBeFocused();
+				await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+			});
 		}
 	}
 
@@ -2723,10 +2765,14 @@ suite('chatInput browser component', () => {
 				const conversationBackground = { light: 'rgb(248, 248, 248)', dark: 'rgb(37, 37, 38)', hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)' }[theme]!;
 				await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
 				await expect(page.locator('.ash-chat-view')).toHaveCSS('background-color', conversationBackground);
-				await page.locator('main').evaluate(element => { element.style.setProperty('--ash-auxiliaryBar-background', 'rgb(250, 245, 240)'); });
+				// The view resolves the theme token; its descendants inherit the computed background.
+				await page.locator('.ash-chat-view').evaluate(element => { element.style.setProperty('--ash-auxiliaryBar-background', 'rgb(250, 245, 240)'); });
+				await expect(page.locator('.ash-chat-view')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
+				await expect(page.locator('.ash-chat-pane-host')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
 				await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
 				await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
-				await page.locator('main').evaluate(element => { element.style.removeProperty('--ash-auxiliaryBar-background'); });
+				await page.locator('.ash-chat-view').evaluate(element => { element.style.removeProperty('--ash-auxiliaryBar-background'); });
+				await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
 
 				const composer = await page.locator('.ash-chat-input-container').boundingBox();
 				const footerBounds = await footer.boundingBox();
@@ -2794,7 +2840,7 @@ suite('chatInput browser component', () => {
 				await expect(context).toHaveAttribute('aria-expanded', 'false');
 				await context.click();
 				await page.keyboard.press('Tab');
-				await expect(details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' })).toBeFocused();
+				await expect(details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' })).toBeFocused();
 				await page.keyboard.press('Tab');
 				await expect(details).toBeHidden();
 				await context.focus();
@@ -2862,12 +2908,13 @@ suite('chatInput browser component', () => {
 				await expect(ring.locator('.ash-chat-context-usage-value')).toHaveAttribute('stroke-dasharray', '50 50');
 				await context.click();
 				await expect(details).toBeVisible();
-				const close = details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' });
-				await close.focus();
+				const breakdown = details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' });
+				await breakdown.focus();
 				await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 600));
 				await expect(details.locator('.ash-chat-context-details-summary')).toContainText('60%');
-				await expect(close).toBeFocused();
-				await close.click();
+				await expect(breakdown).toBeFocused();
+				await breakdown.click();
+				await expect(page.getByLabel('Opened sources')).toContainText('chat-usage');
 				await expect(details).toBeHidden();
 				await expect(context).toBeFocused();
 				await context.click();
@@ -3265,7 +3312,7 @@ suite('chatInput browser component', () => {
 		}
 		const modes: Record<string, { icon: string; color?: string; }> = {
 			Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
-			Multitask: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'chat-4', color: '--ash-charts-green' },
+			Multitask: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'ask', color: '--ash-charts-green' },
 		};
 		for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
 			await mode.press('ArrowDown');
@@ -4155,4 +4202,118 @@ suite('chatInput browser component', () => {
 		});
 		expect(commandRightInset).toBeLessThanOrEqual(2);
 	});
+	for (const locale of ['en', 'zh-CN']) test(`Picker ports keep drafts and cannot reopen a retired input (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/chatInput.html?locale=${locale}&modelSet=multiple`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-textarea-input');
+		await input.fill('Preserve picker draft');
+		const before = await page.evaluate(() => window.ashChatInputIntegration.modelState());
+		await page.evaluate(() => window.ashChatInputIntegration.openModels());
+		await expect(page.locator('.ash-chat-model-picker')).toBeVisible();
+		await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+		await expect(page.locator('.ash-chat-model-picker')).toBeHidden();
+		await page.evaluate(() => window.ashChatInputIntegration.openModels());
+		await expect(page.locator('.ash-chat-model-picker')).toBeHidden();
+		await page.evaluate(() => window.ashChatInputIntegration.setVisible(true));
+		await expect(input).toHaveValue('Preserve picker draft');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(before);
+	});
+
+});
+
+
+for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]) {
+	test(`Explicit ${queue} carries composer context and restores a failed unedited draft`, async () => {
+		const calls: unknown[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'agent', {
+			send: async (text, mode, skills, contexts, signal, intent) => {
+				calls.push({ text, mode, skills, contexts, signal, intent });
+				throw new Error('Synthetic explicit submission failed');
+			},
+		});
+		part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+		edit(part, 'Preserve this draft');
+		part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+		const before = await part.captureDraft();
+		await assert.rejects(part.acceptInput(undefined, { queue }), /Synthetic explicit submission failed/);
+		assert.equal(calls.length, 1);
+		const call = calls[0] as { intent: ChatRequestQueueKind; contexts: ChatContextAttachment[]; signal: AbortSignal; };
+		assert.equal(call.intent, queue);
+		assert.equal(call.contexts[0].id, 'note');
+		assert.equal(call.signal.aborted, false);
+		assert.equal((await part.captureDraft())?.draft.text, before?.draft.text);
+		assert.equal((await part.captureDraft())?.draft.contexts?.[0].id, 'note');
+	});
+}
+
+test('Explicit queue intent cannot execute a slash command or change a hidden draft', async () => {
+	let commands = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async () => { commands++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, '/config');
+	await assert.rejects(part.acceptInput(undefined, { queue: ChatRequestQueueKind.Queued }), /not slash commands/);
+	assert.equal(part.element.querySelector('textarea')!.value, '/config');
+	assert.equal(commands, 0);
+	part.setVisible(false);
+	await part.acceptInput('Do not replace hidden draft', { queue: ChatRequestQueueKind.Queued });
+	assert.equal(part.element.querySelector('textarea')!.value, '/config');
+});
+
+
+test('Retired answer forms cannot resolve a replacement interaction or hidden composer', async () => {
+	const replies: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { replies.push(response); } });
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'first', request: { type: 'userInput', request: { questions: [{ id: 'answer', header: 'Answer', question: 'Question', allowFreeForm: true }] } } }
+	};
+	part.render(state);
+	const old = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;
+	old.querySelector('input')!.value = 'Old answer';
+	part.render({ ...state, interaction: { ...state.interaction!, requestId: 'next' } });
+	old.dispatchEvent(new browserEnvironment.window.Event('submit', { cancelable: true }));
+	assert.deepEqual(replies, []);
+	const current = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;
+	part.acceptElicitation();
+	assert.deepEqual(replies, []);
+	current.querySelector('input')!.value = 'Current answer'; part.acceptElicitation();
+	assert.deepEqual(replies, [{ type: 'userInput', response: { answers: { answer: { value: 'Current answer' } } } }]);
+	part.setVisible(false); current.requestSubmit();
+	assert.equal(replies.length, 1);
+});
+
+
+test('Approval ports use the displayed request identity and reject hidden, disabled and non-approval inputs', async () => {
+	const replies: { response: Parameters<ChatInputDelegate['resolveInteraction']>[0]; requestId?: string; }[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { replies.push({ response, requestId }); } });
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'displayed', request: { type: 'approval', request: { reason: 'Review action', capabilities: [] } } }
+	};
+	part.render(state); await part.acceptActiveToolConfirmation(); await part.skipActiveToolConfirmation();
+	assert.deepEqual(replies, [
+		{ requestId: 'displayed', response: { type: 'approval', response: { decision: 'approveOnce' } } },
+		{ requestId: 'displayed', response: { type: 'approval', response: { decision: 'decline' } } },
+	]);
+	part.render({ ...state, aiDisabled: true }); await part.acceptActiveToolConfirmation();
+	part.render({ ...state, interaction: undefined }); await part.skipActiveToolConfirmation();
+	part.render(state); part.setVisible(false); await part.acceptActiveToolConfirmation();
+	assert.equal(replies.length, 2);
+});
+
+
+test('Confirmation focus toggles through the owning input without answering or changing its draft', () => {
+	let answered = false;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async () => { answered = true; } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'focus-only', request: { type: 'approval', request: { reason: 'Review action', capabilities: [] } } }
+	});
+	edit(part, 'Keep this draft');
+	const decline = part.element.querySelector<HTMLButtonElement>('.ash-chat-interaction button')!; decline.scrollIntoView = () => { };
+	assert.equal(part.focusConfirmation(), true); assert.equal(document.activeElement, decline);
+	assert.equal(part.focusConfirmation(), true); assert.equal(document.activeElement, part.element.querySelector('textarea'));
+	assert.equal(answered, false); assert.equal(part.element.querySelector('textarea')!.value, 'Keep this draft');
+	part.setVisible(false); assert.equal(part.focusConfirmation(), false);
 });

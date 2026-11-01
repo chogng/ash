@@ -56,6 +56,7 @@ pub struct ExtensionPackageManager {
     providers: Mutex<ExtensionSources>,
     store: Store,
     runtime: Mutex<RuntimeState>,
+    update_check: Mutex<()>,
     lease_sequence: AtomicU64,
     session_nonce: String,
 }
@@ -63,10 +64,59 @@ pub struct ExtensionPackageManager {
 #[derive(Clone, Default, Deserialize, Serialize)]
 struct DurableState {
     #[serde(default)]
+    update_policy: ExtensionUpdatePolicy,
+    #[serde(default)]
+    update_policy_revision: u64,
+    #[serde(default)]
     sources: BTreeMap<ash_utils_plugins::ExtensionSourceId, crate::AshExtensionSourceConfig>,
     #[serde(default)]
     source_revision: u64,
     installations: BTreeMap<String, InstallationRecord>,
+}
+
+/// Profile-wide registry update policy; bundled product packages follow product updates.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionUpdatePolicy {
+    pub auto_check_updates: bool,
+    pub auto_update: bool,
+}
+
+impl Default for ExtensionUpdatePolicy {
+    fn default() -> Self {
+        Self {
+            auto_check_updates: true,
+            auto_update: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AvailableExtensionUpdate {
+    pub installation_id: String,
+    pub current: PackageRef,
+    pub available: PackageRef,
+}
+
+/// A reconstructable check result plus the authoritative persisted policy and revision.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtensionUpdatesSnapshot {
+    pub revision: u64,
+    pub policy: ExtensionUpdatePolicy,
+    pub checking: bool,
+    pub last_checked_at: Option<u64>,
+    pub available: Vec<AvailableExtensionUpdate>,
+    pub updated: Vec<PackageRef>,
+    pub failures: Vec<String>,
+}
+
+#[derive(Default)]
+struct UpdateCheckState {
+    checking: bool,
+    last_checked_at: Option<u64>,
+    available: Vec<AvailableExtensionUpdate>,
+    updated: Vec<PackageRef>,
+    failures: Vec<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -78,6 +128,10 @@ pub(crate) struct InstallationRecord {
     pub capabilities: Vec<CapabilityRecord>,
     #[serde(default)]
     product_runtime_authority: Option<String>,
+    // Content-derived installation IDs can be reused after uninstall/reinstall. In-flight
+    // updates must retain this process-local incarnation; no update survives a restart.
+    #[serde(skip)]
+    generation: u64,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -183,6 +237,7 @@ impl LocalCapabilitySource {
 #[derive(Default)]
 struct RuntimeState {
     durable: DurableState,
+    update_check: UpdateCheckState,
     leases: BTreeMap<String, LeaseRecord>,
     generation: u64,
     subscribers: Vec<mpsc::Sender<u64>>,
@@ -190,6 +245,11 @@ struct RuntimeState {
 
 struct LeaseRecord {
     lease: CapabilityLease,
+}
+
+enum InstallationOperation<'a> {
+    Install,
+    Update(&'a InstallationRecord),
 }
 
 impl ExtensionPackageManager {
@@ -275,6 +335,11 @@ impl ExtensionPackageManager {
     ) -> Result<Self, ExtensionsClientError> {
         let store = Store::open(state_root.into())?;
         let mut durable: DurableState = store.read_state()?;
+        if durable.update_policy.auto_update && !durable.update_policy.auto_check_updates {
+            return Err(ExtensionsClientError::local_storage(
+                "invalid persisted extension update policy",
+            ));
+        }
         crate::sources::restore_sources(&mut providers, &durable.sources, &store)?;
         durable
             .installations
@@ -324,10 +389,12 @@ impl ExtensionPackageManager {
             store,
             runtime: Mutex::new(RuntimeState {
                 durable,
+                update_check: UpdateCheckState::default(),
                 leases: BTreeMap::new(),
                 generation: 1,
                 subscribers: Vec::new(),
             }),
+            update_check: Mutex::new(()),
             lease_sequence: AtomicU64::new(1),
             session_nonce,
         })
@@ -348,6 +415,178 @@ impl ExtensionPackageManager {
     /// Identifies this process-local change stream for profile-level notification deduplication.
     pub fn change_source_id(&self) -> &str {
         &self.session_nonce
+    }
+
+    pub fn updates(&self) -> Result<ExtensionUpdatesSnapshot, ExtensionsClientError> {
+        let runtime = self.lock_runtime()?;
+        Ok(ExtensionUpdatesSnapshot {
+            revision: runtime.durable.update_policy_revision,
+            policy: runtime.durable.update_policy.clone(),
+            checking: runtime.update_check.checking,
+            last_checked_at: runtime.update_check.last_checked_at,
+            available: runtime.update_check.available.clone(),
+            updated: runtime.update_check.updated.clone(),
+            failures: runtime.update_check.failures.clone(),
+        })
+    }
+
+    pub fn set_update_policy(
+        &self,
+        policy: ExtensionUpdatePolicy,
+        expected_revision: u64,
+    ) -> Result<ExtensionUpdatesSnapshot, ExtensionsClientError> {
+        if policy.auto_update && !policy.auto_check_updates {
+            return Err(ExtensionsClientError::invalid_request(
+                "automatic updates require automatic checks",
+            ));
+        }
+        let mut runtime = self.lock_runtime()?;
+        if runtime.durable.update_policy_revision != expected_revision {
+            return Err(ExtensionsClientError::invalid_request(
+                "extension update policy revision conflict",
+            ));
+        }
+        let mut durable = runtime.durable.clone();
+        durable.update_policy = policy;
+        durable.update_policy_revision = durable
+            .update_policy_revision
+            .checked_add(1)
+            .ok_or_else(ExtensionsClientError::storage)?;
+        self.store.write_state(&durable)?;
+        runtime.durable = durable;
+        publish_change(&mut runtime)?;
+        drop(runtime);
+        self.updates()
+    }
+
+    /// Checks signed registries without granting execution to a new package identity.
+    pub fn check_for_updates(&self) -> Result<ExtensionUpdatesSnapshot, ExtensionsClientError> {
+        let _check = self
+            .update_check
+            .lock()
+            .map_err(|_| ExtensionsClientError::storage())?;
+        self.check_updates_now(|| false)
+    }
+
+    /// Called by the single profile worker. Failed sources are retried at the next hourly check.
+    pub fn check_for_updates_if_due(
+        &self,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), ExtensionsClientError> {
+        let _check = match self.update_check.try_lock() {
+            Ok(check) => check,
+            Err(std::sync::TryLockError::WouldBlock) => return Ok(()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                return Err(ExtensionsClientError::storage());
+            }
+        };
+        let runtime = self.lock_runtime()?;
+        let now = update_time()?;
+        if cancelled.load(Ordering::Acquire)
+            || !runtime.durable.update_policy.auto_check_updates
+            || runtime
+                .update_check
+                .last_checked_at
+                .is_some_and(|last| now.saturating_sub(last) < 3_600_000)
+        {
+            return Ok(());
+        }
+        drop(runtime);
+        self.check_updates_now(|| cancelled.load(Ordering::Acquire))
+            .map(|_| ())
+    }
+
+    fn check_updates_now(
+        &self,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<ExtensionUpdatesSnapshot, ExtensionsClientError> {
+        let installations = {
+            let mut runtime = self.lock_runtime()?;
+            runtime.update_check = UpdateCheckState {
+                checking: true,
+                last_checked_at: Some(update_time()?),
+                ..Default::default()
+            };
+            publish_change(&mut runtime)?;
+            runtime
+                .durable
+                .installations
+                .values()
+                .filter(|record| {
+                    record.state == InstallationState::Installed
+                        && record.product_runtime_authority.is_none()
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let mut available = Vec::new();
+        let mut updated = Vec::new();
+        let mut failures = Vec::new();
+        for installation in installations {
+            if cancelled() {
+                break;
+            }
+            let candidate = match self.get(GetPackageRequest {
+                package_id: installation.package.id.clone(),
+                version: None,
+            }) {
+                Ok(details) => details.package,
+                Err(_) => {
+                    failures.push(installation.package.id.clone());
+                    continue;
+                }
+            };
+            let (Ok(current), Ok(next)) = (
+                semver::Version::parse(&installation.package.version),
+                semver::Version::parse(&candidate.version),
+            ) else {
+                failures.push(installation.package.id.clone());
+                continue;
+            };
+            if next <= current || !next.pre.is_empty() {
+                continue;
+            }
+            let apply = {
+                let runtime = self.lock_runtime()?;
+                // A concurrent uninstall or manual update retires this exact installation.
+                let current = runtime
+                    .durable
+                    .installations
+                    .get(&installation.installation_id);
+                if !current.is_some_and(|record| {
+                    record.package == installation.package
+                        && record.generation == installation.generation
+                        && record.state == InstallationState::Installed
+                }) {
+                    continue;
+                }
+                runtime.durable.update_policy.auto_update
+            };
+            let update = AvailableExtensionUpdate {
+                installation_id: installation.installation_id.clone(),
+                current: installation.package.clone(),
+                available: candidate.clone(),
+            };
+            if apply && !cancelled() {
+                match self.update_installation(&installation, Some(candidate.version)) {
+                    Ok(installed) => updated.push(installed.package),
+                    Err(_) => {
+                        failures.push(installation.package.id);
+                        available.push(update);
+                    }
+                }
+            } else {
+                available.push(update);
+            }
+        }
+        let mut runtime = self.lock_runtime()?;
+        runtime.update_check.checking = false;
+        runtime.update_check.available = available;
+        runtime.update_check.updated = updated;
+        runtime.update_check.failures = failures;
+        publish_change(&mut runtime)?;
+        drop(runtime);
+        self.updates()
     }
 
     /// Returns verified sources of one capability kind for trusted local runtime composition.
@@ -475,6 +714,7 @@ impl ExtensionPackageManager {
     fn install_downloaded(
         &self,
         downloaded: &dyn ExtensionPackagePayload,
+        operation: InstallationOperation<'_>,
     ) -> Result<InstalledPackage, ExtensionsClientError> {
         let artifact = self.store.materialize(downloaded)?;
         self.ensure_supported_package(&artifact.package)?;
@@ -501,10 +741,8 @@ impl ExtensionPackageManager {
             })
             .collect::<Vec<_>>();
         let mut installation = InstallationRecord {
-            product_runtime_authority: {
-                let runtime = self.lock_runtime()?;
-                self.product_runtime_authority(&artifact.package.id, &runtime.durable)?
-            },
+            product_runtime_authority: None,
+            generation: 0,
             installation_id: installation_id.clone(),
             package: artifact.package,
             state: InstallationState::Installed,
@@ -515,15 +753,69 @@ impl ExtensionPackageManager {
                 activation::descriptor(&self.store, &installation.package, capability)?;
         }
         let mut runtime = self.lock_runtime()?;
-        let installation = runtime
-            .durable
+        // Revalidate and retire the old installation in the same transaction that publishes
+        // its replacement. Downloading or materializing bytes alone never reinstalls a package.
+        if let InstallationOperation::Update(expected) = &operation {
+            let current = runtime
+                .durable
+                .installations
+                .get(&expected.installation_id)
+                .ok_or_else(installation_not_found)?;
+            if current.package != expected.package || current.generation != expected.generation {
+                return Err(installation_not_found());
+            }
+            if current.state != InstallationState::Installed {
+                return Err(installation_in_use());
+            }
+        }
+        installation.product_runtime_authority =
+            self.product_runtime_authority(&installation.package.id, &runtime.durable)?;
+        installation.generation = runtime.generation;
+        let mut durable = runtime.durable.clone();
+        let installation = durable
             .installations
             .entry(installation_id)
             .or_insert(installation)
             .clone();
-        self.store.write_state(&runtime.durable)?;
+        if let InstallationOperation::Update(previous) = operation
+            && previous.installation_id != installation.installation_id
+        {
+            let in_use = runtime
+                .leases
+                .values()
+                .any(|lease| lease.lease.installation_id == previous.installation_id);
+            if in_use {
+                durable
+                    .installations
+                    .get_mut(&previous.installation_id)
+                    .expect("update source was checked under the same lock")
+                    .state = InstallationState::PendingRemoval;
+            } else {
+                durable.installations.remove(&previous.installation_id);
+            }
+        }
+        self.store.write_state(&durable)?;
+        runtime.durable = durable;
         publish_change(&mut runtime)?;
         Ok(installation.public())
+    }
+
+    fn update_installation(
+        &self,
+        installation: &InstallationRecord,
+        version: Option<String>,
+    ) -> Result<InstalledPackage, ExtensionsClientError> {
+        if installation.state != InstallationState::Installed {
+            return Err(installation_in_use());
+        }
+        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
+            package_id: installation.package.id.clone(),
+            version,
+        })?;
+        self.install_downloaded(
+            downloaded.as_ref(),
+            InstallationOperation::Update(installation),
+        )
     }
 
     fn lock_runtime(
@@ -686,36 +978,23 @@ impl ExtensionPackageService for ExtensionPackageManager {
             package_id: request.package_id,
             version: request.version,
         })?;
-        self.install_downloaded(downloaded.as_ref())
+        self.install_downloaded(downloaded.as_ref(), InstallationOperation::Install)
     }
 
     fn update(
         &self,
         request: UpdatePackageRequest,
     ) -> Result<InstalledPackage, ExtensionsClientError> {
-        let package_id = {
+        let installation = {
             let runtime = self.lock_runtime()?;
             runtime
                 .durable
                 .installations
                 .get(&request.installation_id)
                 .ok_or_else(installation_not_found)?
-                .package
-                .id
                 .clone()
         };
-        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
-            package_id,
-            version: request.version,
-        })?;
-        let installed = self.install_downloaded(downloaded.as_ref())?;
-        if installed.installation_id != request.installation_id {
-            self.uninstall(UninstallPackageRequest {
-                installation_id: request.installation_id,
-                mode: UninstallMode::WhenUnused,
-            })?;
-        }
-        Ok(installed)
+        self.update_installation(&installation, request.version)
     }
 
     fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), ExtensionsClientError> {
@@ -910,6 +1189,14 @@ fn installation_not_found() -> ExtensionsClientError {
         "Extensions installation was not found",
         false,
     )
+}
+
+fn update_time() -> Result<u64, ExtensionsClientError> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .ok_or_else(ExtensionsClientError::storage)
 }
 
 fn publish_change(runtime: &mut RuntimeState) -> Result<(), ExtensionsClientError> {

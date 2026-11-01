@@ -30,7 +30,7 @@ import { ChatContextPickService } from '../../../../contrib/chat/browser/attachm
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
-const data: IBrowserEditorInputData = { id, url: 'https://example.test/', title: 'Saved page', session: { scope: BrowserViewStorageScope.Workspace } };
+const data: IBrowserEditorInputData = { version: 1, id, url: 'https://example.test/', title: 'Saved page', session: { scope: BrowserViewStorageScope.Workspace } };
 
 suite('Browser editor page model and restoration', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -173,11 +173,39 @@ suite('Browser editor page model and restoration', () => {
 	});
 });
 
+suite('Browser network restoration', () => {
+	test('migrates legacy window-network tabs once and pins new local snapshots', () => {
+		using f = fixture();
+		const serializer = f.instantiation.createInstance(BrowserEditorSerializer);
+		f.network = { authority: 'ssh+window-host' };
+		const { version: _version, ...legacy } = data;
+		const migrated = serializer.deserialize(legacy) as BrowserEditorInput;
+		assert.deepEqual(migrated.serialize().session, { scope: BrowserViewStorageScope.Workspace, network: f.network });
+		const local = serializer.deserialize(data) as BrowserEditorInput;
+		assert.deepEqual(local.serialize().session, data.session);
+	});
+
+	test('restores the saved network and workspace partition and rejects malformed routing', () => {
+		using f = fixture();
+		const serializer = f.instantiation.createInstance(BrowserEditorSerializer);
+		const session = { scope: BrowserViewStorageScope.Workspace as const, network: { authority: 'ssh+host-a' }, affinity: '["ssh+host-a","/project"]' };
+		const restored = serializer.deserialize({ ...data, session }) as BrowserEditorInput;
+		assert.deepEqual(restored.serialize().session, session);
+		for (const invalid of [
+			{ ...session, network: { authority: 'ssh+host-a', proxy: 'http://attacker' } },
+			{ ...session, network: { authority: '' } },
+			{ scope: BrowserViewStorageScope.Global, network: session.network },
+		]) {
+			assert.throws(() => serializer.deserialize({ ...data, session: invalid }));
+		}
+	});
+});
+
 function fixture() {
 	const store = new DisposableStore();
 	const events = store.add(new Emitter<BrowserViewEvent>());
 	const f = {
-		[Symbol.dispose]: () => store.dispose(), events, creations: 0, closed: 0,
+		[Symbol.dispose]: () => store.dispose(), events, creations: 0, closed: 0, network: undefined as { authority: string; } | undefined,
 		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { isDevToolsOpen: false, targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
@@ -198,6 +226,8 @@ function fixture() {
 		onDidChangeBrowserViews: Event.None,
 		initialize: async () => { }, getKnownBrowserViews: () => new Map(), getContextualBrowserViews: () => new Map(),
 		registerContextualFilter: () => Disposable.None, registerOpenHandler: () => Disposable.None,
+		registerNetworkResolver: () => Disposable.None, resolveNetwork: () => f.network,
+		replaceBrowserView: async input => input,
 		getOrCreateLazy: input, createBrowserView: async () => { throw new Error('Not used in serializer fixture'); },
 	});
 	return Object.assign(f, { service, instantiation, input });

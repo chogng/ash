@@ -245,11 +245,16 @@ impl Api {
                 let message = if error["name"] == "GitUnavailable" {
                     self.text("git.unavailable", &[])
                 } else {
-                    error["message"]
+                    let name = error["name"].as_str().unwrap_or("Unavailable");
+                    let message = error["message"]
                         .as_str()
                         .filter(|message| !message.is_empty())
-                        .or_else(|| error["name"].as_str())
-                        .unwrap_or("Unavailable")
+                        .unwrap_or(name);
+                    // RPC messages prefix diagnostics with their stable error name;
+                    // the typed name still determines cancellation below.
+                    message
+                        .strip_prefix(&format!("{name}: "))
+                        .unwrap_or(message)
                         .to_owned()
                 };
                 return Err(ExtensionError::new(
@@ -300,6 +305,61 @@ impl Api {
             self.text(key, &[]),
             token,
         )
+    }
+    pub fn command_error(
+        &self,
+        command: &str,
+        error: &ExtensionError,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        let _ = self
+            .output
+            .append_line(format!("[Git] {command}: {}", error.message));
+        // The current backend contract carries command diagnostics in its display
+        // message. Keep that envelope in the log, but summarize Git's own output.
+        let diagnostic = error
+            .message
+            .strip_prefix('`')
+            .and_then(|message| message.split_once("` failed with exit code "))
+            .and_then(|(command, failure)| {
+                let (_, stderr) = failure.split_once(": ")?;
+                (!stderr.trim().is_empty()).then_some((command, stderr))
+            });
+        let summary = diagnostic
+            .map_or(error.message.as_str(), |(_, stderr)| stderr)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("> husky"))
+            .map(|line| line.strip_prefix("error: ").unwrap_or(line))
+            .find(|line| !line.is_empty());
+        let message = summary.map_or_else(
+            || self.text("git.operationFailed", &[]),
+            |summary| self.text("git.commandFailed", &[summary]),
+        );
+        let mut buttons = vec![self.text("git.openGitLog", &[])];
+        if diagnostic.is_some() {
+            buttons.push(self.text("git.showCommandOutput", &[]));
+        }
+        let choice = self.editor(
+            json!({"method":"prompt","title":"Git","severity":"error",
+                "message":message,"buttons":buttons}),
+            Some(token),
+        )?;
+        if choice["selection"] == 0 {
+            self.output.show()?;
+        } else if choice["selection"] == 1
+            && let Some((command, stderr)) = diagnostic
+        {
+            self.editor(
+                json!({"method":"open","input":{
+                    "resource":format!("git-output:/git-error-{}", crate::commands::random_id()?),
+                    "label":self.text("git.commandOutput", &[]),"languageId":"plaintext",
+                    "initialText":format!("> {command}\n{stderr}"),"readOnly":true
+                },"options":{"pinned":true}}),
+                Some(token),
+            )?;
+        }
+        Ok(())
     }
     pub fn status(
         &self,
@@ -380,6 +440,31 @@ impl Api {
             token,
         )?)
     }
+    pub fn change_files(
+        &self,
+        repository: &Repository,
+        paths: &[&crate::paths::RepoPath],
+        comparison: crate::model::Comparison,
+        token: &CancellationToken,
+    ) -> Result<Vec<crate::model::FileComparison>, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        struct Response {
+            files: Vec<crate::model::FileComparison>,
+        }
+        let response: Response = decode(self.repository_request(
+            repository,
+            "changeFiles",
+            json!({"paths": paths, "comparison": comparison}),
+            token,
+        )?)?;
+        if response.files.len() != paths.len() {
+            return Err(invalid(
+                "Git comparison batch did not match its requested paths",
+            ));
+        }
+        Ok(response.files)
+    }
+
     pub fn index_diff(
         &self,
         repository: &Repository,

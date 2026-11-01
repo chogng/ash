@@ -20,6 +20,8 @@ interface ViewCustomizations {
 
 interface ViewDescriptorServiceOptions {
 	readonly registry?: WorkbenchViewRegistry;
+	/** A host-local catalog must not overwrite the window's view customizations. */
+	readonly customizationsStorageKey?: string;
 	/** A host may replace a view's presentation without registering its actions again. */
 	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
 	/** Initial window state, decoded by the host's persistence boundary. */
@@ -76,7 +78,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 		this._register(this.registry.onDidRegisterViews(() => this.syncViewModels()));
 		this._register(this.registry.onDidDeregisterViews(() => this.syncViewModels()));
 		this._register(storage.onDidChangeValue(event => {
-			if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewCustomizationsKey) return;
+			if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== (this.options.customizationsStorageKey ?? viewCustomizationsKey)) return;
 			try {
 				this.restoreCustomizations();
 				this.syncViewModels();
@@ -225,7 +227,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 		for (const location of this.containerOrders.keys()) {
 			this.setViewContainerOrder(location, this.registry.getViewContainers(location).map(container => container.id));
 		}
-		this.storage.remove(viewCustomizationsKey, StorageScope.PROFILE);
+		this.storage.remove(this.options.customizationsStorageKey ?? viewCustomizationsKey, StorageScope.PROFILE);
 	}
 
 	private syncViewModels(): void {
@@ -259,7 +261,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	private restoreCustomizations(): void {
-		const raw = this.storage.get(viewCustomizationsKey, StorageScope.PROFILE);
+		const raw = this.storage.get(this.options.customizationsStorageKey ?? viewCustomizationsKey, StorageScope.PROFILE);
 		const state = parseCustomizations(raw);
 		this.viewLocations.clear();
 		this.generatedLocations.clear();
@@ -275,7 +277,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	private saveCustomizations(): void {
-		this.storage.store(viewCustomizationsKey, JSON.stringify({ viewLocations: Object.fromEntries(this.viewLocations), generatedViewContainerLocations: Object.fromEntries(this.generatedLocations) }), StorageScope.PROFILE, StorageTarget.USER);
+		this.storage.store(this.options.customizationsStorageKey ?? viewCustomizationsKey, JSON.stringify({ viewLocations: Object.fromEntries(this.viewLocations), generatedViewContainerLocations: Object.fromEntries(this.generatedLocations) }), StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	private projectContainer(container: IViewContainerDescriptor): IViewContainerDescriptor {

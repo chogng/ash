@@ -160,7 +160,7 @@ export class BrowserEditorZoomSupport extends Disposable {
 		let selected: number | undefined;
 		using pending = toDisposable(() => picker.hide());
 		await new Promise<void>(resolve => {
-			listeners.add(picker.onDidHide(resolve));
+			listeners.add(picker.onDidHide(() => resolve()));
 			listeners.add(picker.onDidAccept(() => { selected = picker.selectedItems[0]?.index; picker.hide(); }));
 			this.pendingPicker.value = pending;
 			picker.show();

@@ -15,7 +15,11 @@ import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
 import { ChatGPTInputWidget } from './chatGPTInputWidget.js';
 import './media/chatGPTWidget.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../../chat/common/constants.js';
+import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfiguration } from '../../chat/common/welcomePhrases.js';
 
 export class ChatGPTWidget extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
@@ -33,16 +37,25 @@ export class ChatGPTWidget extends Disposable {
 	private readonly status = this.element('span', 'ash-chatgpt-status');
 	private readonly jumpButton: HTMLButtonElement;
 	private followOutput = true;
-	private readonly loading: LoadingSkeleton;
+	private welcomeDraftId: string | undefined;
+	private welcomePhraseIndex = 0;
+	private welcomePhraseAnnounced = false;
+	private visible = false;
 
-	constructor(private readonly root: HTMLElement, @IChatGPTService private readonly chat: IChatGPTService, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		private readonly root: HTMLElement,
+		@IChatGPTService private readonly chat: IChatGPTService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IStorageService private readonly storage: IStorageService,
+		@IAccessibilityService private readonly accessibility: IAccessibilityService,
+	) {
 		super();
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
 		const main = this.element('main', 'ash-chatgpt-main');
 		this.scroll.append(this.welcome, this.messages);
-		this.loading = this._register(new LoadingSkeleton(this.scroll, localize('sessions.loadingConversation', 'Loading conversation…'), 'transcript', 3));
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
 		this.messages.setAttribute('aria-live', 'off');
@@ -67,6 +80,12 @@ export class ChatGPTWidget extends Disposable {
 		main.append(this.scroll, this.jumpButton, footer);
 		root.append(main);
 		this._register(autorun(reader => this.render(this.chat.state.read(reader))));
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if ([NEW_SESSION_WELCOME_PHRASES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_MESSAGES_SETTING, 'accessibility.verbosity.newSessionWelcome'].some(key => event.affectsConfiguration(key))) {
+				this.renderWelcome(this.chat.state.get());
+			}
+		}));
+		this._register(this.accessibility.onDidChangeScreenReaderOptimized(() => this.renderWelcome(this.chat.state.get())));
 		this._register(toDisposable(() => { for (const item of this.rendered.values()) { item.markdown?.dispose(); item.attachments?.dispose(); } }));
 	}
 
@@ -82,12 +101,42 @@ export class ChatGPTWidget extends Disposable {
 
 	public focus(): void { this.input.focus(); }
 	public setVisible(visible: boolean): void {
+		this.visible = visible;
 		this.input.setVisible(visible);
 		for (const row of this.rendered.values()) row.attachments?.setVisible(visible);
+		this.renderWelcome(this.chat.state.get());
 	}
 	public setScrollingOptimization(enabled: boolean): void { this.root.classList.toggle('optimize-scrolling', enabled); }
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
+
+	private renderWelcome(state: ChatGPTState): void {
+		// parentId identifies the service-owned draft until its first message. Changes
+		// to input, catalog or attachments must not consume another welcome phrase.
+		const isNew = !state.conversationId && state.messages.length === 0 && state.loading?.kind !== 'conversation';
+		if (isNew && this.welcomeDraftId !== state.parentId) {
+			this.welcomeDraftId = state.parentId;
+			this.welcomePhraseAnnounced = false;
+			const key = 'agentSessions.newSession.welcomePhraseIndex';
+			const stored = this.storage.getNumber(key, StorageScope.PROFILE, 0);
+			this.welcomePhraseIndex = Number.isSafeInteger(stored) && stored >= 0 ? stored : 0;
+			this.storage.store(key, this.welcomePhraseIndex < Number.MAX_SAFE_INTEGER - 1 ? this.welcomePhraseIndex + 1 : 0, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
+		const phrases = getNewSessionWelcomePhrases(
+			this.configuration.getValue<INewSessionWelcomeMessagesConfiguration>(NEW_SESSION_WELCOME_MESSAGES_SETTING),
+			this.configuration.getValue<string>(NEW_SESSION_WELCOME_NAME_SETTING).trim() || undefined,
+		);
+		const phrase = this.configuration.getValue<boolean>(NEW_SESSION_WELCOME_PHRASES_SETTING) && phrases.length
+			? phrases[this.welcomePhraseIndex % phrases.length] : '';
+		this.welcome.hidden = !isNew || !phrase;
+		const text = this.welcome.hidden ? '' : phrase;
+		if (this.welcome.textContent !== text) { this.welcome.textContent = text; }
+		if (this.visible && !this.welcome.hidden && !this.welcomePhraseAnnounced && this.accessibility.isScreenReaderOptimized()
+			&& this.configuration.getValue<boolean>('accessibility.verbosity.newSessionWelcome')) {
+			this.welcomePhraseAnnounced = true;
+			this.accessibility.status(localize('newSession.welcome.announcement', '{0}\nTo disable this announcement, set {1} to false.', phrase, 'accessibility.verbosity.newSessionWelcome'));
+		}
+	}
 
 	private renderActivity(id: string, messages: readonly ChatGPTMessage[], active: boolean): HTMLDetailsElement {
 		let row = this.activities.get(id);
@@ -151,14 +200,12 @@ export class ChatGPTWidget extends Disposable {
 		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
 		const loading = state.loading?.kind === 'conversation' && (state.loading.id !== state.conversationId || !state.messages.length);
-		this.loading.setVisible(loading);
 		this.messages.hidden = loading;
 		this.root.classList.toggle('empty', !state.messages.length && !loading);
-		this.welcome.textContent = localize('sessions.chatgpt.welcome', 'What can I help with?');
-		this.welcome.hidden = loading || state.messages.length > 0;
+		this.renderWelcome(state);
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
-		this.status.textContent = state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
+		this.status.textContent = loading ? localize('sessions.loadingConversation', 'Loading conversation…') : state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
 			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.loading?.kind === 'conversation'));

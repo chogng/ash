@@ -500,7 +500,8 @@ const typescriptConfiguration = stanza.languages.setLanguageConfiguration('types
 const events: CreationEvent[] = [];
 const listener = stanza.editor.onDidCreateEditor(editor => {
 	const model = editor.getModel();
-	if (!model) throw new Error('Created standalone editor has no model');
+	// Pooled Diff controls register before binding a model; this log records model-backed creation.
+	if (!model) return;
 	const container = model.uri.toString() === callerResource.toString() ? callerContainer : ownedContainer;
 	events.push({
 		model: model.uri.toString(),

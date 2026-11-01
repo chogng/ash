@@ -376,6 +376,17 @@ function testWidget(model: ChatAttachmentModel, focus: () => void = () => { }): 
 		isTranscriptProgressActive: false, onDidChangeVisibility: Event.None,
 		onDidHide: Event.None, onDidChangeViewModel: Event.None,
 		acquireContext: (prepare, signal) => model.acquireContext(prepare, signal),
+		getFindController: () => undefined,
+		get input(): never { throw new Error('Unexpected composer operation'); },
+		retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
+		focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
+		acceptInput: async () => { },
+		focusInput: () => { },
+		getFocus: () => undefined,
+		getSibling: () => undefined,
+		focus: () => { },
+		reveal: () => { },
+		focusResponseItem: () => { },
 		startVoiceConversation: async () => { throw new Error('Context must not start voice'); },
 	};
 }

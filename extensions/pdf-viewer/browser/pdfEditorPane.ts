@@ -370,7 +370,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			action('ash.pdf.annotations.select', localize('pdf.viewer.select', 'Select'), localize('pdf.viewer.selectHint', 'Select text or annotations'), Lxicon.check, available, this.mode === 'select', () => this.setMode('select')),
 			action('ash.pdf.annotations.highlight', localize('pdf.viewer.highlight', 'Highlight'), localize('pdf.viewer.highlightHint', 'Draw a highlight'), Lxicon.bold, available, this.mode === 'highlight', () => this.setMode('highlight')),
 			action('ash.pdf.annotations.ink', localize('pdf.viewer.draw', 'Draw'), localize('pdf.viewer.drawHint', 'Draw freehand ink'), Lxicon.italics, available, this.mode === 'ink', () => this.setMode('ink')),
-			action('ash.pdf.annotations.note', localize('pdf.viewer.note', 'Note'), localize('pdf.viewer.noteHint', 'Place a note'), Lxicon.chat4, available, this.mode === 'note', () => this.setMode('note')),
+			action('ash.pdf.annotations.note', localize('pdf.viewer.note', 'Note'), localize('pdf.viewer.noteHint', 'Place a note'), Lxicon.chat, available, this.mode === 'note', () => this.setMode('note')),
 			new Separator(),
 			action('ash.pdf.annotations.undo', localize('pdf.viewer.undo', 'Undo'), localize('pdf.viewer.undoHint', 'Undo annotation change'), Lxicon.history, available && this.annotationModel.canUndo, false, () => { if (this.canAnnotate()) this.annotationModel.undo(); }),
 			action('ash.pdf.annotations.redo', localize('pdf.viewer.redo', 'Redo'), localize('pdf.viewer.redoHint', 'Redo annotation change'), Lxicon.history, available && this.annotationModel.canRedo, false, () => { if (this.canAnnotate()) this.annotationModel.redo(); }),

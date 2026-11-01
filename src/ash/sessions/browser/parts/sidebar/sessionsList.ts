@@ -1,12 +1,12 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import './media/sessionsList.css';
-import { LoadingSkeleton } from '../../ui/loadingSkeleton.js';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { AbstractDisposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { captureAnimationTarget, triggerConfettiAnimation } from '../../../../base/browser/ui/animations/animations.js';
 import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -37,6 +37,7 @@ import { readNewChatDraftState } from '../../../contrib/chat/common/newChatDraft
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
+	private readonly archiveFeedback = this._register(new MutableDisposable());
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly list: HTMLDivElement;
@@ -46,8 +47,6 @@ export class SessionsList extends DomWidget {
 	private projectLoad = 0;
 	private projectsFailed = false;
 	private projectsLoading = false;
-	private readonly loading: LoadingSkeleton;
-	private readonly projectLoading: LoadingSkeleton;
 	private readonly empty: HTMLParagraphElement;
 	private readonly projectError: HTMLButtonElement;
 	private readonly navigation: HTMLElement;
@@ -80,8 +79,6 @@ export class SessionsList extends DomWidget {
 		this.heading.textContent = title;
 		this.list = h(ownerDocument, 'div');
 		this.list.className = 'ash-sessions-list-items';
-		this.loading = this._register(new LoadingSkeleton(this.list, localize('sessions.list.loading', 'Loading sessions…')));
-		this.projectLoading = this._register(new LoadingSkeleton(this.list, localize('projects.loading', 'Loading projects…'), 'list', 3));
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
@@ -192,7 +189,15 @@ export class SessionsList extends DomWidget {
 			getAnchor: () => anchor,
 			getActions: () => createSessionItemActions(selection, this.commands, this.storage, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })),
+				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
+					...action,
+					run: async () => {
+						const target = captureAnimationTarget(item.domNode);
+						const archived = await action.run();
+						if (archived === true && !this._store.isDisposed) this.archiveFeedback.value = triggerConfettiAnimation(target);
+						return archived;
+					},
+				}),
 			onHide: () => { item.setMenuVisible(false); },
 		});
 	}
@@ -208,7 +213,7 @@ export class SessionsList extends DomWidget {
 		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
 		const itemFor = (key: string): SessionListItem => {
 			present.add(key);
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat4 : undefined));
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat : undefined));
 			item.domNode.dataset.item = key;
 			return item;
 		};
@@ -265,8 +270,6 @@ export class SessionsList extends DomWidget {
 			}
 		}
 		if (this.projectsFailed) projects.push(this.projectError);
-		this.projectLoading.setVisible(this.projectsLoading && !this.projects.length && !this.projectsFailed);
-		if (!this.projectLoading.element.hidden) projects.push(this.projectLoading.element);
 		for (const group of this.groups.groups) {
 			const members: HTMLElement[] = [];
 			for (const id of group.sessionIds) {
@@ -293,7 +296,6 @@ export class SessionsList extends DomWidget {
 		} else recent.push(...remaining.values());
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
-		this.loading.setVisible(loading && showEmpty);
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		if (showEmpty) {
 			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
@@ -303,8 +305,7 @@ export class SessionsList extends DomWidget {
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...chatGroups);
 		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
-		if (!this.loading.element.hidden) ordered.push(this.loading.element);
-		else if (showEmpty) ordered.push(this.empty);
+		if (showEmpty) ordered.push(this.empty);
 		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
 		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
 		reconcileChildren(this.list, ordered);

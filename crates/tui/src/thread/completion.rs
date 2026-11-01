@@ -468,6 +468,7 @@ fn queue_request(
                 session_id: scope.session_id().clone(),
                 thread_id: scope.thread_id().clone(),
                 command_id: target.command_id,
+                expected_revision: Some(target.revision),
             })?;
         }
         Command::RefreshQueue => {}

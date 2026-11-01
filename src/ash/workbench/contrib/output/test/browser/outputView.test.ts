@@ -604,7 +604,7 @@ test('Output retains manual scroll pausing and resuming when smart scrolling is 
 test('Output smart scrolling is editable in the existing Settings interaction group', () => {
 	const defaults = new DefaultSettings();
 	const layout = createSettingsLayout(defaults.all);
-	const setting = layout.find(category => category.id === 'general')?.groups.find(group => group.id === 'interaction')?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
+	const setting = layout.find(category => category.id === 'interaction')?.groups.find(group => group.id === 'interaction')?.settings.find(setting => setting.id === 'output.smartScroll.enabled');
 	assert.ok(setting);
 	assert.deepEqual({ type: setting.valueType, defaultValue: setting.configuration.defaultValue, title: setting.title }, { type: 'boolean', defaultValue: true, title: 'Output smart scrolling' });
 });

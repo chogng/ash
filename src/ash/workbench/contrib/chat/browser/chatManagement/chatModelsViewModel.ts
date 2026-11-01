@@ -27,6 +27,8 @@ export interface ILanguageModel extends ModelCatalogEntry {
 export interface ILanguageModelEntry {
 	readonly type: 'model';
 	readonly id: string;
+	/** Stable across filtering and visibility edits until the next visit to Models settings. */
+	readonly order: number;
 	readonly templateId: string;
 	readonly model: ILanguageModel;
 	readonly modelNameMatches?: readonly IMatch[];
@@ -65,6 +67,7 @@ export class ChatModelsViewModel extends Disposable {
 	private readonly changed = this._register(new Emitter<IViewModelChangeEvent>());
 	public readonly onDidChange = this.changed.event;
 	private catalog: readonly ModelCatalogEntry[] = [];
+	private readonly modelOrder = new Map<string, number>();
 	private vendors: ILanguageModelProvider['vendor'][] = [];
 	private entries: IViewModelEntry[] = [];
 	private query = '';
@@ -83,6 +86,10 @@ export class ChatModelsViewModel extends Disposable {
 	}
 
 	public get viewModelEntries(): readonly IViewModelEntry[] { return this.entries; }
+	public resetModelOrder(): void {
+		this.modelOrder.clear();
+		this.rebuild();
+	}
 	public shouldRefilter(): boolean { return this.dirty; }
 	public getVendors(): ILanguageModelProvider['vendor'][] {
 		return [...new Map([...this.getConfiguredVendors().map(provider => provider.vendor), ...this.vendors].map(vendor => [vendor.vendor, vendor])).values()];
@@ -148,12 +155,19 @@ export class ChatModelsViewModel extends Disposable {
 	}
 
 	private entry(model: ILanguageModel): ILanguageModelEntry {
-		return { type: 'model', id: model.identifier, templateId: MODEL_ENTRY_TEMPLATE_ID, model };
+		return { type: 'model', id: model.identifier, order: this.modelOrder.get(model.identifier)!, templateId: MODEL_ENTRY_TEMPLATE_ID, model };
 	}
 
 	private groupId(provider: ILanguageModelProvider): string { return `provider:${provider.group.vendor}`; }
 
 	private rebuild(): void {
+		// Rank the full catalog so searches cannot determine the visit's order. Later discoveries
+		// append to that order without moving models the user is already configuring.
+		const newModels = this.catalog.filter(entry => !this.modelOrder.has(modelRefIdentity(entry.model)))
+			.sort((a, b) => Number(this.models.isModelVisible(b.model)) - Number(this.models.isModelVisible(a.model)));
+		for (const entry of newModels) {
+			this.modelOrder.set(modelRefIdentity(entry.model), this.modelOrder.size);
+		}
 		const providers: string[] = [];
 		const capabilities: string[] = [];
 		const text = this.query.replace(/@provider:\s*(?:"([^"]*)"|(\S+))/giu, (_match, quoted: string | undefined, plain: string | undefined) => {

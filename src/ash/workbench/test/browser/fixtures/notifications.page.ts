@@ -1,3 +1,4 @@
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../common/views.js';
 import { ViewDescriptorService } from '../../../services/views/browser/viewDescriptorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
@@ -92,6 +93,7 @@ services.registerInstance(IHostService, {
 const notifications = resources.add(services.createInstance(NotificationService));
 services.registerInstance(INotificationService, notifications);
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
+services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected notification picker link'); } } as unknown as IOpenerService);
 services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root, contextKeyService: services.get(IContextKeyService), configurationService: resources.add(new InMemoryConfigurationService(new ConfigurationRegistry())) })));
 services.registerInstance(IClipboardService, new BrowserClipboardService(navigator.clipboard));

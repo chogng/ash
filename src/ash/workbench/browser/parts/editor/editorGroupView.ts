@@ -223,9 +223,14 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
 			pinEditor: input => this.pinEditor(input),
 			unstickEditor: input => this.unstickEditor(input),
-			startDrag: input => options.dragAndDrop?.start(this, input),
+			startDrag: input => {
+				const selected = this.selectedInputs.includes(input) ? this.selectedInputs.filter(candidate => candidate !== input) : [];
+				this.setSelection(input, selected);
+				options.dragAndDrop?.start(this, input);
+			},
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
-			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
+			getDragOperation: copyRequested => options.dragAndDrop?.getOperation(this, copyRequested) ?? 'move',
+			drop: (target, position, copyRequested) => options.dragAndDrop?.drop(this, target, position, undefined, copyRequested),
 			dropExternal: (event, target, position) => {
 				void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
 					console.error('Failed to open dropped editor resources', error);
@@ -302,6 +307,22 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
+		// Tabs keep their own drag payload. Empty title space moves the retained group,
+		// including every pane, rather than reopening each editor in another host.
+		if (options.dragAndDrop) {
+			const title = this.titleControl.domNode;
+			title.draggable = true;
+			this._register(addDisposableListener(title, 'dragstart', event => {
+				if (!(event.target instanceof title.ownerDocument.defaultView!.Element) || event.target.closest('.ash-tab, [role="tab"], button, input, a')) return;
+				if (!this.activeInput) { event.preventDefault(); return; }
+				options.onDidActivate?.();
+				options.dragAndDrop!.startGroup(this);
+				event.dataTransfer?.setData('text/plain', String(this.id));
+				if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+				event.stopPropagation();
+			}));
+			this._register(addDisposableListener(title, 'dragend', () => options.dragAndDrop!.end()));
+		}
 		if (this.scopedContextKeyService) {
 			this._register(new EditorGroupContextKeyController(
 				this.scopedContextKeyService,
@@ -498,6 +519,29 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 	}
 
+	/** Resolve before routing requests so tab identity is consistent across groups and restores. */
+	public resolveEditorInput(input: IResourceEditorInput, options: EditorOpenOptions = {}): IResourceEditorInput {
+		try {
+			return this.resolveEditorPane(input, options)?.createInput?.(input) ?? input;
+		} catch {
+			// Opening owns error reporting and placeholders, including unavailable editor types.
+			return input;
+		}
+	}
+
+	private resolveEditorPane(input: IResourceEditorInput, options: EditorOpenOptions): IEditorPaneDescriptor | undefined {
+		const matchInput = this.languageResolver
+			? Object.create(input, { languageId: { value: input.languageId ?? this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) } }) as IResourceEditorInput
+			: input;
+		const association = options.preferredEditorId === undefined && this.configurationService
+			? associatedEditorId(
+				EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY })!.path,
+				this.configurationService.getValue<EditorAssociations>(isResourceDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
+			)
+			: undefined;
+		return this.registry.getEditorPane(matchInput, { ...options, preferredEditorId: options.preferredEditorId ?? input.editorId ?? association });
+	}
+
 	async openEditor(
 		input: IResourceEditorInput,
 		options: EditorOpenOptions = {},
@@ -522,7 +566,19 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!(identity instanceof URI)) await identity;
 		this.assertNotDisposed();
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
-		const existing = this.entry(input);
+		let existing = this.entry(input);
+		let descriptor: IEditorPaneDescriptor;
+		try {
+			const selected = this.resolveEditorPane(input, options);
+			if (!selected) {
+				throw new RangeError(`No editor can open ${input.resource}`);
+			}
+			descriptor = selected;
+			input = descriptor.createInput?.(input) ?? input;
+			existing = this.entry(input);
+		} catch (error) {
+			return this.showOpenError(input, options, error, existing);
+		}
 		const limitedReplacement = this.model.editorLimit === 1 ? this.model.getEditorToReplace(input, options) : undefined;
 		if (!existing && limitedReplacement && !await this.confirmCloseEditor(limitedReplacement.input)) {
 			throw new CancellationError('Replacing the editor was cancelled');
@@ -536,25 +592,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return this.showOpenError(input, options, error, existing);
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
-		let descriptor: IEditorPaneDescriptor;
-		try {
-			const matchInput = this.languageResolver
-				? Object.create(input, { languageId: { value: input.languageId ?? this.languageResolver.resolveLanguageId({ resource: input.resource, ...(input.contentType === undefined ? {} : { contentType: input.contentType }) }) } }) as IResourceEditorInput
-				: input;
-			const association = options.preferredEditorId === undefined && this.configurationService
-				? associatedEditorId(
-					EditorResourceAccessor.getOriginalUri(input, { supportSideBySide: SideBySideEditor.PRIMARY })!.path,
-					this.configurationService.getValue<EditorAssociations>(isResourceDiffEditorInput(input) ? DiffEditorAssociationsConfiguration : EditorAssociationsConfiguration),
-				)
-				: undefined;
-			const selected = this.registry.getEditorPane(matchInput, { ...options, preferredEditorId: options.preferredEditorId ?? input.editorId ?? association });
-			if (!selected) {
-				throw new RangeError(`No editor can open ${input.resource}`);
-			}
-			descriptor = selected;
-		} catch (error) {
-			return this.showOpenError(input, options, error, existing);
-		}
 		if (existing?.paneInstance.pane.id === descriptor.id && !options.forceReload) {
 			const wasPreview = existing.preview;
 			const previousIndex = this.model.indexOf(input);
@@ -797,14 +834,20 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	}
 
 	async replaceEditor(input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
+		replacement = this.resolveEditorInput(replacement);
 		const index = this.model.indexOf(input);
 		if (index < 0) throw new RangeError(`Editor is not open in this group: ${input.resource}`);
 		const wasSticky = this.isSticky(input);
 		const previouslyActive = this.activeInput;
 		const wasActive = this.activeEntry === this.entry(input);
-		await this.openEditor(replacement, { index });
+		const viewState = this.saveEditorViewState(input);
+		await this.openEditor(replacement, { index, inactive: !wasActive, preserveFocus: !wasActive });
 		if (wasSticky) this.stickEditor(replacement);
-		await this.closeEditor(input, { skipConfirmation: true, reason: 'replace' });
+		if (this.entry(input) !== this.entry(replacement)) {
+			await this.closeEditor(input, { skipConfirmation: true, reason: 'replace' });
+		}
+		// Closing the source may change the layout. Restore only into a compatible pane.
+		this.restoreEditorViewState(replacement, viewState);
 		if (previouslyActive && !wasActive) this.activateEditor(previouslyActive);
 	}
 
@@ -925,8 +968,15 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		else { this.domNode.focus(); }
 	}
 
-	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
+	setSelection(active: IResourceEditorInput, inactiveSelection: readonly IResourceEditorInput[] = []): void {
+		this.activateEntry(this.requireEntry(active), false, inactiveSelection);
+	}
+
+	private activateEntry(entry: EditorGroupEntry, focus: boolean, inactiveSelection: readonly IResourceEditorInput[] = []): void {
 		const changed = this.model.setActive(entry.input);
+		for (const input of inactiveSelection) {
+			if (input !== entry.input) this.model.setSelection(input, { toggle: true, range: false });
+		}
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		this.panes.activate(entry.paneInstance, this.dimension);

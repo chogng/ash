@@ -102,6 +102,9 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 			const { projectSessionTraceGraph } = await import('./sessionScopedTrace.js');
 			return { ...result, graph: projectSessionTraceGraph(scope, result.graph) };
 		}),
+		startWireLog: (...args: Parameters<IAgentThreadService['startWireLog']>) => run(() => backend.startWireLog(params(args[0]))),
+		stopWireLog: (...args: Parameters<IAgentThreadService['stopWireLog']>) => run(() => backend.stopWireLog(params(args[0]))),
+		readWireLog: (...args: Parameters<IAgentThreadService['readWireLog']>) => run(() => backend.readWireLog(params(args[0]))),
 		configureAdvisor: (...args: Parameters<IAgentThreadService['configureAdvisor']>) => run(async () => {
 			const [source, ...rest] = args;
 			const result = await backend.configureAdvisor(params(source), ...rest);

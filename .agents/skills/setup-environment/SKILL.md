@@ -70,14 +70,14 @@ Within one CI job, prepare generated inputs once before the dependent checks. Fo
 
 ## Select and verify the scope
 
-On a fresh checkout, frontend `pre*` hooks may compile Rust protocol generators. Reuse a verified protocol cache/package when available; do not fabricate generated files or symlink outputs from another dirty checkout.
+Frontend `pre*` hooks only reuse validated protocol artifacts or a matching prepared package; they never invoke Cargo. On a fresh checkout, supply a matching package through `ASH_PROTOCOL_PACKAGE` or explicitly run `pnpm protocol:generate` once. Missing or stale artifacts fail with that repair command instead of implicitly building Rust. Do not fabricate generated files or symlink outputs from another dirty checkout.
 
 | Tier | Preparation and acceptance |
 | --- | --- |
 | Frontend/Web without backend | `pnpm test:smoke:browser` builds Web and checks Renderer and automation types. To reuse an existing build, check `test/automation/tsconfig.json` through `./node_modules/.bin/bun check -p test/automation/tsconfig.json --all` if needed, then use `pnpm test:smoke:browser:no-compile`. Launch with `pnpm dev:web` only if requested. |
 | Backend/CLI | Run `just verify <package>` and the owning build (for Code, `just build-code`). Complete backend package preparation uses `just ash-package`. |
 | Full Web | `pnpm test:smoke:browser:full` checks frontend types, builds Web and prepares the packaged-Node backend. Launch with `pnpm dev:web:full` only if requested. |
-| Desktop | `pnpm test:smoke:desktop` prepares the backend, builds Electron and checks Renderer and automation types. Launch with `pnpm dev` only if requested. `pnpm test:smoke:ui` selects UI acceptance but still prepares the backend runtime package for startup metadata. |
+| Desktop | `pnpm test:smoke:desktop` prepares the backend, builds Electron and checks Renderer and automation types. Launch with `pnpm dev` only if requested. `pnpm test:smoke:ui` builds Electron and checks automation types without preparing or starting the backend; Tunnel binaries are resolved only when hosting starts. |
 
 For a setup smoke check, select scenarios under [test/smoke/areas](../../../test/smoke/areas) using the package script's file/filter arguments. Confirm at least one applicable test ran and inspect skips. For accompanying TypeScript changes, use [TypeScript validation](../../../.github/instructions/typescript-testing.instructions.md).
 

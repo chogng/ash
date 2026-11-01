@@ -4,6 +4,11 @@ import { isFiniteNumber, isNonNegativeSafeInteger } from '../../../../base/commo
 import { type IMultiDiffEditorModel, validateDocumentDiffItems } from './model.js';
 import { type IWorkbenchUIElementFactory } from './workbenchUIElementFactory.js';
 import { isConfigured, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { Range } from '../../../common/core/range.js';
+import type { IDocumentDiffItem } from './model.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+
+export const MultiDiffReviewPreviewContext = new RawContextKey<boolean>('multiDiffReviewPreview', false);
 
 export const DEFAULT_LINE_HEIGHT = 20;
 export const DEFAULT_OVERSCAN_ROW_COUNT = 8;
@@ -31,7 +36,12 @@ export interface IMultiDiffEditorWidgetOptions {
 	readonly wordWrap?: IEditorOptions['wordWrap'];
 	readonly wordWrapColumn?: number;
 	readonly overscanRowCount?: number;
+	/** Presentation selected by the embedding host; it does not change comparison behavior. */
+	readonly layoutStyle?: 'flat' | 'modern';
 	readonly ariaLabel?: string;
+	/** Opt-in review prototype. Wrapped content continues to use the full editor. */
+	readonly preview?: boolean;
+	readonly onOpenEditor?: (item: IDocumentDiffItem, side: 'original' | 'modified', range: Range) => void;
 	readonly workbenchUIElementFactory?: IWorkbenchUIElementFactory;
 }
 
@@ -45,6 +55,7 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 	if (!isFiniteNumber(lineHeight) || lineHeight < 0) throw new RangeError('Multi-diff editor line height must be non-negative and finite');
 	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
+	if (options.layoutStyle !== undefined && options.layoutStyle !== 'flat' && options.layoutStyle !== 'modern') throw new TypeError('Invalid multi-diff editor layout style');
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
 	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
 	for (const [name, value] of [
@@ -52,9 +63,12 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 		['showLineNumbers', options.showLineNumbers],
 		['showInlineChanges', options.showInlineChanges],
 		['loopChanges', options.loopChanges],
+		['preview', options.preview],
 	] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}
+	if (options.onOpenEditor !== undefined && typeof options.onOpenEditor !== 'function') throw new TypeError('Multi-diff editor open callback must be a function');
+	if (options.preview && !options.onOpenEditor) throw new TypeError('Review preview requires a full-editor entry point');
 	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
 	if (options.workbenchUIElementFactory !== undefined && typeof options.workbenchUIElementFactory.createItemActions !== 'function') throw new TypeError('Multi-diff editor Workbench factory must create item actions');
 	if (options.container.ownerDocument.defaultView !== getWindow(options.container)) throw new Error('Multi-diff editor container must belong to its owner window');

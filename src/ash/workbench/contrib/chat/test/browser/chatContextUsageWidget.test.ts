@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { setup, suite, teardown, test } from 'mocha';
+import { Event } from '../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { getContextInputBudget, type ChatContextUsage } from '../../../../services/chat/common/chatService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { ChatContextUsageWidget } from '../../browser/widgetHosts/viewPane/chatContextUsageWidget.js';
 
 suite('Chat context budget', () => {
@@ -14,6 +16,7 @@ suite('Chat context budget', () => {
 	let contextViews: BrowserContextViewService;
 	let widget: ChatContextUsageWidget;
 	let installedGlobals: IDisposable;
+	let commands: { id: string; args: unknown[]; }[];
 
 	setup(() => {
 		environment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
@@ -22,7 +25,9 @@ suite('Chat context budget', () => {
 		installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent']);
 		initializeTestLocalization('en');
 		contextViews = new BrowserContextViewService(environment.window.document.body);
-		widget = new ChatContextUsageWidget(environment.window.document, contextViews);
+		commands = [];
+		const commandService: ICommandService = { onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: readonly unknown[]): Promise<T> => { commands.push({ id, args: [...args] }); return undefined as T; } };
+		widget = new ChatContextUsageWidget(environment.window.document, contextViews, commandService);
 		environment.window.document.body.append(widget.domNode);
 		// jsdom has no layout; the focus-restoration guard needs a rendered anchor.
 		Object.defineProperty(widget.domNode, 'getClientRects', {
@@ -69,11 +74,28 @@ suite('Chat context budget', () => {
 			const details = environment.window.document.querySelector<HTMLElement>('.ash-chat-context-details')!;
 			assert.equal(widget.domNode.getAttribute('aria-expanded'), 'true');
 			assert.match(details.querySelector('.ash-chat-context-details-summary')!.textContent!, /100%/u);
-			assert.match(details.textContent!, locale === 'en' ? /Model context capacity: 475,000/u : /模型上下文容量：475,000/u);
+			assert.equal(details.querySelector('.ash-chat-context-details-notes'), null);
+			assert.equal(details.querySelector('.ash-chat-context-details-close'), null);
+			assert.doesNotMatch(details.textContent!, /475,000/u);
 			assert.match(details.textContent!, locale === 'en' ? /Remaining input budget0/u : /剩余输入预算0/u);
 			details.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			assert.equal(widget.domNode.getAttribute('aria-expanded'), 'false');
 			assert.equal(environment.window.document.activeElement, widget.domNode);
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`detailed breakdown closes the popup and opens Usage settings (${locale})`, () => {
+			initializeTestLocalization(locale);
+			widget.update(usage());
+			widget.showDetails();
+			const details = environment.window.document.querySelector<HTMLElement>('.ash-chat-context-details')!;
+			const button = details.querySelector<HTMLButtonElement>('button')!;
+			assert.equal(button.textContent, locale === 'en' ? 'See detailed breakdown' : '查看详细明细');
+			button.click();
+			assert.equal(details.isConnected, false);
+			assert.equal(widget.domNode.getAttribute('aria-expanded'), 'false');
+			assert.deepEqual(commands, [{ id: 'workbench.action.openSettings', args: [{ section: 'chat-usage', jsonEditor: false }] }]);
 		});
 	}
 

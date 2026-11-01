@@ -152,7 +152,7 @@ console.log(describeTheme(palette));
 		triggerPaste: () => undefined,
 		read: async () => [{ type: 'text/plain', data: new TextEncoder().encode(clipboardText) }],
 		readText: async () => clipboardText,
-		readImage: async () => new Uint8Array(),
+		readImage: async () => new Uint8Array(), writeImage: async () => { },
 		writeText: async value => { clipboardText = value; },
 		readFindText: async () => findText,
 		writeFindText: async value => { findText = value; },

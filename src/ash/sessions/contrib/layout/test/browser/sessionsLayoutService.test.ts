@@ -41,11 +41,11 @@ import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../../browser/parts/side
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
-import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+
 	test('New follows the active entry and does not retain an override under a Custom View', async () => {
 		using fixture = new EntryFixture();
 		const entry = { ...chatEntry, newSessionCommand: 'test.entry.newChat' };
@@ -110,20 +110,41 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
-	test('reveals Output beside the current conversation without navigating to another entry', async () => {
+	test('Output requests cannot reveal a Panel in Agent Window', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry({ id: 'chat', activityContext: 'sessions.activity.chatSelected', content: 'conversation', focus: 'conversation', restoreCommand: 'sessions.open.chat' });
 		fixture.partChanges.length = 0;
 		fixture.viewVisibility.fire({ id: WorkbenchViewContainerId.Output, location: ViewContainerLocation.Panel, visible: true });
-		assert.equal(fixture.visible.get('panel'), true);
+		assert.equal(fixture.visible.get('panel'), false);
 		assert.equal(fixture.service.isDocumentContent, false);
-		assert.deepEqual(fixture.partChanges, ['available:panel', 'show:panel']);
+		assert.deepEqual(fixture.partChanges, []);
 		fixture.visible.set('panel', false);
 		fixture.outputReveal.fire();
-		assert.equal(fixture.visible.get('panel'), true);
+		assert.equal(fixture.visible.get('panel'), false);
+	});
+
+	test('legacy Code panel visibility is discarded and entry switches keep the Panel unavailable', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: true, documents: true } });
+		for (const entry of [documentEntry, chatEntry, documentEntry]) {
+			await fixture.service.openEntry(entry);
+			assert.equal(fixture.visible.get('panel'), false);
+		}
+		await fixture.storage.flush();
+		const saved = JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!);
+		assert.equal('panel' in saved.code, false);
 	});
 
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		fixture.openDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, true);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
 
 	test('reopening an already active document leaves the conversation entry even without an editor change', async () => {
 		using fixture = new EntryFixture();
@@ -186,36 +207,80 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
 	});
 
-	test('Code Details-only focuses its visible pane instead of hidden editor content', async () => {
+	test('entering Code leaves tools closed until explicitly opened', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(documentEntry);
 		assert.equal(fixture.visible.get('editor'), false);
-		assert.equal(fixture.visible.get('auxiliarybar'), true);
-		assert.equal(fixture.focused, 'details');
-	});
-
-	test('Code drops restored detail tabs and stale editor visibility without an active session', async () => {
-		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
-		fixture.documentInputs.push(new EmptyFileEditorInput(), new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')));
-		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.filesDetailsOpen, false);
+		assert.equal(fixture.focused, 'conversation');
 		assert.deepEqual(fixture.documentInputs, []);
-		assert.equal(fixture.visible.get('editor'), false);
-		assert.equal(fixture.visible.get('auxiliarybar'), true);
-		assert.equal(fixture.focused, 'details');
 		await fixture.service.openEntry(chatEntry);
 		await fixture.service.openEntry(documentEntry);
-		assert.deepEqual(fixture.documentInputs, []);
 		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.filesDetailsOpen, false);
 	});
 
-	test('Code retains an open document when removing an unowned restored Changes tab', async () => {
+	test('Code restores explicitly opened Files inside the shared EditorPart', async () => {
+		using fixture = new EntryFixture({ code: { details: true, documents: true } });
+		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.filesDetailsOpen, true);
+		assert.equal(fixture.focused, 'files');
+	});
+
+	for (const retained of [false, true]) {
+		test(`Code keeps the closed side pane hidden with ${retained ? 'retained' : 'persisted'} Files`, async () => {
+			using fixture = new EntryFixture({ code: { details: true, documents: false } });
+			fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+			fixture.filesDetailsOpen = retained;
+			const input = new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/retained'));
+			fixture.documentInputs.push(input);
+			await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
+			assert.equal(fixture.visible.get('editor'), false);
+			assert.equal(fixture.filesDetailsOpen, retained);
+			assert.equal(fixture.focused, 'conversation');
+			assert.deepEqual(fixture.documentInputs, [input]);
+		});
+	}
+
+	test('Code restores documents without opening Files when navigation was not selected', async () => {
+		using fixture = new EntryFixture({ code: { details: false, documents: true } });
+		const input = { resource: URI.file('/workspace/sample.ts') };
+		fixture.documentInputs.push(input);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.filesDetailsOpen, false);
+		assert.equal(fixture.focused, 'editor');
+		assert.deepEqual(fixture.documentInputs, [input]);
+	});
+
+	test('Code retains restored tool inputs without an active session', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		const inputs = [new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old'))];
+		fixture.documentInputs.push(...inputs);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, inputs);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.focused, 'files');
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, inputs);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
+	test('Code retains Changes and its neighboring document', async () => {
 		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
 		const file = { resource: URI.file('/workspace/sample.ts'), label: 'sample.ts' };
-		fixture.documentInputs.push(new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')), file);
+		const changes = new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old'));
+		fixture.documentInputs.push(changes, file);
 		await fixture.service.openEntry(documentEntry);
-		assert.deepEqual(fixture.documentInputs, [file]);
+		assert.deepEqual(fixture.documentInputs, [changes, file]);
 		assert.equal(fixture.visible.get('editor'), true);
-		assert.equal(fixture.visible.get('auxiliarybar'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
 	});
 
 	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
@@ -312,8 +377,8 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.openEntry(page);
 		assert.equal(fixture.visible.get('sidebar'), true);
 		assert.deepEqual(JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!), {
-			chat: { details: false, panel: false, documents: false },
-			website: { details: false, panel: false, documents: false },
+			chat: { details: false, documents: false },
+			website: { details: false, documents: false },
 		});
 	});
 
@@ -373,6 +438,7 @@ class EntryFixture extends Disposable {
 	public readonly groupChanges: string[] = [];
 	public readonly documentInputs: IResourceEditorInput[] = [];
 	public pageTitleVisible = true;
+	public filesDetailsOpen = false;
 	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
 	private sidebarId: string | undefined;
 	public defaultSidebarId = SESSIONS_NAVIGATION_CONTAINER_ID;
@@ -387,6 +453,11 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
+	public openDocument(input: IResourceEditorInput): void {
+		this.activeInput = input;
+		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.services.get(IEditorPart).activeGroup.id, event: { kind: 'activeEditorChanged', editor: undefined } });
+	}
+
 	constructor(savedVisibility?: unknown) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));
@@ -407,6 +478,16 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(IEditorPart, {
+			setGroupScope: () => Disposable.None,
+			saveWorkingSet: () => ({}),
+			restoreLayout() { },
+			restoreWorkingSetLayout() { },
+			get filesDetailsOpen() { return fixture.filesDetailsOpen; },
+			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
+			get fileEditorsVisible() { return true; },
+			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
+			isGroupVisible: () => true,
+			filesPart: { isEditorVisible: false, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
 			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,

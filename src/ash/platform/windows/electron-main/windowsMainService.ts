@@ -360,9 +360,9 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		resources.add(host.onDidClose(() => {
 			if (this.getWindows().length + this.managedWindowValues().length === 0) this.lastClosedWindowState = closingState;
 		}));
-		const fullscreenChanged = (): void => host.send(WINDOW_FULLSCREEN_CHANGED_CHANNEL, host.isFullScreen());
-		resources.add(host.onDidEnterFullScreen(fullscreenChanged));
-		resources.add(host.onDidLeaveFullScreen(fullscreenChanged));
+		// Windows can emit the transition before isFullScreen() reflects its new value.
+		resources.add(host.onDidEnterFullScreen(() => host.send(WINDOW_FULLSCREEN_CHANGED_CHANNEL, true)));
+		resources.add(host.onDidLeaveFullScreen(() => host.send(WINDOW_FULLSCREEN_CHANGED_CHANNEL, false)));
 	}
 
 	public updateWorkspace(id: number, workspace: IAnyWorkspaceIdentifier): void {

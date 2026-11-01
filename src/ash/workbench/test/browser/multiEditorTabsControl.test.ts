@@ -78,7 +78,7 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 		const group = new EditorGroupModel();
 		let selected: FileElement | undefined;
 		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration,
-			(element: FileElement) => { selected = element; }, undefined, undefined, undefined, undefined);
+			(element: FileElement) => { selected = element; }, undefined, undefined, undefined, undefined, {});
 		const file = { ...input('engine #1.ts'), resource: URI.file('/Users/lx/Desktop/ash/源 码/engine #1.ts') };
 		group.openEditor(file);
 		control.setEditors([descriptor(file)], file);
@@ -248,6 +248,11 @@ test('MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	});
 
 	firstTab.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+	secondTab.dispatchEvent(dragEvent(dom.window, 'dragenter', 101, 100));
+	assert.equal(secondTab.classList.contains(DndCssClasses.DropBefore), true);
+	secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 125, 200));
+	assert.equal(secondTab.classList.contains(DndCssClasses.DropBefore), true);
+	assert.deepEqual(previews, []);
 	secondTab.dispatchEvent(dragEvent(dom.window, 'dragenter', 175, 100));
 	secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 175, 1700));
 	assert.deepEqual(previews, [second]);
@@ -264,6 +269,51 @@ test('MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	assert.equal(firstTab.classList.contains(DndCssClasses.Dragging), false);
 	control.dispose();
 	dom.window.close();
+});
+
+test('MultiEditorTabsControl only previews a tab after dwelling over that tab', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const previews: IResourceEditorInput[] = [];
+		using services = createTestEditorServices();
+		using control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
+			activate: () => { },
+			preview: input => previews.push(input),
+			close: () => { },
+			pinEditor: () => { },
+			unstickEditor: () => { },
+			startDrag: () => { },
+			isDragging: () => true,
+			drop: () => { },
+			dropExternal: () => { },
+			endDrag: () => { },
+		} satisfies EditorTabsDelegate, new EditorGroupModel());
+		const first = input('first');
+		const second = input('second');
+		control.setEditors([descriptor(first), descriptor(second)], first);
+		const strip = control.domNode.querySelector<HTMLElement>('[role="tablist"]')!;
+		const [firstTab, secondTab] = strip.querySelectorAll<HTMLElement>('.ash-tab');
+		assert.ok(firstTab);
+		assert.ok(secondTab);
+		firstTab.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
+		secondTab.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragenter', 175, 100));
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 175, 1599));
+		assert.deepEqual(previews, []);
+		strip.dispatchEvent(dragEvent(dom.window, 'dragenter', 250, 1600));
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragleave', 175, 1601));
+		strip.dispatchEvent(dragEvent(dom.window, 'dragover', 250, 3200));
+		assert.equal(secondTab.classList.contains(DndCssClasses.DropAfter), true);
+		assert.deepEqual(previews, []);
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragenter', 175, 3300));
+		strip.dispatchEvent(dragEvent(dom.window, 'dragleave', 250, 3301));
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 175, 4799));
+		assert.deepEqual(previews, []);
+		secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 175, 4800));
+		assert.deepEqual(previews, [second]);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('MultiEditorTabsControl forwards external resource drops to the target tab', () => {
@@ -406,7 +456,7 @@ test('editor tab width changes reach both rows and preserve focused actions', as
 		group.openEditor(first);
 		group.openEditor(second);
 		group.stick(first);
-		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
+		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined, {});
 		control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
 		const lists = [...control.domNode.querySelectorAll<HTMLElement>('.ash-tab-list')];
 		const action = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
@@ -445,7 +495,7 @@ test('EditorTitleControl follows nested document symbols and opens outline selec
 	const group = new EditorGroupModel();
 	using services = createTestEditorServices(configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
-		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); });
+		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); }, {});
 	const resource = input('folder/symbols.ts');
 	group.openEditor(resource);
 	control.setEditors([descriptor(resource)], resource, pane);
@@ -508,7 +558,7 @@ suite('Editor tab label format', () => {
 			const tab = (input: IResourceEditorInput) => ({ ...descriptor(input), instanceId: input.resource.path, tabId: `${input.resource.path}-tab`, panelId: `${input.resource.path}-panel` });
 			group.openEditor(first);
 			group.openEditor(unique);
-			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {});
 			control.setEditors([tab(first), tab(unique)], first);
 			const names = () => [...control.domNode.querySelectorAll('.ash-tab-label')].map(label => label.textContent?.replaceAll('\\', '/'));
 			assert.deepEqual(names(), ['index.ts', '.cursorignore']);

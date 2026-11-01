@@ -12,6 +12,12 @@
 	overflow: hidden;
 }
 
+.ash-editor-group-container {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+}
+
 .ash-workbench-editor
 	.ash-workbench-part-content
 	> :is(.ash-grid, .ash-split-view) {

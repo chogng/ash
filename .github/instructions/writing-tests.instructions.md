@@ -48,4 +48,4 @@ For DOM constructors needed during module loading, use `src/ash/editor/test/brow
 - Import `test/automation/test.ts` and reuse the owning window and feature drivers. Each scenario gets fresh workspace/profile state; a restart retains that scenario's state. The launcher owns readiness, cleanup and diagnostics for all windows, including startup failures.
 - After an action reorders a list, locate the target by stable identity; a live `.first()` may identify a different item. Keep catalog rules in unit tests and verify persistence with a named item in the product flow.
 - When changing automation facilities, verify fault injection reached the intended boundary, assert the exact deliberate error before expecting teardown failure, and exercise state isolation and cleanup through real launches.
-- Filtered runs must execute tests; zero matches cannot count as successful validation.
+- Filtered runs must execute tests; zero matches cannot count as successful validation. An affected-test plan that proves no relevant changes may explicitly skip execution; report it as skipped, not as passing tests.

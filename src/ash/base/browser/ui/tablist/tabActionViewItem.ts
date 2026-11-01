@@ -73,6 +73,12 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		const item = this.tabAction.tab;
 		container.classList.add('ash-tab');
 		this.container = container;
+		if (this.draggable) {
+			this._register(addDisposableListener(container, 'dragstart', event => {
+				// Anchor the preview beside the pointer so it cannot cover the insertion edge.
+				event.dataTransfer?.setDragImage(container, 0, 0);
+			}));
+		}
 
 		const tab = h(container.ownerDocument, 'button');
 		this.tabElement = tab;

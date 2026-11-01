@@ -1,76 +1,33 @@
 import { TestViewDescriptorService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
-import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { JSDOM } from 'jsdom';
-import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { IMenuService } from '../../../../../platform/actions/common/actions.js';
-import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ASH_REMOTE_SCHEME } from '../../../../../platform/remote/common/remote.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { WorkspaceFolderCountContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
-import { ViewPaneContainer } from '../../../../../workbench/browser/parts/views/viewPaneContainer.js';
+import { IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
-import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
-import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { DownloadRemoteFileAction, SESSIONS_FILES_CONTAINER_ID } from '../../browser/files.contribution.js';
-import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID } from '../../browser/filesView.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 
-test('Sessions Files selects one view from the current folder state and creates the localized empty pane', () => {
+test('Files command opens group navigation without registering a competing Part container', async () => {
 	using contexts = new ContextKeyService();
-	const folders = WorkspaceFolderCountContext.bindTo(contexts);
 	using descriptors = new TestViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
-	const model = descriptors.getViewContainerModel(SESSIONS_FILES_CONTAINER_ID);
-	assert.equal(model.viewContainer.mergeViewWithContainerWhenSingleView, false);
-	const visibleIds = (): string[] => model.visibleViewDescriptors.map(view => view.id);
-	assert.deepEqual(visibleIds(), [SESSIONS_FILES_EMPTY_VIEW_ID]);
-	folders.set(2);
-	assert.deepEqual(visibleIds(), [SESSIONS_FILES_VIEW_ID]);
-	folders.set(0);
+	assert.equal(descriptors.getViewContainerById(SESSIONS_FILES_CONTAINER_ID), null);
 	using services = new InstantiationService();
-	services.registerInstance(IContextKeyService, contexts);
-	using configuration = new InMemoryConfigurationService();
-	services.registerInstance(IConfigurationService, configuration);
-	const storageEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-files.test' });
-	using storageOwner = toDisposable(() => storageEnvironment.window.close());
-	using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'empty', backend: storageEnvironment.window.localStorage, flushInterval: 0 });
-	services.registerInstance(IStorageService, storage);
+	const opened: string[] = [];
+	services.registerInstance(ICommandService, { executeCommand: async (id: string) => { opened.push(id); } } as unknown as ICommandService);
 	using commands = new CommandService(services);
-	services.registerInstance(IMenuService, new MenuService(commands, contexts));
-	using host = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
-		viewContainer: model.viewContainer,
-		model,
-		onDidFailCreateView: (error: unknown) => { throw error; },
-	});
-	const message = host.element.querySelector('[role="status"]');
-	assert.equal(message?.textContent, 'Folders and files will appear here.');
-	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
-	try {
-		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
-		assert.equal(message?.textContent, 'Folders and files will appear here.');
-		using translated = registerTestComponentServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
-			viewContainer: model.viewContainer, model,
-			onDidFailCreateView: (error: unknown) => { throw error; },
-		});
-		assert.equal(translated.element.querySelector('[role="status"]')?.textContent, '文件夹和文件将在这里显示。');
-		host.getView(SESSIONS_FILES_EMPTY_VIEW_ID)!.focus();
-		assert.equal(browserEnvironment.window.document.activeElement, host.getView(SESSIONS_FILES_EMPTY_VIEW_ID)!.element);
-	} finally {
-		resetNlsResolver();
-	}
+	await commands.executeCommand(SESSIONS_FILES_CONTAINER_ID);
+	assert.deepEqual(opened, [NEW_FILE_TAB_COMMAND_ID]);
 });
 
 test('Sessions remote download preserves selected file bytes and reports read failures', async () => {

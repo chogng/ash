@@ -1,4 +1,4 @@
-import { appServerConnectionChannel, type AppServerConnectionTarget } from '../common/appServerTransport.js';
+import { appServerConnectionChannel, type IAppServerByteTransport, type AppServerConnectionTarget } from '../common/appServerTransport.js';
 import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolCompatibility.js';
 import { MessageChannelMain } from 'electron/main';
 import type { WebContents } from 'electron/main';
@@ -11,13 +11,13 @@ import { CancellationError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { AppServerConnectionState } from '../common/appServerApi.js';
-import type { IAppServerProcessLauncher } from './appServerProcessLauncher.js';
+import type { AppServerConnectionLauncher } from './appServerProcessLauncher.js';
 import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from '../node/childProcessJsonlTransport.js';
 
 /** Owns one renderer's connection carrier; the carrier connects to the shared profile daemon. */
 export class AppServerConnectionRelay extends Disposable {
-	private connectionOptions: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; };
-	private readonly transport = this._register(new MutableDisposable<ChildProcessJsonlTransport>());
+	private connectionOptions: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: AppServerConnectionLauncher; };
+	private readonly transport = this._register(new MutableDisposable<IAppServerByteTransport>());
 	private readonly portResources = this._register(new MutableDisposable<IDisposable>());
 	private readonly changes = this._register(new Emitter<AppServerConnectionState>());
 	public readonly onStateChange = this.changes.event;
@@ -33,7 +33,7 @@ export class AppServerConnectionRelay extends Disposable {
 	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
 
-	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }, private readonly connection: AppServerConnectionTarget = 'workspace') {
+	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: AppServerConnectionLauncher; }, private readonly connection: AppServerConnectionTarget = 'workspace') {
 		super();
 		this.connectionOptions = options;
 		this._register(toDisposable(() => this.startPromise?.cancel()));
@@ -41,9 +41,9 @@ export class AppServerConnectionRelay extends Disposable {
 
 	private get channelPrefix(): string { return appServerConnectionChannel(this.connection); }
 
-	public get options(): { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; } { return this.connectionOptions; }
+	public get options(): { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: AppServerConnectionLauncher; } { return this.connectionOptions; }
 
-	public replaceProcessLauncher(processLauncher: IAppServerProcessLauncher): void {
+	public replaceProcessLauncher(processLauncher: AppServerConnectionLauncher): void {
 		if (!this.options.enabled || this.state !== 'stopped') throw new Error('App Server launcher can only change while stopped');
 		this.connectionOptions = { enabled: true, processLauncher };
 	}
@@ -79,7 +79,9 @@ export class AppServerConnectionRelay extends Disposable {
 			if (token.isCancellationRequested) { throw new CancellationError(); }
 			// An acquisition or another start may already own the new connection generation.
 			if (!this.transport.value) {
-				this.transport.value = new ChildProcessJsonlTransport(this.options.processLauncher.launch(), { stdoutMode: 'bytes' });
+				const transport = await openTransport(this.options.processLauncher);
+				if (this.isDisposed || token.isCancellationRequested) { transport.dispose(); throw new CancellationError(); }
+				this.transport.value = transport;
 				this.setState('starting');
 			}
 			if (this.state === 'ready') { return; }
@@ -124,7 +126,7 @@ export class AppServerConnectionRelay extends Disposable {
 
 	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string; }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
-		const processLauncher = (): IAppServerProcessLauncher | undefined => this.options.enabled ? this.options.processLauncher : undefined;
+		const processLauncher = (): AppServerConnectionLauncher | undefined => this.options.enabled ? this.options.processLauncher : undefined;
 		const reset = (): void => { if (!this.isDisposed) { void this.stop(); } };
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
@@ -178,7 +180,8 @@ export class AppServerConnectionRelay extends Disposable {
 						let transport = this.transport.value;
 						if (!transport) {
 							this.trace('launch', nonce as string);
-							transport = new ChildProcessJsonlTransport(launcher.launch(), { stdoutMode: 'bytes' });
+							transport = await openTransport(launcher);
+							if (this.isDisposed || this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration) { transport.dispose(); throw new CancellationError(); }
 							this.transport.value = transport;
 						}
 						this.trace('carrier-ready', nonce as string);
@@ -217,7 +220,7 @@ export class AppServerConnectionRelay extends Disposable {
 		}];
 	}
 
-	private attach(renderer: WebContents, nonce: string, transport: ChildProcessJsonlTransport): void {
+	private attach(renderer: WebContents, nonce: string, transport: IAppServerByteTransport): void {
 		this.nonce = nonce;
 		this.acquiredNavigation = this.navigationGeneration;
 		const { port1, port2 } = new MessageChannelMain();
@@ -260,7 +263,7 @@ export class AppServerConnectionRelay extends Disposable {
 			sent.push(size);
 			bytes += size;
 			port1.postMessage({ data: new Uint8Array(chunk) });
-			if (sent.length >= 4) { transport.process.stdout.pause(); }
+			if (sent.length >= 4) { transport.pause(); }
 		});
 		const ended = transport.onClose(error => {
 			if (closed) { return; }
@@ -280,7 +283,7 @@ export class AppServerConnectionRelay extends Disposable {
 				const size = sent.shift();
 				if (size === undefined) { close(); return; }
 				bytes -= size;
-				if (sent.length < 4) { transport.process.stdout.resume(); }
+				if (sent.length < 4) { transport.resume(); }
 				return;
 			}
 			if (!(value.data instanceof Uint8Array) || writes >= 128) { close(); return; }
@@ -301,11 +304,15 @@ export class AppServerConnectionRelay extends Disposable {
 	/** Opt-in marks correlate one port lease without retaining protocol payloads. */
 	private trace(phase: string, nonce: string): void {
 		if (process.env.ASH_DESKTOP_STARTUP_TRACE === '1') {
-			performance.mark(`ash.appServer.main.${phase}`, { detail: { nonce, connection: this.connection, carrierPid: this.transport.value?.process.pid, ...(phase === 'initialized' ? { carrierTrace: this.transport.value?.diagnostics().split('\n').filter(line => line.startsWith('ASH_STARTUP_TRACE ')) ?? [] } : {}) } });
+			performance.mark(`ash.appServer.main.${phase}`, { detail: { nonce, connection: this.connection, carrierPid: (this.transport.value instanceof ChildProcessJsonlTransport ? this.transport.value.process.pid : undefined), ...(phase === 'initialized' ? { carrierTrace: this.transport.value?.diagnostics().split('\n').filter(line => line.startsWith('ASH_STARTUP_TRACE ')) ?? [] } : {}) } });
 		}
 	}
 
 	private setState(state: AppServerConnectionState): void {
 		if (this.state !== state) { this.state = state; this.changes.fire(state); }
 	}
+}
+
+function openTransport(launcher: AppServerConnectionLauncher): Promise<IAppServerByteTransport> {
+	return 'openTransport' in launcher ? launcher.openTransport() : Promise.resolve(new ChildProcessJsonlTransport(launcher.launch(), { stdoutMode: 'bytes' }));
 }

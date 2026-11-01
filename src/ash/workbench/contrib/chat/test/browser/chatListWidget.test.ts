@@ -5,7 +5,6 @@ import { createTestLanguageModelToolsService } from '../common/tools/testLanguag
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import { registerChatCopyActions } from '../../browser/actions/chatCopyActions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
@@ -52,7 +51,6 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 
-registerChatCopyActions();
 const document = browserEnvironment.window.document;
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
@@ -217,6 +215,26 @@ test('tool evidence is Turn-scoped and keeps result-before-call and orphan outpu
 	const stopped = chatTranscriptListItems([call('second'), { type: 'turnError', entryId: 'error', turnId: 'second', error: { code: 'connectionFailed', message: 'lost', retryable: true } }]);
 	assert.equal(stopped[0].toolInvocation?.stopped, true);
 	assert.equal(stopped[0].transient, false);
+});
+
+test('accessible transcript reads current retained messages in display order after updates and removals', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const container = document.createElement('main'); document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	using widget = services.createInstance(ChatListWidget, container, {});
+	const first: IChatListItem = { id: 'first', type: 'agentMessage', text: 'First response', transient: true };
+	const second: IChatListItem = { id: 'second', type: 'agentMessage', text: 'Second response', transient: false };
+	widget.render([first, second]);
+	widget.element.querySelector<HTMLElement>('[data-item-id="first"]')!.focus();
+	using provider = services.invokeFunction(accessor => AccessibleViewRegistry.getImplementations().filter(item => item.type === AccessibleViewType.View && item.name.startsWith('chatTranscript-')).map(item => item.getProvider(accessor)).find(item => item !== undefined)!);
+	assert.match(provider.provideContent(), /First response[\s\S]*Second response/);
+	widget.render([second, { ...first, text: 'Updated response', transient: false }]);
+	assert.match(provider.provideContent(), /Second response[\s\S]*Updated response/);
+	assert.doesNotMatch(provider.provideContent(), /First response/);
+	widget.render([second]);
+	assert.match(provider.provideContent(), /Second response/);
+	assert.doesNotMatch(provider.provideContent(), /Updated response/);
 });
 
 test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
@@ -423,7 +441,7 @@ suite('Chat message copy ownership', () => {
 			public override async writeText(text: string): Promise<void> { writes++; await entered.complete(text); await completed.p; }
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
-		const services = createCodeEditorServices(resources, parent);
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		document.body.append(widget.element); widget.setVisible(true);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first**', transient: true }]);
@@ -468,6 +486,24 @@ suite('chatRenderer browser component', () => {
 		{ id: 'media', type: 'agentMessage', text: 'Delayed media.', content: [image], attachmentSource: source, transient: false },
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
+
+
+	test('accessible transcript follows streamed model text and restores the focused response', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const item: IChatListItem = { id: 'accessible-reply', type: 'agentMessage', text: '**Readable** [label](https://example.com).\n\n```ts\nconst exact = 1;\n```', transient: true };
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([item]), item);
+		const row = page.locator('[data-item-id="accessible-reply"]');
+		await row.focus();
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(false)), true);
+		const view = page.locator('.ash-accessible-view-content');
+		await expect(view).toBeFocused();
+		await expect(view).toHaveValue('Ash\n\nReadable label.\nconst exact = 1;');
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([{ ...item, text: 'Completed **reply**', transient: false }]), item);
+		await expect(view).toHaveValue('Ash\n\nCompleted reply');
+		await view.press('Escape');
+		await expect(row).toBeFocused();
+	});
 
 	test('streaming a new response leaves unchanged history DOM untouched', async function () {
 		const { page } = browserTests;

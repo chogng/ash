@@ -1,9 +1,10 @@
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
+import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, withRemoteWorkspacePath } from '../../remote/common/remote.js';
+import type { SessionCreateParams as SessionCreateParamsDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { IAgentHostResourceService } from '../common/agentHostResourceService.js';
-import type { InputItem } from '../../../../../.build/protocol/typescript/index.js';
-import type { AgentInput } from '../common/agent.js';
+import type { QueuedMessage as QueuedMessageDto, InputItem } from '../../../../../.build/protocol/typescript/index.js';
+import type { QueuedMessage, AgentInput, SessionCreateParams } from '../common/agent.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
@@ -17,7 +18,7 @@ import { createAppServerResourceApi, readAppServerResource } from './appServerAp
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
-import { AgentThreadHistoryConflictError } from '../common/agentService.js';
+import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	Thread as ThreadDto,
@@ -105,6 +106,9 @@ export function createDisconnectedAgentThreadService(unavailable: UnavailableOpe
 		readTraceDiagnostics: () => unavailable('thread.readTraceDiagnostics'),
 		readTracePayload: () => unavailable('thread.readTracePayload'),
 		readTraceGraph: () => unavailable('thread.readTraceGraph'),
+		startWireLog: () => unavailable('thread.startWireLog'),
+		stopWireLog: () => unavailable('thread.stopWireLog'),
+		readWireLog: () => unavailable('thread.readWireLog'),
 		read: () => unavailable('thread.read'),
 		configureAdvisor: () => unavailable('thread.configureAdvisor'),
 		subscribe: () => unavailable('thread.subscribe'),
@@ -116,6 +120,8 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 	return {
 		enqueue: () => unavailable('queue.enqueue'),
 		listQueued: () => unavailable('queue.list'),
+		editQueued: () => unavailable('queue.edit'),
+		cancelQueued: () => unavailable('queue.cancel'),
 		start: () => unavailable('turn.start'),
 		startReview: () => unavailable('turn.startReview'),
 		compact: () => unavailable('turn.compact'),
@@ -126,7 +132,7 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 	};
 }
 
-export function createAppServerAgentSessionService(connection: AppServerProtocolClient, sshHost?: string): IAgentSessionService {
+export function createAppServerAgentSessionService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }): IAgentSessionService {
 	return {
 		async collectDebugLogs(params, signal) {
 			if (signal?.aborted) throw canceled();
@@ -188,10 +194,10 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 				assertCurrent();
 				// Transport decoding has validated this closed result; copy only the domain fields.
 				switch (value.type) {
-					case 'targets': return { type: value.type, targets: value.targets.map(target => ({ ...target })) };
+					case 'targets': return { type: value.type, targets: value.targets.map(target => toExecutionTarget(target, remoteHost)) };
 					case 'availability': return { type: value.type, available: value.available };
 					case 'released': return { type: value.type };
-					case 'target': return { type: value.type, target: { ...value.target } };
+					case 'target': return { type: value.type, target: toExecutionTarget(value.target, remoteHost) };
 				}
 			} catch (error) {
 				assertCurrent();
@@ -201,45 +207,43 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 		// The SSH carrier already selected this host; the server consumes its own filesystem paths.
 		create: (params) => appServerRequest(connection, 'session/create', {
 			...params,
-			executionTarget: sshHost && params.executionTarget?.type === 'ssh' && params.executionTarget.host === sshHost
-				? { type: 'local', root: params.executionTarget.root }
-				: params.executionTarget
-		}).then(result => toSessionResult(result, sshHost)),
+			executionTarget: toBackendExecutionTarget(params.executionTarget, remoteHost)
+		}).then(result => toSessionResult(result, remoteHost)),
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
 		async readRoleCatalog() {
 			const catalog = await appServerRequest(connection, 'agent/roles/catalog', {});
 			return {
 				agents: catalog.agents.map(({ path, ...role }) => {
 					let resource: URI | undefined;
-					if (path) { resource = sshHost ? createSshRemoteWorkspaceUri(sshHost, path) : URI.file(path); }
+					if (path) { resource = typeof remoteHost === 'string' ? createSshRemoteWorkspaceUri(remoteHost, path) : remoteHost ? withRemoteWorkspacePath(URI.from({ scheme: 'ash-remote', authority: remoteHost.authority }), path) : URI.file(path); }
 					return { ...role, resource };
 				}),
 				diagnostics: catalog.diagnostics,
 			};
 		},
-		read: (params) => appServerRequest(connection, 'session/read', params).then(result => toSessionResult(result, sshHost)),
+		read: (params) => appServerRequest(connection, 'session/read', params).then(result => toSessionResult(result, remoteHost)),
 		readCatalog: async (params) => {
 			const result = await appServerRequest(connection, 'session/catalog/read', params);
-			return { session: result.session ? toAgentSession(result.session, sshHost) : result.session };
+			return { session: result.session ? toAgentSession(result.session, remoteHost) : result.session };
 		},
 		list: () =>
 			appServerRequest(connection, 'session/list', {}).then((result) => ({
-				sessions: result.sessions.map(session => toAgentSession(session, sshHost))
+				sessions: result.sessions.map(session => toAgentSession(session, remoteHost))
 			})),
 		subscribeCatalog: () =>
 			appServerRequest(connection, 'session/catalog/subscribe', {}).then((result) => ({
-				sessions: result.sessions.map(session => toAgentSession(session, sshHost))
+				sessions: result.sessions.map(session => toAgentSession(session, remoteHost))
 			})),
 		unsubscribeCatalog: () => voidResult(appServerRequest(connection, 'session/catalog/unsubscribe', {})),
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/subscribe', params);
 			return {
-				...toSessionResult(result, sshHost),
+				...toSessionResult(result, remoteHost),
 				threadSnapshots: result.threadProjections.map((snapshot) => {
 					const thread = toThread(snapshot.thread);
 					return {
 						thread,
-						directory: toExecutionTarget(snapshot.directory, sshHost),
+						directory: toExecutionTarget(snapshot.directory, remoteHost),
 						transcript: toThreadTranscriptSnapshot(snapshot.transcript, thread),
 						updates: snapshot.updates.map(toThreadUpdate)
 					};
@@ -256,12 +260,12 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 				.then(sessionThreadResult)
 				.then((result) => {
 					if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
-					return { session: toAgentSession(result.session, sshHost), threadId: result.threadId };
+					return { session: toAgentSession(result.session, remoteHost), threadId: result.threadId };
 				}),
 		rename: async params => {
 			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'renameSession', title: params.title })));
 			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.rename.wrongIdentity', 'The server returned a different conversation while renaming. Refresh and try again.'));
-			return toSessionResult(result, sshHost);
+			return toSessionResult(result, remoteHost);
 		},
 		delete: async params => {
 			const result = await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'delete' }));
@@ -270,15 +274,15 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 		archive: (params) =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'archive' }))
 				.then(sessionResult)
-				.then(result => toSessionResult(result, sshHost)),
+				.then(result => toSessionResult(result, remoteHost)),
 		restore: (params) =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'restore' }))
 				.then(sessionResult)
-				.then(result => toSessionResult(result, sshHost)),
+				.then(result => toSessionResult(result, remoteHost)),
 		stop: (params) =>
 			appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'stop' }))
 				.then(sessionResult)
-				.then(result => toSessionResult(result, sshHost))
+				.then(result => toSessionResult(result, remoteHost))
 	};
 }
 
@@ -303,7 +307,7 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 	} finally { signal?.removeEventListener('abort', cancel); }
 }
 
-export function createAppServerAgentThreadService(connection: AppServerProtocolClient, sshHost?: string, snapshots?: IAgentHostResourceService): IAgentThreadService {
+export function createAppServerAgentThreadService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
 		fork: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
@@ -445,10 +449,19 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		readTraceDiagnostics: (params) => appServerRequest(connection, 'session/trace/diagnostics/read', params),
 		readTracePayload: (params) => appServerRequest(connection, 'session/trace/payload/read', params),
 		readTraceGraph: (params) => appServerRequest(connection, 'session/trace/graph/read', params),
+		startWireLog: async ({ captureId }) => { await appServerRequest(connection, 'diagnostics/wireLog/start', { captureId }); },
+		stopWireLog: async ({ captureId }) => { await appServerRequest(connection, 'diagnostics/wireLog/stop', { captureId }); },
+		readWireLog: async ({ captureId, after, limit }) => {
+			try { return await appServerRequest(connection, 'diagnostics/wireLog/read', { captureId, after, limit }); }
+			catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'ResourceNotFound') { throw new AgentWireLogCaptureUnavailableError(); }
+				throw error;
+			}
+		},
 		read: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/read', params);
 			const thread = toThread(result.thread);
-			return { thread, directory: toExecutionTarget(result.directory, sshHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
+			return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
 		},
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(
@@ -470,7 +483,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			const thread = toThread(result.thread);
 			return {
 				thread,
-				directory: toExecutionTarget(result.directory, sshHost),
+				directory: toExecutionTarget(result.directory, remoteHost),
 				transcript: toThreadTranscriptSnapshot(result.transcript, thread),
 				updates: result.updates.map(toThreadUpdate),
 				...(result.history ? { history: { ...result.history } } : {})
@@ -480,14 +493,34 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 	};
 }
 
+/** Normalize the persisted queue snapshot once at the protocol boundary. */
+function queuedMessage(value: QueuedMessageDto): QueuedMessage {
+	return {
+		sessionId: value.request.sessionId, threadId: value.request.threadId, commandId: value.request.commandId,
+		revision: value.revision, status: value.status, mode: value.request.mode,
+		text: value.request.input.flatMap(item => item.type === 'text' ? [item.text] : []).join(''),
+		contextCount: value.request.input.filter(item => item.type !== 'text').length,
+		turnId: value.turnId ?? undefined, error: value.error ?? undefined,
+	};
+}
+
+function queueFailure(error: unknown): never {
+	if (error instanceof AppServerRemoteError && ['QueueNotFound', 'QueueConflict', 'QueueBusy'].includes(error.errorName)) {
+		throw new AgentQueueConflictError(localize('chat.queue.conflict', 'This queued message changed or has already started. Choose it again from the queue.'));
+	}
+	throw error;
+}
+
 export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
 		enqueue: (params, signal) =>
-			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then((result) => ({ status: result.status })),
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then(queuedMessage),
 		listQueued: (params) =>
 			appServerRequest(connection, 'queue/list', params).then((result) => ({
-				messages: result.messages.map((message) => ({ status: message.status }))
+				messages: result.messages.map(queuedMessage)
 			})),
+		editQueued: (params, action) => appServerRequest(connection, 'queue/edit', { ...params, action: action.type === 'send' ? { type: 'send', turnId: null } : action }).then(queuedMessage).catch(queueFailure),
+		cancelQueued: params => appServerRequest(connection, 'queue/cancel', params).then(queuedMessage).catch(queueFailure),
 		start: (params, signal) =>
 			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(
 				connection,
@@ -873,24 +906,40 @@ function toAgentResponse(response: AgentResponse): AgentResponseDto {
 	}
 }
 
-/** Backend-local paths belong to the selected SSH host in the Desktop domain. */
-function toExecutionTarget(target: AgentSession['executionTarget'], sshHost?: string): AgentSession['executionTarget'] {
-	return sshHost && target?.type === 'local' ? { type: 'ssh', host: sshHost, root: target.root } : target ? { ...target } : target;
+/** Backend-local paths belong to this connection's selected host in the Desktop domain. */
+function toExecutionTarget(target: NonNullable<AgentSession['executionTarget']>, remoteHost?: string | { readonly authority: string; }): NonNullable<AgentSession['executionTarget']>;
+function toExecutionTarget(target: AgentSession['executionTarget'], remoteHost?: string | { readonly authority: string; }): AgentSession['executionTarget'];
+function toExecutionTarget(target: AgentSession['executionTarget'], remoteHost?: string | { readonly authority: string; }): AgentSession['executionTarget'] {
+	if (remoteHost && target?.type === 'local') return typeof remoteHost === 'string' ? { type: 'ssh', host: remoteHost, root: target.root } : { type: 'remote', authority: remoteHost.authority, root: target.root };
+	if (remoteHost && target?.type === 'provider') return { ...target, hostAuthority: (typeof remoteHost === 'string' ? createSshRemoteAuthority(remoteHost).authority : remoteHost.authority) };
+	return target ? { ...target } : target;
 }
 
-function toSessionResult(result: SessionResultDto, sshHost?: string): SessionResult {
+function toBackendExecutionTarget(target: SessionCreateParams['executionTarget'], remoteHost?: string | { readonly authority: string; }): SessionCreateParamsDto['executionTarget'] {
+	if (target?.type === 'provider') {
+		if (target.hostAuthority !== (remoteHost && (typeof remoteHost === 'string' ? createSshRemoteAuthority(remoteHost).authority : remoteHost.authority))) throw new Error(localize('agentHost.foreignRuntime', 'Session runtime belongs to another host.'));
+		return { type: 'provider', providerId: target.providerId, workspace: target.workspace, root: target.root };
+	}
+	if (target?.type === 'remote') {
+		if (!remoteHost || typeof remoteHost === 'string' || target.authority !== remoteHost.authority) throw new Error(localize('agentHost.foreignWorkspace', 'Workspace belongs to another host.'));
+		return { type: 'local', root: target.root };
+	}
+	return remoteHost && target?.type === 'ssh' && target.host === remoteHost ? { type: 'local', root: target.root } : target;
+}
+
+function toSessionResult(result: SessionResultDto, remoteHost?: string | { readonly authority: string; }): SessionResult {
 	return {
-		session: toAgentSession(result.session, sshHost),
+		session: toAgentSession(result.session, remoteHost),
 		agentTree: { roots: result.agentTree.roots.map(toAgentExecutionNode) }
 	};
 }
 
-function toAgentSession(session: SessionDto, sshHost?: string): AgentSession {
+function toAgentSession(session: SessionDto, remoteHost?: string | { readonly authority: string; }): AgentSession {
 	return {
 		sessionId: session.sessionId,
 		title: session.title,
 		status: session.status,
-		executionTarget: toExecutionTarget(session.executionTarget, sshHost),
+		executionTarget: toExecutionTarget(session.executionTarget, remoteHost),
 		model: session.model ? { ...session.model } : session.model,
 		manager: { ...session.manager },
 		threads: session.threads.map((thread) => ({

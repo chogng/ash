@@ -64,6 +64,12 @@ export class BrowserClipboardService extends Disposable implements IClipboardSer
 		await this.clipboard.writeText(value);
 	}
 
+	public async writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void> {
+		if (!this.clipboard?.write) throw new Error('The browser image clipboard is unavailable');
+		const png = Promise.resolve(data).then(bytes => new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+		await this.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+	}
+
 	async readFindText(): Promise<string> {
 		return this.findText;
 	}

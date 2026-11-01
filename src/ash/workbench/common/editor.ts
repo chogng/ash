@@ -122,6 +122,10 @@ export interface IResourceEditorInput {
 	/** Distinguishes an independent custom editor tab from a text tab for the same resource. */
 	readonly editorId?: string;
 	toUntyped?(): IResourceEditorInput;
+	/** Copy tab identity without sharing a view or its playback state. */
+	copy?(): IResourceEditorInput;
+	/** Produce a resource request for a moved or saved file; the resolver chooses its editor. */
+	rename?(target: URI): IResourceEditorInput;
 	/** A custom editor can veto transfers before its source window is closed. */
 	canMove?(sourceGroup: number, targetGroup: number): true | string;
 	readonly capabilities?: EditorInputCapabilities;

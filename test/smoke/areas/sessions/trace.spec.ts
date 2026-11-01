@@ -43,10 +43,26 @@ test('Workbench opens the shared Execution Trace editor and imports a capture', 
 	await expect((await inspectTraceAction(viewer, application, 'Export trace')).enabled).toBe(true);
 	await viewer.page().keyboard.press('Escape');
 	await selectTraceAction(viewer, application, 'Help');
-	await expect(workbench.page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Execution Trace[\s\S]*Hiding or closing the editor stops polling/u);
+	await expect(workbench.page.getByRole('dialog', { name: 'Accessibility Help' }).getByRole('textbox')).toHaveValue(/Agent Debug Logs[\s\S]*Hiding or closing the editor stops polling/u);
 	await workbench.page.keyboard.press('Escape');
-	await workbench.page.getByRole('button', { name: 'Close Execution Trace', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	await expect(viewer).toHaveCount(0);
+});
+
+test.describe('Workbench Agent Debug Logs registration in Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+	test('opens the shared editor and restores focus after localized help', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
+		const viewer = workbench.page.locator('.ash-agent-trace');
+		await expect(viewer).toBeVisible();
+		await selectTraceAction(viewer, application, '帮助');
+		await expect(workbench.page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/Agent 调试日志[\s\S]*各 Thread 自己的顺序[\s\S]*隐藏或关闭编辑器会停止轮询并释放订阅/u);
+		await workbench.page.keyboard.press('Escape');
+		await expect.poll(() => viewer.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect(viewer).toHaveCount(0);
+	});
 });
 
 test('Execution Trace imports evaluation history, nests child Threads and exports every event', async ({ target, application, workbench }, testInfo) => {

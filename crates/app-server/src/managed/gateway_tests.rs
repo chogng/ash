@@ -2168,3 +2168,151 @@ fn ide_attachment_follows_one_gateway_connection_across_directory_routes() {
     client.close();
     served.join().unwrap();
 }
+
+#[test]
+fn browser_tcp_routes_every_chunk_to_its_selected_runtime() {
+    let profile = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = ProfileAppServerRegistry::open(options, ash_app_server_diff::compute).unwrap();
+    let sessions: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
+    for target in [
+        SessionExecutionTarget::Ssh {
+            host: "source-host".into(),
+            root: "/workspace".into(),
+        },
+        SessionExecutionTarget::Provider {
+            provider_id: "ash.dev-containers".into(),
+            workspace: "container-runtime".into(),
+            root: "/workspace".into(),
+        },
+    ] {
+        for method in [
+            "browser/tcp/open",
+            "browser/tcp/read",
+            "browser/tcp/write",
+            "browser/tcp/close",
+        ] {
+            assert_eq!(selected_execution_target(&registry, &sessions, &serde_json::json!({"method":method,"params":{"streamId":"stream","executionTarget":target}})).unwrap(), Some(target.clone()));
+        }
+    }
+}
+
+#[test]
+fn wire_log_records_the_renderer_boundary_across_directory_routes_and_connections() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
+    let server = registry.server_for(options).unwrap();
+    let start = || {
+        let registry = Arc::clone(&registry);
+        let server = Arc::clone(&server);
+        let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+        let served = thread::spawn(move || {
+            let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+            let result = serve(
+                registry,
+                server,
+                BufReader::new(reader),
+                writer,
+                RemoteLaunch::from_environment(),
+            );
+            assert!(
+                result.is_ok()
+                    || result
+                        .as_ref()
+                        .is_err_and(crate::managed::is_peer_disconnect)
+            );
+        });
+        client.send(
+            1,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"wire-test","version":"1"},"capabilities":{}}),
+        );
+        assert!(client.read()["result"].is_object());
+        (client, served)
+    };
+    let call = |client: &mut crate::server::request_dispatch::tests::Client, id, method, params| {
+        client.send(id, method, params);
+        loop {
+            let response = client.read();
+            if response["id"] == id {
+                break response;
+            }
+        }
+    };
+    let (mut owner, served) = start();
+    let capture = serde_json::json!({"captureId":"wire-test"});
+    assert!(
+        call(&mut owner, 2, "diagnostics/wireLog/start", capture.clone())
+            .get("result")
+            .is_some()
+    );
+    let created = call(
+        &mut owner,
+        3,
+        "session/create",
+        serde_json::json!({"commandId":"wire-create","title":"Wire test","executionTarget":{"type":"local","root":root.path()}}),
+    );
+    let session_id = created["result"]["session"]["sessionId"].clone();
+    assert!(session_id.is_string(), "{created}");
+    let read_params = serde_json::json!({"sessionId":session_id});
+    let expected = call(&mut owner, 4, "session/read", read_params.clone());
+    assert!(expected.get("result").is_some(), "{expected}");
+    assert!(
+        call(&mut owner, 5, "diagnostics/wireLog/stop", capture.clone())
+            .get("result")
+            .is_some()
+    );
+    call(&mut owner, 6, "session/read", read_params);
+    let query = serde_json::json!({"captureId":"wire-test","after":0,"limit":100});
+    let snapshot = call(&mut owner, 7, "diagnostics/wireLog/read", query.clone());
+    let frames = snapshot["result"]["frames"].as_array().unwrap();
+    let request = frames
+        .iter()
+        .find(|frame| frame["requestId"] == "4" && frame["kind"] == "request")
+        .unwrap();
+    let reply = frames
+        .iter()
+        .find(|frame| frame["requestId"] == "4" && frame["kind"] == "response")
+        .unwrap();
+    assert_eq!(reply["requestSequence"], request["sequence"]);
+    assert_eq!(
+        serde_json::from_str::<Value>(reply["raw"].as_str().unwrap()).unwrap(),
+        expected
+    );
+    assert!(frames.iter().all(|frame| {
+        !frame["method"]
+            .as_str()
+            .is_some_and(|method| method.starts_with("diagnostics/wireLog/"))
+    }));
+    assert!(frames.iter().all(|frame| frame["requestId"] != "6"));
+    let (mut other, other_served) = start();
+    assert_eq!(
+        call(&mut other, 2, "diagnostics/wireLog/read", query.clone())["error"]["code"],
+        -32004
+    );
+    other.close();
+    other_served.join().unwrap();
+    owner.close();
+    served.join().unwrap();
+    let (mut reconnected, served) = start();
+    assert_eq!(
+        call(&mut reconnected, 2, "diagnostics/wireLog/read", query)["error"]["code"],
+        -32004
+    );
+    reconnected.close();
+    served.join().unwrap();
+}

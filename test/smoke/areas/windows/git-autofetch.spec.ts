@@ -9,8 +9,15 @@ test('Git Auto Fetch setting saves all three modes through shared App Server con
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('source-control');
+	await expect(page.locator('[data-settings-item-id="git.openDiffOnClick"]')).toHaveCount(1);
+	await expect(page.locator('[data-settings-item-id="git.autofetch"]')).toHaveCount(0);
 	await workbench.settingsEditor.selectGroup('extensions');
 	await workbench.settingsEditor.selectCategory('extension.ash.git');
+	await expect(page.locator('[data-settings-category-id^="extension.ash.git.group."]')).toHaveCount(8);
+	await expect(page.locator('[data-settings-item-id="git.openDiffOnClick"]')).toHaveCount(0);
+	await workbench.settingsEditor.selectCategory('extension.ash.git.group.git.sync');
 	const control = page.locator('[data-configuration-key="git.autofetch"]');
 	const select = control.getByRole('combobox', { name: 'Auto Fetch' });
 	await expect(select).toBeVisible();

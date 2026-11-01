@@ -56,6 +56,7 @@ jobs:
           python -B scripts/install_python_tools.py
           pnpm install --frozen-lockfile
           pnpm exec playwright install chromium
+          pnpm protocol:generate
           pnpm prepare:generated
       - name: Check types and screenshot tooling
         run: |

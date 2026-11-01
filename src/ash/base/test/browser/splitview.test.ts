@@ -1,6 +1,8 @@
 import { Orientation } from '../../browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { JSDOM } from 'jsdom';
 import { h } from '../../browser/dom.js';
 
@@ -24,6 +26,102 @@ for (const [name, value] of Object.entries({
 const { SplitView } = await import(
 	'../../browser/ui/splitview/splitview.js'
 );
+
+suite('SplitView rendered separators', () => {
+	const browser = useBrowserTests();
+	for (const orientation of ['horizontal', 'vertical']) {
+		test(`${orientation} handle feedback stays short while the full boundary resizes`, async () => {
+			const { page } = browser;
+			await page.goto(`/splitview.html?orientation=${orientation}&presentation=handle`);
+			await page.waitForFunction(() => !!window.ashSplitViewFixture);
+			await page.locator('#app').evaluate(element => {
+				(element as HTMLElement).style.setProperty('--ash-description-foreground', 'rgb(128, 128, 128)');
+				(element as HTMLElement).style.setProperty('--ash-focusBorder', 'rgb(0, 100, 200)');
+			});
+			const sash = page.locator('.ash-sash').first();
+			await expect(page.locator('#app')).toHaveClass(/ash-sash-handle-scope/);
+			const bounds = (await sash.boundingBox())!;
+			const horizontalSplit = orientation === 'horizontal';
+			const x = bounds.x + (horizontalSplit ? bounds.width / 2 : 10);
+			const y = bounds.y + (horizontalSplit ? 10 : bounds.height / 2);
+			await page.mouse.move(x, y);
+			await expect(sash).toHaveClass(/ash-sash-hover/);
+			const feedback = () => sash.evaluate(element => {
+				const style = getComputedStyle(element, '::after');
+				return { width: style.width, height: style.height, color: style.backgroundColor, top: style.top, left: style.left };
+			});
+			await expect.poll(async () => (await feedback()).color).toBe('rgb(128, 128, 128)');
+			const grip = await feedback();
+			expect(horizontalSplit ? grip.height : grip.width).toBe('60px');
+			expect(horizontalSplit ? grip.width : grip.height).toBe('3px');
+			const pane = page.locator('.ash-split-view-pane').first();
+			const before = (await pane.boundingBox())!;
+			await page.mouse.down();
+			await expect(sash).toHaveClass(/ash-sash-active/);
+			await page.mouse.move(x + (horizontalSplit ? 20 : 0), y + (horizontalSplit ? 0 : 20));
+			await page.mouse.up();
+			const after = (await pane.boundingBox())!;
+			expect(horizontalSplit ? after.width : after.height).toBe((horizontalSplit ? before.width : before.height) + 20);
+			await sash.focus();
+			await sash.press(horizontalSplit ? 'ArrowRight' : 'ArrowDown');
+			await expect.poll(async () => (await feedback()).color).toBe('rgb(0, 100, 200)');
+			await page.evaluate(() => window.ashSplitViewFixture.setFeedbackPresentation(false));
+			const full = await feedback();
+			expect(parseFloat(horizontalSplit ? full.height : full.width)).toBe(horizontalSplit ? bounds.height : bounds.width);
+			await page.evaluate(() => window.ashSplitViewFixture.setFeedbackPresentation(true));
+			expect(horizontalSplit ? (await feedback()).height : (await feedback()).width).toBe('60px');
+		});
+
+		test(`${orientation} separators only precede subsequent visible panes`, async () => {
+			const { page } = browser;
+			await page.goto(`/splitview.html?orientation=${orientation}`);
+			await page.waitForFunction(() => !!window.ashSplitViewFixture);
+			const separators = () => page.locator('.ash-split-view-pane:not([hidden])').evaluateAll(panes => panes.map(pane => getComputedStyle(pane, '::before').content));
+			expect(await separators()).toEqual(['none', '""', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.setVisible(0, false));
+			expect(await separators()).toEqual(['none', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.setVisible(1, false));
+			expect(await separators()).toEqual(['none']);
+			await page.evaluate(() => window.ashSplitViewFixture.setVisible(0, true));
+			expect(await separators()).toEqual(['none', '""']);
+			await page.evaluate(() => window.ashSplitViewFixture.setVisible(1, true));
+			expect(await separators()).toEqual(['none', '""', '""']);
+		});
+
+		test(`${orientation} separators paint above positioned pane content`, async () => {
+			const { page } = browser;
+			await page.goto(`/splitview.html?orientation=${orientation}`);
+			await page.waitForFunction(() => !!window.ashSplitViewFixture);
+			// Tabs and scrollbars create stacking layers above ordinary pane content.
+			const pane = page.locator('.ash-split-view-pane').nth(1);
+			await pane.locator(':scope > div').evaluate(element => {
+				element.style.position = 'relative';
+				element.style.zIndex = '3';
+				element.style.backgroundColor = 'rgb(200, 200, 200)';
+			});
+			const bounds = (await pane.boundingBox())!;
+			const screenshot = await page.screenshot({
+				clip: {
+					x: bounds.x + (orientation === 'vertical' ? 20 : 0),
+					y: bounds.y + (orientation === 'horizontal' ? 20 : 0),
+					width: 1,
+					height: 1,
+				}
+			});
+			const pixel = await page.evaluate(async data => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${data}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = canvas.height = 1;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				return [...context.getImageData(0, 0, 1, 1).data];
+			}, screenshot.toString('base64'));
+			expect(pixel).toEqual([18, 52, 86, 255]);
+		});
+	}
+});
 
 class TestView {
 	readonly element: HTMLDivElement;

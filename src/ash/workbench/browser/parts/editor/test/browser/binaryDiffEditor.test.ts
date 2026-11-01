@@ -23,7 +23,7 @@ test('Binary diff keeps both byte previews and metadata through working-set seri
 	const modified = { resource: URI.file('C:\\project\\after.bin'), label: 'after.bin' };
 	const input = createBinaryDiffEditorInput(original, modified);
 	const restored = EditorInputSerializers.deserialize(EditorInputSerializers.serialize(input));
-	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Default);
+	assert.equal(binaryDiffEditorDescriptor().canOpen(restored), EditorPaneMatch.Builtin);
 	using services = new InstantiationService();
 	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
 	registerTestComponentServices(services, dom.window.document);

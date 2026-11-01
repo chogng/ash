@@ -6,6 +6,7 @@ import { IQuickInputService } from '../../common/quickInput.js';
 import { QuickInputService } from '../../browser/quickInputService.js';
 import { IStorageService, StorageScope, StorageTarget, type StorageValue } from '../../../storage/common/storage.js';
 import { IContextMenuService } from '../../../contextview/browser/contextView.js';
+import { IOpenerService } from '../../../opener/common/opener.js';
 
 /** Test scope owner; every operation still runs through the production service and controller. */
 export class TestQuickInputService extends QuickInputService {
@@ -19,6 +20,9 @@ export class TestQuickInputService extends QuickInputService {
 		const contexts = options.contextKeyService ?? new ContextKeyService();
 		const layout = options.layoutService ?? new BrowserLayoutService({ root: options.container });
 		if (!scope.has(IStorageService)) scope.registerInstance(IStorageService, new TestStorageService());
+		if (!scope.has(IOpenerService)) scope.registerInstance(IOpenerService, {
+			open() { throw new Error('Unexpected Quick Input link'); },
+		} as unknown as IOpenerService);
 		if (!scope.has(IContextMenuService)) scope.registerInstance(IContextMenuService, {
 			contextMenuStyle: 'custom',
 			onDidShowContextMenu: Event.None,
@@ -38,6 +42,8 @@ export class TestQuickInputService extends QuickInputService {
 
 /** Unused service controls fail loudly in headless tests of input/pick consumers. */
 export const quickInputServiceTestControls: Omit<IQuickInputService, 'input' | 'createQuickPick'> = {
+	createQuickTree() { throw new Error('Unexpected Quick Tree'); },
+	createQuickWidget() { throw new Error('Unexpected Quick Widget'); },
 	quickAccess: { onDidChangeVisibility: Event.None, show() { throw new Error('Unexpected Quick Access'); } },
 	onShow: Event.None, onHide: Event.None, currentQuickInput: undefined,
 	focus() { throw new Error('Unexpected Quick Input focus'); },

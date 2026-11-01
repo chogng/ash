@@ -8,7 +8,7 @@ import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffEditor, MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions } from './multiDiffEditor.js';
+import { MultiDiffEditor, MultiDiffEditorAllCollapsed, MultiDiffEditorHideUnchangedRegions, MultiDiffEditorPreview } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
@@ -42,11 +42,29 @@ export class MultiDiffGoToFileAction extends Action2 {
 		if (!item) {
 			return Promise.resolve();
 		}
-		const selection = pane?.getControl()?.modifiedEditor.getSelection();
+		const review = pane?.getReviewLocation();
+		const selection = pane?.getControl()?.modifiedEditor.getSelection() ?? (review?.side === 'modified' ? review.range : undefined);
 		return accessor.get(IEditorService).openEditor(item.goToFile ?? item.modified, {
 			pinned: false, revealIfOpened: true,
 			...(selection ? { selection, selectionSource: TextEditorSelectionSource.JUMP } : {}),
 		});
+	}
+}
+
+export class MultiDiffTogglePreviewAction extends Action2 {
+	constructor() {
+		super({
+			id: 'multiDiffEditor.togglePreview',
+			title: localize2('multiDiff.preview.toggle', 'Toggle Review Preview (Prototype)'),
+			icon: Lxicon.preview,
+			precondition: MultiDiffEditorActive,
+			toggled: MultiDiffEditorPreview.isEqualTo(true),
+			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 12 },
+			f1: true,
+		});
+	}
+	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> | undefined {
+		return activeMultiDiffPane(accessor, context)?.togglePreview();
 	}
 }
 

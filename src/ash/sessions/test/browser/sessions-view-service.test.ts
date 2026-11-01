@@ -624,6 +624,8 @@ class FakeSessionService implements ISessionsManagementService {
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
+	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
+	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
 	async materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> {
 		const id = this.nextMaterializedId++;
 		const durable = session(`materialized-${id}`, `materialized-thread-${id}`);

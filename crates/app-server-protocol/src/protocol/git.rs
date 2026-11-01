@@ -710,6 +710,28 @@ pub struct GitChangeFileResult {
     pub modified: GitCommitFileContentDto,
 }
 
+/// Reads a bounded batch of published changes in request order, under one repository lease.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangeFilesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub client: Option<GitClientOptionsDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[schemars(length(min = 1, max = 16))]
+    pub paths: Vec<String>,
+    pub comparison: GitChangeFileComparisonDto,
+}
+
+/// All requested comparisons, or a failure without a partial editor input.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangeFilesResult {
+    pub files: Vec<GitChangeFileResult>,
+}
+
 /// Identifies a conflicted path in the selected repository.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

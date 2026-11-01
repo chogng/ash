@@ -1,12 +1,24 @@
+import type { IChatInputPart } from './widget/input/chatInputPart.js';
+import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
+import type { IView } from '../../../common/views.js';
+import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
+import type { Selection } from '../../../../editor/common/core/selection.js';
+import type { ChatWidget } from './widget/chatWidget.js';
+import type { IChatListItem } from './widget/chatListItems.js';
+
+export interface IChatAcceptInputOptions {
+	readonly queue?: ChatRequestQueueKind;
+}
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;
 	readonly domNode: HTMLElement;
@@ -16,9 +28,33 @@ export interface IChatWidget {
 	readonly isTranscriptProgressActive: boolean;
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
+	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
+	cancelTranscriptProgress?(): boolean;
+	retryFailedTurn(turnId?: string): Promise<void>;
+	getFindController(): IChatFindController | undefined;
+	focusResponseItem(lastFocused?: boolean): void;
+	focusCodeBlock(reverse?: boolean): void;
+	focusInput(): void;
+	getFocus(): IChatListItem | undefined;
+	/** An absent item selects the first or last boundary of the current transcript. */
+	getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined;
+	focus(item: IChatListItem): void;
+	reveal(item: IChatListItem): void;
 	startVoiceConversation(): Promise<void>;
 	/** Prepares references within this composer’s draft lifetime and admission rules. */
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+}
+
+export interface IChatFindController {
+	readonly visible: boolean;
+	show(seedText?: string, focus?: boolean): void;
+	hide(): void;
+	next(): void;
+	previous(): void;
+	toggleCaseSensitive(): void;
+	toggleWholeWord(): void;
+	toggleRegex(): void;
+	focus(): void;
 }
 
 export interface IChatWidgetService {
@@ -30,6 +66,34 @@ export interface IChatWidgetService {
 }
 
 export const IChatWidgetService = createServiceIdentifier<IChatWidgetService>('chatWidgetService');
+
+export interface IQuickChatOpenOptions {
+	readonly query: string;
+	readonly isPartialQuery?: boolean;
+	readonly selection?: Selection;
+}
+
+export interface IQuickChatService {
+	readonly onDidClose: Event<void>;
+	readonly enabled: boolean;
+	readonly focused: boolean;
+	readonly sessionResource: URI | undefined;
+	toggle(options?: IQuickChatOpenOptions): void;
+	open(options?: IQuickChatOpenOptions): void;
+	focus(): void;
+	close(): void;
+	openInChatView(): Promise<void>;
+}
+
+export const IQuickChatService = createServiceIdentifier<IQuickChatService>('quickChatService');
+
+/** A borrowed presentation: the Sessions adapter retains its model and draft lifetime. */
+export interface IQuickChatSession extends IDisposable {
+	readonly widget: ChatWidget;
+	readonly onDidDispose: Event<void>;
+	setVisible(visible: boolean): void;
+	reveal(): void;
+}
 
 /** The composer remains the owner of preparation; a target admits references to its input. */
 export interface IChatPasteTarget {
@@ -50,3 +114,18 @@ export interface IChatPasteTargetService {
 }
 
 export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetService>('chatPasteTargetService');
+
+/** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
+export interface IChatViewPane extends IView {
+	/** Borrowed root used only to measure the host's content frame. */
+	readonly element: HTMLElement;
+	getOptimalWidth(): number;
+	getSessionsViewerOrientation(): AgentSessionsViewerOrientation;
+	getLastDimensions(orientation: AgentSessionsViewerOrientation): { height: number; width: number; } | undefined;
+	toggleSessionsSidebar(options?: { readonly visible: boolean; }): boolean;
+	focusInput(): void;
+	focusSessions(): boolean;
+	moveToEditor(): Promise<void>;
+	moveSessionToSideBar(resource: URI): Promise<void>;
+	openInNewWindow(): Promise<void>;
+}

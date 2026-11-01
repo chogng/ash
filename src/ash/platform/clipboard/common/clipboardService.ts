@@ -21,6 +21,8 @@ export interface IClipboardService {
 	readText(type?: string): Promise<string>;
 	/** Returns PNG bytes, or an empty buffer when the clipboard contains no image. */
 	readImage(): Promise<Uint8Array>;
+	/** Writes PNG bytes; a pending encoding preserves the browser's user-gesture lease. */
+	writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void>;
 	writeText(value: string, type?: string): Promise<void>;
 	/** Reads the shared find term independently of copied text. */
 	readFindText(): Promise<string>;

@@ -173,6 +173,12 @@ export interface IFileChangeEvent {
 	readonly resources: readonly URI[] | undefined;
 }
 
+/** A successful rename through the file service, including directory moves. */
+export interface IFileRenameEvent {
+	readonly source: URI;
+	readonly target: URI;
+}
+
 /** Provider-owned comparison facts, separate from the resource used for storage and display. */
 export interface IFilePathIdentity {
 	/** Comparison-only spelling, with casing applied separately for each directory's direct children. */
@@ -252,6 +258,7 @@ export function hasCopyScopeCapability(provider: IFileSystemProvider): provider 
 
 /** Routes file operations through explicitly registered resource schemes. */
 export interface IFileService {
+	readonly onDidRenameFile: Event<IFileRenameEvent>;
 	retainPathIdentity(resource: URI): IDisposable;
 	/** Uniform providers need no asynchronous preparation. */
 	resolvePathIdentity(resource: URI, signal?: AbortSignal): Promise<void> | undefined;

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { scheduleAtNextAnimationFrame } from '../../../../../base/browser/dom.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -754,6 +755,7 @@ test('Diff collapse command toggles hidden unchanged regions and follows setting
 	assert.equal(configuration.getValue(CodeEditorConfiguration.diffHideUnchangedRegionsEnabled), true);
 	assert.equal(regions().length, 2);
 	// The leading block retains one context line adjacent to the final changed line.
+	await new Promise<void>(resolve => scheduleAtNextAnimationFrame(dom.window as unknown as Window, () => resolve(), -1000));
 	assert.equal(regions()[0]?.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
 	await configuration.updateValue(CodeEditorConfiguration.diffHideUnchangedRegionsMinimumLineCount, 100);
 	assert.equal(regions().length, 0);

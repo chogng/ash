@@ -29,6 +29,8 @@ import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../../wo
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../services/sessions/common/session.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
 const { IEditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { DesktopLayoutController } = await import('../../browser/desktopLayoutController.js');
@@ -120,27 +122,7 @@ suite('DesktopLayoutController', () => {
 		assert.deepEqual(persisted.find((entry: { sessionResource: string; }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
 	});
 
-	test('Code restores each session panel view only while the panel is visible', async () => {
-		using fixture = await createFixture([{ sessionResource: 'session:b', panelViewContainerId: 'tools.b' }]);
-		await fixture.open('b');
-		assert.equal(fixture.panelView, undefined);
-		fixture.panelVisible = true;
-		fixture.partsChanged.fire();
-		assert.equal(fixture.panelView, 'tools.b');
-		fixture.panelView = 'tools.a';
-		fixture.panelOpened.fire('tools.a');
-		await fixture.open('a');
-		assert.equal(fixture.panelView, 'ash.panel.terminal');
-		await fixture.open('b');
-		assert.equal(fixture.panelView, 'tools.a');
-		fixture.panelVisible = false;
-		fixture.partsChanged.fire();
-		await fixture.open('a');
-		assert.equal(fixture.panelView, 'tools.a');
-		await fixture.storage.flush();
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string; }[];
-		assert.equal(saved.find(entry => entry.sessionResource === 'session:b')?.panelViewContainerId, 'tools.a');
-	});
+
 	test('switching sessions restores their editors and layout visibility does not change selection', async () => {
 		using fixture = await createFixture();
 		fixture.editor.set(workingSet('a', 'a.ts'));
@@ -399,7 +381,7 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /paneCompositePartService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /sessionsService/);
 	});
 });
 

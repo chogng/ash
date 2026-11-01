@@ -25,6 +25,26 @@ await import('../../../hover/browser/hoverContribution.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
+test('unused color picker controls stay unallocated through layout, configuration and model replacement', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using closeDom = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model: first });
+	const picker = () => dom.window.document.querySelector('.stanza-editor-color-picker');
+	assert.equal(picker(), null);
+	editor.getContribution<ColorPickerController>('editor.contrib.colorPicker')!.hide();
+	editor.layout({ width: 500, height: 160 });
+	editor.updateOptions({ readOnly: true });
+	editor.setPosition(new Position(1, 2));
+	assert.equal(picker(), null);
+	editor.setModel(second);
+	assert.equal(picker(), null);
+	editor.dispose();
+	assert.equal(picker(), null);
+});
+
 test('color hover waits for the committed color presentation and rejects it after closing', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using closeDom = toDisposable(() => dom.window.close());

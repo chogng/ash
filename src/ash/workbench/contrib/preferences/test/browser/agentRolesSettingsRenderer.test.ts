@@ -57,6 +57,10 @@ class RolesFixture extends DisposableStore {
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Accessibility help' } as unknown as IAccessibleViewService);
 		this.renderer = this.add(this.services.createInstance(AgentRolesSettingsRenderer, this.root));
+		assert.equal(this.root.childElementCount, 0, 'Preferences retains Agent controls without mounting them on unrelated pages');
+		for (const node of this.renderer.getNodes()) {
+			if (node.element.kind === 'item') this.root.append(this.renderer.renderItem(node.element.value));
+		}
 	}
 }
 

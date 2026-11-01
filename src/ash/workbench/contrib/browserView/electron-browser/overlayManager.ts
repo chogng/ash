@@ -25,6 +25,8 @@ const overlayRoots = new Map<string, BrowserOverlayType>([
 	['.ash-dialog', BrowserOverlayType.Dialog],
 	['.ash-notification', BrowserOverlayType.Notification],
 	['.ash-notifications-center', BrowserOverlayType.Notification],
+	// Hosts mark transient layout surfaces without coupling the browser to product-specific chrome.
+	['[data-browser-overlay]', BrowserOverlayType.Unknown],
 ]);
 const overlaySelector = [...overlayRoots.keys()].join(',');
 

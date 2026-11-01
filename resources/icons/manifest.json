@@ -152,11 +152,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "browser-web",
-      "file": "browser-web.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "bug",
       "file": "bug.svg",
       "rendering": "symbolic"
@@ -177,13 +172,8 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-1",
-      "file": "chat-1.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "chat-1-filled",
-      "file": "chat-1-filled.svg",
+      "id": "chat",
+      "file": "chat.svg",
       "rendering": "symbolic"
     },
     {
@@ -207,13 +197,18 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-4",
-      "file": "chat-4.svg",
+      "id": "chat-filled",
+      "file": "chat-filled.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "chat-4-filled",
-      "file": "chat-4-filled.svg",
+      "id": "chat-mode",
+      "file": "chat-mode.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-mode-filled",
+      "file": "chat-mode-filled.svg",
       "rendering": "symbolic"
     },
     {
@@ -337,6 +332,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "comment-discussion",
+      "file": "comment-discussion.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "connectors",
       "file": "connectors.svg",
       "rendering": "symbolic"
@@ -394,6 +394,11 @@
     {
       "id": "cursor-filled",
       "file": "cursor-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "dashboard",
+      "file": "dashboard.svg",
       "rendering": "symbolic"
     },
     {
@@ -742,6 +747,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "global",
+      "file": "global.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "go-to-file",
       "file": "go-to-file.svg",
       "rendering": "symbolic"
@@ -802,6 +812,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "image-session",
+      "file": "image-session.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "info",
       "file": "info.svg",
       "rendering": "symbolic"
@@ -812,13 +827,13 @@
       "rendering": "symbolic"
     },
     {
-      "id": "issue-closed",
-      "file": "issue-closed.svg",
+      "id": "issue-draft",
+      "file": "issue-draft.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "issue-opened",
-      "file": "issue-opened.svg",
+      "id": "issue-reopened",
+      "file": "issue-reopened.svg",
       "rendering": "symbolic"
     },
     {
@@ -857,53 +872,53 @@
       "rendering": "symbolic"
     },
     {
-      "id": "layout-panel-1",
-      "file": "layout-panel-1.svg",
+      "id": "layout-panel",
+      "file": "layout-panel.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-panel-off-1",
-      "file": "layout-panel-off-1.svg",
+      "id": "layout-panel-off",
+      "file": "layout-panel-off.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-left-1",
-      "file": "layout-sidebar-left-1.svg",
+      "id": "layout-sidebar-left",
+      "file": "layout-sidebar-left.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-left-2",
-      "file": "layout-sidebar-left-2.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "layout-sidebar-left-off-1",
-      "file": "layout-sidebar-left-off-1.svg",
+      "id": "layout-sidebar-left-off",
+      "file": "layout-sidebar-left-off.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-left-off-2",
-      "file": "layout-sidebar-left-off-2.svg",
+      "id": "layout-sidebar-left-off-session",
+      "file": "layout-sidebar-left-off-session.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-right-1",
-      "file": "layout-sidebar-right-1.svg",
+      "id": "layout-sidebar-left-session",
+      "file": "layout-sidebar-left-session.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-right-2",
-      "file": "layout-sidebar-right-2.svg",
+      "id": "layout-sidebar-right",
+      "file": "layout-sidebar-right.svg",
       "rendering": "symbolic"
     },
     {
-      "id": "layout-sidebar-right-off-1",
-      "file": "layout-sidebar-right-off-1.svg",
+      "id": "layout-sidebar-right-off",
+      "file": "layout-sidebar-right-off.svg",
       "rendering": "multicolor"
     },
     {
-      "id": "layout-sidebar-right-off-2",
-      "file": "layout-sidebar-right-off-2.svg",
+      "id": "layout-sidebar-right-off-session",
+      "file": "layout-sidebar-right-off-session.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-right-session",
+      "file": "layout-sidebar-right-session.svg",
       "rendering": "symbolic"
     },
     {
@@ -1159,6 +1174,11 @@
     {
       "id": "primitive-square",
       "file": "primitive-square.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "progress",
+      "file": "progress.svg",
       "rendering": "symbolic"
     },
     {
@@ -1444,6 +1464,26 @@
     {
       "id": "text-2",
       "file": "text-2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsdown",
+      "file": "thumbsdown.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsdown-filled",
+      "file": "thumbsdown-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsup",
+      "file": "thumbsup.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "thumbsup-filled",
+      "file": "thumbsup-filled.svg",
       "rendering": "symbolic"
     },
     {

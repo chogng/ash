@@ -20,6 +20,15 @@ import { ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { registerExtensionManagementActions } from './extensionsActions.js';
 import { openExtensionsView, registerExtensionsViewContainer } from './extensionsViewlet.js';
+import { ExtensionsSettingsModel } from './extensionsSettingsModel.js';
+import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+
+registerSettingsSection({
+	id: 'extensions.management', categoryId: 'extensions', model: new SyncDescriptor(ExtensionsSettingsModel),
+	accessibleViewProviderId: AccessibleViewProviderId.Extensions,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.Extensions,
+});
 
 registerSingleton(IExtensionRecommendationsService, new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.IDE], true));
 registerSingleton(IExtensionIgnoredRecommendationsService, ExtensionIgnoredRecommendationsService, InstantiationType.Delayed);

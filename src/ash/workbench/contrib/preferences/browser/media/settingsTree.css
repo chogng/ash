@@ -5,6 +5,9 @@
 	gap: 32px;
 }
 
+.ash-settings-tree.has-navigation-target
+	.ash-settings-tree-group.is-settings-root
+	> .ash-settings-tree-group-title,
 .ash-settings-tree-group.is-navigation-target > .ash-settings-tree-group-title,
 .ash-settings-tree-group.is-navigation-target
 	> .ash-settings-tree-group-description {

@@ -154,6 +154,9 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		return redactSecrets([this.terminalError?.message, this.stderr.toString('utf8')].filter(Boolean).join('\n'));
 	}
 
+	public pause(): void { this.process.stdout.pause(); }
+	public resume(): void { this.process.stdout.resume(); }
+
 	close(): Promise<void> {
 		if (this.closePromise) return this.closePromise;
 		if (this.process.exitCode !== null || this.process.signalCode !== null) {

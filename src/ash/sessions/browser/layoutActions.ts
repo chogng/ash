@@ -1,7 +1,7 @@
-import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
-import { TERMINAL_VIEW_ID } from '../../workbench/contrib/terminal/common/terminal.js';
-import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
+import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditorInput } from '../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import { TerminalLocation } from '../../platform/terminal/common/terminal.js';
+import type { DesktopEditorParts } from './parts/desktopEditorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -12,10 +12,7 @@ import { RawContextKey, type IContextKeyService } from '../../platform/contextke
 import {
 	SideBarVisibleContext,
 	PanelVisibleContext,
-	PanelMaximizedContext,
-	PanelPositionContext,
 } from '../../workbench/common/contextkeys.js';
-import { positionToString } from '../../workbench/services/layout/browser/layoutService.js';
 import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
@@ -23,12 +20,14 @@ import { Menus } from './menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
+const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
 export function registerLayoutActions(
 	layout: IAgentWorkbenchLayoutService,
 	sessions: ISessionsService,
 	contextKeys: IContextKeyService,
+	editor: DesktopEditorParts,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);
@@ -36,25 +35,20 @@ export function registerLayoutActions(
 	const forwardEnabled = CanGoForwardContext.bindTo(contextKeys);
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
-	const panelMaximized = PanelMaximizedContext.bindTo(contextKeys);
-	const panelPosition = PanelPositionContext.bindTo(contextKeys);
+	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
+	let terminalToggle: Promise<void> | undefined;
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
 			backEnabled.set(sessions.canNavigateBack);
 			forwardEnabled.set(sessions.canNavigateForward);
-			codeAvailable.set(
-				layout.codeCards?.active ??
-				((layout.isPartVisible('sessions') || layout.isPanelMaximized()) &&
-					layout.isPartAvailable('panel')),
-			);
-			panelVisible.set(layout.isPartVisible('panel'));
-			panelMaximized.set(layout.isPanelMaximized());
-			panelPosition.set(positionToString(layout.getPanelPosition()));
+			codeAvailable.set(contextKeys.getValue('sessions.desktopCode') === true);
+			panelVisible.set(false);
+			terminalVisible.set(layout.isPartVisible('editor') && editor.groups.some(group => editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput));
 		});
 	updateContext();
 	disposables.add(layout.onDidChangePartVisibility(updateContext));
-	disposables.add(layout.onDidChangePanelPosition(updateContext));
+	disposables.add(editor.onDidChangeEditors(updateContext));
 	disposables.add(sessions.onDidChange(updateContext));
 	disposables.add(layout.onDidLayoutMainContainer(updateContext));
 	disposables.add(
@@ -65,8 +59,7 @@ export function registerLayoutActions(
 				forwardEnabled.reset();
 				codeAvailable.reset();
 				panelVisible.reset();
-				panelMaximized.reset();
-				panelPosition.reset();
+				terminalVisible.reset();
 			}),
 		),
 	);
@@ -109,23 +102,54 @@ export function registerLayoutActions(
 								when: sessionTools.isEqualTo(true),
 							},
 						],
-						toggled: PanelVisibleContext.isEqualTo(true),
+						toggled: terminalVisibleContext.isEqualTo(true),
 					});
 				}
 				override async run(accessor: ServicesAccessor): Promise<void> {
-					if (
-						(!layout.codeCards?.active &&
-							!layout.isPartVisible('sessions') &&
-							!layout.isPanelMaximized()) ||
-						!layout.isPartAvailable('panel')
-					) {
+					if (!layout.isPartAvailable('editor')) {
 						return;
 					}
-					if (layout.isPartVisible('panel')) {
-						accessor.get(IPaneCompositePartService).hideActivePaneComposite(ViewContainerLocation.Panel);
-					} else {
-						await accessor.get(IViewsService).openView(TERMINAL_VIEW_ID, true);
-					}
+					terminalToggle ??= (async () => {
+						const terminals = accessor.get(ITerminalService);
+						await terminals.whenConnected;
+						if (disposables.isDisposed) {
+							return;
+						}
+						const terminalEditors = accessor.get(ITerminalEditorService);
+						const groups = editor.getToolGroups(input => input instanceof TerminalEditorInput);
+						const unavailable = groups.flatMap(group => group.inputs
+							.filter(input => input instanceof TerminalEditorInput && !terminalEditors.getInstanceFromResource(input.resource))
+							.map(input => ({ group, input })));
+						const hasLiveTerminal = groups.some(group => group.inputs.some(input =>
+							input instanceof TerminalEditorInput && terminalEditors.getInstanceFromResource(input.resource)));
+						if (!hasLiveTerminal) {
+							// A restored tab can outlive its PTY checkpoint. Replace it in its
+							// retained group only after an explicit request successfully opens a shell.
+							const destination = groups.find(group => group === editor.activeGroup) ?? groups[0];
+							const location = destination ? { viewColumn: destination.id } : undefined;
+							const retained = terminals.activeInstance ?? terminals.instances[0];
+							if (retained) {
+								await terminalEditors.openEditor(retained, location);
+							} else {
+								await terminals.createTerminal({ location: location ?? TerminalLocation.Editor });
+							}
+							if (destination) {
+								editor.setGroupVisible(destination.id, true);
+								editor.activateGroup(destination.id);
+								editor.focus();
+							}
+						}
+						for (const { group, input } of unavailable) {
+							await group.closeEditor(input, { skipConfirmation: true });
+						}
+						if (hasLiveTerminal) {
+							await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
+						}
+					})().finally(() => {
+						terminalToggle = undefined;
+						updateContext();
+					});
+					return terminalToggle;
 				}
 			},
 		),
@@ -138,7 +162,7 @@ export function registerLayoutActions(
 					command: {
 						id: 'ash.sessions.toggleSidebar',
 						title: localize2({ bundle: 'ash', key: 'sessions.navigation.showSidebar' }, 'Show sidebar'),
-						icon: Lxicon.layoutSidebarLeftOff2,
+						icon: Lxicon.layoutSidebarLeftOffSession,
 						toggled: {
 							condition: SideBarVisibleContext.isEqualTo(true),
 							title: localize2({ bundle: 'ash', key: 'sessions.navigation.hideSidebar' }, 'Hide sidebar'),
@@ -146,7 +170,7 @@ export function registerLayoutActions(
 								{ bundle: 'ash', key: 'sessions.navigation.hideSidebar' },
 								'Hide sidebar',
 							),
-							icon: Lxicon.layoutSidebarLeft2,
+							icon: Lxicon.layoutSidebarLeftSession,
 						},
 					},
 					group: 'navigation',

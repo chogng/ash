@@ -107,6 +107,14 @@ spawn_pipe_process / spawn_pipe_process_no_stdin
 Unix pipe child 进入独立 session/process group；terminate/interrupt 作用于 group。Linux
 `set_parent_death_signal` 在 `pre_exec` 设置 SIGTERM 并复查 parent PID，降低 fork/exec race。
 
+产品入口经 `arg0` 启用 `process_guard` 内部角色。沙箱的 owned command session 与 pipe session 在执行目标前
+通过专用 socket 确认独立守护进程就绪，父进程持有唯一 lifeline；正常清理、强杀和进程崩溃都会关闭它。
+守护进程与目标保持同一 session，但使用独立进程组；它的存活固定 session 身份，父进程退出后仍可
+结束该 session 内的后代，包括自行建立其他进程组或被 `SIGSTOP` 暂停的进程。根进程正常退出不撤销
+owner 仍持有的 session lease，因此合法后台后代可继续存活，直到 owner 释放 lease 或终止执行。该机制不限制授权代码
+主动创建新 session，也不替代 OS 沙箱。未声明 helper 分发能力的库调用方继续拥有显式清理职责。
+fork 后只执行系统调用并立即 exec；复用描述符隔离，不持有目标协议管道或父进程的监听 socket。
+
 Linux 的 `pre_exec` 优先使用 `close_range(CLOSE_RANGE_CLOEXEC)`，按显式保留的描述符分段；
 不需要额外描述符、排序或 fork 后内存分配。这样即使子进程降低 `RLIMIT_NOFILE` 后所有低位槽都已占用，
 仍能覆盖已打开的稀疏高位描述符。内核不支持该 syscall 或 CLOEXEC flag 时，保留原有

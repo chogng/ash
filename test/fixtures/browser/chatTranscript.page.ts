@@ -1,3 +1,6 @@
+import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
+import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -8,7 +11,7 @@ import type { NotificationService } from '../../../src/ash/workbench/services/no
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
-import { ImagePreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreview.js';
+import { ImagePreviewEditor } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreviewEditor.js';
 import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
 import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
@@ -26,6 +29,11 @@ import { registerTestDictationOnboarding, installTestDictationAudio } from '../.
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IDevContainerAgentHostService } from '../../../src/ash/sessions/common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
+import { IAgentSessionActionsService, IAgentSessionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, ILoggerService, LogLevel, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -82,7 +90,7 @@ import { IContextViewService, IContextMenuService } from '../../../src/ash/platf
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
-import { IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -103,7 +111,7 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
@@ -138,6 +146,10 @@ const locale = new URLSearchParams(location.search).get('locale');
 if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsMessages(locale, catalog.bundles);
+}
+if (new URLSearchParams(location.search).has('workbench')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	document.body.classList.add('ash-workbench');
 }
 const resources = new DisposableStore();
 const appLogs: LogEntry[] = [];
@@ -256,7 +268,7 @@ resources.add(services.get(ICodeEditorService).registerCodeEditorOpenHandler(asy
 	return file;
 }));
 services.registerInstance(IEditorPart, { get activePane() { return { getControl: () => file }; } } as unknown as IEditorPart);
-let mediaPreview: ImagePreview | MediaPreview | undefined;
+let mediaPreview: ImagePreviewEditor | MediaPreview | undefined;
 let mediaPreviewRoot: HTMLElement | undefined;
 services.registerInstance(IEditorService, {
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
@@ -273,7 +285,7 @@ services.registerInstance(IEditorService, {
 			mediaPreviewRoot = document.createElement('section');
 			mediaPreviewRoot.style.cssText = 'height:240px;width:600px';
 			document.body.append(mediaPreviewRoot);
-			mediaPreview = /\.(?:png|jpeg|gif|webp)$/u.test(input.resource.path) ? resources.add(previewServices.createInstance(ImagePreview)) : resources.add(previewServices.createInstance(MediaPreview, 'audio', 'Audio'));
+			mediaPreview = /\.(?:png|jpeg|gif|webp)$/u.test(input.resource.path) ? resources.add(previewServices.createInstance(ImagePreviewEditor)) : resources.add(previewServices.createInstance(MediaPreview, 'audio', 'Audio'));
 			mediaPreview.create(mediaPreviewRoot);
 			await mediaPreview.setInput({ resource: input.resource, readOnly: input.readOnly }, new AbortController().signal);
 			mediaPreview.setVisible(true);
@@ -303,6 +315,7 @@ root.style.cssText = 'display:flex;width:600px;height:400px';
 document.body.append(root);
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
 const accessibleView = resources.add(services.createInstance(AccessibleViewService));
+services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
@@ -601,12 +614,16 @@ declare global {
 			isCodeChatActive(): boolean;
 			finishHistoryRecovery(): void;
 			historyRecoveries(): number;
+			openChatAuxiliaryWindow(): Promise<void>;
 			prepareSessionLifecycle(wording: 'archive' | 'done'): Promise<void>;
-			runSessionAction(command: string): Promise<unknown>;
-			sessionLifecycleState(): { readonly requests: readonly unknown[]; readonly opened: readonly string[]; readonly sessions: readonly { readonly id: string; readonly status: string; readonly threads: readonly string[]; }[]; readonly drafts: readonly string[]; };
+			runSessionAction(command: string, target?: string): Promise<unknown>;
+			sessionLifecycleState(): { readonly activeThreadId: string | undefined; readonly requests: readonly unknown[]; readonly opened: readonly string[]; readonly sessions: readonly { readonly id: string; readonly status: string; readonly threads: readonly string[]; }[]; readonly drafts: readonly string[]; };
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
+			setUpvoteAnimation(value: string): Promise<void>;
+			showFind(query?: string): void;
+			runNavigationCommand(command: string): Promise<void>;
 			prepareRequestEditing(cowork: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; }[];
 			finishRequestEdit(failure?: boolean): void;
@@ -775,7 +792,21 @@ window.ashChatTranscriptIntegration = {
 		theme.setColorTheme(palette);
 	},
 	imageReadCount: () => imageReads,
+	showFind: query => list.getFindController().show(query),
+	runNavigationCommand: async command => {
+		const widget = {
+			visible: true, domNode: list.element,
+			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
+			getFocus: () => list.getFocus(),
+			getSibling: (item, type) => list.getSibling(item, type),
+			focus: item => list.focus(item),
+			reveal: item => list.reveal(item),
+		} as IChatWidget;
+		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget } as IChatWidgetService]));
+		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
+	},
 	renderItems: items => { rendererItems = items; list.render(items); },
+	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
 	prepareRequestEditing: cowork => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
@@ -1052,6 +1083,7 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
 		chatServices.registerInstance(IChatSessionNavigationService, {
+			createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 			revision: 0,
 			getActiveConversation: () => ({ sessionId: 'app-session', threadId: 'app-thread' }),
 			openConversation: async () => { if (!requestEditMode) throw new Error('Unexpected conversation navigation'); },
@@ -1176,11 +1208,40 @@ window.ashChatTranscriptIntegration = {
 	isCodeChatActive: () => chatViews.getViewContainerModel(CHAT_VIEW_CONTAINER_ID).activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID),
 	finishHistoryRecovery: () => { finishHistory?.(); finishHistory = undefined; },
 	historyRecoveries: () => historyRecoveries,
+	openChatAuxiliaryWindow: async () => {
+		const scope = resources.add(services.createChild());
+		scope.registerInstance(IAccessibleViewService, accessibleView);
+		const windows = resources.add(scope.createInstance(BrowserAuxiliaryWindowService, window, document.body));
+		const auxiliary = await windows.open({ title: 'Borrowed conversation', width: 640, height: 480 });
+		await auxiliary.whenStylesHaveLoaded;
+		const shell = resources.add(scope.createInstance(ChatAuxiliaryWindow, auxiliary, 'Borrowed conversation'));
+		const content = document.createElement('section');
+		content.className = 'ash-chat';
+		content.dataset.testChatWindow = 'true';
+		const input = document.createElement('textarea');
+		input.setAttribute('aria-label', 'Borrowed draft');
+		input.value = 'Preserved draft';
+		content.append(input);
+		shell.mount(content);
+		resources.add(auxiliary.onDidClose(() => {
+			document.body.append(content);
+			shell.dispose();
+			auxiliary.dispose();
+			input.focus();
+		}));
+		auxiliary.layout();
+	},
 	prepareSessionLifecycle: async wording => {
 		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
 		await services.get(IConfigurationService).updateValue(ChatSessionArchiveActionWordingSettingId, wording);
 		const lifecycleServices = resources.add(services.createChild());
 		lifecycleCommands = resources.add(new CommandService(lifecycleServices));
+		lifecycleServices.registerInstance(ICommandService, lifecycleCommands);
+		lifecycleServices.registerInstance(IViewsService, { focusView: async () => { file.focus(); return true; } } as unknown as IViewsService);
+		const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+		lifecycleServices.registerSingleton(IAgentSessionsService, () => lifecycleServices.createInstance(historyDescriptor));
+		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IRendererHostService, disconnected);
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
@@ -1205,10 +1266,12 @@ window.ashChatTranscriptIntegration = {
 				return read();
 			},
 		});
+		lifecycleServices.registerSingleton(IDevContainerAgentHostService, () => lifecycleServices.createInstance(DevContainerAgentHostService));
 		lifecycleSessions = resources.add(lifecycleServices.createInstance(SessionsManagementService, lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
 		await lifecycleSessions.initialize();
 		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
 		lifecycleServices.registerInstance(IChatSessionNavigationService, {
+			createNewConversation: () => { lifecycleSessions!.createUntitledSession(); },
 			revision: 0,
 			getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
 			startVoiceConversation: async () => { throw new Error('Voice is unavailable in the session lifecycle fixture'); },
@@ -1216,11 +1279,12 @@ window.ashChatTranscriptIntegration = {
 			openConversation: async (sessionId, threadId) => { lifecycleOpened.push(`${sessionId}/${threadId}`); await lifecycleSessions!.openThread(sessionId, threadId); },
 		});
 	},
-	runSessionAction: async command => {
-		await lifecycleCommands!.executeCommand(command);
-		if (command === 'agentSession.archive') lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
+	runSessionAction: async (command, target) => {
+		const result = await lifecycleCommands!.executeCommand(command, target);
+		if (command === 'agentSession.archive' && result === true) lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
+		return result;
 	},
-	sessionLifecycleState: () => ({ requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
+	sessionLifecycleState: () => ({ activeThreadId: lifecycleSessions!.active?.threadId, requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
 	showReadAloudMessage: async (text, cowork = false) => {
 		await import('../../../src/ash/workbench/contrib/chat/electron-browser/actions/voiceChatActions.js');
 		readBridge ??= resources.add(new MainThreadSpeech(1000, readApi, services.get(ISpeechService)));

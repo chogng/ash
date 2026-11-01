@@ -162,7 +162,7 @@
 }
 
 .workspace-trust-advanced > summary:hover {
-	background: var(--ash-toolbar-hoverBackground, rgba(90, 93, 94, 0.15));
+	background: var(--ash-toolbar-hoverBackground);
 }
 
 .workspace-trust-advanced > summary:focus-visible {
@@ -183,7 +183,7 @@
 	font-family: var(--ash-font-family-monospace);
 	font-size: var(--ash-fontSize-label2);
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	background: var(--ash-text-codeBlockBackground, rgba(0, 0, 0, 0.05));
+	background: var(--ash-text-codeBlockBackground);
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-small);
 	word-break: break-all;

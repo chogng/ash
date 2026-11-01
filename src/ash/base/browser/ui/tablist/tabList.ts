@@ -52,6 +52,7 @@ export interface TabListDragAndDrop<T> {
 	readonly canDrop: (event: DragEvent, target: T | undefined, position: TabListDropPosition) => boolean;
 	readonly onDragStart: (value: T, event: DragEvent) => void;
 	readonly onDragEnter?: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
+	/** The tab under the pointer, or undefined over strip whitespace. */
 	readonly onDragOver?: (target: T | undefined, position: TabListDropPosition, event: DragEvent, duration: number) => void;
 	readonly onDragLeave?: () => void;
 	readonly onDrop: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;

@@ -1,3 +1,8 @@
+import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../common/chat.js';
+import type { IChatAcceptInputOptions } from '../../chat.js';
+import type { IContextKey } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import type { IChatWidgetModel } from '../chatWidget.js';
 import type { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
@@ -93,7 +98,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: 'plan', label: 'Plan', icon: Lxicon.plan },
 	{ id: 'debug', label: 'Debug', icon: Lxicon.debug },
 	{ id: 'multitask', label: 'Multitask', icon: Lxicon.multitask },
-	{ id: 'ask', label: 'Ask', icon: Lxicon.chat4 },
+	{ id: 'ask', label: 'Ask', icon: Lxicon.ask },
 ];
 
 const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
@@ -137,8 +142,14 @@ export interface IChatInputPart extends IDisposable {
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	appendToDraft(text: string): void;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
-	acceptInput(value?: string): Promise<void>;
-	openModelSelector(): void;
+	acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void>;
+	openModelPicker(): void;
+	openModePicker(): void;
+	openPermissionPicker(): void;
+	acceptActiveToolConfirmation(): Promise<void>;
+	skipActiveToolConfirmation(): Promise<void>;
+	acceptElicitation(): void;
+	focusConfirmation(): boolean;
 	setVisible(visible: boolean): void;
 	render(state: ChatInputState): void;
 }
@@ -169,6 +180,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
+	private readonly elicitationFocused: IContextKey<boolean>;
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
 	private readonly attachAction: IAction = {
 		id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
@@ -224,7 +236,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private dictationSample: { text: string; backend: string; } | undefined;
 	private measuringDictation = false;
 	private measureWholeDraft = false;
-	private visible = true;
+	protected visible = true;
 	private draftRevision = 0;
 	private textRevision = 0;
 	private acceptingContext = false;
@@ -248,6 +260,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService private readonly attachmentResolver: IChatAttachmentResolveService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		this.screenshotContext = instantiationService.createInstance(ScreenshotContextValuePick);
@@ -257,6 +270,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.element = h(ownerDocument, 'div');
 		this.element.className = 'ash-chat-input-part';
 		container.append(this.element);
+		const context = this._register(contextKeys.createScoped(this.element));
+		ChatContextKeys.inChatInput.bindTo(context).set(true);
+		const cursorAtTop = ChatContextKeys.inputCursorAtTop.bindTo(context);
 		this.status = h(ownerDocument, 'div');
 		this.status.className = 'ash-chat-status';
 		this.status.setAttribute('role', 'status');
@@ -266,11 +282,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.dictationPreview.hidden = true;
 		this.interaction = h(ownerDocument, 'div');
 		this.interaction.className = 'ash-chat-interaction';
+		const interactionContext = this._register(context.createScoped(this.interaction));
+		this.elicitationFocused = interactionContext.createKey('chatElicitationFocused', false);
 		this.interaction.setAttribute('aria-live', 'polite');
 		this.inputContainer = h(ownerDocument, 'form');
 		this.inputContainer.className = 'ash-chat-input-container';
 		const editorHost = h(ownerDocument, 'div');
 		editorHost.className = 'ash-chat-input-editor-host';
+		// Editor scopes inherit their DOM ancestors when they are constructed.
+		this.element.append(this.inputContainer);
+		this.inputContainer.append(editorHost);
 		this.input = this._register(editorProvider.create({
 			container: editorHost,
 			placeholder: 'Ask Ash',
@@ -278,6 +299,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			slashCommands: this.slashCommands,
 			skills: this.skills,
 		}));
+		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
+		this._register(this.input.onDidChange(updateCursorAtTop));
+		if (this.input.codeEditor) {
+			this._register(this.input.codeEditor.onDidChangeCursorSelection(updateCursorAtTop));
+			this._register(this.input.codeEditor.onDidLayoutChange(updateCursorAtTop));
+		}
+		for (const event of ['focusin', 'keyup', 'click'] as const) {
+			this._register(addDisposableListener(this.input.element, event, updateCursorAtTop));
+		}
+		updateCursorAtTop();
 		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel));
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
 		if (this.input.codeEditor && this.input.getModel) {
@@ -346,7 +377,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', image.alt, image.naturalWidth, image.naturalHeight);
 						}
 						const names = this.contexts.map(attachment => attachment.name).join('\n');
-						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Add context opens a searchable menu beside its button and focuses the search field. Press Enter or Space on Add context to open it; activate it again to close it. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to return from a source picker to attachment search. Escape in attachment search cancels and returns focus to the message. After attaching, focus returns to the message. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Context references are inserted at the message cursor. Use Tab to reach their source and Remove buttons; Enter opens its source. Removing a reference returns focus to the message. Paste or drop files into the message to attach them. Sending waits until file preparation finishes; a failed preparation keeps the draft. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('chat.screenshot.shortcutHelp', 'Use {0} or Screenshot: Capture Screen in the Command Palette to capture an image, then copy, save, or add it to chat. Customize the shortcut in Screenshot settings or Keyboard Shortcuts.', '<keybinding:workbench.action.chat.attachScreenshot>') + '\n' + this.screenshotContext.accessibilityHelp + '\n' + localize('chat.tool.help', 'Tool calls appear as collapsed summaries. Use Tab to reach a summary and Enter or Space to expand its input, source, execution target, standard output, standard error and result. Streaming updates retain focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful.') + '\n' + localize('hooks.feedbackHelp', 'Hook summaries show running, allowed to continue, blocked, failed, or cancelled results. Allowed means the Hook permits the action to continue; it does not confirm that the tool or Turn succeeded. Blocked and failed Hooks are errors; cancellation is reported separately. Use Tab to reach a Hook summary and Enter or Space to expand a reason when one is available. Status updates preserve the summary focus and expanded details. Execution Trace shows the recorded status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('chatSession.actionsHelp', 'Open Chat History and use a session\'s More actions to choose Archive or Mark as Done, or use the Command Palette. After confirmation, running work in the session is interrupted. Open Chat History to find archived sessions, then use Unarchive or Restore, or press Enter on a session, to restore and open its root conversation. The Command Palette also offers Restore or Unarchive to list archived sessions. Restore All restores the listed sessions without changing the current conversation. Restoring never restarts work. Unsent drafts are kept.') + '\n' + localize('chat.history.recoveryHelp', 'When chat history or updates cannot load, use Tab to reach Retry loading chat and Enter or Space to retry. Recovery preserves your draft and attachments and never sends a message. Sending stays unavailable until loading succeeds. Closing accessibility help returns focus to recovery, or to the message input when recovery is complete.') + '\n' + localize('chat.voice.help', 'Voice conversation: when available, focus Voice conversation and press Enter or Space to start. Choose a provider, model and voice from the searchable options, then press Enter. Press Escape to cancel without starting media. Stop voice conversation closes the microphone and reply playback. Interrupt voice reply retires the current reply and reconnects speech. Switching conversations stops voice. Spoken task requests use the current Chat mode, queue and approvals; unsent text and attachments remain in the draft. Your speech and voice replies appear as plain-text transcripts in the conversation.') + '\n' + localize('chat.editor.help', 'Use Move Chat to Editor Area in Chat More Actions or the Command Palette to move this conversation into an editor tab. Its unsent text, attachments and history stay with the same composer. Move Chat to Side Bar or close the Chat editor to return it. You can keep a document beside Chat. Switching tabs never sends a message; drafts and the selected conversation restore after restarting the window.') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only. In the Code window, use the conversation title or Show Chat History to switch conversations and unfinished drafts. Switching keeps their inputs. Press Escape to dismiss the picker and return to the title.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Add context is to the left of the approval mode button. Added attachments appear inside the input. The approval mode button shows the current mode. Press Enter or Space to open its menu above the button, use arrow keys to choose a mode, and Escape to close the menu and return focus. Full access requires confirmation. The context ring shows estimated input as a share of the automatic compaction budget. Model context capacity is shown separately. Hover or focus it to read the percentage and token counts, or activate it to open the breakdown above the ring. Unknown capacity uses an empty ring and shows token counts without a percentage. Press Escape or activate Close to close the details and return to the ring. Loading, working and error status appears alongside extension status indicators. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + localize('chat.input.changesHelp', 'The changes button above the input shows workspace changes in New Chat, or net changes at the current checkpoint inside a conversation. Undo and redo update the summary. Use Tab to reach it and Enter or Space to open Changes. A conversation with no changes never shows workspace changes. The button is hidden when there are no changes or the summary is unavailable.') + '\n' + localize('chat.context.inlineSelectionHelp', 'Choose a file in Add context, including workspace files, Open editors or Attach files, or paste or drop a code file to insert its name at the message cursor. Images from Add context, paste or drop also insert their file name at the message cursor, with a thumbnail and Remove button. Activate the thumbnail or file name to preview the image; Escape or Close image preview returns to the image reference. Use Tab to reach the image Preview and Remove buttons. Select code in an editor and choose Add Selection to Chat, or press Ctrl or Command+L, to insert the file name and line range. All context references appear in the message. References are single units: the caret stays before or after them, and extending a selection includes the whole reference. Arrow Left and Arrow Right move across a reference; Backspace or Delete removes it and its captured context. Undo in the rich input restores the reference and its captured code. Drafts retain references and unsaved code snapshots.') + '\n' + localize('chat.context.referenceSourceHelp', 'Hover over a reference to preview its captured content. At a reference, use {0} to open the same information; Escape returns to the message. Click a file or code reference, or press Alt+Enter at it, to open the full saved content in a read-only editor. Opening saved content keeps the draft and never sends a message.', '<keybinding:editor.action.showHover>') + '\n' + localize('chat.context.copyHelp', 'Copy or cut a message selection to keep its references and captured content when pasting into Chat. Undo and redo restore the pasted text and references together. Paste as plain text inserts labels without their captured content. After copying code in an editor, Paste options offers Pasted Code Attachment. Choosing it keeps the copied selection even if the source changes or closes.') + '\n' + localize('chat.context.attachmentWidgetHelp', 'File, image and terminal references have native Open or Preview and Remove buttons. Use Tab to reach them and Enter or Space to activate them. While an image is loading, Tab skips its unavailable preview and still reaches Remove. If captured image bytes cannot be decoded, the reference reports Preview unavailable and stays removable; its captured content is preserved through undo, draft restoration and copy-paste. Delete or Backspace on either button removes that reference; Undo restores its captured content. At a reference, Alt+Enter opens its saved file content, prepared image or terminal snapshot. Image and terminal previews open a dialog; Escape or Close returns focus to the reference. A terminal preview can also return to its original terminal. Removing a reference or closing the input closes its preview.') + '\n' + localize('chat.context.otherWidgetHelp', 'Other context references also have native Open and Remove buttons. Tab reaches each button, Enter or Space activates it, and Delete or Backspace removes only that reference even when the text caret is elsewhere. Undo restores its captured context. Directories return to Explorer, instructions open their authorized file, tools and tool selections open Tools settings, and search results return to Search. Other source links retain their captured destination. Captured contexts without a navigable source, including debug and source control snapshots, open their saved content in a read-only editor. Opening or removing context never sends the draft.') + '\n' + localize('chat.context.browserScmWidgetHelp', 'Browser element and source control references open captured content in a read-only editor. Their extra source button opens the original web page, commit changes or revision file. If the source is unavailable, saved content remains readable. Use Tab to reach each action. Delete or Backspace removes the focused reference; Undo restores its source identity and captured content.') + '\n' + localize('chat.context.capturePreviewHelp', 'While a context source is loading a new query, its previous results cannot be attached. Escape cancels the selection. Hover over a saved file, browser element, source control or other captured-content reference to preview its saved text. The keyboard hover command shows the same shortened preview; Escape returns to the message. Internal source identities are omitted from these previews. Open editors attaches the displayed version of a read-only editor, including when an editable working copy exists for the same file.') + '\n' + localize('chat.context.resourceActionsHelp', 'Drag a file, folder, source image, instruction file or symbol reference by its source button to use its original resource elsewhere. Right-click the reference, or press Shift+F10 or the Context Menu key on its buttons, for source actions such as Open to the Side, Reveal in Explorer View, Copy Path and Copy Relative Path. Escape returns focus to the invoking button. These actions use the original source and range; the captured attachment and its undo history stay in the message. Images from the clipboard and internal snapshots do not expose source-file actions.') + '\n' + localize('chat.context.receiveDropHelp', 'Drag a file, folder, source image or code reference into the message to attach captured content at the text cursor. Code references capture their source range, including unsaved edits. A mixed drop is added when every item is ready. Undo removes that drop in one step and Redo restores the same captured content. Sending waits for preparation. If any item cannot be read or the model does not support its images, the draft stays unchanged. Leaving the conversation or hiding the input cancels unfinished drops.') + '\n' + localize('chat.context.referenceWidgetHelp', 'At a session reference, press Alt+Enter to open the referenced conversation. Use Tab to reach its Open and Remove buttons. Delete or Backspace on either button removes the reference; Undo restores it and its captured content. Opening the conversation never sends the draft.') + '\n' + localize('chat.input.canvasHelp', 'When this conversation has an available Canvas, use the dropdown beside New Chat > Canvas, or Add context > Canvas…. In the toolbar, use the Left and Right Arrow keys to focus the New Chat dropdown, press Enter or Space to open its menu, then use arrow keys to choose Canvas. Escape closes the menu and returns focus to its trigger. Opening a Canvas never sends or changes the draft. These menu items are hidden when Canvases are disabled, no conversation is active, or no Canvas is available.') + '\n' + names;
+						return type === AccessibleViewType.View ? names : localize('chat.context.help', 'Chat context\nUse Add context to search recent and workspace files, attach files or images, read an image from the clipboard, take a screenshot, select a session, issue or pull request, choose Files & Folders to include a directory, add open editors including unsaved text, or select another context source. Add context opens a searchable menu beside its button and focuses the search field. Press Enter or Space on Add context to open it; activate it again to close it. Type to search, use arrow keys to choose, Enter to attach, Ctrl or Command+Enter to attach and keep searching, and Escape to return from a source picker to attachment search. Escape in attachment search cancels and returns focus to the message. After attaching, focus returns to the message. Use Go back to return to the previous picker. Directory attachments include their path and file list. Session and GitHub attachments capture their content when selected. Terminal attaches selected text or recent output. Symbols attach their source range, including unsaved edits. Search Results attaches the completed search and its match locations. These attachments keep the content captured when selected; their source button returns to the terminal, code or Search view. Tools attaches an enabled tool or tool set. Choose Configure tools, use Enter to toggle a tool or set, then choose Apply to save for this chat. Escape discards changes. Selection applies to the next request and is retained after sending; remove its attachment to reset. Steering cannot change a running request’s selection. A tool reference’s source button opens Tools settings. Calls use the current tool catalog and execution permissions. Instructions selects from the authorized user and directory catalog; the backend loads the current instruction when sending. Its source button opens the instruction file. Browser screenshots ask you to choose a screen, window or tab and can be cancelled. GitHub pickers let you choose an account and repository, paste a link, enter a number or load more items. Context references are inserted at the message cursor. Use Tab to reach their source and Remove buttons; Enter opens its source. Removing a reference returns focus to the message. Paste or drop files into the message to attach them. Sending waits until file preparation finishes; a failed preparation keeps the draft. Attachments can be sent without text and remain in the draft when sending fails.') + '\n' + localize('chat.screenshot.shortcutHelp', 'Use {0} or Screenshot: Capture Screen in the Command Palette to capture an image, then copy, save, or add it to chat. Customize the shortcut in Screenshot settings or Keyboard Shortcuts.', '<keybinding:workbench.action.chat.attachScreenshot>') + '\n' + this.screenshotContext.accessibilityHelp + '\n' + localize('chat.tool.help', 'Tool calls appear as collapsed summaries. Use Tab to reach a summary and Enter or Space to expand its input, source, execution target, standard output, standard error and result. Streaming updates retain focus and expansion. Failed calls show an error; a finished turn without a result is never shown as successful.') + '\n' + localize('hooks.feedbackHelp', 'Hook summaries show running, allowed to continue, blocked, failed, or cancelled results. Allowed means the Hook permits the action to continue; it does not confirm that the tool or Turn succeeded. Blocked and failed Hooks are errors; cancellation is reported separately. Use Tab to reach a Hook summary and Enter or Space to expand a reason when one is available. Status updates preserve the summary focus and expanded details. Execution Trace shows the recorded status and duration; enable detailed recording to load commands and input/output on demand.') + '\n' + localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('chatSession.actionsHelp', 'Open Chat History and use a session\'s More actions to choose Archive or Mark as Done, or use the Command Palette. After confirmation, running work in the session is interrupted. Open Chat History to find archived sessions, then use Unarchive or Restore, or press Enter on a session, to restore and open its root conversation. The Command Palette also offers Restore or Unarchive to list archived sessions. Restore All restores the listed sessions without changing the current conversation. Restoring never restarts work. Unsent drafts are kept.') + '\n' + localize('chat.history.recoveryHelp', 'When chat history or updates cannot load, use Tab to reach Retry loading chat and Enter or Space to retry. Recovery preserves your draft and attachments and never sends a message. Sending stays unavailable until loading succeeds. Closing accessibility help returns focus to recovery, or to the message input when recovery is complete.') + '\n' + localize('chat.voice.help', 'Voice conversation: when available, focus Voice conversation and press Enter or Space to start. Choose a provider, model and voice from the searchable options, then press Enter. Press Escape to cancel without starting media. Stop voice conversation closes the microphone and reply playback. Interrupt voice reply retires the current reply and reconnects speech. Switching conversations stops voice. Spoken task requests use the current Chat mode, queue and approvals; unsent text and attachments remain in the draft. Your speech and voice replies appear as plain-text transcripts in the conversation.') + '\n' + localize('chat.editor.help', 'Use Move Chat to Editor Area in Chat More Actions or the Command Palette to move this conversation into an editor tab. Its unsent text, attachments and history stay with the same composer. Move Chat to Side Bar or close the Chat editor to return it. When Session display is Tabs, drag an individual Chat tab into the editor tab bar or editor area to give it an independent editor tab. Drag it back onto the Chat tab row to return it. For keyboard access, press Shift+F10 on the tab and choose Move Chat to Editor Area or Move Chat to Side Bar. Other conversations stay in place; the same composer, draft and running work are retained. Individual tab transfers are unavailable in List mode. You can keep a document beside Chat. Switching tabs never sends a message; drafts and the selected conversation restore after restarting the window. In desktop Chat More Actions, Open Browser opens a browser editor tab. Chat Settings opens the Chat appearance page in Settings. Use arrow keys to choose a menu action and Enter to activate it.') + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.history.help', 'Chat input: Enter sends; Shift+Enter inserts a line. At the first or last input row, Arrow Up and Arrow Down recall earlier inputs. Press Ctrl+R to search all input history; Enter restores the selected text without sending it. Escape restores the original draft, cursor, attachments and Skill bindings. Input history belongs to the local Profile and stores text only. In the Code window, use the conversation title or Show Chat History to switch conversations and unfinished drafts. Switching keeps their inputs. Press Escape to dismiss the picker and return to the title.') + '\n' + (this.secondaryToolbarContainer ? localize('chat.input.secondaryHelp', 'Below the input, Add context is to the left of the approval mode button. Added attachments appear inside the input. The approval mode button shows the current mode. Press Enter or Space to open its menu above the button, use arrow keys to choose a mode, and Escape to close the menu and return focus. Full access requires confirmation. The context ring shows estimated input as a share of the automatic compaction budget. Model context capacity is shown separately. Hover or focus it to read the percentage and token counts, or activate it to open the breakdown above the ring. Unknown capacity uses an empty ring and shows token counts without a percentage. Press Escape or activate Close to close the details and return to the ring. Loading, working and error status appears alongside extension status indicators. Use Tab to reach each toolbar, arrow keys to move between actions, and Enter or Space to activate an action.') : '') + '\n' + localize('chat.input.changesHelp', 'The changes button above the input shows workspace changes in New Chat, or net changes at the current checkpoint inside a conversation. Undo and redo update the summary. Use Tab to reach it and Enter or Space to open Changes. A conversation with no changes never shows workspace changes. The button is hidden when there are no changes or the summary is unavailable.') + '\n' + localize('chat.context.inlineSelectionHelp', 'Choose a file in Add context, including workspace files, Open editors or Attach files, or paste or drop a code file to insert its name at the message cursor. Images from Add context, paste or drop also insert their file name at the message cursor, with a thumbnail and Remove button. Activate the thumbnail or file name to preview the image; Escape or Close image preview returns to the image reference. Use Tab to reach the image Preview and Remove buttons. Select code in an editor and choose Add Selection to Chat, or press Ctrl or Command+L, to insert the file name and line range. All context references appear in the message. References are single units: the caret stays before or after them, and extending a selection includes the whole reference. Arrow Left and Arrow Right move across a reference; Backspace or Delete removes it and its captured context. Undo in the rich input restores the reference and its captured code. Drafts retain references and unsaved code snapshots.') + '\n' + localize('chat.context.referenceSourceHelp', 'Hover over a reference to preview its captured content. At a reference, use {0} to open the same information; Escape returns to the message. Click a file or code reference, or press Alt+Enter at it, to open the full saved content in a read-only editor. Opening saved content keeps the draft and never sends a message.', '<keybinding:editor.action.showHover>') + '\n' + localize('chat.context.copyHelp', 'Copy or cut a message selection to keep its references and captured content when pasting into Chat. Undo and redo restore the pasted text and references together. Paste as plain text inserts labels without their captured content. After copying code in an editor, Paste options offers Pasted Code Attachment. Choosing it keeps the copied selection even if the source changes or closes.') + '\n' + localize('chat.context.attachmentWidgetHelp', 'File, image and terminal references have native Open or Preview and Remove buttons. Use Tab to reach them and Enter or Space to activate them. While an image is loading, Tab skips its unavailable preview and still reaches Remove. If captured image bytes cannot be decoded, the reference reports Preview unavailable and stays removable; its captured content is preserved through undo, draft restoration and copy-paste. Delete or Backspace on either button removes that reference; Undo restores its captured content. At a reference, Alt+Enter opens its saved file content, prepared image or terminal snapshot. Image and terminal previews open a dialog; Escape or Close returns focus to the reference. A terminal preview can also return to its original terminal. Removing a reference or closing the input closes its preview.') + '\n' + localize('chat.context.otherWidgetHelp', 'Other context references also have native Open and Remove buttons. Tab reaches each button, Enter or Space activates it, and Delete or Backspace removes only that reference even when the text caret is elsewhere. Undo restores its captured context. Directories return to Explorer, instructions open their authorized file, tools and tool selections open Tools settings, and search results return to Search. Other source links retain their captured destination. Captured contexts without a navigable source, including debug and source control snapshots, open their saved content in a read-only editor. Opening or removing context never sends the draft.') + '\n' + localize('chat.context.browserScmWidgetHelp', 'Browser element and source control references open captured content in a read-only editor. Their extra source button opens the original web page, commit changes or revision file. If the source is unavailable, saved content remains readable. Use Tab to reach each action. Delete or Backspace removes the focused reference; Undo restores its source identity and captured content.') + '\n' + localize('chat.context.capturePreviewHelp', 'While a context source is loading a new query, its previous results cannot be attached. Escape cancels the selection. Hover over a saved file, browser element, source control or other captured-content reference to preview its saved text. The keyboard hover command shows the same shortened preview; Escape returns to the message. Internal source identities are omitted from these previews. Open editors attaches the displayed version of a read-only editor, including when an editable working copy exists for the same file.') + '\n' + localize('chat.context.resourceActionsHelp', 'Drag a file, folder, source image, instruction file or symbol reference by its source button to use its original resource elsewhere. Right-click the reference, or press Shift+F10 or the Context Menu key on its buttons, for source actions such as Open to the Side, Reveal in Explorer View, Copy Path and Copy Relative Path. Escape returns focus to the invoking button. These actions use the original source and range; the captured attachment and its undo history stay in the message. Images from the clipboard and internal snapshots do not expose source-file actions.') + '\n' + localize('chat.context.receiveDropHelp', 'Drag a file, folder, source image or code reference into the message to attach captured content at the text cursor. Code references capture their source range, including unsaved edits. A mixed drop is added when every item is ready. Undo removes that drop in one step and Redo restores the same captured content. Sending waits for preparation. If any item cannot be read or the model does not support its images, the draft stays unchanged. Leaving the conversation or hiding the input cancels unfinished drops.') + '\n' + localize('chat.context.referenceWidgetHelp', 'At a session reference, press Alt+Enter to open the referenced conversation. Use Tab to reach its Open and Remove buttons. Delete or Backspace on either button removes the reference; Undo restores it and its captured content. Opening the conversation never sends the draft.') + '\n' + localize('chat.input.canvasHelp', 'When this conversation has an available Canvas, use the dropdown beside New Chat > Canvas, or Add context > Canvas…. In the toolbar, use the Left and Right Arrow keys to focus the New Chat dropdown, press Enter or Space to open its menu, then use arrow keys to choose Canvas. Escape closes the menu and returns focus to its trigger. Opening a Canvas never sends or changes the draft. These menu items are hidden when Canvases are disabled, no conversation is active, or no Canvas is available.') + '\n' + names;
 					}, () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -789,8 +820,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inputChanges.fire();
 	}
 
-	async acceptInput(value?: string): Promise<void> {
+	async acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		if (this.isDisposed || !this.visible) { return; }
+		const queue = options?.queue;
 		const intent = parseSlashCommandInput(value ?? this.commandText(), this.slashCommands);
+		if (queue && intent.kind === 'command') {
+			throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
+		}
 		// Local product settings must remain available while the model catalog is loading.
 		const localCommand = intent.kind === 'command' && intent.binding.origin === 'local';
 		if (this.submitting || this.isSubmissionBlocked(localCommand)) return;
@@ -821,6 +857,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const textRevision = this.textRevision;
 			const mode = this.mode;
 			const input = parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands);
+			// Speech and prepared context can change the parsed input after initial admission.
+			if (queue && input.kind === 'command') {
+				throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
+			}
 			// Commands do not submit context. Their settings and management actions remain available during reads.
 			const contexts = input.kind === 'message' && this.attachmentModel.hasPendingContext
 				? [...new Map([...draft.attachments, ...await this.attachmentModel.resolvePendingContext()].map(attachment => [attachment.id, attachment])).values()] : draft.attachments;
@@ -842,7 +882,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.notifications.error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return;
 			}
-			await this.submit(draft, textRevision, lifecycle, () => this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, contexts, lifecycle));
+			await this.submit(draft, textRevision, lifecycle, () => this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, contexts, lifecycle, queue));
 		} finally {
 			// An old send must not release the new conversation’s in-flight submission.
 			if (!lifecycle.aborted && !this.isDisposed) {
@@ -855,6 +895,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	invalidatePendingInput(): void {
 		this.modePickerActionItem?.hide();
+		this.modelPickerActionItem?.hide();
 		if (this.input.codeEditor) CopyPasteController.get(this.input.codeEditor)?.clearWidgets();
 		const previous = this.inputLifecycle;
 		this.inputLifecycle = new AbortController();
@@ -870,8 +911,55 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		});
 	}
 
-	openModelSelector(): void {
+	openModelPicker(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled) return;
 		this.modelPickerActionItem.openModelPicker();
+	}
+
+	openModePicker(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.options.modePicker === 'hidden' || this.toolbarState.inputKind === 'command') return;
+		this.modePickerActionItem?.focus();
+		this.modePickerActionItem?.show();
+	}
+
+	openPermissionPicker(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled) return;
+		if (this.permissionWidget) {
+			this.permissionWidget.focus();
+			this.permissionWidget.show();
+		} else {
+			// Hosts without a permission trigger already provide the /permission flow.
+			void this.runSecondaryAction(() => this.delegate.executeCommand({ commandId: OPEN_CHAT_PERMISSIONS_COMMAND_ID, argumentsText: '' }));
+		}
+	}
+
+	public focusConfirmation(): boolean {
+		if (this.isDisposed || !this.visible || this.interaction.hidden) { return false; }
+		const control = [...this.interaction.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([type="hidden"]), textarea:not(:disabled), select:not(:disabled)')]
+			.find(element => !element.closest('[hidden]'));
+		if (!control) { return false; }
+		if (this.interaction.contains(this.interaction.ownerDocument.activeElement)) { this.focus(); }
+		else { control.scrollIntoView({ block: 'nearest' }); control.focus({ preventScroll: true }); }
+		return true;
+	}
+
+	public acceptActiveToolConfirmation(): Promise<void> { return this.confirmTool('approveOnce'); }
+	public skipActiveToolConfirmation(): Promise<void> { return this.confirmTool('decline'); }
+
+	private confirmTool(decision: 'approveOnce' | 'decline'): Promise<void> {
+		const interaction = this.state.interaction;
+		if (!interaction || interaction.request.type !== 'approval' || this.state.aiDisabled || this.state.phase === 'submitting') { return Promise.resolve(); }
+		return this.resolveInteraction(interaction, { type: 'approval', response: { decision } });
+	}
+
+	public acceptElicitation(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.state.phase === 'submitting' || this.state.interaction?.request.type !== 'userInput') { return; }
+		this.interaction.querySelector<HTMLFormElement>('form')?.requestSubmit();
+	}
+
+	private resolveInteraction(interaction: NonNullable<ChatInputState['interaction']>, response: Parameters<ChatInputDelegate['resolveInteraction']>[0]): Promise<void> {
+		if (this.isDisposed || !this.visible || this.renderedInteraction !== interaction || this.state.interaction !== interaction) { return Promise.resolve(); }
+		return this.delegate.resolveInteraction(response, interaction.requestId);
 	}
 
 	setVisible(visible: boolean): void {
@@ -1335,6 +1423,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderInteraction(state: ChatInputState): void {
 		const interaction = state.interaction;
+		this.elicitationFocused.set(interaction?.request.type === 'userInput' && !state.aiDisabled);
 		// Streaming and catalog updates must not replace the approval button under keyboard focus.
 		if (interaction && interaction === this.renderedInteraction) return;
 		this.renderedInteraction = interaction;
@@ -1346,6 +1435,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		this.interaction.hidden = false;
 		const request = interaction.request;
+		// Detached forms and buttons must never answer a successor interaction.
+		const resolve = (response: Parameters<ChatInputDelegate['resolveInteraction']>[0]): Promise<void> => this.resolveInteraction(interaction, response);
 		switch (request.type) {
 			case 'approval': {
 				const reason = h(this.element.ownerDocument, 'p');
@@ -1390,17 +1481,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						: localize('chat.approval.saveRule', 'Save approval for this exact action');
 					const button = this.interactionButton(label);
 					actions.append(button);
-					this.interactionListeners.add(addDisposableListener(button, 'click', () => void this.delegate.resolveInteraction({
+					this.interactionListeners.add(addDisposableListener(button, 'click', () => void resolve({
 						type: 'approval', response: { decision: choice },
 					}).catch(() => undefined)));
 				}
 
 				this.interaction.append(reason, capabilities, actions);
-				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void this.delegate.resolveInteraction({
+				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void resolve({
 					type: 'approval',
 					response: { decision: 'decline' },
 				}).catch(() => undefined)));
-				this.interactionListeners.add(addDisposableListener(approve, 'click', () => void this.delegate.resolveInteraction({
+				this.interactionListeners.add(addDisposableListener(approve, 'click', () => void resolve({
 					type: 'approval',
 					response: { decision: 'approveOnce' },
 				}).catch(() => undefined)));
@@ -1462,12 +1553,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				actions.append(decline, approve);
 				form.append(actions);
 				this.interaction.append(form);
-				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void this.delegate.resolveInteraction({
+				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void resolve({
 					type: 'permissions', response: { duration: 'turn', directories: [], networkHosts: [] },
 				}).catch(() => undefined)));
 				this.interactionListeners.add(addDisposableListener(form, 'submit', event => {
 					event.preventDefault();
-					void this.delegate.resolveInteraction({
+					void resolve({
 						type: 'permissions', response: {
 							duration: duration.value === 'session' ? 'session' : 'turn',
 							directories: directories.map(entry => ({ path: entry.path, permissions: entry.permissions.filter(value => value.input.checked).map(value => value.permission) })).filter(entry => entry.permissions.length > 0),
@@ -1491,7 +1582,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					form.append(label);
 					inputs.set(question.id, input);
 				}
-				const submit = this.interactionButton('Submit', true);
+				const submit = this.interactionButton(localize('chat.interaction.submit', 'Submit answers'), true);
 				submit.type = 'submit';
 				form.append(submit);
 				this.interaction.append(form);
@@ -1499,7 +1590,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					event.preventDefault();
 					const answers: Record<string, { value: string; }> = {};
 					for (const [id, input] of inputs) answers[id] = { value: input.value };
-					void this.delegate.resolveInteraction({
+					void resolve({
 						type: 'userInput',
 						response: { answers },
 					}).catch(() => undefined);

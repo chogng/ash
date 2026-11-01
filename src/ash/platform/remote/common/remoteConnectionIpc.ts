@@ -7,3 +7,5 @@ export const REMOTE_CONNECTION_CONNECT_CHANNEL = 'ash:remote:connection:connect'
 /** Additional Agents-window connections use the existing carrier acquisition protocol. */
 export const REMOTE_AGENT_HOST_OPEN_CHANNEL = 'ash:remote:agent-host:open';
 export const REMOTE_AGENT_HOST_CLOSE_CHANNEL = 'ash:remote:agent-host:close';
+
+export const REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL = 'ash:remote:agent-host:wsl-distros';

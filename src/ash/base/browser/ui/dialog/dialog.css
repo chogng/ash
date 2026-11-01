@@ -1,6 +1,7 @@
 .ash-dialog {
-	width: min(440px, calc(100vw - 32px));
-	max-width: none;
+	box-sizing: border-box;
+	width: 440px;
+	max-width: calc(100vw - 32px);
 	padding: 0;
 	overflow: hidden;
 	border: var(--ash-strokeThickness) solid

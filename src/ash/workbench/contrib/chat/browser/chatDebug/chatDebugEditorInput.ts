@@ -7,8 +7,12 @@ import { localize } from '../../../../../nls.js';
 /** Opens saved Session history, optionally at a durable Thread, Turn or event identity. */
 export const OpenAgentTraceCommandId = 'workbench.action.chat.openAgentDebugPanel';
 
+export type AgentTraceView = 'overview' | 'logs' | 'flowchart' | 'cache' | 'wirelog';
+
 export interface AgentTraceLocation {
 	readonly sessionId: string;
+	readonly viewHint?: AgentTraceView;
+	readonly filter?: string;
 	readonly threadId?: string;
 	readonly turnId?: string;
 	readonly eventId?: string;
@@ -20,6 +24,8 @@ function validateLocation(value: unknown): AgentTraceLocation {
 		const field = value[key];
 		if (field !== undefined && (typeof field !== 'string' || !field.trim() || /[\u0000-\u001f\u007f]/.test(field))) { return invalidLocation(); }
 	}
+	if (value.viewHint !== undefined && (typeof value.viewHint !== 'string' || !['overview', 'logs', 'flowchart', 'cache', 'wirelog'].includes(value.viewHint))) { return invalidLocation(); }
+	if (value.filter !== undefined && (typeof value.filter !== 'string' || value.filter.length > 4096 || /[\u0000-\u001f\u007f]/.test(value.filter))) { return invalidLocation(); }
 	if ((value.turnId !== undefined || value.eventId !== undefined) && value.threadId === undefined) { return invalidLocation(); }
 	return value as unknown as AgentTraceLocation;
 }
@@ -33,7 +39,7 @@ export function createAgentTraceResource(target?: string | AgentTraceLocation): 
 	if (target === undefined) { return URI.from({ scheme: 'ash-agent-trace', path: '/import' }); }
 	const location = validateLocation(typeof target === 'string' ? { sessionId: target } : target);
 	const query: string[] = [];
-	for (const key of ['threadId', 'turnId', 'eventId'] as const) {
+	for (const key of ['threadId', 'turnId', 'eventId', 'viewHint', 'filter'] as const) {
 		if (location[key] !== undefined) { query.push(`${key}=${encodeURIComponent(location[key])}`); }
 	}
 	return URI.from({ scheme: 'ash-agent-trace', path: `/${location.sessionId}`, query: query.join('&') });
@@ -50,7 +56,7 @@ export function readAgentTraceLocation(resource: URI): AgentTraceLocation | unde
 		let value: string;
 		try { key = decodeURIComponent(pair[0]); value = decodeURIComponent(pair[1]); }
 		catch { return invalidLocation(); }
-		if (!['threadId', 'turnId', 'eventId'].includes(key) || Object.hasOwn(fields, key)) { return invalidLocation(); }
+		if (!['threadId', 'turnId', 'eventId', 'viewHint', 'filter'].includes(key) || Object.hasOwn(fields, key)) { return invalidLocation(); }
 		fields[key] = value;
 	}
 	return validateLocation(fields);

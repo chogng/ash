@@ -202,6 +202,9 @@ importers:
       playwright-core:
         specifier: 1.61.1
         version: 1.61.1
+      undici:
+        specifier: 7.29.0
+        version: 7.29.0
     devDependencies:
       '@ash/typescript-compiler':
         specifier: npm:typescript@7.0.2

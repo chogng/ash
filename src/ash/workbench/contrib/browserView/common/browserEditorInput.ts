@@ -2,9 +2,13 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewSessionOptions } from '../../../../platform/browserView/common/browserView.js';
+import {
+	IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl,
+	validateBrowserViewSessionOptions, getBrowserViewSessionNetwork, type IBrowserViewSessionOptions,
+} from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
 import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
@@ -12,6 +16,7 @@ import { BrowserViewModel, IBrowserViewWorkbenchService, type IBrowserViewModel 
 import { BrowserViewUri } from '../../../../platform/browserView/common/browserViewUri.js';
 
 export interface IBrowserEditorInputData {
+	readonly version?: 1;
 	readonly id: string;
 	readonly url: string;
 	readonly title: string;
@@ -64,6 +69,8 @@ export class BrowserEditorInput extends EditorInput {
 		return title.trim() || new URL(url).host;
 	}
 
+	public getIcon(): typeof Lxicon.global { return Lxicon.global; }
+
 	public resolve(): Promise<IBrowserViewModel> {
 		this.assertNotDisposed();
 		if (this.isClosed) { throw new Error('BrowserTargetUnavailable'); }
@@ -98,8 +105,10 @@ export class BrowserEditorInput extends EditorInput {
 		const info = this.model?.info;
 		const session = info?.session ?? this.data.session;
 		// Restoring a tab restores user presentation, never an agent's authority or in-memory login.
-		const restoredSession = session.scope === BrowserViewStorageScope.Agent ? { scope: BrowserViewStorageScope.Ephemeral as const } : session;
-		return { id: this.data.id, url: info?.state.url ?? this.data.url, title: info?.state.title ?? this.data.title, session: restoredSession };
+		const network = getBrowserViewSessionNetwork(session);
+		const restoredSession = session.scope === BrowserViewStorageScope.Agent
+			? { scope: BrowserViewStorageScope.Ephemeral as const, ...(network ? { network } : {}) } : session;
+		return { version: 1, id: this.data.id, url: info?.state.url ?? this.data.url, title: info?.state.title ?? this.data.title, session: restoredSession };
 	}
 
 	protected override disposeCore(): void {
@@ -123,11 +132,16 @@ export class BrowserEditorSerializer implements EditorInputSerializer {
 		const data = requireRecord(value, 'browser editor');
 		const id = requireString(data.id, 'browser editor id');
 		if (!/^browser_target_[0-9a-f-]{36}$/.test(id)) { throw new TypeError('Invalid browser editor id'); }
-		const session = requireRecord(data.session, 'browser storage');
-		if (session.scope !== BrowserViewStorageScope.Global && session.scope !== BrowserViewStorageScope.Workspace && session.scope !== BrowserViewStorageScope.Ephemeral) {
-			throw new TypeError('Invalid restored browser storage');
+		if (data.version !== undefined && data.version !== 1) { throw new TypeError('Invalid browser editor version'); }
+		let session = validateBrowserViewSessionOptions(data.session);
+		if (session.scope === BrowserViewStorageScope.Agent) { throw new TypeError('Invalid restored browser storage'); }
+		// Older Ash tabs inherited their window's proxy without saving its identity.
+		// New snapshots pin local as well as remote choices by their version.
+		if (data.version === undefined && session.scope !== BrowserViewStorageScope.Global && !session.network) {
+			const network = this.views.resolveNetwork({ type: 'user' });
+			if (network) { session = { ...session, network }; }
 		}
 		if (typeof data.title !== 'string') { throw new TypeError('Invalid browser editor title'); }
-		return this.views.getOrCreateLazy({ id, url: normalizeBrowserViewUrl(data.url), title: data.title, session: { scope: session.scope } });
+		return this.views.getOrCreateLazy({ version: 1, id, url: normalizeBrowserViewUrl(data.url), title: data.title, session });
 	}
 }

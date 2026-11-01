@@ -1,7 +1,7 @@
 import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test, suite, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
@@ -30,8 +30,9 @@ import { IContextKeyService, ContextKeyService } from '../../../../platform/cont
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
-const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
 	observe(): void { }
@@ -67,6 +68,76 @@ const enabledAccessibilityService: IAccessibilityService = {
 	alert: () => { },
 	status: () => { },
 };
+
+suite('Diff editor model reuse', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('rebinding keeps editor identities while releasing old models, features and edit mappings', async () => {
+		using services = createServices();
+		using computation = new WidgetTestDiffComputationService();
+		using originalA = new TextModel('first\nbefore A\nlast');
+		using modifiedA = new TextModel('first\nafter A\nlast');
+		using modelA = new DiffModel({ original: originalA, modified: modifiedA, diffProvider: computation, diffOptions });
+		using originalB = new TextModel('before B');
+		using modifiedB = new TextModel('after B');
+		using modelB = new DiffModel({ original: originalB, modified: modifiedB, diffProvider: computation, diffOptions });
+		await Promise.all([waitForReady(modelA), waitForReady(modelB)]);
+		using editor = services.createInstance(DiffEditorWidget, {
+			container: browserEnvironment.window.document.createElement('main'), model: modelA,
+			dimension: { width: 600, height: 160 }, renderSideBySide: false,
+		});
+		const originalEditor = editor.originalEditor;
+		const modifiedEditor = editor.modifiedEditor;
+		const observedPairs: boolean[] = [];
+		const observePair = () => {
+			const original = originalEditor.getModel();
+			const modified = modifiedEditor.getModel();
+			if (original && modified) observedPairs.push(
+				original === originalA && modified === modifiedA || original === originalB && modified === modifiedB,
+			);
+		};
+		using originalChanges = originalEditor.onDidChangeModel(observePair);
+		using modifiedChanges = modifiedEditor.onDidChangeModel(observePair);
+		const oldMapping = modelA.diff!.changes[0]!;
+		editor.setPosition({ lineNumber: 2, column: 3 });
+		editor.accessibleDiffViewerNext();
+		editor.setModel(null);
+		assert.equal(originalEditor.getModel(), null);
+		assert.equal(modifiedEditor.getModel(), null);
+		assert.equal(editor.diff, undefined);
+		assert.equal(editor.getAccessibleContent(), '');
+		assert.equal(editor.element.querySelectorAll('.stanza-diff-inline-original-line, .stanza-accessible-diff-viewer, .ash-diff-gutter').length, 0);
+		assert.equal(originalA.isDisposed(), false);
+		assert.equal(modifiedA.isDisposed(), false);
+		modifiedA.setValue('detached A');
+		await waitForReady(modelA);
+		assert.equal(editor.diff, undefined);
+		editor.updateOptions({ readOnly: true, originalAriaLabel: 'Old B', modifiedAriaLabel: 'New B' });
+		editor.layout({ width: 640, height: 200 });
+		editor.setModel(modelB);
+		assert.strictEqual(editor.originalEditor, originalEditor);
+		assert.strictEqual(editor.modifiedEditor, modifiedEditor);
+		assert.strictEqual(originalEditor.getModel(), originalB);
+		assert.strictEqual(modifiedEditor.getModel(), modifiedB);
+		assert.strictEqual(editor.diff, modelB.diff);
+		assert.equal(modifiedEditor.getOption(EditorOption.readOnly), true);
+		assert.equal(modifiedEditor.getOption(EditorOption.ariaLabel), 'New B');
+		assert.deepEqual({ ...modifiedEditor.getPosition()! }, { lineNumber: 1, column: 1 });
+		assert.equal(editor.element.classList.contains('accessible-view-open'), false);
+		assert.equal(editor.element.querySelector('.stanza-diff-inline-original-line')?.textContent, 'before B');
+		editor.revert(oldMapping);
+		assert.equal(modifiedB.getValue(), 'after B', 'A retired mapping cannot modify another file');
+		editor.updateOptions({ readOnly: false });
+		editor.setModel(modelA);
+		originalB.dispose();
+		assert.strictEqual(modifiedEditor.getModel(), modifiedA, 'A retired source cannot detach the current file');
+		originalA.dispose();
+		assert.equal(originalEditor.getModel(), null);
+		assert.equal(modifiedEditor.getModel(), null);
+		assert.equal(editor.diff, undefined);
+		assert.ok(observedPairs.length > 0 && observedPairs.every(Boolean), 'Model observers must never see sides from different comparisons');
+	});
+});
 
 test('DiffEditorWidget colors inline removed lines and refreshes their tokens without replacing the accessible zone', async () => {
 	using services = createServices();
@@ -191,6 +262,28 @@ test('inline removed lines follow semantic theme styles and coloring settings wh
 	await services.get(IConfigurationService).updateValue('editor.semanticHighlighting.enabled', false);
 	assert.deepEqual(style(), ['', '']);
 	assert.equal([...removedLine.querySelectorAll('.stanza-diff-inline-removed')].map(token => token.textContent).join(''), 'before');
+});
+
+test('DiffEditorWidget uses supplied dimensions and rejects invalid dimensions before creating child editors', async () => {
+	using services = createServices();
+	using original = new TextModel('before');
+	using modified = new TextModel('after');
+	using computation = new WidgetTestDiffComputationService();
+	using model = new DiffModel({ original, modified, diffProvider: computation, diffOptions });
+	await waitForReady(model);
+	using editor = services.createInstance(DiffEditorWidget, {
+		container: browserEnvironment.window.document.createElement('main'), model,
+		dimension: { width: 480, height: 120 },
+	});
+	assert.equal(editor.originalEditor.getLayoutInfo().height, 120);
+	assert.equal(editor.modifiedEditor.getLayoutInfo().height, 120);
+	assert.ok(editor.modifiedEditor.getLayoutInfo().width > 0);
+	const container = browserEnvironment.window.document.createElement('main');
+	for (const dimension of [{ width: -1, height: 120 }, { width: NaN, height: 120 }, { width: 480, height: Infinity }]) {
+		assert.throws(() => services.createInstance(DiffEditorWidget, { container, model, dimension }), /finite and non-negative/);
+		assert.equal(container.children.length, 0);
+		assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 2);
+	}
 });
 
 test('DiffEditorWidget owns two editors, keeps source models caller-owned, and refreshes decorations after an edit', async () => {
@@ -392,6 +485,7 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 		hideUnchangedRegions: { enabled: true, contextLineCount: 1, minimumLineCount: 3, revealLineCount: 2 },
 	});
 	editor.layout({ width: 800, height: 600 });
+	await new Promise<void>(resolve => browserEnvironment.window.requestAnimationFrame(() => resolve()));
 
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
 	assert.equal(editor.originalEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
@@ -405,6 +499,7 @@ test('DiffEditorWidget hides paired unchanged lines and reveals them from either
 	(editor.modifiedEditor.getDomNode().querySelector('.ash-diff-fold-unchanged button') as HTMLButtonElement).click();
 	assert.equal(editor.element.querySelectorAll('.ash-diff-fold-unchanged').length, 0);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-hidden-region').length, 2);
+	await new Promise<void>(resolve => browserEnvironment.window.requestAnimationFrame(() => resolve()));
 	assert.equal(editor.element.querySelector('.ash-diff-hidden-region-count')?.textContent, '34 hidden lines');
 	assert.equal(editor.modifiedEditor.getVisibleRanges().some(range => range.startLineNumber <= 5 && 5 <= range.endLineNumber), false);
 	assert.equal(original.getValue(), lines.join('\n'));
@@ -512,9 +607,9 @@ function createServices(): InstantiationService {
 	const services = new InstantiationService();
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-	services.registerInstance(IThemeService, new TestThemeService(darkColorTheme));
-	services.registerInstance(ILanguageConfigurationService, createTestLanguageConfigurationService());
-	services.registerInstance(ILanguageFeaturesService, new LanguageFeaturesService());
+	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
+	services.registerSingleton(ILanguageConfigurationService, () => createTestLanguageConfigurationService());
+	services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 	registerCodeEditorServices(services);

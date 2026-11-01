@@ -463,6 +463,18 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'on', label: 'On' },
 		]),
 	}),
+	diffReviewPreview: configurationRegistry.registerConfiguration<boolean>({
+		key: 'diffEditor.experimental.reviewPreview',
+		scope: ConfigurationScope.WINDOW,
+		tags: ['experimental'],
+		defaultValue: false,
+		parse: value => parseBoolean(value, 'diffEditor.experimental.reviewPreview'),
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('multiDiff.preview.settingTitle', 'Review preview (prototype)'); },
+			get description() { return localize('multiDiff.preview.settingDescription', 'Use a lightweight read-only multi-file diff preview. Open the full editor to edit or search. Wrapped content uses the full diff editor.'); },
+		},
+	}),
 	diffShowLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: 'diffEditor.showLineNumbers',
 		defaultValue: true,

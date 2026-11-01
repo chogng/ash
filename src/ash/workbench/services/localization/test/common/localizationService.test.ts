@@ -144,7 +144,7 @@ suite('Workbench localization', () => {
 			],
 			['切换终端', '隐藏编辑器', '显示编辑器', '打开更改标签'],
 		);
-		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读文件列表和更改前后的内容/u);
+		assert.match(localize('sessions.changes.editorHelp', ''), /Alt\+F2 阅读文件列表和前后内容/u);
 		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
 	});
 
@@ -838,7 +838,7 @@ suite('Workbench localization', () => {
 		);
 		const { localize } = await import('../../../../../nls.js');
 		assert.equal(localize('parameterHints.dialog', 'Parameter hints'), '参数提示');
-		assert.equal(localize('chat.providerKeys.manage', 'Manage Model Connections'), '管理模型接入');
+		assert.equal(localize({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, 'Chat Settings'), '聊天设置');
 		assert.equal(localize('chat.input.dictate', 'Dictate message'), '听写');
 		assert.equal(localize('dictation.cloudProvider.title', 'Cloud dictation provider'), '云端听写供应商');
 		assert.equal(
@@ -1020,6 +1020,9 @@ suite('Workbench localization', () => {
 
 	function createExtensions(): IExtensionManagementService {
 		return {
+			updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+			setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
+			checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 			recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 			searchPage: async () => {
 				throw new Error('Localization does not use customization paging');

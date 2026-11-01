@@ -24,8 +24,10 @@ export interface ActionBarDragAndDrop {
 	readonly canDrop: (event: DragEvent, target: IAction | undefined, position: ActionBarDropPosition) => boolean;
 	readonly onDragStart: (action: IAction, event: DragEvent) => void;
 	readonly onDragEnter?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
+	/** The item under the pointer, or undefined over collection whitespace. */
 	readonly onDragOver?: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent, duration: number) => void;
 	readonly onDragLeave?: () => void;
+	/** The host resolves no-op, selection, and grouped-drop semantics. */
 	readonly onDrop: (target: IAction | undefined, position: ActionBarDropPosition, event: DragEvent) => void;
 	readonly onDragEnd: () => void;
 }
@@ -162,6 +164,7 @@ export class ActionBar extends Disposable {
 
 	setActions(actions: readonly IAction[]): void {
 		if (this.isDisposed || this.deferActions(actions, false)) return;
+		if (this.draggingEntry && !actions.includes(this.draggingEntry.action)) this.endDrag();
 		const activeElement = this.element.ownerDocument.activeElement;
 		const focusedEntry = this.entries.find(({ container }) => container.contains(activeElement));
 		const focusedActionId = focusedEntry?.action.id;
@@ -185,6 +188,7 @@ export class ActionBar extends Disposable {
 			return createdEntry;
 		});
 		for (const entry of retained.values()) {
+			if (this.dropTarget === entry.container) this.clearDropTarget();
 			entry.store.dispose();
 			entry.container.remove();
 		}
@@ -351,6 +355,7 @@ export class ActionBar extends Disposable {
 	}
 
 	private clearActions(): void {
+		this.endDrag();
 		this.pendingActions = undefined;
 		for (const entry of this.entries) entry.store.dispose();
 		this.entries.length = 0;
@@ -453,7 +458,8 @@ export class ActionBar extends Disposable {
 			store.add(new DragAndDropObserver(container, {
 				onDragEnter: (event) => this.onEntryDragEnter(entry, event),
 				onDragOver: (event, duration) => this.onEntryDragOver(entry, event, duration),
-				onDragLeave: () => this.clearDropTarget(),
+				// The bar clears feedback when the drag leaves the whole collection.
+				// An old item's dragleave can arrive after the next item's dragenter.
 				onDrop: (event) => this.onEntryDrop(entry, event),
 			}));
 		}
@@ -473,22 +479,22 @@ export class ActionBar extends Disposable {
 	private onDragOver(event: DragEvent, duration = 0): void {
 		const { entry, position } = this.dropTargetFromEvent(event);
 		if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.clearDropTarget();
 			return;
 		}
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		if (this.isNoopDrop(entry, position)) {
-			this.clearDropTarget();
-			return;
-		}
+		// Keep the insertion position visible even when dropping would retain the order.
+		// Suppressing that feedback leaves a dead zone beside the dragged item.
 		this.updateDropTarget(entry?.container, position);
-		this.dragAndDrop.onDragOver?.(entry?.action, position, event, duration);
+		// Whitespace has an insertion neighbor, but no item is being hovered.
+		this.dragAndDrop.onDragOver?.(undefined, position, event, duration);
 	}
 
 	private onDrop(event: DragEvent): void {
 		const { entry, position } = this.dropTargetFromEvent(event);
-		if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) return;
-		if (this.isNoopDrop(entry, position)) {
+		if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.endDrag();
 			return;
 		}
@@ -499,30 +505,32 @@ export class ActionBar extends Disposable {
 
 	private onEntryDragEnter(entry: ActionBarEntry, event: DragEvent): void {
 		const position = this.dropPositionForEntry(entry, event);
-		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) return;
+		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+			this.clearDropTarget();
+			return;
+		}
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		this.updateDropTarget(entry.container, position);
 		this.dragAndDrop.onDragEnter?.(entry.action, position, event);
 	}
 
 	private onEntryDragOver(entry: ActionBarEntry, event: DragEvent, duration: number): void {
 		const position = this.dropPositionForEntry(entry, event);
 		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.clearDropTarget();
 			return;
 		}
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		if (this.isNoopDrop(entry, position)) {
-			this.clearDropTarget();
-			return;
-		}
 		this.updateDropTarget(entry.container, position);
 		this.dragAndDrop.onDragOver?.(entry.action, position, event, duration);
 	}
 
 	private onEntryDrop(entry: ActionBarEntry, event: DragEvent): void {
 		const position = this.dropPositionForEntry(entry, event);
-		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) return;
-		if (this.isNoopDrop(entry, position)) {
+		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.endDrag();
 			return;
 		}
@@ -534,9 +542,8 @@ export class ActionBar extends Disposable {
 	private endDrag(): void {
 		const wasDragging = this.dragging;
 		this.dragging = false;
+		this.draggingEntry?.container.classList.remove(DndCssClasses.Dragging);
 		this.draggingEntry = undefined;
-		const dragged = this.element.querySelector<HTMLElement>(`.${DndCssClasses.Dragging}`);
-		dragged?.classList.remove(DndCssClasses.Dragging);
 		this.clearDropTarget();
 		if (wasDragging) this.dragAndDrop?.onDragEnd();
 	}
@@ -566,14 +573,6 @@ export class ActionBar extends Disposable {
 		if (lastLaidOutEntry) return { entry: lastLaidOutEntry, position: 'after' };
 		const entry = this.entryFromEvent(event);
 		return { entry, position: entry ? 'before' : 'after' };
-	}
-
-	private isNoopDrop(entry: ActionBarEntry | undefined, position: ActionBarDropPosition): boolean {
-		const sourceIndex = this.draggingEntry ? this.entries.indexOf(this.draggingEntry) : -1;
-		if (sourceIndex < 0) return false;
-		const targetIndex = entry ? this.entries.indexOf(entry) : this.entries.length;
-		const insertionIndex = targetIndex + (entry && position === 'after' ? 1 : 0);
-		return insertionIndex === sourceIndex || insertionIndex === sourceIndex + 1;
 	}
 
 	private dropPositionForEntry(entry: ActionBarEntry, event: DragEvent): ActionBarDropPosition {
@@ -611,6 +610,8 @@ export class ActionBar extends Disposable {
 	}
 
 	private replaceEntry(entry: ActionBarEntry, action: IAction): void {
+		if (this.draggingEntry === entry) this.endDrag();
+		if (this.dropTarget === entry.container) this.clearDropTarget();
 		const wasTabStop = entry.item === this.tabStop;
 		const activeElement = entry.container.ownerDocument.activeElement;
 		const hadFocus = entry.container.contains(activeElement);

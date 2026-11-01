@@ -22,6 +22,8 @@ use ash_git::GitRepository;
 use ash_git::GitRepositorySnapshot;
 use ash_git::GitTextDiffLimits;
 use ash_git::GitTextDiffSnapshot;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::num::NonZeroUsize;
@@ -910,6 +912,42 @@ impl GitService {
                 )
                 .await
                 .map_err(GitServiceError::Git)
+        })
+    }
+
+    /// Reads one bounded batch without reopening or rediscovering its repository per file.
+    pub(crate) fn change_files_at_paths(
+        &self,
+        repository: &GitRepository,
+        paths: &[(PathBuf, PathBuf)],
+        comparison: GitChangeFileComparison,
+    ) -> Result<Vec<GitChangeFile>, GitServiceError> {
+        self.ensure_readable()?;
+        run(&self.runtime, async {
+            let prefix = self.repository_prefix(repository)?;
+            let client = self.client();
+            // Keep the invocation's cancellation/client context and return request order.
+            // Dropping buffered futures also cancels their owned Git processes on failure.
+            futures::stream::iter(paths.iter().map(|(original, modified)| {
+                let original = prefix.join(original);
+                let modified = prefix.join(modified);
+                let client = &client;
+                async move {
+                    client
+                        .change_file_at_paths(
+                            repository,
+                            &original,
+                            &modified,
+                            comparison,
+                            MAX_CHANGE_FILE_BYTES,
+                        )
+                        .await
+                        .map_err(GitServiceError::Git)
+                }
+            }))
+            .buffered(4)
+            .try_collect()
+            .await
         })
     }
 

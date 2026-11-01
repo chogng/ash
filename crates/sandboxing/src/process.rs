@@ -95,6 +95,8 @@ use std::process::ExitStatus;
 /// Platform helpers keep their sandbox resources alive until their descendants terminate.
 struct CommandProcess {
     child: Child,
+    #[cfg(unix)]
+    _guard: Option<ash_utils_pty::process_guard::ProcessGuard>,
     #[cfg(windows)]
     job: ash_utils_pty::JobObject,
     closed: bool,
@@ -106,6 +108,8 @@ impl CommandProcess {
         {
             ash_utils_pty::process_group::configure_command_session(&mut command);
         }
+        #[cfg(unix)]
+        let guard = ash_utils_pty::process_guard::configure_command_guard(&mut command)?;
         #[cfg(windows)]
         let job = ash_utils_pty::JobObject::create()?;
         #[cfg(windows)]
@@ -114,6 +118,8 @@ impl CommandProcess {
         let child = command.spawn()?;
         Ok(Self {
             child,
+            #[cfg(unix)]
+            _guard: guard,
             #[cfg(windows)]
             job,
             closed: false,

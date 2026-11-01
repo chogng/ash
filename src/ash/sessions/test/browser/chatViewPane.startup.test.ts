@@ -1,8 +1,10 @@
+import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerCodeEditorServices } from '../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -62,8 +64,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ChatViewPane } = await import('../../browser/chatViewPane.js');
-await import('../../browser/actions/chatLayoutActions.js');
+const { SessionChatViewPane } = await import('../../browser/chatViewPane.js');
+await import('../../../workbench/contrib/chat/browser/chat.contribution.js');
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 const { BrowserLayoutService } = await import('../../../platform/layout/browser/layoutService.js');
 
@@ -106,6 +108,7 @@ test('opens a local Chat conversation before the backend session request settles
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getConversations: () => [], getActiveConversation: () => undefined,
 		captureActiveDraft: async () => undefined, appendToActiveDraft: () => { },
@@ -121,7 +124,7 @@ test('opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IContextMenuService, {} as IContextMenuService);
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
-	using view = new ChatViewPane(
+	using view = new SessionChatViewPane(
 		document.body,
 		{ id: 'workbench.chat', title: 'Chat' },
 		chat,
@@ -137,7 +140,7 @@ test('opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService),
+		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService), services.get(IContextKeyService), emptyEditorGroupsService,
 	);
 
 	assert.deepEqual(escaped, []);
@@ -188,6 +191,8 @@ class PendingSessionService implements ISessionsManagementService {
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
+	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
+	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
@@ -281,6 +286,12 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		startTurn: () => pending as Promise<void>,
 		queueTurn: () => pending as Promise<void>,
 		queuedMessageCount: () => pending as Promise<number>,
+		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
+		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
+		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
+		editPendingRequest: async () => { throw new Error('Unexpected queue operation'); },
+		removePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
+		sendPendingRequestImmediately: async () => { throw new Error('Unexpected queue operation'); },
 		compactContext: () => pending as Promise<void>,
 		steerTurn: () => pending as Promise<void>,
 		interruptTurn: () => pending as Promise<void>,

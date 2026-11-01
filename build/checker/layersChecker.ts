@@ -49,13 +49,58 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 	if (!config || config.errors.length) throw new Error(config?.errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n')).join('\n') ?? `Cannot read ${tsconfigPath}`);
 	const files = ts.sys.readDirectory(sourceRoot, ['.ts', '.tsx', '.cts', '.mts'], ['**/test/**', '**/fixtures/**'], ['**/*']).sort();
 	if (files.length === 0) throw new Error(`No production TypeScript sources in ${sourceRoot}`);
-	const program = ts.createProgram(files, config.options);
+	const host = ts.createCompilerHost(config.options);
+	const key = (path: string): string => host.getCanonicalFileName(resolve(path));
+	const importers = new Map<string, Set<string>>();
+	const targets = new Map<ts.Node, string>();
+	// Capture the compiler's resolution results once. Re-resolving imports through
+	// the type checker would force semantic work in unrelated source files.
+	const cache = ts.createModuleResolutionCache(repositoryRoot, host.getCanonicalFileName, config.options);
+	host.resolveModuleNameLiterals = (literals, containingFile, redirectedReference, options, containingSourceFile) => literals.map(literal => {
+		const result = ts.resolveModuleName(literal.text, containingFile, options, host, cache, redirectedReference, ts.getModeForUsageLocation(containingSourceFile, literal, options));
+		if (result.resolvedModule) {
+			targets.set(literal, result.resolvedModule.resolvedFileName);
+			const target = key(result.resolvedModule.resolvedFileName);
+			let parents = importers.get(target);
+			if (!parents) importers.set(target, parents = new Set());
+			parents.add(key(containingFile));
+		}
+		return result;
+	});
+	const program = ts.createProgram(files, config.options, host);
 	const checker = program.getTypeChecker();
 	const contractPath = resolve(sourceRoot, 'platform/ipc/common/mainProcessService.ts');
 	const contract = program.getSourceFile(contractPath);
 	const moduleSymbol = contract && checker.getSymbolAtLocation(contract);
 	const nativeIPC = moduleSymbol && checker.getExportsOfModule(moduleSymbol).find(symbol => symbol.name === 'IMainProcessService');
 	if (!nativeIPC) throw new Error(`Missing IMainProcessService contract: ${contractPath}`);
+	const nativeNames = new Set([nativeIPC.name]);
+	const globals = new Set<string>();
+	const aliases: { name: ts.Identifier | ts.StringLiteral; source: ts.SourceFile; }[] = [];
+	// Only import/export aliases can rename the contract symbol. Collect their
+	// spellings before visiting consumers, including names used through namespaces.
+	for (const source of program.getSourceFiles()) {
+		if (!ts.isExternalModule(source)) globals.add(key(source.fileName));
+		function collectAliases(node: ts.Node): void {
+			if (ts.isModuleDeclaration(node) && (node.flags & ts.NodeFlags.GlobalAugmentation || ts.isStringLiteral(node.name)) || ts.isNamespaceExportDeclaration(node)) globals.add(key(source.fileName));
+			if (ts.isImportSpecifier(node) || ts.isExportSpecifier(node) || ts.isImportClause(node) || ts.isImportEqualsDeclaration(node)) {
+				if (node.name) aliases.push({ name: node.name, source });
+			}
+			ts.forEachChild(node, collectAliases);
+		}
+		collectAliases(source);
+	}
+	// Service handles can only be inferred through the contract's import closure.
+	// Ambient/UMD declarations and module augmentations can expose them globally,
+	// so those cases retain the complete receiver scan.
+	const reachable = new Set(nativeIPC.declarations?.map(declaration => key(declaration.getSourceFile().fileName)));
+	for (const source of reachable) for (const parent of importers.get(source) ?? []) reachable.add(parent);
+	const ambient = [...reachable].some(source => globals.has(source));
+	for (const { name, source } of aliases) {
+		if (!ambient && !reachable.has(key(source.fileName))) continue;
+		const symbol = checker.getSymbolAtLocation(name);
+		if (symbol && (symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol) === nativeIPC) nativeNames.add(name.text);
+	}
 	const nativeTypes = new Map<ts.Type, boolean>();
 	const violations: ILayerViolation[] = [];
 
@@ -82,6 +127,7 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 		const environment = environmentFor(path);
 		const restrictNativeIPC = ['common', 'browser', 'worker'].includes(environment) && source !== contract;
 		const restrictHostGlobals = webEnvironments.has(environment) && !preloads.has(path);
+		const checkReceivers = restrictNativeIPC && (ambient || reachable.has(key(source.fileName)));
 		const report = (node: ts.Node, message: string): void => {
 			const position = source.getLineAndCharacterOfPosition(node.getStart(source));
 			violations.push({ fileName: source.fileName, line: position.line + 1, character: position.character + 1, message });
@@ -93,15 +139,15 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 				if (name.startsWith('node:') || nodeModules.has(name) || (name === 'electron' || name.startsWith('electron/')) && !preloads.has(path)) {
 					report(specifier, `Module '${name}' is unavailable in the ${environment} layer.`);
 				}
-				const target = checker.getSymbolAtLocation(specifier)?.declarations?.find(ts.isSourceFile);
+				const target = targets.get(specifier);
 				if (target) {
-					const targetPath = relative(sourceRoot, target.fileName).replaceAll('\\', '/');
+					const targetPath = relative(sourceRoot, target).replaceAll('\\', '/');
 					if (!isAbsolute(targetPath) && !targetPath.startsWith('../') && ['node', 'electron-main', 'electron-utility'].includes(environmentFor(targetPath))) {
 						report(specifier, `Host module '${name}' is unavailable in the ${environment} layer.`);
 					}
 				}
 			}
-			if (ts.isIdentifier(node) && (restrictNativeIPC || restrictHostGlobals)) {
+			if (ts.isIdentifier(node) && (restrictNativeIPC && nativeNames.has(node.text) || restrictHostGlobals && hostGlobals.has(node.text))) {
 				let symbol = checker.getSymbolAtLocation(node);
 				if (symbol?.flags && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
 				if (restrictNativeIPC && symbol === nativeIPC) report(node, `IMainProcessService is only available to Electron host adapters, not ${environment} code.`);
@@ -110,7 +156,7 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 				if (restrictHostGlobals && hostGlobals.has(node.text) && symbol?.declarations?.some(declaration => /\/node_modules\/(?:@types\/node|electron)\//u.test(declaration.getSourceFile().fileName.replaceAll('\\', '/')))) {
 					report(node, `Host global '${node.text}' is unavailable in the ${environment} layer.`);
 				}
-			} else if (restrictNativeIPC && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && isNativeType(checker.getTypeAtLocation(node.expression))) {
+			} else if (checkReceivers && (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && isNativeType(checker.getTypeAtLocation(node.expression))) {
 				report(node, `Inferred IMainProcessService access is unavailable in the ${environment} layer.`);
 			}
 			ts.forEachChild(node, visit);
@@ -122,7 +168,7 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	try {
-		if (process.argv.length !== 2) throw new Error('Usage: node build/checker/layersChecker.ts');
+		if (process.argv.length !== 2) throw new Error('Usage: bun build/checker/layersChecker.ts');
 		const violations = checkLayers(resolve(repositoryRoot, 'tsconfig.renderer.json'), resolve(repositoryRoot, 'src/ash'));
 		for (const violation of violations) console.error(`${relative(repositoryRoot, violation.fileName)}:${violation.line}:${violation.character}: ${violation.message}`);
 		console.log(`Layer references: ${violations.length} violations.`);

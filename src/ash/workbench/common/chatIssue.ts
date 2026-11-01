@@ -12,7 +12,7 @@ export function computeIssueIcon(state: GitHubIssue['state'], stateReason: GitHu
 	} else if (isDiscarded) {
 		color = 'description.foreground';
 	}
-	return { id: isOpen ? Lxicon.issueOpened.id : Lxicon.issueClosed.id, color: themeColorFromId(color) };
+	return { id: Lxicon.issues.id, color: themeColorFromId(color) };
 }
 
 /** Unresolved references keep a collection active until every Issue is known to be closed. */

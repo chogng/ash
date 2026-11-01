@@ -40,6 +40,8 @@ export interface PaneCompositePartOptions {
 	readonly contextKeyService?: IContextKeyService;
 	readonly localizationService?: ILocalizationService;
 	readonly id: string;
+	/** Embedded Parts keep their selection separate from the window's region. */
+	readonly activeCompositeStorageKey?: string;
 	readonly location: ViewContainerLocation;
 	readonly ariaLabel: string;
 	readonly ariaLabelKey?: LocalizationKey;
@@ -66,6 +68,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly activeCompositeContext: IContextKey<string> | undefined;
 	private readonly location: ViewContainerLocation;
+	private readonly activeCompositeStorageKey: string;
 	protected readonly titleContentDomNode: HTMLDivElement;
 	protected readonly titleActionsSlotDomNode: HTMLDivElement;
 	protected readonly viewTitleActionsDomNode: HTMLDivElement;
@@ -86,6 +89,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		@IActivityService activityService: IActivityService,
 	) {
 		super(container, options.id, themeService, storageService);
+		this.activeCompositeStorageKey = options.activeCompositeStorageKey ?? activeCompositeStorageKeys[options.location];
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.activeCompositeContext = options.contextKeyService
 			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
@@ -189,7 +193,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		const available = this.viewDescriptorService.getViewContainers(this.location).filter(container =>
 			!container.hideIfEmpty || this.viewDescriptorService.getViewContainerModel(container.id).activeViewDescriptors.length > 0);
 		const stored = this.storageService.get(
-			activeCompositeStorageKeys[this.location],
+			this.activeCompositeStorageKey,
 			StorageScope.WORKSPACE,
 		);
 		if (stored && available.some(container => container.id === stored)) {
@@ -230,7 +234,7 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 
 	private storeActiveComposite(compositeId: string): void {
 		const storage = this.storageService;
-		const key = activeCompositeStorageKeys[this.location];
+		const key = this.activeCompositeStorageKey;
 		if (compositeId === this.viewDescriptorService.getDefaultViewContainer(this.location)?.id) {
 			storage.remove(key, StorageScope.WORKSPACE);
 			return;

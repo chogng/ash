@@ -28,6 +28,15 @@ suite('Execution Trace command', () => {
 
 
 suite('Workbench Trace navigation', () => {
+	test('the session command applies its public filter argument and opens Logs', async () => {
+		using services = new InstantiationService();
+		const opened: IResourceEditorInput[] = [];
+		services.registerInstance(IStorageService, { store() { } } as unknown as IStorageService);
+		services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput) => { opened.push(input); } } as unknown as IEditorService);
+		await services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.openAgentDebugPanelForSession')!, 'session', 'toolCall');
+		assert.equal(opened[0]!.resource.toString(), createAgentTraceResource({ sessionId: 'session', viewHint: 'logs', filter: 'toolCall' }).toString());
+	});
+
 	for (const saved of [undefined, 'ash-agent-trace:/session?threadId=child&turnId=turn', 'https://example.test/untrusted']) {
 		test(`resumes only a valid readonly Trace locator ${String(saved)}`, async () => {
 			using services = new InstantiationService();

@@ -32,11 +32,18 @@
 .ash-reduce-motion .ash-split-view-vertical > .ash-sash {
 	transition: none;
 }
-/* Pane edges stay visible independently of resize-handle hover and drag state. */
+.ash-split-view-separator-border > .ash-sash {
+	/* The pane's leading border starts at the drag axis; center feedback on its paint. */
+	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / 2);
+}
+
+/* Only separate visible panes; retained hidden siblings do not create an outer edge. */
 .ash-split-view-separator-border
-	> .ash-split-view-pane:not(:first-child)::before {
+	> .ash-split-view-pane:not([hidden])
+	~ .ash-split-view-pane::before {
 	position: absolute;
-	z-index: 1;
+	/* Paint above pane tabs and scrollbars (1–3), below resize feedback (35). */
+	z-index: 4;
 	top: 0;
 	left: 0;
 	background-color: var(--ash-split-view-separator-border);
@@ -44,12 +51,14 @@
 	pointer-events: none;
 }
 .ash-split-view-horizontal.ash-split-view-separator-border
-	> .ash-split-view-pane:not(:first-child)::before {
+	> .ash-split-view-pane:not([hidden])
+	~ .ash-split-view-pane::before {
 	width: var(--ash-strokeThickness);
 	height: 100%;
 }
 .ash-split-view-vertical.ash-split-view-separator-border
-	> .ash-split-view-pane:not(:first-child)::before {
+	> .ash-split-view-pane:not([hidden])
+	~ .ash-split-view-pane::before {
 	width: 100%;
 	height: var(--ash-strokeThickness);
 }

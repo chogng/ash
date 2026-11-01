@@ -1,12 +1,16 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { extUri } from '../../../../base/common/resources.js';
-import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewCreateOptions, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
+import {
+	IBrowserViewService, getBrowserViewSessionNetwork, getBrowserViewSessionAffinity,
+	type BrowserViewEvent, type IBrowserViewCreateOptions, type IBrowserViewInfo,
+	type IBrowserViewOwner, type IBrowserViewNetwork, type IBrowserViewSessionOptions,
+} from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IEditorService, type EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { BrowserEditorInput, type IBrowserEditorInputData } from '../common/browserEditorInput.js';
-import { BrowserViewModel, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
+import { BrowserViewModel, type IBrowserViewNetworkResolver, type IBrowserViewContextualFilter, type IBrowserViewFilterContext, type IBrowserViewOpenHandler, type IBrowserViewWorkbenchService, type IBrowserViewWorkbenchCreateOptions } from '../common/browserView.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
 import { DialogResult, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { localize } from '../../../../nls.js';
@@ -28,6 +32,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private readonly changes = this._register(new Emitter<void>());
 	public readonly onDidChangeBrowserViews = this.changes.event;
 	private readonly filters = new Set<IBrowserViewContextualFilter>();
+	private networkResolver: IBrowserViewNetworkResolver | undefined;
 	private readonly openHandlers = new Set<IBrowserViewOpenHandler>();
 	private readonly retiringInputs = this._register(new DisposableStore());
 	private readonly closingInputs = new Map<string, Promise<void>>();
@@ -116,6 +121,28 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		return toDisposable(() => { this.openHandlers.delete(handler); });
 	}
 
+	public registerNetworkResolver(resolver: IBrowserViewNetworkResolver): IDisposable {
+		this.assertNotDisposed();
+		if (this.networkResolver) { throw new Error('Browser network resolver already registered'); }
+		this.networkResolver = resolver;
+		const listener = resolver.onDidChangeNetworkStatus(() => this.changes.fire());
+		return toDisposable(() => {
+			listener.dispose();
+			if (this.networkResolver === resolver) { this.networkResolver = undefined; }
+		});
+	}
+
+	public resolveNetwork(owner: IBrowserViewOwner): IBrowserViewNetwork | undefined {
+		if (this.networkResolver) {
+			const network = this.networkResolver.resolveNetwork(owner);
+			if (network === null) { throw new Error('BrowserOwnerNetworkUnavailable'); }
+			if (network && this.networkResolver.getNetworkStatus(network).proxySupported === false) { throw new Error('BrowserRemoteProxyUnavailable'); }
+			return network;
+		}
+		const authority = getWorkspaceRemoteAuthority(this.workspace.getWorkspace());
+		return authority ? { authority } : undefined;
+	}
+
 	public getOrCreateLazy(data: IBrowserEditorInputData): BrowserEditorInput {
 		this.assertNotDisposed();
 		let input = this.inputs.get(data.id);
@@ -129,13 +156,24 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	}
 
 	public async createBrowserView(request: IBrowserViewWorkbenchCreateOptions, source?: IntegratedBrowserOpenSource): Promise<BrowserEditorInput> {
-		await this.initialize();
-		const options: IBrowserViewCreateOptions = { ...request, session: request.session ?? await this.defaultStorage(request.owner) };
-		this.assertNotDisposed();
+		// Capture policy before initialization/trust IPC: selection can change while those are pending.
+		const network = request.session ? getBrowserViewSessionNetwork(request.session) : this.resolveNetwork(request.owner);
+		const affinity = request.session ? getBrowserViewSessionAffinity(request.session) : this.networkResolver?.resolveStorageAffinity?.(request.owner);
 		const id = 'browser_target_' + crypto.randomUUID();
-		// Reserve the input before creation: the IPC result and created event can arrive in either order.
-		const input = this.getOrCreateLazy({ id, url: options.initialUrl, title: '', session: options.session });
+		const created = [...this.openHandlers].map(handler => handler.onWillCreateBrowserView?.(request.owner, id));
+		let input: BrowserEditorInput | undefined;
 		try {
+			const storage = request.session ?? await this.defaultStorage(request.owner, network, affinity);
+			const session: IBrowserViewSessionOptions = storage.scope === BrowserViewStorageScope.Global ? storage : {
+				...storage,
+				...(network ? { network } : {}),
+				...(storage.scope === BrowserViewStorageScope.Workspace && affinity !== undefined && storage.affinity === undefined ? { affinity } : {}),
+			};
+			await this.initialize();
+			const options: IBrowserViewCreateOptions = { ...request, session };
+			this.assertNotDisposed();
+			// Reserve before Main emits creation, so its event cannot open the page a second time.
+			input = this.getOrCreateLazy({ id, url: options.initialUrl, title: '', session: options.session });
 			const info = await this.service.getOrCreateBrowserView(id, options);
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
@@ -143,10 +181,12 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			await this.openEditor(input);
 			this.assertNotDisposed();
 			if (this.inputs.get(id) !== input) { throw new Error('BrowserTargetUnavailable'); }
+			for (const callback of created) { callback?.(input); }
 			logBrowserOpen(this.telemetry, source ?? (options.initialUrl === 'about:blank' ? 'commandWithoutUrl' : 'commandWithUrl'));
 			return input;
 		} catch (error) {
-			if (this.inputs.get(id) === input) {
+			for (const callback of created) { callback?.(undefined); }
+			if (input && this.inputs.get(id) === input) {
 				this.inputListeners.deleteAndDispose(id);
 				this.inputs.deleteAndDispose(id);
 				this.changes.fire();
@@ -155,17 +195,47 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		}
 	}
 
-	private async defaultStorage(owner: IBrowserViewCreateOptions['owner']): Promise<IBrowserViewCreateOptions['session']> {
+	/** A native session cannot change networks. Resolve its replacement before touching visible editors. */
+	public async replaceBrowserView(input: BrowserEditorInput, session: IBrowserViewSessionOptions): Promise<BrowserEditorInput> {
+		const groups = this.editorPart.groups.filter(group => group.inputs.includes(input));
+		if (!groups.length || input.isDisposed) { return input; }
+		const id = 'browser_target_' + crypto.randomUUID();
+		const created = [...this.openHandlers].map(handler => handler.onWillCreateBrowserView?.({ type: 'user' }, id, input));
+		const replacement = this.getOrCreateLazy({ ...input.serialize(), id, session });
+		try {
+			await replacement.resolve();
+			this.assertNotDisposed();
+			for (const group of groups) {
+				if (!input.isDisposed && group.inputs.includes(input)) { await group.replaceEditor(input, replacement); }
+			}
+			const opened = this.editorPart.groups.some(group => group.inputs.includes(replacement));
+			for (const callback of created) { callback?.(opened ? replacement : undefined); }
+			if (!opened) { await this.service.destroyBrowserView(id); }
+			return opened ? replacement : input;
+		} catch (error) {
+			const opened = this.editorPart.groups.some(group => group.inputs.includes(replacement));
+			for (const callback of created) { callback?.(opened ? replacement : undefined); }
+			if (!opened) {
+				await this.service.destroyBrowserView(id).catch(() => { });
+				this.inputListeners.deleteAndDispose(id);
+				this.inputs.deleteAndDispose(id);
+				this.changes.fire();
+			}
+			throw error;
+		}
+	}
+
+	private async defaultStorage(owner: IBrowserViewCreateOptions['owner'], network: IBrowserViewNetwork | undefined, affinity: string | undefined): Promise<IBrowserViewCreateOptions['session']> {
 		if (owner.type === 'agent') { throw new Error('Agent browser storage requires an explicit Thread'); }
 		// Offline hosts cannot resolve backend capabilities; keep new pages isolated until trust is known.
 		await this.trust.workspaceTrustInitialized;
 		await this.trust.resolveWorkspaceTrust().catch(() => undefined);
 		const trust = await this.trust.getWorkspaceTrustInfo().catch(() => undefined);
 		if (!trust?.isTrusted) { return { scope: BrowserViewStorageScope.Ephemeral }; }
-		const configured = this.configuration.getValue<string>('workbench.browser.dataStorage');
-		const remote = getWorkspaceRemoteAuthority(this.workspace.getWorkspace());
+		const configured = this.configuration.getValue<string>('workbench.browser.dataStorage') ?? 'default';
+		const remote = network?.authority;
 		const scope = configured === 'default' ? (remote ? BrowserViewStorageScope.Workspace : BrowserViewStorageScope.Global) : configured;
-		if (scope === BrowserViewStorageScope.Ephemeral || (scope === BrowserViewStorageScope.Workspace && this.workspace.getWorkbenchState() === WorkbenchState.EMPTY)) { return { scope: BrowserViewStorageScope.Ephemeral }; }
+		if (scope === BrowserViewStorageScope.Ephemeral || (scope === BrowserViewStorageScope.Workspace && !remote && !affinity && this.workspace.getWorkbenchState() === WorkbenchState.EMPTY)) { return { scope: BrowserViewStorageScope.Ephemeral }; }
 		// A remote connection cannot join local global cookies. Main also isolates its proxy partition.
 		return { scope: scope === BrowserViewStorageScope.Global && !remote ? BrowserViewStorageScope.Global : BrowserViewStorageScope.Workspace };
 	}
@@ -313,6 +383,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 		this.authenticationDialogs.clear();
 		for (const handle of this.permissionDialogs.values()) { handle.item.cancel(); }
 		this.permissionDialogs.clear();
+		this.networkResolver = undefined;
 		this.filters.clear();
 		this.openHandlers.clear();
 		super.disposeCore();

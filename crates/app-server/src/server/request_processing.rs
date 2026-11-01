@@ -76,7 +76,8 @@ impl RequestLane {
             Some(method) if super::github_processor::GitHubRequestProcessor::handles(method)
                 || super::issue_operations::IssueRequestProcessor::handles(method) => Self::Network,
             Some(
-                ClientMethod::VoiceStartCancel
+                ClientMethod::WireLogStop
+                | ClientMethod::VoiceStartCancel
                 | ClientMethod::VoiceStop
                 | ClientMethod::VoiceInterrupt
                 | ClientMethod::VoiceRejectDelegation

@@ -136,8 +136,12 @@ export class ViewOverlayWidgets extends ViewPart {
 	}
 
 	public override prepareRender(): void {
-		this._viewDomNodeRect = getDomNodePagePosition(this._viewDomNode);
-		for (const [, widget] of this._widgets) widget.prepareRender();
+		let needsPagePosition = false;
+		for (const [, widget] of this._widgets) {
+			widget.prepareRender();
+			needsPagePosition ||= widget.position?.preference != null && this._widgetCanOverflow(widget.actual);
+		}
+		this._viewDomNodeRect = needsPagePosition ? getDomNodePagePosition(this._viewDomNode) : null;
 	}
 
 	public render(context: RestrictedRenderingContext): void {
@@ -229,6 +233,14 @@ class OverlayWidget extends Disposable {
 	}
 
 	public prepareRender(): void {
+		const preference = this.position?.preference;
+		// Hidden widgets and explicit coordinates do not depend on content size.
+		// Diff hidden-region controls use this path for every collapsed region.
+		if (preference === null || preference === undefined || isCoordinates(preference)) {
+			this.width = 0;
+			this.height = 0;
+			return;
+		}
 		const rectangle = this.domNode.domNode.getBoundingClientRect();
 		this.width = rectangle.width || this.domNode.domNode.offsetWidth;
 		this.height = rectangle.height || this.domNode.domNode.offsetHeight;

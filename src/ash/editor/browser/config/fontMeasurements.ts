@@ -2,7 +2,7 @@ import { PixelRatio } from '../../../base/browser/pixelRatio.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../base/browser/scheduler.js';
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, markAsSingleton } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { EditorFontLigatures } from '../../common/config/editorOptions.js';
 import { BareFontInfo, FontInfo, SERIALIZED_FONT_INFO_VERSION } from '../../common/config/fontInfo.js';
@@ -35,9 +35,14 @@ interface FontCache {
 
 export class FontMeasurementsImpl extends Disposable {
 	private _cache = new WeakMap<Window, FontCache>();
-	private readonly _eviction = this._register(new DisposableMap<Window, DisposableStore>());
+	private readonly _eviction: DisposableMap<Window, DisposableStore>;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	readonly onDidChange = this._onDidChange.event;
+
+	constructor(eviction = new DisposableMap<Window, DisposableStore>()) {
+		super();
+		this._eviction = this._register(eviction);
+	}
 
 	clearAllFontInfos(): void {
 		this._cache = new WeakMap();
@@ -185,4 +190,5 @@ function clampUnreliableFontInfo(fontInfo: FontInfo): FontInfo {
 	}, false);
 }
 
-export const FontMeasurements = new FontMeasurementsImpl();
+// This registry outlives individual editors; scoped measurement instances keep their normal ownership.
+export const FontMeasurements = new FontMeasurementsImpl(markAsSingleton(new DisposableMap<Window, DisposableStore>()));

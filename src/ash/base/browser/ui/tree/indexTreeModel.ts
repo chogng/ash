@@ -1,10 +1,10 @@
 import { Emitter, type Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
-import { TreeVisibility, type AbstractTreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from './tree.js';
+import { TreeVisibility, type ITreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from './tree.js';
 
 export type IndexTreeModelChangeKind = 'structure' | 'collapse' | 'filter' | 'rerender';
 
-export interface IndexTreeNode<T> extends AbstractTreeNode<T> {
+export interface IndexTreeNode<T> extends ITreeNode<T> {
 	readonly parent: IndexTreeNode<T> | undefined;
 	readonly children: readonly IndexTreeNode<T>[];
 	readonly location: IndexTreeLocation;
@@ -45,6 +45,7 @@ interface MutableIndexTreeNode<T> {
 	visible: boolean;
 	visibleChildIndex: number;
 	visibleChildrenCount: number;
+	filterData: unknown;
 }
 
 interface PreparedTreeElement<T> extends TreeElement<T> {
@@ -87,6 +88,7 @@ export class IndexTreeModel<T> extends Disposable {
 			visible: true,
 			visibleChildIndex: 0,
 			visibleChildrenCount: 1,
+			filterData: undefined,
 		};
 		this.rebuildIndexAndProjection();
 	}
@@ -226,6 +228,7 @@ export class IndexTreeModel<T> extends Disposable {
 				visible: true,
 				visibleChildIndex: 0,
 				visibleChildrenCount: 0,
+				filterData: undefined,
 			};
 			node.element = treeElement.element;
 			node.parent = parent;
@@ -340,7 +343,9 @@ export class IndexTreeModel<T> extends Disposable {
 	}
 
 	private updateFilterVisibility(node: MutableIndexTreeNode<T>, parentVisibility: TreeVisibility): boolean {
-		const visibility = normalizeFilterResult(this.filter?.filter(node.element, parentVisibility) ?? TreeVisibility.Visible);
+		const result = this.filter?.filter(node.element, parentVisibility) ?? TreeVisibility.Visible;
+		node.filterData = typeof result === 'object' ? result.data : undefined;
+		const visibility = normalizeFilterResult(result);
 		if (visibility === TreeVisibility.Hidden) {
 			this.hideSubtree(node);
 			return false;
@@ -417,6 +422,7 @@ function changedVisibleRange<T>(before: readonly IndexTreeNode<T>[], after: read
 }
 
 function normalizeFilterResult(result: TreeFilterResult): TreeVisibility {
+	if (typeof result === 'object') return normalizeFilterResult(result.visibility);
 	if (result === true) return TreeVisibility.Visible;
 	if (result === false) return TreeVisibility.Hidden;
 	return result;

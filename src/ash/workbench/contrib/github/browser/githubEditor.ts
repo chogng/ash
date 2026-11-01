@@ -179,7 +179,7 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 		this._register(addDisposableListener(this.formDraft, 'change', () => { if (this.model.compose) { this.model.compose.draft = this.formDraft.checked; } }));
 		this.formActions = this.toolbar(this.form, localize('github.editor.formActions', 'Form actions'));
 		this.reviewSection = this.element(this.detail, 'github-review');
-		this.codexActions = this.toolbar(this.reviewSection, localize('github.editor.codexActions', 'Codex review actions'));
+		this.codexActions = this.toolbar(this.reviewSection, localize('github.editor.codexActions', 'Codex PR cloud review actions'));
 		this.codexNotice = h(parent.ownerDocument, 'p'); this.codexNotice.setAttribute('role', 'status'); this.codexNotice.setAttribute('aria-live', 'polite'); this.reviewSection.append(this.codexNotice);
 		this.reviewers = h(parent.ownerDocument, 'p'); this.reviewSection.append(this.reviewers);
 		this.reviewerActions = this.toolbar(this.reviewSection, localize('github.editor.reviewerActions', 'Reviewer actions'));
@@ -345,12 +345,12 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 	private renderReview(): void {
 		const model = this.model;
 		this.codexActions.setActions([
-			this.action('requestCodexReview', localize('github.editor.requestCodex', 'Request Codex review'), model.canWrite && !model.codexReviewRequested && model.repository?.host === 'github.com', () => model.requestCodexReview()),
-			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex review settings'), true, () => this.preferences.openSettings({ section: 'github' })),
+			this.action('requestCodexReview', localize('github.editor.requestCodex', 'Request Codex PR cloud review'), model.canWrite && !model.codexReviewRequested && model.repository?.host === 'github.com', () => model.requestCodexReview()),
+			this.action('codexSettings', localize('github.editor.codexSettings', 'Codex PR cloud review settings'), true, () => this.preferences.openSettings({ section: 'github' })),
 		]);
 		this.codexNotice.textContent = model.codexReviewRequested
-			? localize('github.editor.codexRequested', 'Posted @codex review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.')
-			: localize('github.editor.codexHint', 'Request Codex review posts @codex review using your GitHub account. Configure the official Connector in Codex review settings.');
+			? localize('github.editor.codexRequested', 'Posted @codex review to request a cloud review. Refresh to read PR comments and review discussions. The official Connector must be authorized for this repository.')
+			: localize('github.editor.codexHint', 'Request Codex PR cloud review posts @codex review using your GitHub account. The official Connector reviews the PR in the cloud. Configure repository authorization in Codex PR cloud review settings.');
 		this.checks.replaceChildren(h(this.root.ownerDocument, 'h3', localize('github.editor.checks', 'Checks')));
 		if (model.checks) {
 			this.checks.append(h(this.root.ownerDocument, 'p', model.checks.state));

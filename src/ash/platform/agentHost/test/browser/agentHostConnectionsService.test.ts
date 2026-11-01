@@ -1,3 +1,5 @@
+import { URI } from '../../../../base/common/uri.js';
+import { remoteAgentHostRoot } from '../../common/remoteAgentHostService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -14,6 +16,13 @@ import type { AppServerConnectionState } from '../../common/appServerApi.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
+test('reusing a forwarded Tunnel port cannot reuse a previous authenticated lease resource namespace', () => {
+	const target = { type: 'tunnel' as const, name: 'Tunnel', endpoint: 'http://127.0.0.1:5174/', workspace: '/repo' };
+	assert.notEqual(remoteAgentHostRoot(target, 'lease-a').authority, remoteAgentHostRoot(target, 'lease-b').authority);
+	assert.equal(remoteAgentHostRoot(target, 'lease-a').authority, remoteAgentHostRoot({ ...target, name: 'Renamed' }, 'lease-a').authority);
+	assert.throws(() => remoteAgentHostRoot(target), /connection lease/);
+});
+
 test('host registry projects the selected ambient host and independent same-server roots without owning their lifetime', async () => {
 	using lifetime = new DisposableStore();
 	const changed = lifetime.add(new Emitter<void>());
@@ -23,7 +32,7 @@ test('host registry projects the selected ambient host and independent same-serv
 	const first = { name: 'First', host: 'build', workspace: '/repo' };
 	const nested = { name: 'Nested', host: 'build', workspace: '/repo/nested' };
 	let retired = 0;
-	const host = { id: 'first', api, connection: first, ...toDisposable(() => retired++) };
+	const host = { id: 'first', api, connection: first, directory: { uri: URI.parse('ash-remote://ssh+build/repo'), target: { type: 'environment' as const, dirId: 'first' } }, ...toDisposable(() => retired++) };
 	lifetime.add(host);
 	let entries: IRendererAgentHostConnection[] = [
 		{ id: 'first', connection: first, host, state: 'ready' },
@@ -32,7 +41,7 @@ test('host registry projects the selected ambient host and independent same-serv
 	const renderer = {
 		...api, appServer: { ...api.appServer, getConnectionState: () => initialState.p, onConnectionState: state.event }, agentHosts: {
 			get connections() { return entries; }, onDidChangeConnections: changed.event,
-			connect: async () => host, disconnect: () => { throw new Error('Read-only registry must not retire endpoints'); }, reconnect: async () => { },
+			listWSLDistros: async () => [], connect: async () => host, disconnect: () => { throw new Error('Read-only registry must not retire endpoints'); }, reconnect: async () => { },
 		}
 	};
 	const service = lifetime.add(new AgentHostConnectionsService(renderer));

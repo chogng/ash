@@ -48,7 +48,7 @@ registerAction2(class QuickOpenBrowserAction extends Action2 {
 		};
 		let request: BrowserTabPick | undefined;
 		await new Promise<void>(resolve => {
-			listeners.add(picker.onDidHide(resolve));
+			listeners.add(picker.onDidHide(() => resolve()));
 			listeners.add(picker.onDidAccept(() => {
 				request = picker.selectedItems[0];
 				picker.hide();

@@ -1,3 +1,6 @@
+import { Emitter, Event } from '../../../base/common/event.js';
+import { ViewsService } from '../../services/views/browser/viewsService.js';
+import { IPaneCompositePartService } from '../../services/panecomposite/browser/panecomposite.js';
 import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
@@ -22,6 +25,22 @@ import {
 	WorkbenchViewRegistry,
 } from '../../../workbench/common/views.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
+
+test('Part-local view catalogs do not register duplicate window commands', () => {
+	using command = CommandsRegistry.register('test.scopedDetails', () => undefined);
+	const handler = CommandsRegistry.getCommand('test.scopedDetails');
+	using first = new WorkbenchViewRegistry({ registerActions: false });
+	using second = new WorkbenchViewRegistry({ registerActions: false });
+	const container = { id: 'test.scopedDetails', title: 'Details', location: ViewContainerLocation.AuxiliaryBar };
+	using firstContainer = first.registerViewContainer(container);
+	using secondContainer = second.registerViewContainer(container);
+	using firstView = first.registerViews(container.id, [testView('test.scopedDetails.view', 'Files')]);
+	using secondView = second.registerViews(container.id, [testView('test.scopedDetails.view', 'Files')]);
+	assert.equal(first.getViews(container.id).length, 1);
+	assert.equal(second.getViews(container.id).length, 1);
+	assert.equal(CommandsRegistry.getCommand('test.scopedDetails'), handler);
+	assert.equal(CommandsRegistry.getCommand('test.scopedDetails.view.toggleVisibility'), undefined);
+});
 
 test('container commands open in the invoking window and expire with their declaration', async () => {
 	using registry = new WorkbenchViewRegistry();
@@ -502,4 +521,37 @@ test('view models require storage at the production constructor and preserve ree
 	});
 	model.setVisible('test.required.first', false);
 	assert.deepEqual(model.visibleViewDescriptors, []);
+});
+
+test('editor-hosted Views retain ownership and release focus and listeners in either disposal order', async () => {
+	using contexts = new ContextKeyService();
+	using registry = new WorkbenchViewRegistry();
+	using descriptors = new TestViewDescriptorService({ registry }, contexts);
+	using focused = new Emitter<void>();
+	using blurred = new Emitter<void>();
+	using visibility = new Emitter<boolean>();
+	let visible = false, opens = 0, closes = 0, focuses = 0;
+	const view = { id: 'test.editor.files', paneTitle: 'Files', onDidFocus: focused.event, onDidBlur: blurred.event, onDidChangeBodyVisibility: visibility.event, isBodyVisible: () => visible, focus: () => { focuses++; focused.fire(); } } as unknown as IView & { onDidFocus: Event<void>; onDidBlur: Event<void>; onDidChangeBodyVisibility: Event<boolean>; };
+	const descriptor = testView(view.id, 'Files');
+	const panes = { onDidPaneCompositeOpen: Event.None, onDidPaneCompositeClose: Event.None } as unknown as IPaneCompositePartService;
+	for (const serviceFirst of [false, true]) {
+		using views = new ViewsService(descriptors, panes, contexts);
+		using registration = views.registerView(view, descriptor, async () => { opens++; visible = true; visibility.fire(true); }, () => { closes++; visible = false; visibility.fire(false); });
+		assert.throws(() => views.registerView(view, descriptor, async () => { }, () => { }), /already hosted/);
+		assert.equal(views.getViewWithId(view.id), view);
+		assert.equal(views.getActiveViewWithId(view.id), null);
+		assert.equal(await views.openView(view.id, true), view);
+		assert.equal(views.getActiveViewWithId(view.id), view);
+		assert.equal(views.getFocusedView(), descriptor);
+		assert.equal(views.getFocusedViewName(), 'Files');
+		views.closeView(view.id);
+		assert.equal(views.isViewVisible(view.id), false);
+		if (serviceFirst) views.dispose(); else registration.dispose();
+		assert.equal(contexts.getValue('focusedView'), '');
+		assert.equal(focused.hasListeners(), false);
+		assert.equal(blurred.hasListeners(), false);
+		assert.equal(visibility.hasListeners(), false);
+		assert.equal(views.getViewWithId(view.id), null);
+	}
+	assert.deepEqual([opens, closes, focuses], [2, 2, 2]);
 });

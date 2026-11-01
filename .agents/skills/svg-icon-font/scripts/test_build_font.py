@@ -11,11 +11,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fontTools.pens.areaPen import AreaPen
+from fontTools.pens.pointInsidePen import PointInsidePen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import otTables
 
 from build_font import UPM, build, normalize_svg
-from build_sessions_font import build_sessions, merge_sessions
+from build_sessions_font import build_sessions, merge_sessions, prepare_svg
 from build_product_font import ROOT, publish, rebuild, write_manifest
 
 
@@ -148,6 +149,26 @@ class SvgFontTests(unittest.TestCase):
             pen = AreaPen(glyphs)
             glyphs["hole"].draw(pen)
             self.assertAlmostEqual(abs(pen.value), (14 ** 2 - 8 ** 2) * (UPM / 16) ** 2)
+
+    def test_nearly_touching_artifacts_outlines_keep_both_card_interiors(self):
+        source = ROOT / "resources/icons/artifacts.svg"
+        profile = json.loads((ROOT / "resources/icons/font/sessions.json").read_text())
+        sessions = self.root / "artifacts.svg"
+        sessions.write_text(prepare_svg(source, profile)[0])
+        for variant, artwork in (("ide", source), ("sessions", sessions)):
+            with self.subTest(variant=variant):
+                report = build(self.manifest([
+                    {"id": "artifacts", "unicode": "E001", "source": str(artwork)}
+                ]), self.root / variant)
+                with TTFont(report["woff2"]) as font:
+                    glyphs = font.getGlyphSet()
+                    # Both card centers must stay hollow; their left borders
+                    # must still paint after clipping and same-color union.
+                    for x, y, filled in ((5.5, 9, False), (11, 6, False),
+                                         (2.2, 9, True), (7.8, 2.5, True)):
+                        pen = PointInsidePen(glyphs, (x * UPM / 16, (16 - y) * UPM / 16))
+                        glyphs["artifacts"].draw(pen)
+                        self.assertEqual(pen.getResult(), filled, (x, y))
 
     def test_contour_order_and_start_points_do_not_change_font_bytes(self):
         source = self.svg('<path d="M1 1H5V5H1Z M9 9Q13 9 13 13H9Z"/>')

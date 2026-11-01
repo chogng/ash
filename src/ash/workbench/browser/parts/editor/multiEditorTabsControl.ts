@@ -23,6 +23,7 @@ import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.j
 import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, type EditorLabelFormat } from '../../../services/editor/common/editorConfiguration.js';
 import { WorkbenchTabsControl } from './workbenchTabsControl.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { isEditorTabCopyRequested } from './editorTabDragAndDrop.js';
 
 const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
@@ -70,15 +71,15 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),
 				onDragStart: (editor, event) => {
 					event.dataTransfer?.setData(DataTransfers.TEXT, editor.instanceId);
-					if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+					if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copyMove';
 					delegate.startDrag(editor.input);
 				},
 				onDragEnter: (_target, _position, event) => {
 					this.previewedInput = undefined;
-					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? 'move' : 'copy';
+					if (event.dataTransfer) event.dataTransfer.dropEffect = this.getDropEffect(event);
 				},
 				onDragOver: (target, _position, event, duration) => {
-					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? 'move' : 'copy';
+					if (event.dataTransfer) event.dataTransfer.dropEffect = this.getDropEffect(event);
 					if (target && duration >= DRAG_OVER_ACTIVATE_DELAY && target.input !== this.previewedInput) {
 						this.previewedInput = target.input;
 						delegate.preview(target.input);
@@ -90,7 +91,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				onDrop: (target, position, event) => {
 					this.previewedInput = undefined;
 					event.stopPropagation();
-					if (delegate.isDragging()) delegate.drop(target?.input, position);
+					if (delegate.isDragging()) delegate.drop(target?.input, position, isEditorTabCopyRequested(event));
 					else delegate.dropExternal(event, target?.input, position);
 				},
 				onDragEnd: () => {
@@ -122,6 +123,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			event.stopPropagation();
 			this.delegate.pinEditor(editor.input);
 		}));
+	}
+
+	private getDropEffect(event: DragEvent): 'move' | 'copy' {
+		return this.delegate.isDragging() ? this.delegate.getDragOperation?.(isEditorTabCopyRequested(event)) ?? 'move' : 'copy';
 	}
 
 	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {

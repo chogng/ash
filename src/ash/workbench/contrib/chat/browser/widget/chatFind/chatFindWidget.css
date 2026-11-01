@@ -1,0 +1,75 @@
+.ash-chat-find {
+	position: absolute;
+	top: var(--ash-spacing-size40);
+	right: var(--ash-spacing-size80);
+	z-index: 2;
+	box-sizing: border-box;
+	width: 420px;
+	max-width: calc(100% - 16px);
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 4px 12px var(--ash-widget-shadow);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-find[hidden],
+.ash-chat-find > [hidden] {
+	display: none;
+}
+
+.ash-chat-find-query,
+.ash-chat-find-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}
+
+.ash-chat-find-query > .ash-input-box {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.ash-chat-find-controls {
+	flex-wrap: wrap;
+	margin-top: var(--ash-spacing-size40);
+}
+
+.ash-chat-find-status {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-find.invalid .ash-chat-find-status {
+	color: var(--ash-error-foreground);
+}
+
+::highlight(ash-chat-find-match) {
+	background-color: var(--ash-search-matchBackground);
+}
+
+::highlight(ash-chat-find-current-match) {
+	background-color: var(--ash-search-matchBackground);
+	text-decoration: underline;
+	text-decoration-color: var(--ash-focusBorder);
+	text-decoration-thickness: 2px;
+}
+
+.ash-chat-find-active {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
+.stanza-editor .ash-chat-find-code-match {
+	background: var(--ash-search-matchBackground);
+}
+
+.stanza-editor .ash-chat-find-code-current {
+	background: var(--ash-search-matchBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}

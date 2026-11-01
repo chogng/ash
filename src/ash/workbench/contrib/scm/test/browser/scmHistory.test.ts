@@ -1320,7 +1320,9 @@ suite('scmHistory browser component', () => {
 		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 		await tree.press('Home');
 		await expect(row).toBeInViewport();
+		await expect(action).toBeVisible();
 		await action.focus();
+		await expect(action).toBeFocused();
 		await expectVisibleFocusOutline(action);
 		await browserTests.info.attach(`scm-scrollbar-gap-${locale}-${modernUI ? 'modern' : 'classic'}.png`, { body: await graph.screenshot(), contentType: 'image/png' });
 		const longRowWidth = (await row.boundingBox())!.width;

@@ -1,3 +1,27 @@
+import { registerChatExportActions } from './actions/chatImportExport.js';
+import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
+import { registerChatToolActions } from './actions/chatToolActions.js';
+import { registerChatTitleActions } from './actions/chatTitleActions.js';
+import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
+import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
+import { registerChatQueueActions } from './actions/chatQueueActions.js';
+import { registerChatPromptNavigationActions } from './actions/chatPromptNavigationActions.js';
+import { registerChatAccessibilityActions } from './actions/chatAccessibilityActions.js';
+import { registerChatFindActions } from './actions/chatFindActions.js';
+import { ChatFindAccessibilityHelp } from './widget/chatFind/chatFindAccessibilityHelp.js';
+import { isHTMLElement } from '../../../../base/browser/dom.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { registerEditorPane } from '../../../browser/editor.js';
+import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
+import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
+import { registerChatChangesActions } from './chatEditing/chatEditingActions.js';
+import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
@@ -21,20 +45,89 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
+import { ChatUsageSettingsModel } from './chatUsageSettingsModel.js';
+import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ChatWidgetService } from './widget/chatWidgetService.js';
+import { IQuickChatService } from './chat.js';
+import { QuickChatService } from './widgetHosts/chatQuick.js';
+import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
 import { CopyTextProvider } from './widget/input/editor/chatPasteProviders.js';
 import { ChatAttachmentWidgetRegistry, IChatAttachmentWidgetRegistry } from './attachments/chatAttachmentWidgetRegistry.js';
 import { ChatReferenceAttachmentWidgetContribution } from './attachments/chatReferenceAttachmentWidget.contribution.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './chatManagement/chatManagement.contribution.js';
+import { IChatEditingService } from '../common/editing/chatEditingService.js';
+import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
+import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+import { ChatInputEditor } from './widget/input/chatInputEditor.js';
+import { ChatInputEditors } from './widget/input/chatInputEditorRegistry.js';
+import { IChatDebugService } from '../common/chatDebugService.js';
+import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService.js';
+import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
+import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
+import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
+
+// Both renderer hosts use these primitives; each host registers its own New and History actions.
+registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
+registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
+registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
+registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PromptLanguageFeaturesProvider));
+registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
+	const instantiationService = accessor.get(IInstantiationService);
+	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });
+});
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+registerSettingsSection({
+	id: 'chat.usage', categoryId: 'chat-usage', model: new SyncDescriptor(ChatUsageSettingsModel),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatUsage,
+});
+registerSingleton(IQuickChatService, QuickChatService, InstantiationType.Delayed);
+registerQuickChatActions();
+registerChatFindActions();
+registerChatPromptNavigationActions();
+registerChatExecuteActions();
+registerChatToolActions();
+registerChatTitleActions();
+registerChatExportActions();
+registerChatCopyActions();
+registerChatCodeBlockActions();
+registerChatElicitationActions();
+registerChatQueueActions();
+registerChatAccessibilityActions();
+AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
+	key: AGENT_SESSIONS_PRESENTATION_SETTING,
+	defaultValue: AgentSessionsPresentation.Tabs,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(AgentSessionsPresentation) },
+	parse(value: unknown): AgentSessionsPresentation {
+		if (value === AgentSessionsPresentation.Tabs || value === AgentSessionsPresentation.List) return value;
+		throw new TypeError(localize('chat.sessions.presentation.invalid', 'Invalid session display mode.'));
+	},
+	setting: {
+		title: localize('chat.sessions.presentation.title', 'Session display'),
+		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list. The list opens beside Chat when there is enough width.'),
+		valueType: 'select',
+		options: [
+			{ value: AgentSessionsPresentation.Tabs, label: localize('chat.sessions.presentation.tabs', 'Tabs') },
+			{ value: AgentSessionsPresentation.List, label: localize('chat.sessions.presentation.list', 'List') },
+		],
+	},
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'stacked' | 'sideBySide'>({
 	key: ChatConfiguration.ChatViewSessionsOrientation,
@@ -101,6 +194,7 @@ registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
+configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,
@@ -341,3 +435,36 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 		return target === undefined ? [[DICTATION_MODEL_SETTING, { value: model }], ['dictation.localModel', { value: undefined }]] : { value: undefined };
 	},
 }]);
+
+registerAgentSessionActions();
+
+registerChatChangesActions();
+
+registerEditorPane({
+	id: chatDebugEditorId,
+	name: localize('chatDebugInputName', 'Agent Debug Logs'),
+	canOpen: input => input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: async options => {
+		if (!options.instantiationService) { throw new Error('Execution Trace requires Workbench services'); }
+		const { ChatDebugEditor } = await import('./chatDebug/chatDebugEditor.js');
+		return options.instantiationService.createInstance(ChatDebugEditor);
+	},
+});
+
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type,
+		name: `agentTrace.${type}`,
+		priority: 100,
+		when: ContextKeyExpr.has('agentTraceFocused'),
+		getProvider: accessor => {
+			const activePane = accessor.get(IEditorPart).activePane;
+			if (activePane?.id !== chatDebugEditorId) { return undefined; }
+			const pane = activePane as ChatDebugEditor;
+			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
+			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
+				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Agent Debug Logs\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between search, the execution tree and detail tabs. Arrow keys, Home and End navigate the tree; Left and Right collapse or expand it. Detail tabs activate with Enter or Space. Overview is the default; Raw record opens a readonly editor on demand. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. Input and Output load the selected saved body on demand; choose a body section to read it. Core requests and materialized requests remain distinct, as do complete responses and partial output. Requests are semantic ModelService input, not HTTP bytes. Relations follows recorded model, tool, Code Mode, terminal and child-agent links. More Actions contains Import, Export and Help. Accessible View includes filtered events outside the mounted tree viewport. Model evidence is placed at its recorded Thread prefix when available. Child Threads keep their own sequence. Relations also shows saved child result returns and joins; result-to-model input links require the loaded Core request body. Unknown associations stay unknown. Hiding or closing the editor stops polling and releases subscriptions. Export freezes all loaded events when clicked, including events hidden by the filter. Relationships exclude events and causal evidence outside that capture, with omissions listed in graph warnings. Only one export runs at a time. The last selected import wins even if an earlier file finishes later. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.') + '\n' + localize('chatDebug.navigationHelp', 'Home lists saved sessions from the current backend catalog. Search by title or Session ID and activate a session with Enter. Debug Views switches between Overview, Logs, Flow Chart and Cache Explorer. Flow Chart uses saved relationships; filter text is shared with Logs. Tab reaches graph nodes, Enter opens their saved event in Logs, and zoom controls change the graph scale. Cache Explorer compares requests from the same Thread and evidence boundary; Core and materialized requests are separate. Show Request in Logs locates the selected request. Missing or omitted request bodies stay unavailable. Refresh retries a failed request body read. Imports never read live payloads. Changed semantic requests do not establish a provider cache miss. Home and editor hiding release the previous live subscriptions.') + '\n' + localize('chatDebug.wireHelp', 'Wire Log records raw JSON-RPC frames on the selected App Server connection, including other sessions. Start New Capture begins a backend memory capture. Stop Capture freezes it; leaving the view also stops capture. A new capture replaces the stopped one, and disconnect clears it. Filter by method, type or ID, and choose the request direction. Tab reaches calls; Enter displays the original request and its paired response, latency and errors. Responses outside the capture remain unpaired. Frame truncation and dropped older frames are reported. Accessible View includes matching calls beyond Show More Frames. Imported traces never acquire live Wire Log frames.') + '\n' + localize('chatDebug.inspectionHelp', 'Session locations accept viewHint and filter; reopening preserves the target view and filter. Overview shows current backend session details; Reveal Chat Session opens Chat through its existing navigation owner. Logs supports Tree View and List View over the same event identities, Expand All, Collapse All and Copy Selected Row. These do not change backend history. Compare in Diff Editor opens an on-demand readonly request comparison within the same evidence boundary; hiding releases its computation and text models. Wire Log shows requests, error frames, unanswered calls in the capture and the slowest paired call. Export stops backend recording and reads every retained frame; display filters do not affect exports, and truncation and drop metadata are preserved.') + '\n' + localize('chatDebug.filterHelp', 'Use commas for alternative text terms and !term to exclude text. Use thread:ID and turn:ID for exact identities. after:YYYY-MM-DD and before:YYYY-MM-DD use inclusive UTC days; ISO timestamps require a time zone. Kind buttons independently show or hide models, tools, agents and other events. Clear filters restores all events. Capture overview is independent of display filters. Each token subtotal shows reported-call coverage; unknown is different from zero. Cached input is included in input tokens. Old imports without a matching backend overview show unknown metrics. In narrow windows, expanding the overview shows it with the event tree; choosing an event restores its details.') + '\n' + localize('chatDebug.timingHelp', 'Client timing starts at each model call. First text latency counts the first nonempty body delta, excluding reasoning, metadata and completed snapshots. Generation lasts from first text to call completion and includes transport and local processing. Text TPS estimates non-reasoning output tokens divided by generation duration, not server decode speed; single-chunk responses, tool calls, failures and missing details show unknown. Performance values and unknown reasons are produced by the backend and preserved in exports. Old captures without performance projections stay unknown; the viewer does not recalculate them.'),
+				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
+		},
+	});
+}

@@ -266,6 +266,10 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/clone': return { repositoryPath: '/downloads/clone' };
 			case 'git/stage': revision++; return { status: status() };
 			case 'git/changeFile': return { original: { kind: 'text', text: 'old' }, modified: { kind: 'text', text: 'new' } };
+			case 'git/changeFiles': {
+				if (!params || typeof params !== 'object' || !('paths' in params) || !Array.isArray(params.paths)) throw new TypeError('Expected Git comparison paths');
+				return { files: params.paths.map(() => ({ original: { kind: 'text', text: 'old' }, modified: { kind: 'text', text: 'new' } })) };
+			}
 			case 'git/checkIgnore': return { ignoredPaths: [] };
 			case 'git/compareChanges': return { baseObjectId: '0'.repeat(40), changes: incomingChanges };
 			default: throw new Error(`Unexpected domain request ${method}`);

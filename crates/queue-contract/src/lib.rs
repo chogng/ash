@@ -63,9 +63,21 @@ pub struct QueuedMessage {
 )]
 pub enum QueueEdit {
     Pause,
-    Replace { input: Vec<UserInput> },
-    Move { direction: QueueMove },
-    Send { turn_id: Option<TurnId> },
+    /// Return a paused message to its existing FIFO position.
+    Resume,
+    /// Change user text without reconstructing frozen attachments or tool selection.
+    ReplaceText {
+        text: String,
+    },
+    Replace {
+        input: Vec<UserInput>,
+    },
+    Move {
+        direction: QueueMove,
+    },
+    Send {
+        turn_id: Option<TurnId>,
+    },
 }
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

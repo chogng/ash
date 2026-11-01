@@ -67,7 +67,7 @@ export function binaryDiffEditorDescriptor(): IEditorPaneDescriptor {
 	return {
 		id: BINARY_DIFF_EDITOR_ID,
 		name: 'Binary Diff Editor',
-		canOpen: input => isBinaryDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		canOpen: input => isBinaryDiffEditorInput(input) ? EditorPaneMatch.Builtin : EditorPaneMatch.None,
 		create: options => {
 			if (!options.instantiationService) throw new Error('Binary diff editor requires Workbench instantiation services');
 			return options.instantiationService.createInstance(BinaryResourceDiffEditor);

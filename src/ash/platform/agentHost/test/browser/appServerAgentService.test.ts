@@ -35,6 +35,32 @@ test('Agent role catalog maps source paths to the owning local or SSH editor res
 suite('Session runtime connection ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	for (const source of ['build-host', { authority: 'wsl+5562756e7475' }, { authority: 'tunnel+68747470' }]) {
+		test(`qualifies runtime targets and removes frontend host identity on create for ${JSON.stringify(source)}`, async () => {
+			using changed = new Emitter<AppServerConnectionState>();
+			const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: '/Source', root: '/workspace' };
+			let created: unknown;
+			const connection = {
+				generation: 1, state: 'ready', capabilities: { contracts: { sessionRuntimes: { version: 1 } } }, onStateChange: changed.event,
+				request: async (method: { method: string; }, params: unknown) => {
+					if (method.method === 'session/runtime/invoke') return { type: 'target', target };
+					created = params;
+					return { session: { sessionId: 'one', title: 'One', status: 'active', executionTarget: target, threads: [], manager: { status: 'idle', statusChangedAtUnixMs: 0 } }, agentTree: { roots: [] } };
+				},
+			};
+			const api = createAppServerAgentSessionService(connection as unknown as AppServerProtocolClient, source);
+			const runtime = await api.invokeRuntime!('ash.dev-containers', { operation: 'prepare', workspace: '/Source' }, new AbortController().signal);
+			assert.equal(runtime.type, 'target');
+			if (runtime.type !== 'target') throw new Error('Missing runtime');
+			const authority = typeof source === 'string' ? 'ssh+build-host' : source.authority;
+			assert.deepEqual(runtime.target, { ...target, hostAuthority: authority });
+			const params = { commandId: 'create', title: 'One', executionTarget: runtime.target, agent: { type: 'default' as const } };
+			await api.create(params);
+			assert.deepEqual(created, { ...params, executionTarget: target });
+			assert.throws(() => api.create({ ...params, executionTarget: { ...target, hostAuthority: 'ssh+another-host' } }), /another host/);
+		});
+	}
+
 	for (const replacement of [false, true]) {
 		for (const abort of [false, true]) {
 			test(`retires a runtime result after ${replacement ? 'replacement' : 'close'} with cancellation ${abort}`, async () => {
@@ -854,4 +880,35 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	wrongSession = true;
 	await assert.rejects(service.fork({ ...base, target: 'thread' }), /different conversation/);
 	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
+});
+
+test('Queue adapters preserve durable identity and revision and map guarded mutations without transport objects', async () => {
+	const request = { sessionId: 'session', threadId: 'thread', commandId: 'queued', directory: '/workspace', mode: 'agent', approvalMode: 'manual', toolMode: 'direct', model: null, reasoningEffort: null, steerTurn: null, input: [{ type: 'text', text: 'Before\n' }, { type: 'context', name: 'note', content: 'Frozen' }, { type: 'text', text: 'After' }, { type: 'toolSelection', disabled: [], allowed: ['read_file'] }] };
+	const wire = { request, revision: 9, status: 'paused', turnId: null, error: null };
+	const calls: unknown[] = [];
+	let failure: unknown;
+	const api = createAppServerAgentTurnService({
+		request: async (method: { method: string; }, params: unknown) => {
+			calls.push([method.method, params]);
+			if (failure) throw failure;
+			return method.method === 'queue/list' ? { messages: [wire] } : wire;
+		}
+	} as unknown as AppServerProtocolClient);
+	const expected = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 9, mode: 'agent', status: 'paused', text: 'Before\nAfter', contextCount: 2, turnId: undefined, error: undefined };
+	assert.deepEqual(await api.listQueued({ sessionId: 'session', threadId: 'thread' }), { messages: [expected] });
+	const target = { sessionId: 'session', threadId: 'thread', commandId: 'queued', expectedRevision: 9 };
+	for (const action of [{ type: 'pause' }, { type: 'resume' }, { type: 'replaceText', text: 'Edited' }, { type: 'send' }] as const) {
+		assert.deepEqual(await api.editQueued(target, action), expected);
+	}
+	assert.deepEqual(await api.cancelQueued(target), expected);
+	assert.deepEqual(calls.slice(1), [
+		['queue/edit', { ...target, action: { type: 'pause' } }], ['queue/edit', { ...target, action: { type: 'resume' } }],
+		['queue/edit', { ...target, action: { type: 'replaceText', text: 'Edited' } }], ['queue/edit', { ...target, action: { type: 'send', turnId: null } }], ['queue/cancel', target],
+	]);
+	for (const kind of ['QueueConflict', 'QueueBusy', 'QueueNotFound'] as const) {
+		failure = new AppServerRemoteError(-32122, 'wire diagnostic', { kind });
+		await assert.rejects(api.cancelQueued(target), error => error instanceof Error && error.constructor.name === 'AgentQueueConflictError');
+	}
+	failure = new Error('Disconnected');
+	await assert.rejects(api.editQueued(target, { type: 'pause' }), error => error === failure);
 });

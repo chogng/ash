@@ -1,4 +1,16 @@
 import type { VSBuffer } from '../../../base/common/buffer.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+
+/** Opaque, flow-controlled JSONL bytes. Protocol ownership stays in the renderer. */
+export interface IAppServerByteTransport extends IDisposable {
+	onData(listener: (bytes: Uint8Array) => void): IDisposable;
+	onClose(listener: (error: Error) => void): IDisposable;
+	sendBytes(bytes: Uint8Array): Promise<void>;
+	pause(): void;
+	resume(): void;
+	diagnostics(): string;
+	close(): Promise<void>;
+}
 
 // A local carrier installs and verifies the bundled backend on first use before
 // it can forward initialize. Main and Renderer must allow that same cold start.

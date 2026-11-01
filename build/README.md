@@ -30,6 +30,12 @@ hooks prepare frontend inputs only. Explicit `prepare:backend` and
 `prepare:backend:web` commands remain available for package preparation, CI and
 consumers that deliberately reuse a prepared backend.
 
+Frontend preparation reuses validated protocol artifacts or a matching package
+without running Cargo. For initial setup or changed protocol inputs, explicitly
+run `pnpm protocol:generate`, or provide `ASH_PROTOCOL_PACKAGE` with matching
+artifacts. `--no-build` rejects missing, stale or incomplete contracts instead of
+compiling Rust from a frontend hook. Backend builds retain explicit generation.
+
 Frontend CI checks Renderer sources and smoke automation types once per platform
 before building Desktop and both Web modes on Linux, Windows and macOS.
 `pnpm valid-layers-check` prepares generated inputs, rejects Node/Electron imports
@@ -37,10 +43,12 @@ and native Main-process service references in shared or Web code, and checks eac
 runtime against its own API declarations. It includes Common, Browser, Worker,
 Node, Electron renderer/Main/utility, and the separately compiled sandbox preloads.
 Frontend contracts CI runs it before the product checks. Compiler checks use the
-pinned Bun with no output; `build/checker/layersChecker.ts` uses the existing
-TypeScript Compiler API to follow renamed imports, re-exports and inferred native
-service receivers. Host-only globals are also checked by symbol origin, so a
-dependency's ambient Node declarations cannot grant those APIs to Web code.
+pinned Bun with no output; `build/checker/layersChecker.ts` also runs on Bun and
+uses the TypeScript Compiler API to follow renamed imports, re-exports and inferred
+native service receivers. It reuses module resolution to limit inference to the
+contract's import closure, retaining full inference when ambient declarations or
+module augmentations expose the service. Host-only globals are also checked by
+symbol origin, so a dependency's ambient Node declarations cannot grant those APIs to Web code.
 
 `pnpm build:prepared` requires current generated inputs and successful common,
 Renderer and automation checks; it retains TS7 Host compilation and preload
@@ -60,6 +68,13 @@ filters, skipping preparation and compilation. The runner regression suite uses
 `pnpm test:unit:runner` after test compilation; `test:main` and frontend CI run it
 once separately from business units. Use a compiling
 entry again when sources, generated inputs, compiler configuration or dependencies change.
+Unit, editor-unit and extension-unit commands select source test files before
+preparing resources and compiling. Add `--plan` to inspect the selected files and
+impact reason without preparation, compilation or execution, even on a cold
+checkout. `--affected` skips unchanged inputs explicitly; unmatched file filters
+and zero executed tests still fail. Documentation outside test/fixture directories
+does not force a full suite, but filesystem readers and architecture checks remain
+selected. Unknown inputs and shared runtime changes retain the full-suite fallback.
 Unit files run in separate processes with at most four workers by default;
 `--workers 1` selects serial execution. Output snapshots use filesystem reflinks
 where available while retaining independent files when the compiler rebuilds.
@@ -69,9 +84,10 @@ Vite against those prepared, checked sources; use `pnpm build:web` or
 App Server compile-time flags and share an output directory, so CI runs each
 mode's tests before replacing its bundle. Connected Web smoke fixtures reuse the
 explicitly prepared backend, rather than compiling it again for every profile;
-`test:smoke:browser:full:no-compile` requires that preparation. Electron smoke preparation publishes
-the runtime required by startup's Tunnel services and builds Desktop once;
-UI and connected tests reuse those artifacts with separate test profiles.
+`test:smoke:browser:full:no-compile` requires that preparation. Electron UI smoke
+preparation builds Desktop without preparing a backend runtime package; Tunnel binaries are resolved only
+when inbound hosting starts. Connected tests prepare and reuse backend artifacts
+with separate test profiles.
 
 The pinned Bun 1.4.4 runtime owns single-run, no-emit type checking for
 Renderer, Common, Protocol, Extensions, Memories, Stanza, build tools, unit-runner

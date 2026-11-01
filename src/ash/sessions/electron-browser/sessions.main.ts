@@ -1,3 +1,8 @@
+import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
+import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IRendererHostService } from '../../platform/renderer/common/rendererHost.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
+import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
 import { ElectronAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import { ILoggerService } from '../../platform/log/common/log.js';
 import '../../workbench/contrib/url/browser/url.contribution.js';
@@ -170,14 +175,19 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						)
 					: undefined,
 				createBrowserHost: documentClient
-					? services =>
-						registerAppServerBrowserHost(
+					? services => {
+						const browsers = services.get(IBrowserViewWorkbenchService);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IRendererHostService), services.get(IWorkspaceContextService));
+						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),
 							services.get(IMainProcessService),
 							services.get(IConfigurationService),
 							services.get(IAgentHostCanvasCollection),
-						)
+							owner => browsers.resolveNetwork(owner),
+						);
+						return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
+					}
 					: undefined,
 				createTextDocumentHost: documentClient
 					? services => {
@@ -192,20 +202,26 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
+					'workbench.contrib.mediaPreviewStatusBar',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',
 					'terminalTelemetry',
 					'workbench.contrib.settingsChangeRelauncher',
-					'workbench.contrib.partsSplash',
+					'sessions.contrib.splash',
 					'workbench.contrib.preferences',
 					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',
+					'sessions.contrib.filesView',
 					'terminal.native',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
+					'sessions.contrib.remoteAgentHostContribution',
+					'sessions.contrib.sshAgentHostContribution',
+					'sessions.contrib.wslAgentHostContribution',
+					'sessions.contrib.tunnelAgentHostContribution',
 					'sessions.contrib.automationsCustomView',
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingContribution.ID,
@@ -228,6 +244,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.browserView.windowZoomSynchronizer',
 					'workbench.contrib.browserView.autoReload',
 					'workbench.contrib.sessionBrowserViewController',
+					'workbench.contrib.sessionBrowserNetwork',
 					'sessions.chatgpt.web',
 					'workbench.contrib.browserView.restore',
 					'workbench.contrib.chatAccessibilitySignals',
@@ -295,11 +312,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
 						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
 					}
-					return services.createInstance(
+					const titlebar = services.createInstance(
 						TitlebarPart,
 						titlebarContainer,
 						isMacintosh ? 'actions-only' : 'application-menu',
 					);
+					titlebar.domNode.classList.add('ash-electron-titlebar');
+					return titlebar;
 				},
 				container,
 			}),

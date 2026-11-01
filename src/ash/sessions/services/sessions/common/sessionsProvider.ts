@@ -4,6 +4,12 @@ import type { IObservable } from '../../../../base/common/observable.js';
 import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+
+export interface ISessionCreateOptions {
+	readonly devContainer?: boolean;
+	readonly token: CancellationToken;
+}
 
 export interface ISessionsProviderAutomations extends IAutomationStore { }
 
@@ -28,7 +34,7 @@ export interface ISessionsProvider extends IDisposable {
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
-	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string): Promise<IActiveSessionThread>;
+	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	deleteSession(session: ISession): Promise<void>;

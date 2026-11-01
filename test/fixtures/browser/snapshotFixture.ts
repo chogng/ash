@@ -1,3 +1,5 @@
+import { IWorkspaceTrustManagementService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { IAdapterManager } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
@@ -29,6 +31,9 @@ export async function startSnapshotFixture(parent: InstantiationService, resourc
 		[IExtensionApi, packages], [ILanguagePackService, createEmptyTestLanguagePacks()], [IAdapterManager, resources.add(new AdapterManager())],
 		[IImageEditorService, parent.get(IImageEditorService)],
 	)));
+	if (!services.has(IWorkspaceTrustManagementService)) {
+		services.registerInstance(IWorkspaceTrustManagementService, resources.add(services.createInstance(TestWorkspaceTrustManagementService)));
+	}
 	const extensions = resources.add(services.createInstance(AppServerExtensionService, { api: packages }));
 	services.registerInstance(IExtensionService, extensions);
 	await extensions.start();

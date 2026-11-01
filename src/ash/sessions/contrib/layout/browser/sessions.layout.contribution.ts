@@ -4,7 +4,8 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import { SESSIONS_NAVIGATION_CONTAINER_ID, TEAMS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
+import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
+import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { COLLAB_CONTAINER_ID } from '../../../../workbench/contrib/collab/common/collab.js';
 import { SessionsLayoutService, documentEntry } from './sessionsLayoutService.js';
 
@@ -12,9 +13,13 @@ class SessionsLayoutContribution extends Disposable {
 	constructor(@ISessionsLayoutService layout: ISessionsLayoutService) {
 		super();
 		this._register(CommandsRegistry.register('sessions.open.code', (_accessor, source) => layout.openEntry(documentEntry, undefined, source === 'restore' ? { source } : undefined)));
+		// Retire the saved sidebar entry; explicit legacy commands now open its Settings owner.
+		this._register(CommandsRegistry.register('sessions.open.teams', async (accessor, source) => {
+			await layout.openEntry(documentEntry, undefined, source === 'restore' ? { source } : undefined);
+			if (source !== 'restore') await accessor.get(IPreferencesService).openUserSettings({ section: 'agents' });
+		}));
 		for (const [id, sidebar, focus] of [
 			['chat', SESSIONS_NAVIGATION_CONTAINER_ID, 'conversation'],
-			['teams', TEAMS_NAVIGATION_CONTAINER_ID, 'sidebar'],
 			['collaboration', COLLAB_CONTAINER_ID, 'sidebar'],
 		] as const) {
 			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({

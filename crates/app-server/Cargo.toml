@@ -11,6 +11,8 @@ name = "ash_app_server_runtime"
 path = "src/lib.rs"
 
 [dependencies]
+process-hardening = { workspace = true }
+futures = { workspace = true }
 ash-model-accounting = { workspace = true }
 ash-debug-contract.workspace = true
 ash-utils-string = { workspace = true }
@@ -69,7 +71,7 @@ analytics = { workspace = true }
 diagnostics = { workspace = true }
 feedback = { workspace = true }
 features = { workspace = true }
-network-proxy = { workspace = true }
+network-proxy = { workspace = true, features = ["server"] }
 ash-memory-diagnostics = { workspace = true }
 ash-automation = { workspace = true }
 ash-symphony.workspace = true
@@ -161,13 +163,13 @@ ash-web-search-extension = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+arg0 = { workspace = true }
 ash-app-server-diff = { workspace = true }
 github-extension = { package = "ash-github-extension", path = "../../extensions/github" }
 http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }
 github-authentication = { package = "ash-github-authentication", path = "../../extensions/github-authentication" }
 mxc-sandbox = { workspace = true }
 tokio-tungstenite = { workspace = true }
-futures = { workspace = true }
 ash-context-engine = { workspace = true }
 image = { workspace = true, features = ["png"] }
 ash-uds = { workspace = true }

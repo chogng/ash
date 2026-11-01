@@ -502,7 +502,7 @@ Ash JS API 提供已有命令、文档事件与快照、诊断集合、语言 Pr
 
 V8 宿主保留 macOS Seatbelt 和 64 位 Windows AppContainer 的限制：读取包快照、初始化引擎后才释放启动权限并执行 JS，文件、网络和创建子进程均受限制。每实例 64 MiB 堆与 64 MiB ArrayBuffer 预算，结束执行最多 4 MiB 余量；共享、可调整大小的缓冲区和 WebAssembly 不开放。其余系统拒绝该生产隔离入口。标准 Node 按独立的精确包执行授权运行，不具有这些沙箱限制。可信 Worker 无 Workbench DOM 权限，但仍是同源代码，无生产 hard limits。
 
-媒体预览仍由 `extensions/media-preview` 声明资源匹配并选择产品编辑器；不执行脚本。图片、音频和视频的生命周期仍由原编辑器 owner 管理。
+媒体预览仍由 `extensions/media-preview` 声明资源匹配并选择产品编辑器；不执行脚本。`ImagePreviewEditorInput` 和 `MediaPlayerEditorInput` 拥有标签身份、分屏复制、资源替换和序列化恢复；编辑器组在打开和恢复资源请求时创建对应输入。每个 pane 独立管理图片解码或音视频播放、视图状态及资源释放。改名和 Save As 经输入的资源替换契约重新选择编辑器，文件扩展名变化可以切换到文本编辑器。
 
 ### 0.2 GitHub 的具体分工
 

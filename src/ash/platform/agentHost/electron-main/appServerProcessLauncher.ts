@@ -1,4 +1,17 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import type { IAppServerByteTransport } from '../common/appServerTransport.js';
+
+/** Native acquisition can supply either a process stream or an authenticated socket. */
+export interface IAppServerTransportLauncher {
+	readonly description: string;
+	readonly initializeTimeoutMs?: number;
+	validate(): void | Promise<void>;
+	openTransport(): Promise<IAppServerByteTransport>;
+	didInitialize?(): void | Promise<void>;
+	recoverInitializationFailure?(error: unknown): boolean | Promise<boolean>;
+}
+
+export type AppServerConnectionLauncher = IAppServerProcessLauncher | IAppServerTransportLauncher;
 
 /** Creates the process carrying one App Server JSONL connection. */
 export interface IAppServerProcessLauncher {

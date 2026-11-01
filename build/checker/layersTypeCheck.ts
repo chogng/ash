@@ -14,7 +14,7 @@ export const PROJECTS = [
 ] as const;
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-	if (process.argv.length !== 2) throw new Error('Usage: node build/checker/layersTypeCheck.ts');
+	if (process.argv.length !== 2) throw new Error('Usage: bun build/checker/layersTypeCheck.ts');
 	const root = resolve(import.meta.dirname, '../..');
 	const compiler = resolve(root, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 	await withProcessRun(root, async (run, environment) => {

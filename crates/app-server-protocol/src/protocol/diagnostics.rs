@@ -143,3 +143,72 @@ pub struct NetworkHttpConfigureParams {
     pub expected_revision: u64,
     pub http_mode: HttpCompatibilityModeDto,
 }
+
+/// A connection-owned diagnostic capture, released on disconnect. One capture per connection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WireLogParams {
+    pub capture_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WireLogReadParams {
+    pub capture_id: String,
+    #[ts(type = "number")]
+    pub after: u64,
+    pub limit: u32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WireLogDirection {
+    ClientToServer,
+    ServerToClient,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WireLogFrameKind {
+    Request,
+    Notification,
+    Response,
+}
+
+/// Raw UTF-8 JSON at the transport boundary, excluding the JSONL delimiter.
+/// A truncated prefix is evidence only and must never be parsed as a complete envelope.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WireLogFrame {
+    #[ts(type = "number")]
+    pub sequence: u64,
+    #[ts(type = "number")]
+    pub timestamp_ms: u64,
+    pub direction: WireLogDirection,
+    pub kind: WireLogFrameKind,
+    /// JSON-encoded identifier preserves string/number identity and the two request directions.
+    pub request_id: Option<String>,
+    pub method: Option<String>,
+    #[ts(type = "number | null")]
+    pub request_sequence: Option<u64>,
+    #[ts(type = "number | null")]
+    pub elapsed_ms: Option<u64>,
+    pub is_error: bool,
+    pub byte_length: u32,
+    pub truncated: bool,
+    pub raw: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WireLogPage {
+    pub capture_id: String,
+    pub connection_id: String,
+    pub recording: bool,
+    pub frames: Vec<WireLogFrame>,
+    #[ts(type = "number")]
+    pub cursor: u64,
+    pub has_more: bool,
+    #[ts(type = "number")]
+    pub dropped_frames: u64,
+}

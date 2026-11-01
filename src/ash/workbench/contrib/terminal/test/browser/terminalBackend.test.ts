@@ -27,13 +27,14 @@ registerRemoteContributions();
 function fixture(owner: DisposableStore, remote: boolean) {
 	const workspace = owner.add(new TestWorkspaceService({ id: 'workspace', uri: remote ? URI.from({ scheme: 'ash-remote', authority: 'host-one', path: '/project' }) : URI.file('/project') }));
 	const creation = new DeferredPromise<ITerminalProcessCreation>();
+	const creating = new DeferredPromise<void>();
 	const closed: string[] = [];
 	const written: string[] = [];
 	const queries: { terminalId: string; dirId?: string; }[] = [];
 	let queryResult = Promise.resolve({ ready: { pid: 7, cwd: '/project' }, cwd: '/project/current', rows: 24, cols: 80 });
 	const processes = {
 		onConnectionState: () => Disposable.None, getConnectionState: async () => 'ready',
-		create: () => creation.p,
+		create: () => { void creating.complete(); return creation.p; },
 		close: async ({ terminalId }: { terminalId: string; }) => { closed.push(terminalId); },
 		write: async ({ data }: { data: string; }) => { written.push(data); },
 		resize: async () => { },
@@ -47,7 +48,7 @@ function fixture(owner: DisposableStore, remote: boolean) {
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return {
-		workspace, closed, written, queries, services, terminals,
+		workspace, closed, written, queries, services, terminals, creating: creating.p,
 		setQuery: (value: typeof queryResult) => { queryResult = value; },
 		ready: () => creation.complete({ terminalId: 'original-pty', ready: { pid: 7, cwd: '/project' }, profile: { profileId: 'shell', title: 'Shell', isDefault: true }, connectionPersistence: 'reconnectable' }),
 		create: () => terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' }, deferStart: true }),
@@ -63,6 +64,7 @@ suite('Terminal execution host boundaries', () => {
 		await f.terminals.whenConnected;
 		const pending = f.create();
 		const rejected = assert.rejects(pending, isCancellationError);
+		await f.creating;
 		f.workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/other') });
 		await f.ready();
 		await rejected;

@@ -38,10 +38,10 @@ export class AgentHostConnectionsService extends Disposable implements IAgentHos
 		return [{
 			id: AMBIENT_AGENT_HOST_AUTHORITY, authority: AMBIENT_AGENT_HOST_AUTHORITY, address: undefined,
 			name: localize({ bundle: 'ash.workbench', key: 'agentHosts.currentWindow' }, 'Current Window'),
-			isAmbient: true, state: this.ambientState, connection: this.renderer, remoteConnection: undefined,
+			isAmbient: true, state: this.ambientState, connection: this.renderer, remoteConnection: undefined, directory: undefined,
 		}, ...(this.renderer.agentHosts?.connections ?? []).map(entry => {
 			const address = agentHostConnectionAddress(entry.connection);
-			return { id: entry.id, authority: address, address, name: entry.connection.name, isAmbient: false, state: entry.state, connection: entry.host?.api, remoteConnection: entry.connection };
+			return { id: entry.id, authority: address, address, name: entry.connection.name, isAmbient: false, state: entry.state, connection: entry.host?.api, remoteConnection: entry.connection, directory: entry.host?.directory };
 		})];
 	}
 

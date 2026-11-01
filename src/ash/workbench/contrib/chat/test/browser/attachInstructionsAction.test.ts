@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
@@ -14,6 +15,7 @@ const document = browserEnvironment.window.document;
 const path = '/outside-workspaces/instructions/review.md';
 
 function setup(resources: DisposableStore, initial: RemoteAgentConnection, resource?: URI) {
+	resources.add(installTestElementHeights(document));
 	const keys = resources.add(new ContextKeyService());
 	const quick = resources.add(new TestQuickInputService({ container: document.body, contextKeyService: keys }));
 	let connection = initial;

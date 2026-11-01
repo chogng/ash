@@ -1,6 +1,8 @@
+import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from './sessionActionsService.js';
+import { ChatViewPane } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
-import { Schemas } from '../../base/common/network.js';
 import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
@@ -16,13 +18,13 @@ import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/ch
 import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { ChatViewPane } from './chatViewPane.js';
-import './actions/chatActions.js';
+import { SessionChatViewPane } from './chatViewPane.js';
+import { IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { ChatHistoryModel } from './chatHistoryModel.js';
 import { registerChatSessionsActions } from '../../workbench/contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
-import './actions/chatLayoutActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 
 class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
@@ -30,6 +32,10 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
 	) { }
+
+	createNewConversation(): void {
+		this.sessions.createUntitledSession();
+	}
 
 	get revision(): number { return this.sessions.navigationRevision; }
 
@@ -85,7 +91,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		title: 'Chat',
 		localizationKey: { bundle: 'ash.views', key: 'chat' },
 		location: ViewContainerLocation.AuxiliaryBar,
-		icon: Lxicon.chat4,
+		icon: Lxicon.chat,
 		order: 1,
 		isDefault: true,
 	});
@@ -96,12 +102,13 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		order: 1,
 		canToggleVisibility: false,
 		when: ChatContextKeys.enabled.isEqualTo(true),
-		ctorDescriptor: new SyncDescriptor(ChatViewPane),
+		ctorDescriptor: new SyncDescriptor(SessionChatViewPane),
 	}]);
 }
 
 registerSingleton(ISessionGroupsService, SessionGroupsService, InstantiationType.Delayed);
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
+registerSingleton(IAgentSessionsService, ChatHistoryModel, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
 registerChatSessionsActions();
 registerChatViews();
@@ -110,6 +117,8 @@ EditorInputSerializers.registerStatic(new ChatEditorInputSerializer());
 registerEditorPane({
 	id: ChatEditorInput.EditorID,
 	name: localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'),
-	canOpen: input => input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => input instanceof ChatEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(ChatEditor),
 });
+
+registerSingleton(IAgentSessionActionsService, SessionActionsService, InstantiationType.Delayed);

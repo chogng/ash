@@ -94,6 +94,25 @@ test('Provider headings keep connection identities and model visibility changes 
 	assert.equal(models('@provider:second')[0].model.hidden, true);
 });
 
+test('Model order uses the full catalog and survives filtered edits, catalog refreshes and new discoveries until reset', async () => {
+	using resources = new DisposableStore();
+	const { view, source, enabled, models } = setup(resources);
+	enabled.add(modelRefIdentity(catalog[2].model));
+	view.filter('older');
+	await view.refresh();
+	const ordered = (): string[] => models('').sort((a, b) => a.order - b.order).map(entry => entry.model.displayName);
+	assert.deepEqual(ordered(), ['New Model', 'Other', 'Older Model']);
+	await view.toggleModelHidden(models('older')[0]);
+	await view.toggleModelHidden(models('newest')[0]);
+	assert.deepEqual(ordered(), ['New Model', 'Other', 'Older Model']);
+	const discovered: ModelCatalogEntry = { model: { provider: 'first', model: 'discovered' }, displayName: 'Discovered', longContext: null };
+	source.read = async () => [discovered, ...[...catalog].reverse()];
+	await view.refresh();
+	assert.deepEqual(ordered(), ['New Model', 'Other', 'Older Model', 'Discovered']);
+	view.resetModelOrder();
+	assert.deepEqual(ordered(), ['Other', 'Older Model', 'Discovered', 'New Model']);
+});
+
 test('Provider headings always expose matching models and preserve a surviving selection', async () => {
 	using resources = new DisposableStore();
 	const { view, models } = setup(resources);

@@ -1,3 +1,7 @@
+import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
+import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IRendererHostService } from '../../platform/renderer/common/rendererHost.js';
+import { IBrowserViewWorkbenchService } from '../contrib/browserView/common/browserView.js';
 import { ElectronAuxiliaryWindowService } from '../services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import { NativeExtensionService } from '../services/extensions/electron-browser/nativeExtensionService.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
@@ -175,7 +179,12 @@ export class DesktopMain extends Disposable {
 					}));
 					return hosts;
 				} : undefined,
-				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection)) : undefined,
+				createBrowserHost: documentClient ? services => {
+					const browsers = services.get(IBrowserViewWorkbenchService);
+					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IRendererHostService), services.get(IWorkspaceContextService));
+					const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
+					return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
+				} : undefined,
 				createLogService: () => {
 					// The factory owns failure cleanup and transfers the logger to the Workbench.
 					this._store.delete(logger);

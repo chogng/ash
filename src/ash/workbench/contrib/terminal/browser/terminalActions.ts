@@ -312,7 +312,8 @@ export function registerTerminalActions(): void {
 			terminals.setActiveInstance(instance);
 			// Reveal without deferring focus inside openView: a newer picker may
 			// open while process creation or view restoration is still pending.
-			await groups.showPanel(false);
+			if (instance.target === TerminalLocation.Editor) await instantiation.invokeFunction(accessor => accessor.get(ITerminalEditorService)).openEditor(instance, { preserveFocus: true });
+			else await groups.showPanel(false);
 			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
 		}
 	});
@@ -465,7 +466,8 @@ export function registerTerminalActions(): void {
 			const config = resolveProfile(profiles, profileId);
 			const instance = await terminals.createTerminal({ config });
 			terminals.setActiveInstance(instance);
-			await groups.showPanel(true);
+			if (instance.target === TerminalLocation.Editor) await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: false });
+			else await groups.showPanel(true);
 		}
 	});
 	registerAction2(class SelectDefaultProfileAction extends Action2 {

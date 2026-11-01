@@ -20,6 +20,30 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
+test('code actions leave the lightbulb unallocated for empty results and model replacement', async () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	using close = toDisposable(() => dom.window.close());
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using first = new TextModel('first', { languageId: 'typescript' });
+	using second = new TextModel('second', { languageId: 'typescript' });
+	using features = new LanguageFeaturesService();
+	using provider = features.codeActionProvider.register('typescript', { provideCodeActions: () => [] });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!, model: first,
+		languageFeaturesService: features, dimension: { width: 320, height: 80 },
+	});
+	const lightbulb = () => dom.window.document.querySelector('.ash-editor-lightbulb');
+	assert.equal(lightbulb(), null);
+	await editor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand('editor.action.quickFix'));
+	assert.equal(lightbulb(), null);
+	editor.layout({ width: 500, height: 160 });
+	editor.setModel(second);
+	editor.updateOptions({ readOnly: true });
+	assert.equal(lightbulb(), null);
+	editor.dispose();
+	assert.equal(lightbulb(), null);
+});
+
 for (const [command, kind] of [['editor.action.refactor', 'refactor.extract'], ['editor.action.sourceAction', 'source.organizeImports']] as const) {
 	for (const matching of [true, false]) {
 		test(`${command} honors kind, preferred and apply arguments${matching ? '' : ' without crossing action families'}`, async () => {

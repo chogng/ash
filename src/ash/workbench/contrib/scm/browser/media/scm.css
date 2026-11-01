@@ -335,12 +335,12 @@
 		display var(--ash-animation-durationFast) allow-discrete;
 }
 
-/* A remembered row focus reveals actions only while the tree has keyboard focus. */
+/* Keep actions visible as keyboard focus moves from the tree into a row control. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
 .ash-scm-graph-actions.dropdown-visible,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
@@ -405,7 +405,7 @@
 .ash-scm-graph-change-row:is(
 		:hover,
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-actions {
 	display: flex;
@@ -706,6 +706,27 @@
 	flex: 1 1 auto;
 }
 
+.ash-scm-changes .ash-tree-indent {
+	/* Keep the guide at the pane's 16px axis despite inset row backgrounds. */
+	left: calc(16px - var(--ash-list-row-inset-start, 0px));
+}
+
+.ash-scm-changes
+	.ash-tree.ash-tree-indent-guides-onHover
+	.ash-tree-indent-guide {
+	/* A retained selection must not reveal guides outside the Changes tree. */
+	border-left-color: transparent;
+}
+
+.ash-scm-changes
+	.ash-tree.ash-tree-indent-guides-onHover:hover
+	.ash-tree-indent-guide {
+	border-left-color: var(
+		--ash-list-style-tree-inactive-indent-guides-stroke,
+		var(--ash-tree-inactiveIndentGuidesStroke)
+	);
+}
+
 .ash-scm-section-heading {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -868,7 +889,7 @@
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
@@ -890,14 +911,14 @@
 .ash-scm-change:focus-within > .ash-scm-change-actions,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions,
 .ash-scm-graph-change-row:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-actions,
 :is(
@@ -907,7 +928,7 @@
 ):has(button[aria-expanded="true"]),
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
@@ -990,7 +1011,7 @@
 	color: color-mix(in srgb, currentColor 78%, transparent);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
-	text-align: center;
+	text-align: end;
 	white-space: nowrap;
 }
 

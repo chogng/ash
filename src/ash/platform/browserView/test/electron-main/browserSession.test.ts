@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { BrowserSessionPermissions } from '../../electron-main/browserSessionPermissions.js';
 import { BrowserSession } from '../../electron-main/browserSession.js';
 import { BrowserViewStorageScope, type BrowserViewEvent } from '../../common/browserView.js';
-import { SshPortForwardingService } from '../../../remote/electron-main/sshPortForwardingService.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -162,16 +162,15 @@ test('website grants bind both origins, reset removes decisions and closing canc
 });
 
 test('a remote session retains one SOCKS policy until its last page closes and never clears it to direct mode', async () => {
-	const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null, stderr: new EventEmitter(), kill: () => { child.emit('exit', 0); return true; } });
-	using tunnels = new SshPortForwardingService({
-		getWorkspace: () => ({ id: 'remote', remoteAuthority: 'ssh+test-host' }),
-		sshExecutable: 'ssh', localEnvironment: {}, reserveLocalPort: async () => 12345,
-		spawnProcess: (_executable, args) => {
-			assert.deepEqual(args.slice(-3), ['-D', '127.0.0.1:12345', 'test-host']);
-			return child as unknown as import('node:child_process').ChildProcess;
-		},
-		probeLoopbackListener: async () => 'ready',
-	});
+	const child = new EventEmitter();
+	const cancellation = new AbortController();
+	const exit = () => cancellation.abort();
+	const tunnels = {
+		openProxy: async () => {
+			child.once('exit', exit);
+			return Object.assign(toDisposable(() => child.removeListener('exit', exit)), { localPort: 12345, signal: cancellation.signal });
+		}
+	};
 	const policies: Electron.ProxyConfig[] = [];
 	let connectionsClosed = 0;
 	const session = Object.assign(new EventEmitter(), {

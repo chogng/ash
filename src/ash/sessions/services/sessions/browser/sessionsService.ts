@@ -471,6 +471,7 @@ export function isUntitledSession(value: unknown): value is IUntitledChatSession
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))
 		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
+		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')
 		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))
 		&& isWorkspaceSelection(value.workspace);
 }
@@ -488,8 +489,12 @@ function isWorkspaceSelection(value: unknown): value is SessionWorkspaceSelectio
 	if (value.type === 'ssh') {
 		return nonEmptyString(value.host) && nonEmptyString(value.root);
 	}
+	if (value.type === 'remote') {
+		return nonEmptyString(value.authority) && /^(wsl|tunnel)\+(?:[0-9a-f]{2})+$/.test(value.authority) && nonEmptyString(value.root);
+	}
 	if (value.type === 'provider') {
-		return nonEmptyString(value.providerId) && nonEmptyString(value.workspace) && nonEmptyString(value.root);
+		return nonEmptyString(value.providerId) && nonEmptyString(value.workspace) && nonEmptyString(value.root)
+			&& (value.hostAuthority === undefined || nonEmptyString(value.hostAuthority));
 	}
 	return value.type === 'multiple' && Array.isArray(value.folders) && value.folders.length > 0
 		&& value.folders.every(folder => isRecord(folder) && typeof folder.label === 'string' && isRecord(folder.target)

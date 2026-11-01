@@ -43,6 +43,8 @@ export class ModelPickerActionItem extends ActionViewItem {
 		this.pickerWidget.show();
 	}
 
+	public hide(): void { this.pickerWidget.hide(); }
+
 	public override setTabbable(_tabbable: boolean): void {
 		// Both picker triggers are page-level Tab stops, independent of ActionBar's current item.
 		this.pickerWidget.setEnabled(this.action.enabled);

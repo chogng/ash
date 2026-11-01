@@ -10,13 +10,23 @@ import { installEditorTestDom } from '../../../../../editor/test/browser/editorT
 import { resetNlsResolver, setNlsResolver, formatNlsMessage } from '../../../../../nls.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { inspectImage } from '../../../../../base/browser/image.js';
-import { getBuiltinEditorPaneFactory } from '../../../../browser/editor.js';
+import { EditorPanes } from '../../../../browser/editor.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { IMAGE_PREVIEW_ID, ImagePreview } from '../../browser/imagePreview.js';
+import { ImagePreviewEditor } from '../../browser/imagePreviewEditor.js';
+import { ImagePreviewInfo } from '../../browser/imagePreviewInfo.js';
+import { IMAGE_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
+import type { IResourceEditorInput } from '../../../../common/editor.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
 
@@ -28,7 +38,9 @@ class ImageFixture extends Disposable {
 	public readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly services = this._register(new InstantiationService());
 	public readonly revoked: string[] = [];
-	public readonly preview: ImagePreview;
+	public readonly preview: ImagePreviewEditor;
+	public readonly opened: IResourceEditorInput[] = [];
+	public readonly saved: { resource: URI; bytes: Uint8Array; }[] = [];
 	public read = async (): Promise<Uint8Array> => png;
 	public decode = async (): Promise<ImageBitmap> => ({ width: 800, height: 600, close: () => { this.closedBitmaps++; } }) as ImageBitmap;
 	public closedBitmaps = 0;
@@ -38,7 +50,15 @@ class ImageFixture extends Disposable {
 		this._register(toDisposable(() => this.preview.dispose()));
 		const originalRevoke = URL.revokeObjectURL;
 		this._register(toDisposable(() => { this.browser.window.close(); URL.revokeObjectURL = originalRevoke; resetNlsResolver(); }));
-		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], { createImageBitmap: () => this.decode() }));
+		this._register(installEditorTestDom(this.browser, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement'], {}));
+		const fixture = this;
+		this.browser.window.HTMLImageElement.prototype.decode = async function (): Promise<void> {
+			const decoded = await fixture.decode();
+			Object.defineProperties(this, { naturalWidth: { value: decoded.width }, naturalHeight: { value: decoded.height } });
+			decoded.close();
+		};
+		this.services.registerInstance(IClipboardService, this._register(new BrowserClipboardService(undefined)));
+		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		Object.defineProperty(this.browser.window, 'ResizeObserver', { value: class { observe(): void { } disconnect(): void { } } });
 		URL.revokeObjectURL = url => { this.revoked.push(url); originalRevoke(url); };
 		const unexpected = async (): Promise<never> => { throw new Error('Unexpected file operation'); };
@@ -49,23 +69,34 @@ class ImageFixture extends Disposable {
 
 			onDidChangeFiles: this.changes.event,
 			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected,
+			writeFile: async (target, bytes) => {
+				this.saved.push({ resource: target, bytes: bytes.slice() });
+				return { stat: { resource: target, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: 'saved' };
+			},
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
+		this.services.registerInstance(IWebWorkerService, new WebWorkerService());
+		this.services.registerInstance(IEditorService, {
+			onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
+			activeEditor: undefined, activeEditorPane: undefined, visibleEditors: [], visibleEditorPanes: [],
+			openEditor: async input => { this.opened.push(input); }, focusActiveEditor: () => { },
+			save: unexpected, saveAll: unexpected,
+		});
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
-		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: this.services }, 'Image preview') as ImagePreview);
+		this.preview = this._register(EditorPanes.getEditorPanes().find(pane => pane.id === IMAGE_PREVIEW_EDITOR_ID)!.create({ instantiationService: this.services }) as ImagePreviewEditor);
 		this.preview.create(this.browser.window.document.body);
-		const viewport = this.browser.window.document.querySelector('.ash-image-preview-viewport')!;
+		const viewport = this.browser.window.document.querySelector('.ash-image-viewer')!;
 		Object.defineProperties(viewport, { clientWidth: { value: 400 }, clientHeight: { value: 300 } });
 	}
 }
 
 test('Image preview factory requires production services', () => {
 	using services = new InstantiationService();
-	assert.throws(() => getBuiltinEditorPaneFactory('ash.media-preview', IMAGE_PREVIEW_ID)!.create({ instantiationService: services }, 'Image preview'), /fileService/);
+	assert.throws(() => EditorPanes.getEditorPanes().find(pane => pane.id === IMAGE_PREVIEW_EDITOR_ID)!.create({ instantiationService: services }), /fileService/);
 });
 
 test('Image preview opens through the registered pane, zooms and releases its URL on closure', async () => {
@@ -73,7 +104,8 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
 	const image = fixture.browser.window.document.querySelector('img')!;
 	const url = image.src;
-	assert.equal(fixture.preview.id, IMAGE_PREVIEW_ID);
+	assert.equal(fixture.preview.id, IMAGE_PREVIEW_EDITOR_ID);
+	assert.equal(fixture.browser.window.document.querySelector('[role="toolbar"]'), null);
 	assert.deepEqual([image.style.width, image.style.height, image.alt, fixture.closedBitmaps], ['400px', '300px', 'Product', 1]);
 	fixture.preview.focus();
 	const viewport = fixture.browser.window.document.activeElement!;
@@ -81,9 +113,27 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	assert.equal(image.style.width, '800px');
 	assert.match(fixture.preview.getAccessibleContent(), /800 × 600 pixels[\s\S]*100%/);
 	viewport.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: '+', bubbles: true }));
-	assert.equal(image.style.width, '1000px');
+	assert.equal(image.style.width, '1200px');
 	fixture.preview.clearInput();
 	assert.deepEqual([image.hasAttribute('src'), fixture.revoked], [false, [url]]);
+});
+
+test('Image information reports clipboard failures without closing or changing the preview', async () => {
+	using fixture = new ImageFixture();
+	const document = fixture.browser.window.document;
+	using views = new BrowserContextViewService(document.body);
+	fixture.services.registerInstance(IContextViewService, views);
+	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
+	const anchor = document.createElement('button');
+	document.body.append(anchor);
+	using details = fixture.services.createInstance(ImagePreviewInfo, fixture.preview, anchor, () => { });
+	details.show();
+	const copy = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Copy dimensions')!;
+	copy.click();
+	await setImmediate();
+	assert.match(document.querySelector('.ash-image-preview-info [role="alert"]')!.textContent!, /browser clipboard is unavailable/);
+	assert.equal(details.visible, true);
+	assert.deepEqual(fixture.preview.imageInfo, { name: 'Product', width: 800, height: 600, mediaType: 'image/png', fileSize: png.length });
 });
 
 test('Image preview keeps a first-open read failure in the pane and retries it', async () => {
@@ -133,7 +183,7 @@ test('Image preview closes a decoder that finishes after disposal', async () => 
 		fixture.preview.dispose();
 		await decoding.complete({ width: 800, height: 600, close: () => { fixture.closedBitmaps++; } } as ImageBitmap);
 		await cancelled;
-		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 0, null]);
+		assert.deepEqual([fixture.closedBitmaps, fixture.revoked.length, fixture.browser.window.document.querySelector('img')], [1, 1, null]);
 	} finally {
 		fixture.dispose();
 	}
@@ -145,13 +195,24 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	using fixture = new ImageFixture();
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 
-	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
+	assert.equal(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.classList.contains('hidden'), true);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
-	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '适应窗口');
+	assert.equal(fixture.browser.window.document.querySelector('button')!.hidden, true);
+	const document = fixture.browser.window.document;
+	using views = new BrowserContextViewService(document.body);
+	fixture.services.registerInstance(IContextViewService, views);
+	const anchor = document.createElement('button');
+	document.body.append(anchor);
+	using details = fixture.services.createInstance(ImagePreviewInfo, fixture.preview, anchor, () => { });
+	details.show();
+	assert.equal(document.querySelector('.ash-image-preview-info')!.getAttribute('aria-label'), '图片信息');
+	assert.deepEqual(Array.from(document.querySelectorAll('.ash-image-preview-info dt')).map(term => term.textContent), ['文件名', '格式', '尺寸', '文件大小']);
+	assert.equal(document.querySelectorAll('.ash-image-preview-info dd')[2].textContent, '800 × 600 像素');
 	fixture.preview.clearInput();
 	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
+	assert.equal(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === '以只读文本打开' && !button.hidden), true);
 	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'), true);
 });
 
@@ -166,17 +227,16 @@ test('Image preview refreshes a changed resource and revokes the previous URL', 
 	assert.equal(image.src, original);
 	fixture.changes.fire({ resources: [resource] });
 	await setImmediate();
-	assert.deepEqual([image.style.width, image.style.height, fixture.revoked], ['320px', '200px', [original]]);
+	assert.deepEqual([image.style.width, image.style.height, fixture.revoked], ['400px', '250px', [original]]);
 	assert.notEqual(image.src, original);
 });
 
-test('Image inspection rejects unsupported signatures and preview decoding failures can be retried', async () => {
+test('Image preview decoding failures can be retried', async () => {
 	using fixture = new ImageFixture();
-	await assert.rejects(inspectImage(new Uint8Array([137, 80, 78, 71])), /PNG, JPEG or WebP/);
 	fixture.decode = async () => { throw new Error('Invalid encoded image'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /Could not load image: The image data could not be decoded/);
-	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [0, false]);
+	assert.deepEqual([fixture.revoked.length, fixture.browser.window.document.querySelector('img')!.hasAttribute('src')], [1, false]);
 	const retry = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry');
 	assert.ok(retry, 'failed image decode should expose a Retry action');
 	fixture.decode = async () => ({ width: 320, height: 200, close: () => { fixture.closedBitmaps++; } }) as ImageBitmap;
@@ -200,4 +260,65 @@ test('Image preview reports a failed refresh and loads the resource again on its
 	await setImmediate();
 	assert.equal(image.hasAttribute('src'), true);
 	assert.match(fixture.preview.getAccessibleContent(), /Image: product.png/);
+});
+
+test('Image preview Save As preserves binary bytes, skips the source and saves revision-backed data', async () => {
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	await fixture.preview.saveAs(resource);
+	assert.equal(fixture.saved.length, 0);
+	const target = URI.file('/images/saved.png');
+	await fixture.preview.saveAs(target);
+	assert.deepEqual(fixture.saved, [{ resource: target, bytes: png }]);
+	const initialBytes = new Uint8Array([0, 255, 128, 42]);
+	fixture.read = async () => { throw new Error('No provider for the revision'); };
+	await fixture.preview.setInput({ resource: URI.parse('git:/revision.png'), initialBytes }, new AbortController().signal);
+	await fixture.preview.saveAs(target);
+	assert.deepEqual(fixture.saved.at(-1), { resource: target, bytes: initialBytes });
+});
+
+test('Git LFS images explain the pointer and open read-only text without decoding it', async () => {
+	using fixture = new ImageFixture();
+	const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 123\n';
+	await fixture.preview.setInput({ resource: URI.parse('git:/image.png'), initialBytes: new TextEncoder().encode(pointer) }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /Git LFS pointer/);
+	assert.equal(fixture.closedBitmaps, 0);
+	const button = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Open as read-only text')!;
+	assert.equal(button.hidden, false);
+	button.click();
+	await setImmediate();
+	assert.equal(fixture.opened[0]?.initialText, pointer);
+	assert.equal(fixture.opened[0]?.readOnly, true);
+});
+
+test('Closing an image cancels a pending text recovery before it opens an editor', async () => {
+	using fixture = new ImageFixture();
+	fixture.read = async () => { throw new Error('Load failed'); };
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	const read = new DeferredPromise<Uint8Array>();
+	fixture.read = () => read.p;
+	Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Open as read-only text')!.click();
+	fixture.preview.clearInput();
+	await read.complete(png);
+	await setImmediate();
+	assert.deepEqual(fixture.opened, []);
+});
+
+test('Image view state transfers to another resource and rejects malformed persisted state', async () => {
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	fixture.preview.imageViewer.setScale(2);
+	fixture.preview.imageViewer.domNode.scrollLeft = 160;
+	fixture.preview.imageViewer.domNode.scrollTop = 120;
+	const state = fixture.preview.saveViewState();
+	assert.deepEqual(state, { scale: 2, scrollLeft: 160, scrollTop: 120 });
+	await fixture.preview.setInput({ resource: URI.file('/images/copy.png') }, new AbortController().signal);
+	fixture.preview.restoreViewState(state);
+	assert.deepEqual(fixture.preview.saveViewState(), state);
+	for (const invalid of [null, {}, [], { ...state, scale: 0 }, { ...state, scale: Infinity }, { ...state, scrollTop: -1 }, { ...state, scrollLeft: '160' }]) {
+		fixture.preview.restoreViewState(invalid);
+		assert.deepEqual(fixture.preview.saveViewState(), state);
+	}
+	fixture.preview.clearInput();
+	assert.equal(fixture.preview.saveViewState(), null);
 });

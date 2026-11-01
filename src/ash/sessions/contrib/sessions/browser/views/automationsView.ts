@@ -30,7 +30,6 @@ import { IAutomationRunner } from '../../../../../workbench/contrib/chat/common/
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { AbstractCustomView } from '../../../../services/customView/browser/customView.js';
 import '../media/automationsCards.css';
-import { LoadingSkeleton } from '../../../../browser/ui/loadingSkeleton.js';
 
 interface PlanCard {
 	readonly lifetime: DisposableStore;
@@ -145,7 +144,6 @@ export class AutomationsCardsWidget extends Disposable {
 			},
 		}));
 		plansSection.append(plansHeader, controls, empty, this.plans, noMatches);
-		const planLoading = this._register(new LoadingSkeleton(plansSection, localize('automations.loading', 'Loading automations…'), 'cards', 4));
 		const historySection = h(document, 'section', { className: 'ash-automation-history-section', attributes: { 'aria-label': localize('automations.history', 'Run history') } });
 		const historyHeader = h(document, 'div', { className: 'ash-automation-section-heading' });
 		const heading = h(document, 'h2', {}, localize('automations.history', 'Run history'));
@@ -154,7 +152,6 @@ export class AutomationsCardsWidget extends Disposable {
 		const historyEmpty = h(document, 'p', { className: 'ash-automation-empty-history' }, localize('automations.emptyHistory', 'No runs yet. Run an automation now or wait for its next scheduled time.'));
 		this.history = h(document, 'div', { className: 'ash-automation-history' });
 		historySection.append(historyHeader, historyMessage, historyEmpty, this.history);
-		const historyLoading = this._register(new LoadingSkeleton(historySection, localize('sessions.loadingHistory', 'Loading history…'), 'list', 3));
 		const overview = h(document, 'div', { className: 'ash-automation-overview' });
 		const notificationPreference = h(document, 'label', { className: 'ash-automation-notification-preference' });
 		const notifySuccess = h(document, 'input', { properties: { type: 'checkbox' } });
@@ -201,15 +198,14 @@ export class AutomationsCardsWidget extends Disposable {
 			for (const template of this.templates) template.enabled = canCreate;
 			for (const item of filterButtons) item.button.checked = filter === item.value;
 			historyMessage.textContent = historyState === 'error'
-				? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.') : '';
+				? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')
+				: (historyState ?? state) === 'loading' ? localize('sessions.loadingHistory', 'Loading history…') : '';
 			historyMessage.hidden = !historyMessage.textContent;
 			this.message.textContent = state === 'loading' ? localize('automations.loading', 'Loading automations…')
 				: state === 'error' ? localize('automations.loadFailed', 'Could not load automations.')
 					: state === 'unavailable' ? localize('automations.unavailable', 'The owning automation host is unavailable. Saved results may be out of date.')
 						: '';
-			this.message.hidden = !this.message.textContent || state === 'loading';
-			planLoading.setVisible(state === 'loading' && !plans.length);
-			historyLoading.setVisible((historyState ?? state) === 'loading' && !runs.length);
+			this.message.hidden = !this.message.textContent;
 			plansSection.setAttribute('aria-busy', String(state === 'loading'));
 			historySection.setAttribute('aria-busy', String((historyState ?? state) === 'loading'));
 			empty.hidden = state !== 'ready' || plans.length > 0;

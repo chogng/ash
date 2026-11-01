@@ -19,6 +19,7 @@ import { QuickInputService } from '../../../../../platform/quickinput/browser/qu
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -358,6 +359,79 @@ test('Quick Input section headings follow filtering and never accept a conversat
 	assert.deepEqual(list.visibleItems.map(item => item.label), ['Beta']);
 	assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-checkbox').length, 1);
 	assert.deepEqual([...list.element.querySelectorAll('.ash-quick-pick-section-header')].map(header => header.textContent), ['Recent']);
+});
+
+test('Quick Widget preserves borrowed content, scopes Escape and leaves Enter to its editor', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using contexts = new ContextKeyService();
+	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contexts });
+	const previous = dom.window.document.querySelector('button')!;
+	previous.focus();
+	using widget = service.createQuickWidget();
+	const content = dom.window.document.createElement('textarea');
+	content.value = 'Keep my draft';
+	widget.widget = content;
+	widget.contextKey = 'testQuickWidgetVisible';
+	widget.ignoreFocusOut = true;
+	let closed = 0;
+	using listener = widget.onDidHide(() => closed++);
+	widget.show();
+	assert.equal(contexts.getContext(content).getValue('testQuickWidgetVisible'), true);
+	const enter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true });
+	content.dispatchEvent(enter);
+	assert.equal(enter.defaultPrevented, false);
+	assert.equal(service.currentQuickInput, widget);
+	previous.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+	assert.equal(service.currentQuickInput, widget);
+	content.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(service.currentQuickInput, undefined);
+	assert.equal(dom.window.document.activeElement, previous);
+	assert.equal(closed, 1);
+	widget.show();
+	assert.equal(widget.widget, content);
+	assert.equal(content.value, 'Keep my draft');
+	previous.focus();
+	using picker = service.createQuickPick();
+	picker.show();
+	assert.equal(closed, 2);
+	assert.equal(content.isConnected, false);
+});
+
+test('Quick Widget keeps its editor alive while an anchored child picker restores focus', () => {
+	const dom = new JSDOM('<!doctype html><body><button>Previous editor</button></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using service = new TestQuickInputService({ container: dom.window.document.body });
+	const previous = dom.window.document.querySelector('button')!;
+	previous.focus();
+	using widget = service.createQuickWidget();
+	const content = dom.window.document.createElement('div');
+	const attach = dom.window.document.createElement('button');
+	attach.textContent = 'Attach';
+	content.append(attach);
+	widget.widget = content;
+	widget.ignoreFocusOut = true;
+	let hidden = 0;
+	using listener = widget.onDidHide(() => hidden++);
+	widget.show();
+	using picker = service.createQuickPick();
+	picker.anchor = attach;
+	picker.items = [{ label: 'fixture.txt' }];
+	picker.show();
+	assert.equal(content.isConnected, true);
+	assert.equal(hidden, 0);
+	assert.equal(service.currentQuickInput, picker);
+	picker.hide();
+	assert.equal(dom.window.document.activeElement, attach);
+	assert.equal(service.currentQuickInput, widget);
+	assert.equal(hidden, 0);
+	widget.hide();
+	assert.equal(dom.window.document.activeElement, previous);
+	assert.equal(hidden, 1);
 });
 
 test('Quick Input Escape stays scoped to its host while an owned menu has focus', () => {
@@ -1028,7 +1102,11 @@ suite('Quick Input shared foundations', () => {
 		assert.throws(() => service.createQuickPick(), /storageService/);
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'position', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
+		assert.throws(() => service.createQuickPick(), /openerService/);
+		assert.throws(() => service.createQuickTree(), /openerService/);
+		services.registerInstance(IOpenerService, { open() { throw new Error('Unexpected Quick Input link'); } } as unknown as IOpenerService);
 		assert.throws(() => service.createQuickPick(), /contextMenuService/);
+		assert.throws(() => service.createQuickTree(), /contextMenuService/);
 		services.registerInstance(IContextMenuService, contextMenus);
 		const key = 'workbench.quickInput.viewState';
 		for (const value of ['broken json', 'null', '[]', '{"top":0.2}', '{"top":-1,"left":0.5}', '{"top":0.2,"left":2}', '{"top":"0.2","left":0.5}']) {

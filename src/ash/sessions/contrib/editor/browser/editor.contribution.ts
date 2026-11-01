@@ -1,5 +1,3 @@
-import { ActiveAuxiliaryContext } from '../../../../workbench/common/contextkeys.js';
-import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -8,18 +6,21 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
+import { isRecord } from '../../../../base/common/types.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
+const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
+const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
-
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
 	constructor(
@@ -33,9 +34,11 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		// Existing editor contributions keep their menu identity; Desktop groups consume its live projection.
 		const mirrored = this._register(new DisposableStore());
 		const layoutCommands = new Set(['ash.sessions.toggleDetails', 'ash.sessions.hideEditor', 'ash.sessions.showEditor', 'workbench.action.splitEditor']);
+		const navigationCommands = new Set(['multiDiffEditor.goToPreviousChange', 'multiDiffEditor.goToNextChange']);
 		const updateEditorMenu = (): void => {
 			mirrored.clear();
 			for (const item of MenusRegistry.getMenuItems(MenuId.EditorTitle)) {
+				if ('command' in item && navigationCommands.has(item.command.id)) { continue; }
 				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
 				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
 				mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, layoutItem ? { ...item, group: '9_layout' } : item));
@@ -47,18 +50,24 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
+		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
+		const changesVisible = changesVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
-				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor'));
-				detailsVisible.set(layout.isPartVisible('auxiliarybar'));
+				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
+					(!(editor as DesktopEditorParts).filesDetailsVisible || (editor as DesktopEditorParts).filesPart.isEditorVisible));
+				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).filesDetailsVisible);
+				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).fileEditorsVisible);
+				changesVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && editor.groups.some(group =>
+					editor.isGroupVisible(group.id) && group.activeInput?.resource.scheme === 'ash-session-changes'));
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, changesVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -77,14 +86,23 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				await operation();
 				updateContext();
 			});
+		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
+			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
+		this._register(CommandsRegistry.register('ash.sessions.hideTool', arg => run(async () => {
+			(editor as DesktopEditorParts).hideTool(toolGroup(arg));
+			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
+		})));
+		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', arg => run(async () => {
+			(editor as DesktopEditorParts).toggleMaximizeTool(toolGroup(arg));
+		})));
 		for (const [id, operation] of [
 			['ash.sessions.toggleDetails', () => controller.toggleDetails()],
 			['ash.sessions.toggleFiles', () => controller.toggleFiles()],
+			['ash.sessions.toggleChanges', () => controller.toggleChanges()],
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					layout.hidePart('auxiliarybar');
-					layout.focus();
+					if ((editor as DesktopEditorParts).filesDetailsOpen) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
@@ -125,6 +143,29 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		this._register(
 			MenusRegistry.appendMenuItems([
 				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { ...toggleDetails, icon: Lxicon.listUnordered },
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files')),
+						group: 'navigation',
+						order: -1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { id: 'ash.sessions.maximizeTool', title: localize2('sessions.layout.maximizeTool', 'Toggle tool size'), icon: Lxicon.screenFull },
+						when: codeWhen, group: 'navigation', order: 1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { id: 'ash.sessions.hideTool', title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
+						when: codeWhen, group: 'navigation', order: 2,
+					},
+				},
+				{
 					id: MenuId.AuxiliaryBarTitle,
 					item: {
 						command: {
@@ -144,10 +185,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							id: 'ash.sessions.toggleFiles',
 							title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
 							icon: Lxicon.folder,
-							toggled: ContextKeyExpr.and(
-								detailsVisibleContext.isEqualTo(true),
-								ActiveAuxiliaryContext.isEqualTo(SESSIONS_FILES_CONTAINER_ID),
-							),
+							toggled: filesVisibleContext.isEqualTo(true),
 						},
 						when: codeWhen,
 						group: 'navigation',
@@ -158,9 +196,10 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.TitleBarRightLayout,
 					item: {
 						command: {
-							id: 'workbench.agentSessions.action.viewChanges',
+							id: 'ash.sessions.toggleChanges',
 							title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
 							icon: Lxicon.diffChanges,
+							toggled: changesVisibleContext.isEqualTo(true),
 						},
 						when: codeWhen, group: 'navigation', order: 4,
 					},
@@ -168,7 +207,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...toggleDetails, icon: Lxicon.files },
+						command: { ...toggleDetails, icon: Lxicon.listUnordered },
 						when: codeWhen,
 						group: 'navigation',
 						order: 90,
@@ -177,7 +216,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOff2 },
+						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOffSession },
 						when: editorShown,
 						group: 'navigation',
 						order: 91,
@@ -186,7 +225,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...showEditor, icon: Lxicon.layoutSidebarRight2 },
+						command: { ...showEditor, icon: Lxicon.layoutSidebarRightSession },
 						when: editorHidden,
 						group: 'navigation',
 						order: 91,

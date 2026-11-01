@@ -928,6 +928,36 @@ fn extension_source_mutations_have_strict_inputs_and_exclusive_serialization() {
 }
 
 #[test]
+fn extension_update_policy_is_strict_and_serializes_mutations() {
+    use crate::protocol::extension_packages::ExtensionsSetUpdatePolicyParams;
+    let value = serde_json::json!({"policy":{"autoCheckUpdates":true,"autoUpdate":false},"expectedRevision":2});
+    let parsed: ExtensionsSetUpdatePolicyParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(parsed).unwrap(), value);
+    assert_eq!(
+        definition("extensions/updates/setPolicy")
+            .serialization_scope(&value)
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive
+        })
+    );
+    let mut invalid = value.clone();
+    invalid["policy"]["autoUpdate"] = serde_json::json!("true");
+    assert!(serde_json::from_value::<ExtensionsSetUpdatePolicyParams>(invalid).is_err());
+    let mut unknown = value;
+    unknown["policy"]["grantExecution"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ExtensionsSetUpdatePolicyParams>(unknown).is_err());
+    for method in ["extensions/updates/read", "extensions/updates/check"] {
+        assert_eq!(
+            definition(method)
+                .serialization_scope(&serde_json::json!({}))
+                .unwrap(),
+            None
+        );
+    }
+}
+
+#[test]
 fn git_pull_modes_roundtrip_and_keep_repository_serialization() {
     use crate::protocol::config::GitConfigDto;
     use crate::protocol::git::GitPullModeDto;
@@ -1082,6 +1112,28 @@ fn git_file_admission_keeps_staged_order_and_rejects_invalid_comparisons() {
     ] {
         assert!(definition.serialization_scope(&invalid).is_err());
     }
+}
+
+#[test]
+fn git_comparison_batches_keep_one_exclusive_repository_publication() {
+    let definition = super::client_method_definition("git/changeFiles").unwrap();
+    for comparison in ["staged", "unstaged"] {
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({
+                    "repositoryId":"repo", "paths":["a.txt","b.txt"], "comparison":comparison
+                }))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo".into()),
+                access: SerializationAccess::Exclusive
+            })
+        );
+    }
+    let schema = schemars::schema_for!(crate::protocol::git::GitChangeFilesParams);
+    let value = serde_json::to_value(schema).unwrap();
+    assert_eq!(value["properties"]["paths"]["minItems"], 1);
+    assert_eq!(value["properties"]["paths"]["maxItems"], 16);
 }
 
 #[test]

@@ -135,6 +135,17 @@ suite('Desktop built-in Voice Mode command', () => {
 			domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false,
 			onDidHide: Event.None, onDidChangeViewModel: Event.None,
 			acquireContext: async () => { throw new Error('Unexpected context preparation'); },
+			getFindController: () => undefined,
+			get input(): never { throw new Error('Unexpected composer operation'); },
+			retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
+			focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
+			acceptInput: async () => { },
+			focusInput: () => { },
+			getFocus: () => undefined,
+			getSibling: () => undefined,
+			focus: () => { },
+			reveal: () => { },
+			focusResponseItem: () => { },
 			startVoiceConversation: async () => { starts++; },
 		};
 		const registration = owner.add(widgets.register(widget));
@@ -147,7 +158,7 @@ suite('Desktop built-in Voice Mode command', () => {
 		widget.isTranscriptProgressActive = true;
 		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
 		widget.isTranscriptProgressActive = false;
-		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget: { ...widget } });
+		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget: Object.create(widget) });
 		registration.dispose();
 		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
 		assert.equal(starts, 1);

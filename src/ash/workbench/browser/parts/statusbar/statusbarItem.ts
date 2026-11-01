@@ -47,7 +47,7 @@ export class StatusbarEntryItem extends Disposable {
 				return;
 			}
 			event.preventDefault();
-			this.entry?.run?.();
+			this.entry?.run?.(this.labelDomNode);
 		}));
 		this._register(addDisposableListener(labelDomNode, 'keydown', (event) => {
 			if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -57,7 +57,7 @@ export class StatusbarEntryItem extends Disposable {
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			this.entry?.run?.();
+			this.entry?.run?.(this.labelDomNode);
 		}));
 
 		this.update(entry);
@@ -74,6 +74,12 @@ export class StatusbarEntryItem extends Disposable {
 			setOptionalAttribute(this.labelDomNode, 'aria-label', accessibleLabel);
 		}
 		const focusable = this.isFocusable();
+		if (!previousEntry || previousEntry.ariaHasPopup !== entry.ariaHasPopup) {
+			setOptionalAttribute(this.labelDomNode, 'aria-haspopup', entry.ariaHasPopup ?? '');
+		}
+		if (!previousEntry || previousEntry.ariaExpanded !== entry.ariaExpanded) {
+			setOptionalAttribute(this.labelDomNode, 'aria-expanded', entry.ariaExpanded === undefined ? '' : String(entry.ariaExpanded));
+		}
 		const previouslyFocusable = previousEntry?.run !== undefined;
 		if (!previousEntry || previouslyFocusable !== focusable) {
 			this.labelDomNode.classList.toggle('disabled', !focusable);

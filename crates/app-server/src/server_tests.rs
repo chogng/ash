@@ -8168,6 +8168,28 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         std::fs::read_to_string(peer.join("local.txt")).unwrap(),
         "from app server\n"
     );
+    run_git(&dir, &["remote", "set-url", "origin", "../missing.git"]);
+    for (index, operation) in [
+        serde_json::json!({"kind":"fetch","mode":"all"}),
+        serde_json::json!({"kind":"pull","mode":"configured"}),
+        serde_json::json!({"kind":"push","expectedHead":pushed["result"]["status"]["head"]}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let failed = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":100+index,"method":"git/transport",
+                "params":{"operationId":format!("failure-{index}"),
+                    "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),"operation":operation}}),
+        );
+        assert_eq!(failed["error"]["code"], -32061, "{failed}");
+        assert_eq!(failed["error"]["data"]["kind"], "GitOperationFailed");
+        let message = failed["error"]["message"].as_str().unwrap();
+        assert!(message.contains("missing.git"), "{failed}");
+        assert!(message.contains("exit code"), "{failed}");
+    }
     run_git(
         &dir,
         &[
@@ -8415,6 +8437,93 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
 }
 
 #[test]
+fn git_change_files_rpc_preserves_order_freshness_and_rejects_partial_or_unbounded_reads() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.test"]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("HEAD {name}\n")).unwrap();
+    }
+    run_git(&root, &["add", "."]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("INDEX {name}\n")).unwrap();
+    }
+    run_git(&root, &["add", "."]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("WORKTREE {name}\n")).unwrap();
+    }
+    let server = server()
+        .with_git_root(dir_authorization(&root, DirPermission::InspectRepository))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, (comparison, before, after)) in [
+        ("staged", "HEAD", "INDEX"),
+        ("unstaged", "INDEX", "WORKTREE"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":index + 2, "method":"git/changeFiles",
+                "params":{"paths":["second.txt","first.txt"], "comparison":comparison}
+            }),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        for (index, name) in ["second.txt", "first.txt"].iter().enumerate() {
+            assert_eq!(
+                response["result"]["files"][index]["original"]["text"],
+                format!("{before} {name}\n")
+            );
+            assert_eq!(
+                response["result"]["files"][index]["modified"]["text"],
+                format!("{after} {name}\n")
+            );
+        }
+    }
+    std::fs::write(root.join("first.txt"), "fresh\n").unwrap();
+    let fresh = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"git/changeFiles",
+            "params":{"paths":["first.txt"], "comparison":"unstaged"}
+        }),
+    );
+    assert_eq!(fresh["result"]["files"][0]["modified"]["text"], "fresh\n");
+    for (index, paths) in [
+        vec![],
+        vec!["first.txt"; 17],
+        vec!["../outside"],
+        vec!["first.txt", "missing.txt"],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":index + 5, "method":"git/changeFiles",
+                "params":{"paths":paths, "comparison":"unstaged"}
+            }),
+        );
+        assert!(response.get("error").is_some(), "{response}");
+        assert_ne!(response["error"]["message"], "InvalidRequest", "{response}");
+        assert!(
+            response.get("result").is_none(),
+            "No partial comparisons may escape a failed batch"
+        );
+    }
+}
+
+#[test]
 fn git_change_file_rpc_preserves_renames_and_rejects_sources_outside_the_grant() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
@@ -8438,6 +8547,23 @@ fn git_change_file_rpc_preserves_renames_and_rejects_sources_outside_the_grant()
             .unwrap();
         let mut connection = server.connection();
         initialize(&server, &mut connection);
+        let batch = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":3, "method":"git/changeFiles",
+                "params":{"paths":[path], "comparison":"staged"}
+            }),
+        );
+        if allowed {
+            assert!(batch.get("error").is_none(), "{batch}");
+            assert_eq!(
+                batch["result"]["files"][0]["original"]["text"],
+                "original content\n"
+            );
+        } else {
+            assert!(batch.get("error").is_some(), "{batch}");
+        }
         let result = call(
             &server,
             &mut connection,
@@ -10064,4 +10190,85 @@ fn debug_session_graph_rpc_keeps_prepared_children_connection_owned_and_console_
         serde_json::json!({"jsonrpc":"2.0","id":34,"method":"debug/session/console","params":{"id":"parent","clear":false}}),
     );
     assert!(gone["result"].is_null(), "{gone}");
+}
+
+#[test]
+fn browser_tcp_is_connection_owned_and_closes_native_sockets_on_disconnect() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let server = server();
+    let mut owner = server.product_host_connection();
+    initialize(&server, &mut owner);
+    let opened = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert!(opened.get("error").is_none(), "{opened}");
+    let (mut socket, _) = listener.accept().unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut stranger = server.product_host_connection();
+    initialize(&server, &mut stranger);
+    let denied = call(
+        &server,
+        &mut stranger,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
+    );
+    assert!(denied.get("error").is_some());
+    let mut untrusted = server.connection();
+    initialize(&server, &mut untrusted);
+    let denied = call(
+        &server,
+        &mut untrusted,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert_eq!(denied["error"]["message"], "ResourceNotOwner");
+    server.close_connection(owner);
+    let mut byte = [0];
+    assert_eq!(std::io::Read::read(&mut socket, &mut byte).unwrap(), 0);
+    server.close_connection(stranger);
+    server.close_connection(untrusted);
+}
+
+#[test]
+fn browser_tcp_half_close_keeps_the_response_readable() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let server = server();
+    let mut owner = server.product_host_connection();
+    initialize(&server, &mut owner);
+    let opened = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert!(opened.get("error").is_none(), "{opened}");
+    let (mut socket, _) = listener.accept().unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let ended = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"browser/tcp/write","params":{"streamId":"stream","dataBase64":"","eof":true}}),
+    );
+    assert_eq!(ended["result"]["written"], 0, "{ended}");
+    assert_eq!(std::io::Read::read(&mut socket, &mut [0]).unwrap(), 0);
+    std::io::Write::write_all(&mut socket, b"reply").unwrap();
+    socket.shutdown(std::net::Shutdown::Write).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let response = call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        if response["result"]["dataBase64"] == "cmVwbHk=" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{response}");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    server.close_connection(owner);
 }

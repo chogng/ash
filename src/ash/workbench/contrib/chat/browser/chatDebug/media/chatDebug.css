@@ -188,3 +188,187 @@
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size40);
 }
+
+.ash-chat-debug-view-navigation {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	padding: 0 var(--ash-spacing-size120) var(--ash-spacing-size80);
+}
+.ash-chat-debug-home {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
+}
+.ash-chat-debug-home h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-chat-debug-home p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+}
+.ash-chat-debug-home-list {
+	flex: 1;
+	min-height: 0;
+}
+.ash-chat-debug-session-list {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-debug-flow,
+.ash-chat-debug-cache {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+}
+.ash-chat-debug-flow-host,
+.ash-chat-debug-cache-host {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+.ash-chat-debug-flow > .ash-chat-debug-view-navigation,
+.ash-chat-debug-cache > .ash-chat-debug-view-navigation {
+	padding: 0;
+}
+.ash-chat-debug-notice {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ash-chat-debug-flow-canvas {
+	position: relative;
+}
+.ash-chat-debug-flow-canvas svg {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+.ash-chat-debug-flow-canvas path {
+	fill: none;
+	stroke: var(--ash-foreground);
+	stroke-width: var(--ash-strokeThickness);
+}
+.ash-chat-debug-flow-node {
+	position: absolute;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+}
+.ash-chat-debug-cache-requests {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+.ash-chat-debug-request-pair {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size120);
+}
+.ash-chat-debug-request-pair section {
+	min-width: 0;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-medium);
+	padding: var(--ash-spacing-size80);
+}
+.ash-chat-debug-request-pair h3 {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-chat-debug-request-pair pre {
+	user-select: text;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--ash-font-family-monospace);
+}
+
+.ash-chat-debug-cache.narrow .ash-chat-debug-request-pair {
+	grid-template-columns: minmax(0, 1fr);
+}
+.ash-chat-debug-flow-canvas text {
+	fill: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-agent-trace .ash-chat-debug-wire {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-height: 0;
+	flex: 1;
+}
+
+.ash-agent-trace .ash-chat-debug-wire[hidden] {
+	display: none;
+}
+
+.ash-agent-trace .ash-chat-debug-wire-filter {
+	max-width: 480px;
+}
+
+.ash-agent-trace .ash-chat-debug-wire-host {
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-agent-trace .ash-chat-debug-wire-body {
+	display: grid;
+	grid-template-columns: minmax(200px, 2fr) minmax(0, 3fr);
+	gap: 12px;
+}
+
+.ash-agent-trace .ash-chat-debug-wire.narrow .ash-chat-debug-wire-body {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-agent-trace .ash-chat-debug-wire-rows {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	min-width: 0;
+}
+
+.ash-agent-trace .ash-chat-debug-wire-details {
+	min-width: 0;
+}
+
+.ash-agent-trace .ash-chat-debug-wire-details pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--ash-font-family-monospace);
+	font-size: var(--ash-fontSize-body2);
+	background: var(--ash-text-codeBlockBackground);
+	padding: 8px;
+}
+
+.ash-chat-debug-cache-diff {
+	min-width: 0;
+	height: 360px;
+}
+
+.ash-chat-debug-session-details {
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-debug-log-controls {
+	flex: 0 0 auto;
+	flex-wrap: nowrap;
+}

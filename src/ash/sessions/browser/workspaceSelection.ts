@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { observableValue } from '../../base/common/observable.js';
 import { localize } from '../../nls.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
-import { getRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../platform/remote/common/remote.js';
+import { getProviderRemoteWorkspace, getRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../platform/remote/common/remote.js';
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
 import type { SessionExecutionTarget, SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
@@ -20,13 +20,9 @@ export function selectionFromWorkspace(workspace: IWorkspace): SessionWorkspaceS
 
 function selectionFromResource(resource: URI): SessionExecutionTarget {
 	if (!isRemoteResource(resource)) return { type: 'local', root: resource.fsPath };
-	if (resource.authority.startsWith('provider+')) {
-		const source: unknown = JSON.parse(decodeURIComponent(resource.authority.slice('provider+'.length)));
-		if (!Array.isArray(source) || source.length !== 2 || source.some(value => typeof value !== 'string' || !value.length)) {
-			throw new TypeError('Invalid Session runtime authority');
-		}
-		return { type: 'provider', providerId: source[0] as string, workspace: source[1] as string, root: getRemoteWorkspacePath(resource) };
-	}
+	const runtime = getProviderRemoteWorkspace(resource);
+	if (runtime) return { type: 'provider', ...runtime, root: getRemoteWorkspacePath(resource) };
+	if (resource.authority.startsWith('wsl+') || resource.authority.startsWith('tunnel+')) return { type: 'remote', authority: resource.authority, root: getRemoteWorkspacePath(resource) };
 	const authority = getRemoteAuthority(resource);
 	if (!authority) throw new Error('Remote workspace has no SSH authority');
 	return { type: 'ssh', host: authority.host, root: getRemoteWorkspacePath(resource) };

@@ -17,6 +17,11 @@ import type { AppServerConnectionState } from '../../../../../platform/agentHost
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
 import { getSessionApplication } from '../../../../common/sessionApplication.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import type { URI } from '../../../../../base/common/uri.js';
+import type { ISessionCreateOptions } from '../../../../services/sessions/common/sessionsProvider.js';
+import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { devContainerSourcePath } from '../../remoteAgentHost/browser/devContainerSource.js';
 
 export interface AppServerSessionsProviderHost {
 	readonly id?: string;
@@ -60,6 +65,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IServerEventApi events: IServerEventApi,
 		@IRendererHostService private readonly rendererHost: IRendererHost,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IDevContainerAgentHostService private readonly containers: IDevContainerAgentHostService,
 	) {
 		super();
 		this.id = host.id ?? LOCAL_AGENT_HOST_PROVIDER_ID;
@@ -224,16 +230,38 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid()): Promise<IActiveSessionThread> {
+	private ownsSourceAuthority(authority: string): boolean {
+		const own = this.host.workspace();
+		if (own.type === 'current') return authority === 'local';
+		const sources = own.type === 'multiple' ? own.folders.map(folder => folder.target) : [own];
+		return sources.some(source => buildAgentHostSessionWorkspace(source)?.authorityId === authority);
+	}
+
+	public isDevContainerWorkspaceAvailable(workspaceUri: URI, token = CancellationToken.None): Promise<boolean> {
+		if (!this.ownsSourceAuthority(workspaceUri.scheme === 'file' ? 'local' : workspaceUri.authority)) return Promise.resolve(false);
+		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
+	}
+
+	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), options?: ISessionCreateOptions): Promise<IActiveSessionThread> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const executionTarget = workspace.type === 'multiple'
+		let executionTarget = workspace.type === 'multiple'
 			? await this.host.selectWorkspace(workspace.folders)
 			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
+		const token = options?.token ?? CancellationToken.None;
+		if (options?.devContainer) {
+			const source = executionTarget && buildAgentHostSessionWorkspace(executionTarget);
+			if (!executionTarget || executionTarget.type === 'provider' || !source || !this.ownsSourceAuthority(source.authorityId)) {
+				throw new Error(localize('sessions.devContainer.sourceRequired', 'Select a source workspace on this host before using a Dev Container.'));
+			}
+			executionTarget = await this.containers.connect(executionTarget.root, token);
+		}
+		if (token.isCancellationRequested) throw canceled();
 		if (!this.connectionReady) await this.initialConnectionState;
 		this.assertCurrentConnection(generation, epoch);
+		if (token.isCancellationRequested) throw canceled();
 		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {

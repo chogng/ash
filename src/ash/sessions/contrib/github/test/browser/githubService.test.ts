@@ -654,7 +654,7 @@ suite('sessionGitHub browser component', () => {
 		await attachIssue(page, 11);
 		const summary = page.locator('.ash-session-chat-input-issue-summary');
 		await expect(summary).toHaveAccessibleName('2 issues · 1 open · 1 closed · 0 unavailable');
-		await expect(summary.locator('[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+		await expect(summary.locator('[data-ash-icon-id="issues"]')).toHaveCount(1);
 		await page.reload();
 		await expect(summary).toHaveAccessibleName('2 issues · 1 open · 1 closed · 0 unavailable');
 		await summary.focus(); await page.keyboard.press('Enter');
@@ -664,7 +664,7 @@ suite('sessionGitHub browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toContain('https://github.com/team/one/issues/11');
 		await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'closed', 'completed'));
 		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 2 closed · 0 unavailable');
-		await expect(summary.locator('[data-ash-icon-id="issue-closed"]')).toHaveCount(1);
+		await expect(summary.locator('[data-ash-icon-id="issues"]')).toHaveCount(1);
 		await expect(issue).toBeFocused();
 		await expect(issue).toHaveAccessibleName(/Completed$/);
 		await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'closed', 'not_planned'));
@@ -672,11 +672,11 @@ suite('sessionGitHub browser component', () => {
 		await expect(summary.locator('span').first()).toHaveCSS('color', 'rgb(184, 184, 184)');
 		await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'future'));
 		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 1 closed · 1 unavailable');
-		await expect(issue.locator('[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+		await expect(issue.locator('[data-ash-icon-id="issues"]')).toHaveCount(1);
 		await expect(issue).toHaveAccessibleName(/Status unavailable$/);
 		await page.evaluate(() => window.ashSessionGitHub.setIssueState(11, 'unavailable'));
 		await expect(summary).toHaveAccessibleName('2 issues · 0 open · 1 closed · 1 unavailable');
-		await expect(summary.locator('[data-ash-icon-id="issue-opened"]')).toHaveCount(1);
+		await expect(summary.locator('[data-ash-icon-id="issues"]')).toHaveCount(1);
 		await expect(issue).toHaveAccessibleName(/Status unavailable$/);
 		await expect(issue).toBeFocused();
 		await page.keyboard.press('Escape'); await expect(summary).toBeFocused();

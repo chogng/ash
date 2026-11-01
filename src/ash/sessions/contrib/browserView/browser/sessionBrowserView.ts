@@ -6,14 +6,22 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import type { BrowserEditorInput } from '../../../../workbench/contrib/browserView/common/browserEditorInput.js';
 import { IBrowserViewWorkbenchService, type IBrowserViewFilterContext } from '../../../../workbench/contrib/browserView/common/browserView.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
+import type { AgentTreeNode, ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 type SessionReference = { readonly kind: 'session' | 'untitled'; readonly id: string; };
 
+/** Agent page owners can name a root Session, a Chat or any nested Agent Thread. */
+export function resolveBrowserOwnerSession(management: ISessionsManagementService, ownerId: string): ISession | undefined {
+	const contains = (nodes: readonly AgentTreeNode[]): boolean => nodes.some(node => node.threadId === ownerId || contains(node.children));
+	return management.sessions.find(session => session.sessionId === ownerId
+		|| session.chats.some(chat => chat.threadId === ownerId) || contains(session.agentTree ?? []));
+}
+
 /** Session policy for shared browser inputs. Main retains ownership of pages and access grants. */
 export class SessionBrowserViewController extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'workbench.contrib.sessionBrowserViewController';
+	private readonly openings = new Set<string>();
 	private readonly ownership = new Map<string, SessionReference>();
 	private readonly closing = new Map<string, Promise<void>>();
 	private readonly contextChanges = this._register(new Emitter<void>());
@@ -30,6 +38,16 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 			onDidChange: this.contextChanges.event,
 		}));
 		this._register(browsers.registerOpenHandler({
+			onWillCreateBrowserView: (owner, id, replaces) => {
+				if (owner.type === 'user') {
+					const reference = replaces ? this.owner(replaces) : this.reference(sessions.activeSelection);
+					if (reference) { this.ownership.set(id, reference); this.openings.add(id); }
+				}
+				return input => {
+					this.openings.delete(id);
+					if (!input) { this.ownership.delete(id); }
+				};
+			},
 			shouldOpenEditor: (input, owner) => {
 				this.reconcile();
 				// Agent pages discovered during catalog loading must not enter an unrelated working set.
@@ -63,14 +81,8 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 	}
 
 	private findSession(ownerId: string): SessionReference | undefined {
-		const session = this.management.sessions.find(candidate => candidate.sessionId === ownerId
-			|| candidate.chats.some(chat => chat.threadId === ownerId)
-			|| this.hasThread(candidate.agentTree ?? [], ownerId));
+		const session = resolveBrowserOwnerSession(this.management, ownerId);
 		return session ? { kind: 'session', id: session.sessionId } : undefined;
-	}
-
-	private hasThread(nodes: readonly AgentTreeNode[], threadId: string): boolean {
-		return nodes.some(node => node.threadId === threadId || this.hasThread(node.children, threadId));
 	}
 
 	private owner(input: BrowserEditorInput): SessionReference | undefined {
@@ -100,7 +112,7 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 		if (this.isDisposed) { return; }
 		const known = this.browsers.getKnownBrowserViews();
 		for (const id of this.ownership.keys()) {
-			if (!known.has(id)) { this.ownership.delete(id); }
+			if (!known.has(id) && !this.openings.has(id)) { this.ownership.delete(id); }
 		}
 		for (const input of known.values()) {
 			const owner = this.owner(input);
@@ -124,6 +136,7 @@ export class SessionBrowserViewController extends Disposable implements IWorkben
 
 	protected override disposeCore(): void {
 		// Window disposal detaches presentation; it does not archive sessions or destroy surviving Main pages.
+		this.openings.clear();
 		this.ownership.clear();
 		super.disposeCore();
 	}

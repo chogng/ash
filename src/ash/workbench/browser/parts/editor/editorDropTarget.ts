@@ -5,7 +5,9 @@ import { DndCssClasses } from '../../../../base/browser/ui/dnd/dnd.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { EditorGroupView } from './editorGroupView.js';
-import type { IEditorTabDragAndDrop } from './editorTabDragAndDrop.js';
+import { isEditorTabCopyRequested, type IEditorTabDragAndDrop } from './editorTabDragAndDrop.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Owns the editor area's drop feedback and routes a dropped tab to its group. */
 export class EditorDropTarget extends Disposable {
@@ -16,6 +18,7 @@ export class EditorDropTarget extends Disposable {
 		container: HTMLElement,
 		private readonly findGroup: (target: Node) => EditorGroupView | undefined,
 		private readonly dragAndDrop: IEditorTabDragAndDrop,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this._register(toDisposable(() => this.clearFeedback()));
@@ -35,16 +38,22 @@ export class EditorDropTarget extends Disposable {
 			this.clearFeedback();
 			return;
 		}
+		const operation = this.dragAndDrop.getGroupDropOperation(group, isEditorTabCopyRequested(event));
+		if (!operation) {
+			this.clearFeedback();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+			return;
+		}
 
 		if (this.activeGroup !== group) {
 			this.clearFeedback();
 			this.activeGroup = group;
 		}
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		this.splitDirection = dropSplitDirection(event, group.domNode.getBoundingClientRect());
+		this.splitDirection = dropSplitDirection(event, group, operation.wholeGroup, this.configurationService.getValue(EditorOpenSideBySideDirectionConfiguration));
+		if (event.dataTransfer) event.dataTransfer.dropEffect = operation.effect;
 		if (this.splitDirection !== undefined) group.domNode.dataset.editorDropDirection = Direction[this.splitDirection].toLowerCase();
 		else delete group.domNode.dataset.editorDropDirection;
-		group.domNode.classList.add(DndCssClasses.DropTarget);
+		group.domNode.querySelector('.ash-editor-drop-overlay')?.classList.toggle(DndCssClasses.DropTarget, this.splitDirection === undefined);
 	}
 
 	private onDrop(event: DragEvent): void {
@@ -57,9 +66,14 @@ export class EditorDropTarget extends Disposable {
 
 		event.preventDefault();
 		event.stopPropagation();
+		if (!this.dragAndDrop.getGroupDropOperation(group, isEditorTabCopyRequested(event))) {
+			this.clearFeedback();
+			this.dragAndDrop.end();
+			return;
+		}
 		const direction = group === this.activeGroup ? this.splitDirection : undefined;
 		this.clearFeedback();
-		this.dragAndDrop.drop(group, undefined, 'after', direction);
+		this.dragAndDrop.drop(group, undefined, 'after', direction, isEditorTabCopyRequested(event), 'content');
 	}
 
 	private isOverTitle(group: EditorGroupView, target: EventTarget | null): boolean {
@@ -69,21 +83,28 @@ export class EditorDropTarget extends Disposable {
 	private clearFeedback(): void {
 		if (this.activeGroup) {
 			delete this.activeGroup.domNode.dataset.editorDropDirection;
-			this.activeGroup.domNode.classList.remove(DndCssClasses.DropTarget);
+			this.activeGroup.domNode.querySelector('.ash-editor-drop-overlay')?.classList.remove(DndCssClasses.DropTarget);
 		}
 		this.activeGroup = undefined;
 		this.splitDirection = undefined;
 	}
 }
 
-function dropSplitDirection(event: DragEvent, bounds: DOMRect): Direction | undefined {
-	if (bounds.width <= 0 || bounds.height <= 0) return undefined;
-	const distances = [
-		{ direction: Direction.Left as const, distance: event.clientX - bounds.left, threshold: bounds.width * 0.25 },
-		{ direction: Direction.Right as const, distance: bounds.right - event.clientX, threshold: bounds.width * 0.25 },
-		{ direction: Direction.Up as const, distance: event.clientY - bounds.top, threshold: bounds.height * 0.25 },
-		{ direction: Direction.Down as const, distance: bounds.bottom - event.clientY, threshold: bounds.height * 0.25 },
-	].filter(candidate => candidate.distance >= 0 && candidate.distance <= candidate.threshold)
-		.sort((left, right) => left.distance - right.distance);
-	return distances[0]?.direction;
+function dropSplitDirection(event: DragEvent, group: EditorGroupView, wholeGroup: boolean, preferredDirection: 'right' | 'down'): Direction | undefined {
+	const bounds = group.domNode.getBoundingClientRect();
+	const scale = group.domNode.offsetHeight > 0 ? bounds.height / group.domNode.offsetHeight : 1;
+	const titleHeight = group.titleHeight.offset * scale;
+	const height = bounds.height - titleHeight;
+	if (bounds.width <= 0 || height <= 0) return undefined;
+	const x = (event.clientX - bounds.left) / bounds.width;
+	const y = (event.clientY - bounds.top - titleHeight) / height;
+	if (x < 0 || x > 1 || y < 0 || y > 1) return undefined;
+	// The preferred split axis wins at corners and has a wider entry zone for groups.
+	const vertical = preferredDirection === 'down';
+	const primary = vertical ? y : x;
+	const secondary = vertical ? x : y;
+	const edge = wholeGroup ? 0.3 : 0.1;
+	if (primary > edge && primary < 1 - edge && secondary > 0.1 && secondary < 0.9) return undefined;
+	const directions = vertical ? [Direction.Up, Direction.Down, Direction.Left, Direction.Right] : [Direction.Left, Direction.Right, Direction.Up, Direction.Down];
+	return primary < 1 / 3 ? directions[0] : primary > 2 / 3 ? directions[1] : directions[secondary < 0.5 ? 2 : 3];
 }

@@ -1,4 +1,5 @@
 import { raceCancellationError } from '../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -6,7 +7,7 @@ import { createUuid } from '../../../../base/common/uuid.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from '../common/session.js';
 import type { ISessionsManagementService, SessionsManagementState } from '../common/sessionsManagement.js';
-import type { ISessionsProvider } from '../common/sessionsProvider.js';
+import type { ISessionCreateOptions, ISessionsProvider } from '../common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
@@ -26,7 +27,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private selectionRevision = 0;
 	private pendingCreations = 0;
 	// A draft keeps its creation result until graduation, including retries after first-send failure.
-	private readonly materializations = new Map<string, Promise<IActiveSessionThread>>();
+	private readonly materializations = new Map<string, {
+		readonly promise: Promise<IActiveSessionThread>;
+		readonly cancellation: CancellationTokenSource;
+		waiters: number;
+		settled: boolean;
+	}>();
 	private readonly pendingRefreshes = new Set<SessionId>();
 	private readonly pendingDetailRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
@@ -40,6 +46,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	constructor(private readonly provider: ISessionsProvider, @ISessionsProvidersService private readonly providers: ISessionsProvidersService) {
 		super();
 		this._register(provider);
+		this._register(toDisposable(() => {
+			for (const entry of this.materializations.values()) entry.cancellation.dispose(true);
+			this.materializations.clear();
+		}));
 		for (const entry of this.availableProviders()) this.observeProvider(entry);
 		this._register(providers.onDidChangeProviders(({ added, removed }) => {
 			for (const entry of removed) {
@@ -199,14 +209,16 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string): IUntitledChatSession {
+	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
-		this.selectionRevision++;
 		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
 		this._untitledSessions = [session, ...this._untitledSessions];
-		this._activeUntitledSessionId = session.untitledSessionId;
-		this._error = undefined;
+		if (activate) {
+			this.selectionRevision++;
+			this._activeUntitledSessionId = session.untitledSessionId;
+			this._error = undefined;
+		}
 		this._onDidChange.fire();
 		return session;
 	}
@@ -228,6 +240,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	discardUntitledSession(untitledSessionId: string): void {
 		const sessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (sessions.length === this._untitledSessions.length) return;
+		this.materializations.get(untitledSessionId)?.cancellation.cancel();
+		this.materializations.delete(untitledSessionId);
 		this._untitledSessions = sessions;
 		if (this._activeUntitledSessionId === untitledSessionId) {
 			this.selectionRevision++;
@@ -260,23 +274,49 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread> {
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection, options?: { readonly devContainer: boolean; }): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		// Once creation starts, its command identity and execution directory are immutable.
+		if (this.materializations.has(untitledSessionId)) throw new Error(localize('sessions.workspace.preparing', 'Wait for session preparation to finish before changing its workspace.'));
+		this._untitledSessions = this._untitledSessions.map(session => session === current
+			? { ...session, workspace, devContainer: options?.devContainer === true } : session);
+		this._onDidChange.fire();
+	}
+
+	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread> {
+		if (this.isDisposed || signal?.aborted) throw canceled();
 		const materialized = this.materializedSessions.get().get(untitledSessionId);
 		if (materialized) {
 			const session = this._sessions.find(candidate => candidate.sessionId === materialized.sessionId && candidate.status === 'active');
 			const active = session && activeThread(session, materialized.threadId);
 			return active ? Promise.resolve(active) : Promise.reject(new Error(`Active Session Thread is not available: ${materialized.threadId}`));
 		}
-		const pending = this.materializations.get(untitledSessionId);
-		if (pending) return pending;
-		const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
-		if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
-		const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId));
-		this.materializations.set(untitledSessionId, creating);
-		void creating.catch(() => {
-			if (this.materializations.get(untitledSessionId) === creating) this.materializations.delete(untitledSessionId);
-		});
-		return creating;
+		let entry = this.materializations.get(untitledSessionId);
+		if (!entry) {
+			const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
+			if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
+			const cancellation = new CancellationTokenSource();
+			const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId, { token: cancellation.token, devContainer: session.devContainer }));
+			entry = { promise: creating, cancellation, waiters: 0, settled: false };
+			this.materializations.set(untitledSessionId, entry);
+			const owned = entry;
+			void creating.then(() => { owned.settled = true; cancellation.dispose(); }, () => {
+				owned.settled = true;
+				cancellation.dispose();
+				if (this.materializations.get(untitledSessionId) === owned) this.materializations.delete(untitledSessionId);
+			});
+		}
+		entry.waiters++;
+		try {
+			return await (signal ? raceCancellationError(entry.promise, signal) : entry.promise);
+		} finally {
+			entry.waiters--;
+			if (!entry.settled && entry.waiters === 0) {
+				entry.cancellation.cancel();
+				if (this.materializations.get(untitledSessionId) === entry) this.materializations.delete(untitledSessionId);
+			}
+		}
 	}
 
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
@@ -289,6 +329,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (wasActive || !this._active && !this.activeUntitledSession) this._active = active;
 		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
+	}
+
+	public cancelUntitledSessionPreparation(untitledSessionId: string): void {
+		this.materializations.get(untitledSessionId)?.cancellation.cancel();
 	}
 
 	async ensureActiveThread(): Promise<IActiveSessionThread> {
@@ -371,12 +415,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	private async createSession(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), providerId?: string): Promise<IActiveSessionThread> {
+	private async createSession(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), providerId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread> {
 		this.pendingCreations++;
 		this.setState('creating');
 		try {
 			const provider = this.creationProvider(workspace, providerId);
-			const created = await provider.create(title, workspace, agent, creationId);
+			const created = await provider.create(title, workspace, agent, creationId, options);
 			if (this.creationProvider(undefined, provider.id) !== provider) throw canceled();
 			const active = { session: this.project(created.session, provider), threadId: threadIdentity(provider.id, created.threadId, this.provider.id) };
 			if (this.isDisposed) throw canceled();

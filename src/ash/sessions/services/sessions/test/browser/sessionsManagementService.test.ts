@@ -1,9 +1,11 @@
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as BackendSession } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -14,8 +16,135 @@ import { createDisconnectedRendererApi } from '../../../../../workbench/browser/
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import { AppServerSessionsProvider } from '../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from '../../common/session.js';
+import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+
+type SessionDto = Omit<BackendSession, 'executionTarget'> & Pick<import('../../../../../platform/agentHost/common/agent.js').AgentSession, 'executionTarget'>;
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('container selection does not interpret a remote source URI as a local host directory', async () => {
+	const fake = sessionHost([]);
+	let probes = 0;
+	fake.host.session.invokeRuntime = async () => { probes++; return { type: 'availability', available: true }; };
+	using scope = new InstantiationService();
+	scope.registerInstance(IAgentSessionService, fake.host.session);
+	using containers = scope.createInstance(DevContainerAgentHostService);
+	using provider = createProvider(fake, undefined, containers);
+	assert.equal(await provider.isDevContainerWorkspaceAvailable(createSshRemoteWorkspaceUri('build-host', '/source')), false);
+	assert.equal(probes, 0);
+});
+
+for (const source of [{ type: 'ssh' as const, host: 'build-host', root: '/source' }, { type: 'remote' as const, authority: 'wsl+5562756e7475', root: '/source' }]) {
+	test(`container preparation borrows only its source host for ${source.type}`, async () => {
+		const fake = sessionHost([], undefined, () => source);
+		const operations: unknown[] = [];
+		const authority = source.type === 'ssh' ? 'ssh+build-host' : source.authority;
+		const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: '/source', root: '/workspace', hostAuthority: authority };
+		fake.host.session.invokeRuntime = async (_provider, request) => { operations.push(request); return request.operation === 'probe' ? { type: 'availability', available: true } : { type: 'target', target }; };
+		fake.host.session.create = async params => {
+			operations.push(params.executionTarget);
+			const created = { ...session('remote-container', 'root'), executionTarget: target };
+			fake.sessions.push(created);
+			return { session: created, agentTree: { roots: [] } };
+		};
+		using scope = new InstantiationService();
+		scope.registerInstance(IAgentSessionService, fake.host.session);
+		using containers = scope.createInstance(DevContainerAgentHostService);
+		using provider = createProvider(fake, undefined, containers);
+		assert.equal(await provider.isDevContainerWorkspaceAvailable(URI.from({ scheme: 'ash-remote', authority, path: '/source' })), true);
+		assert.equal(await provider.isDevContainerWorkspaceAvailable(URI.file('/source')), false);
+		const options = { devContainer: true, token: CancellationToken.None };
+		await assert.rejects(provider.create('Foreign', { type: 'local', root: '/source' }, undefined, 'foreign', options), /on this host/);
+		await provider.create('Owned', source, undefined, 'owned', options);
+		assert.deepEqual(operations, [{ operation: 'probe', workspace: '/source' }, { operation: 'prepare', workspace: '/source' }, target]);
+	});
+}
+
+test('a container draft prepares only on materialization and creates on the returned runtime target', async () => {
+	const fake = sessionHost([]);
+	const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: '/source', root: '/workspace' };
+	const operations: unknown[] = [];
+	fake.host.session.invokeRuntime = async (providerId, request) => {
+		operations.push({ providerId, request });
+		return { type: 'target', target };
+	};
+	fake.host.session.create = async params => {
+		operations.push(params.executionTarget);
+		const created = session('container-session', 'container-root');
+		fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	using scope = new InstantiationService();
+	scope.registerInstance(IAgentSessionService, fake.host.session);
+	using containers = scope.createInstance(DevContainerAgentHostService);
+	using management = createManagement(fake, containers);
+	const draft = management.createUntitledSession('Container draft', { type: 'local', root: '/source' });
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { devContainer: true });
+	assert.deepEqual(operations, []);
+	const [first, shared] = await Promise.all([
+		management.materializeUntitledSession(draft.untitledSessionId),
+		management.materializeUntitledSession(draft.untitledSessionId),
+	]);
+	assert.equal(first.session.sessionId, 'container-session');
+	assert.equal(first, shared);
+	assert.deepEqual(operations, [
+		{ providerId: 'ash.dev-containers', request: { operation: 'prepare', workspace: '/source' } }, target,
+	]);
+	assert.equal(management.untitledSessions[0]?.devContainer, true);
+});
+
+test('cancelling container materialization preserves its draft and never creates on the source host', async () => {
+	const fake = sessionHost([]);
+	const entered = new DeferredPromise<void>();
+	const reply = new DeferredPromise<import('../../../../../platform/agentHost/common/agent.js').SessionRuntimeResult>();
+	let signal: AbortSignal | undefined;
+	let creates = 0;
+	fake.host.session.invokeRuntime = (_provider, _request, cancellation) => {
+		signal = cancellation; void entered.complete(); return reply.p;
+	};
+	fake.host.session.create = async () => { creates++; throw new Error('Creation must not run after cancellation'); };
+	using scope = new InstantiationService();
+	scope.registerInstance(IAgentSessionService, fake.host.session);
+	using containers = scope.createInstance(DevContainerAgentHostService);
+	using management = createManagement(fake, containers);
+	const draft = management.createUntitledSession('Keep me', { type: 'local', root: '/source' });
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { devContainer: true });
+	const cancellation = new AbortController();
+	const pending = management.materializeUntitledSession(draft.untitledSessionId, cancellation.signal);
+	const rejected = assert.rejects(pending, isCancellationError);
+	await entered.p;
+	cancellation.abort();
+	await rejected;
+	await waitFor(() => signal?.aborted === true);
+	await reply.complete({ type: 'target', target: { type: 'provider', providerId: 'ash.dev-containers', workspace: '/source', root: '/workspace' } });
+	assert.equal(creates, 0);
+	assert.equal(management.untitledSessions[0]?.untitledSessionId, draft.untitledSessionId);
+	assert.equal(management.untitledSessions[0]?.devContainer, true);
+	assert.equal(management.materializedSessions.get().size, 0);
+});
+
+test('failed container preparation can retry with the same draft without a host fallback', async () => {
+	const fake = sessionHost([]);
+	let attempts = 0;
+	let creates = 0;
+	fake.host.session.invokeRuntime = async () => {
+		attempts++;
+		throw new Error('Container build failed');
+	};
+	fake.host.session.create = async () => { creates++; throw new Error('Unexpected source-host creation'); };
+	using scope = new InstantiationService();
+	scope.registerInstance(IAgentSessionService, fake.host.session);
+	using containers = scope.createInstance(DevContainerAgentHostService);
+	using management = createManagement(fake, containers);
+	const draft = management.createUntitledSession('Retry me', { type: 'local', root: '/source' });
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { devContainer: true });
+	for (let attempt = 0; attempt < 2; attempt++) {
+		await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), /Container build failed/);
+	}
+	assert.deepEqual({ attempts, creates, drafts: management.untitledSessions.length }, { attempts: 2, creates: 0, drafts: 1 });
+});
 
 test('the App Server provider requires the window connection service when created', () => {
 	const fake = sessionHost([]);
@@ -23,7 +152,7 @@ test('the App Server provider requires the window connection service when create
 	assert.throws(() => services.createInstance(AppServerSessionsProvider, fake.host), /AppServerApi/);
 });
 
-for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IServerEventApi]) {
+for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IServerEventApi, IDevContainerAgentHostService]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
 		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -461,7 +590,7 @@ test('a failed catalog restoration retries on the next ready connection', async 
 	assert.equal(service.error, undefined);
 });
 
-function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown): AppServerSessionsProvider {
+function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService): AppServerSessionsProvider {
 	using services = new InstantiationService();
 	services.registerInstance(IRendererHostService, fake.host as unknown as IRendererHost);
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
@@ -469,12 +598,41 @@ function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown)
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }
 	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, fake.host.turn); }
 	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, fake.host.events); }
+	if (omitted !== IDevContainerAgentHostService) {
+		services.registerInstance(IDevContainerAgentHostService, containers ?? {
+			_serviceBrand: undefined,
+			isAvailable: async () => false,
+			connect: async () => { throw new Error('Unexpected container preparation'); },
+			getTargets: async () => [], stopContainer: async () => { }, removeContainer: async () => { },
+		} as IDevContainerAgentHostService);
+	}
 	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace });
 }
 
-function createManagement(fake: ReturnType<typeof sessionHost>): SessionsManagementService {
-	return new SessionsManagementService(createProvider(fake));
+function createManagement(fake: ReturnType<typeof sessionHost>, containers?: IDevContainerAgentHostService): SessionsManagementService {
+	return new SessionsManagementService(createProvider(fake, undefined, containers));
 }
+
+test('background Quick Chat drafts preserve foreground navigation through materialization', async () => {
+	const fake = sessionHost([session('existing', 'root')]);
+	fake.host.session.create = async () => {
+		const created = session('quick', 'quick-root');
+		fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	using management = createManagement(fake);
+	await management.initialize();
+	const active = management.active;
+	const revision = management.navigationRevision;
+	const quick = management.createUntitledSession('Quick Chat', undefined, undefined, false);
+	assert.equal(management.active, active);
+	assert.equal(management.activeUntitledSession, undefined);
+	assert.equal(management.navigationRevision, revision);
+	const materialized = await management.materializeUntitledSession(quick.untitledSessionId);
+	assert.equal(management.active?.session.sessionId, active?.session.sessionId);
+	assert.equal(management.navigationRevision, revision);
+	assert.notEqual(materialized.session.sessionId, active?.session.sessionId);
+});
 
 test('connection transitions keep the catalog unavailable until provider reload completes', async () => {
 	const fake = sessionHost([session('one', 'thread')]);
@@ -949,6 +1107,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	const turn: IAgentTurnService = {
 		enqueue: async () => { throw new Error('Queue is unavailable in this fixture'); },
 		listQueued: async () => ({ messages: [] }),
+		editQueued: async () => { throw new Error('Not used'); },
+		cancelQueued: async () => { throw new Error('Not used'); },
 		async consultAdvisor() { throw new Error('Not used'); },
 		async start() { throw new Error('Not used'); },
 		async startReview() { throw new Error('Not used'); },

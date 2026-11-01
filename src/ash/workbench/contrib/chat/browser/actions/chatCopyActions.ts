@@ -1,37 +1,17 @@
-import { canceled } from '../../../../../base/common/errors.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { buildOpenSessionLinkUri, OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
+import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import { IChatService } from '../../../../services/chat/common/chatService.js';
-import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatService, type ThreadRead } from '../../../../services/chat/common/chatService.js';
+import { IChatSessionNavigationService, withChatConversation } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { IChatWidgetService } from '../chat.js';
 
 // Single-host owners retain the established local address namespace.
 const connectionAuthority = 'local';
-
-async function withConversation(chat: IChatService, appServer: IAppServerApi, sessionId: string, threadId: string, operation: () => Promise<void>): Promise<void> {
-	const generation = appServer.connectionGeneration;
-	let retired = false;
-	// Close can retire a resolved response before its consumer runs without changing generation.
-	const listener = appServer.onConnectionState(state => { if (state !== 'ready') retired = true; });
-	try {
-		const result = await chat.readThread(sessionId, threadId);
-		const state = await appServer.getConnectionState();
-		if (retired || generation !== appServer.connectionGeneration || state !== 'ready') throw canceled();
-		if (result.thread.sessionId !== sessionId || result.thread.threadId !== threadId) {
-			throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
-		}
-		await operation();
-	} finally {
-		listener.dispose();
-	}
-}
 
 export class CopyChatSessionLinkAction extends Action2 {
 	constructor() {
@@ -59,48 +39,83 @@ export class CopyChatSessionLinkAction extends Action2 {
 			const address = await navigation.prepareConversationLink(sessionId, threadId);
 			await clipboard.writeText(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString());
 		} else {
-			await withConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId,
+			await withChatConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId,
 				() => clipboard.writeText(buildOpenSessionLinkUri(sessionId, threadId, connectionAuthority).toString()));
 		}
 		accessibility.status(localize('chat.sessionLink.copied', 'Conversation link copied to clipboard'));
 	}
 }
 
-/** Opens conversation links inside the current owner instead of sending them to the OS. */
-export class ChatSessionLinkOpener extends Disposable {
-	constructor(
-		@IOpenerService opener: IOpenerService,
-		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
-		@IChatService private readonly chat: IChatService,
-		@IAppServerApi private readonly appServer: IAppServerApi,
-	) {
-		super();
-		this._register(opener.registerOpener({ open: target => this.open(target) }));
-	}
-
-	private async open(target: URI | string): Promise<boolean> {
-		const resource = typeof target === 'string' ? URI.parse(target) : target;
-		if (resource.scheme !== OPEN_SESSION_LINK_SCHEME) return false;
-		let link;
-		try { link = parseOpenSessionLinkUri(resource); }
-		catch { throw new Error(localize('chat.sessionLink.invalid', 'This conversation link is invalid.')); }
-		if (this.navigation.openConversationLink) {
-			await this.navigation.openConversationLink(link);
-			if (this.isDisposed) throw canceled();
-			return true;
-		}
-		if (link.connectionAuthority !== connectionAuthority) {
-			throw new Error(localize('chat.sessionLink.connection', 'The connection for this conversation link is unavailable.'));
-		}
-		await withConversation(this.chat, this.appServer, link.sessionId, link.threadId, async () => {
-			if (this.isDisposed) throw canceled();
-			await this.navigation.openConversation(link.sessionId, link.threadId);
-		});
-		return true;
-	}
-}
-
 export function registerChatCopyActions(): void {
+	for (const finalResponse of [false, true]) {
+		registerAction2(class CopyAllAction extends Action2 {
+			constructor() {
+				super({
+					id: finalResponse ? 'workbench.action.chat.copyFinalResponse' : 'workbench.action.chat.copyAll',
+					title: finalResponse ? localize2('chat.copyFinalResponse', 'Chat: Copy Final Response') : localize2('chat.copyAll', 'Chat: Copy Conversation'),
+					precondition: ChatContextKeys.enabled.isEqualTo(true),
+					f1: true,
+				});
+			}
+
+			public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+				const navigation = accessor.get(IChatSessionNavigationService);
+				const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+				const selected = context === undefined ? widget ?? navigation.getActiveConversation() : context;
+				if (!selected || typeof selected !== 'object' || !('sessionId' in selected) || !('threadId' in selected)
+					|| typeof selected.sessionId !== 'string' || !selected.sessionId || typeof selected.threadId !== 'string' || !selected.threadId) {
+					return;
+				}
+				const { sessionId, threadId } = selected;
+				const chat = accessor.get(IChatService);
+				const clipboard = accessor.get(IClipboardService);
+				const accessibility = accessor.get(IAccessibilityService);
+				const copy = async (conversation: ThreadRead): Promise<void> => {
+					// Read the owning transcript, including history outside the mounted list.
+					const messages: string[] = [];
+					for (const entry of conversation.transcript.entries) {
+						if (finalResponse && !(entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && (entry.item.phase == null || entry.item.phase === 'final_answer')
+							|| entry.type === 'voiceTranscript' && entry.transcript.speaker !== 'user')) { continue; }
+						let speaker: string;
+						let text: string;
+						if (entry.type === 'item' && (entry.item.type === 'userMessage' || entry.item.type === 'agentMessage')) {
+							speaker = entry.item.type === 'userMessage' ? localize('chat.copyAll.user', 'User') : localize('chat.copyAll.assistant', 'Assistant');
+							text = entry.item.text;
+						} else if (entry.type === 'voiceTranscript') {
+							speaker = entry.transcript.speaker === 'user' ? localize('chat.copyAll.user', 'User') : localize('chat.copyAll.assistant', 'Assistant');
+							text = entry.transcript.text;
+						} else {
+							continue;
+						}
+						if (text) {
+							if (finalResponse) { messages.splice(0, messages.length, text); }
+							else { messages.push(`${speaker}: ${text}`); }
+						}
+					}
+					if (messages.length) {
+						await clipboard.writeText(messages.join('\n\n'));
+						accessibility.status(finalResponse ? localize('chat.copyFinalResponse.copied', 'Final response copied to clipboard') : localize('chat.copyAll.copied', 'Conversation copied to clipboard'));
+					}
+				};
+				const connection = navigation.captureConnection?.(sessionId);
+				try {
+					if (connection) {
+						await connection.assertCurrent();
+						const conversation = await chat.readThread(sessionId, threadId);
+						await connection.assertCurrent();
+						await copy(conversation);
+					} else {
+						const appServer = accessor.get(IAppServerApi);
+						await withChatConversation(chat, appServer, sessionId, threadId, copy);
+					}
+				} finally {
+					connection?.dispose();
+				}
+			}
+		});
+
+	}
+
 	registerAction2(class CopyItemAction extends Action2 {
 		constructor() { super({ id: 'workbench.action.chat.copyItem', title: localize2('chat.message.copy', 'Copy message') }); }
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {

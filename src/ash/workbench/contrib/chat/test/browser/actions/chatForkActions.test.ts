@@ -1,6 +1,6 @@
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suiteTeardown, test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { MenuId, MenusRegistry, registerAction2 } from '../../../../../../platform/actions/common/actions.js';
@@ -10,10 +10,11 @@ import { CommandsRegistry } from '../../../../../../platform/commands/common/com
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IChatService } from '../../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
-import { registerChatActions } from '../../../browser/actions/chatActions.js';
+import { registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
 import { ForkConversationAction, ForkConversationActionId } from '../../../browser/actions/chatForkActions.js';
 
-registerChatActions();
+const executeActions = registerChatExecuteActions();
+suiteTeardown(() => executeActions.dispose());
 
 test('New Chat in Session is removed and Fork stays in the Command Palette rather than the title menu', () => {
 	using resources = new DisposableStore();

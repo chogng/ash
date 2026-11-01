@@ -8,6 +8,8 @@ export interface SettingsGroupDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
+	/** An explicit extension owner allows its settings to appear in the relevant product surface. */
+	readonly source?: string;
 	readonly settings: readonly string[];
 }
 
@@ -42,73 +44,6 @@ export interface SettingsLayoutCategory {
  * Registry. Preferences owns only where those registered settings appear.
  */
 export const SettingsNavigation = [
-	{
-		id: 'general',
-		label: localize({ bundle: 'ash.settings', key: 'groups.general.label' }, 'General'),
-		description: localize({ bundle: 'ash.settings', key: 'groups.general.description' }, 'Configure core application behavior.'),
-		categories: [
-			{
-				id: 'general',
-				label: localize({ bundle: 'ash.settings', key: 'categories.general.label' }, 'Application'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.general.description' }, 'Configure core application behavior.'),
-				presentation: 'general',
-				groups: [
-					{
-						id: 'display-language',
-						label: localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'),
-						description: localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'),
-						settings: ['workbench.locale'],
-					},
-					{
-						id: 'updates',
-						label: localize('update.settingsGroup', 'Updates'),
-						description: localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'),
-						settings: ['update.policy', 'network.meteredConnection'],
-					},
-					{
-						id: 'interaction',
-						label: 'Interaction',
-						description: 'Tune hover feedback and resize handles.',
-						settings: [
-							'workbench.hover.*',
-							'workbench.sash.*',
-							'workbench.commandPalette.history',
-							'onboarding.enabled',
-							'output.smartScroll.enabled',
-							'chat.disableAIFeatures',
-							'sessions.automations.notifyOnSuccess',
-							'task.allowAutomaticTasks',
-							'extensions.ignoreRecommendations',
-							'extensions.showRecommendationsOnlyOnDemand',
-						],
-					},
-				],
-			},
-			{
-				id: 'github',
-				label: localize({ bundle: 'ash.settings', key: 'categories.github.label' }, 'GitHub'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect accounts and manage Codex pull request reviews.'),
-				keywords: ['Codex', 'PR', 'review', 'Connector'],
-				presentation: 'general',
-				groups: [
-					{
-						id: 'repository',
-						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
-						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
-						settings: ['github.gitProtocol', 'github.branchProtection'],
-					},
-				],
-			},
-			{
-				id: 'network',
-				label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
-				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
-				presentation: 'general',
-				groups: [],
-			},
-		],
-	},
 	{
 		id: 'workbench',
 		label: localize({ bundle: 'ash.settings', key: 'groups.workbench.label' }, 'Workbench'),
@@ -513,6 +448,20 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'media-preview',
+				label: localize({ bundle: 'ash.settings', key: 'categories.media-preview.label' }, 'Media Preview'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.media-preview.description' }, 'Configure image zoom and media playback.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'media-preview',
+						label: localize({ bundle: 'ash.settings', key: 'categories.media-preview.label' }, 'Media Preview'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.media-preview.description' }, 'Configure image zoom and media playback.'),
+						settings: ['mediaPreview.*'],
+					},
+				],
+			},
+			{
 				id: 'explorer',
 				label: localize({ bundle: 'ash.settings', key: 'categories.explorer.label' }, 'Explorer'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.explorer.description' }, 'Configure file nesting and automatic file reveal.'),
@@ -559,6 +508,50 @@ export const SettingsNavigation = [
 							'scm.graph.showOutgoingChanges',
 						],
 					},
+					{
+						id: 'git-changes',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitChanges.label' }, 'Git changes'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitChanges.description' }, 'Configure Git file status, change groups, counts, and progress.'),
+						source: 'ash.git',
+						settings: ['git.decorations.enabled', 'git.untrackedChanges', 'git.countBadge', 'git.alwaysShowStagedChangesResourceGroup', 'git.showProgress', 'git.optimisticUpdate'],
+					},
+					{
+						id: 'git-controls',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitControls.label' }, 'Git controls'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitControls.description' }, 'Choose Git actions, commit input, and what opens when selecting a changed file.'),
+						source: 'ash.git',
+						settings: ['git.openDiffOnClick', 'git.showInlineOpenFileAction', 'git.enableStatusBarSync', 'git.showCommitInput', 'git.showActionButton'],
+					},
+					{
+						id: 'git-history',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitHistory.label' }, 'Git history and authorship'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitHistory.description' }, 'Configure Git history, file timelines, and line authorship in the editor and status bar.'),
+						source: 'ash.git',
+						settings: ['git.commitShortHashLength', 'git.blame.*', 'git.timeline.*'],
+					},
+				],
+			},
+			{
+				id: 'extensions',
+				label: localize({ bundle: 'ash.settings', key: 'categories.extensions.label' }, 'Extensions'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.extensions.description' }, 'Configure extension management and recommendations.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'extensions',
+						label: localize({ bundle: 'ash.settings', key: 'categories.extensions.label' }, 'Extensions'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.extensions.description' }, 'Configure extension management and recommendations.'),
+						settings: ['extensions.*'],
+					},
+					{
+						id: 'customization-discovery',
+						label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
+						description: localize(
+							{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
+							'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
+						),
+						settings: ['chat.customizations.marketplace.enabled'],
+					},
 				],
 			},
 			{
@@ -593,15 +586,89 @@ export const SettingsNavigation = [
 		],
 	},
 	{
+		id: 'application',
+		label: localize({ bundle: 'ash.settings', key: 'groups.application.label' }, 'Application'),
+		description: localize({ bundle: 'ash.settings', key: 'groups.application.description' }, 'Configure core application behavior.'),
+		categories: [
+			{
+				id: 'display-language',
+				label: localize({ bundle: 'ash.settings', key: 'categories.display-language.label' }, 'Display Language'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.display-language.description' }, 'Choose the language used by the Ash interface.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'display-language',
+						label: localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'),
+						description: localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'),
+						settings: ['workbench.locale'],
+					},
+				],
+			},
+			{
+				id: 'updates',
+				label: localize({ bundle: 'ash.settings', key: 'categories.updates.label' }, 'Updates'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.updates.description' }, 'Choose how Ash checks for updates and synchronizes language packs.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'updates',
+						label: localize('update.settingsGroup', 'Updates'),
+						description: localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'),
+						settings: ['update.policy', 'network.meteredConnection'],
+					},
+				],
+			},
+			{
+				id: 'network',
+				label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
+				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'interaction',
+				label: localize({ bundle: 'ash.settings', key: 'categories.interaction.label' }, 'Interaction'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.interaction.description' }, 'Tune hover feedback and resize handles.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'interaction',
+						label: localize({ bundle: 'ash.settings', key: 'categories.interaction.label' }, 'Interaction'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.interaction.description' }, 'Tune hover feedback and resize handles.'),
+						settings: [
+							'workbench.hover.*',
+							'workbench.sash.*',
+							'workbench.commandPalette.history',
+							'onboarding.enabled',
+							'output.smartScroll.enabled',
+							'chat.disableAIFeatures',
+							'sessions.automations.notifyOnSuccess',
+							'task.allowAutomaticTasks',
+						],
+					},
+				],
+			},
+		],
+	},
+	{
 		id: 'agents',
 		label: localize({ bundle: 'ash.settings', key: 'groups.agents.label' }, 'Chat'),
 		description: localize({ bundle: 'ash.settings', key: 'groups.agents.description' }, 'Configure chats, agents, models, and shared capabilities.'),
 		categories: [
 			{
-				id: 'chat-input',
-				label: localize({ bundle: 'ash.settings', key: 'categories.chat-input.label' }, 'Message input'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.chat-input.description' }, 'Set the font and spacing for messages you type.'),
-				keywords: ['chat input', 'prompt', 'font', 'typography'],
+				id: 'chat-usage',
+				label: localize('chat.usage.title', 'Usage'),
+				description: localize('chat.usage.description', 'Inspect the current chat’s context estimate and accumulated token usage.'),
+				keywords: ['context', 'tokens', 'usage', 'budget'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'chat-appearance',
+				label: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.label' }, 'Appearance'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.description' }, 'Customize the message input and code blocks in replies.'),
+				keywords: ['chat input', 'prompt', 'chat code', 'font', 'typography', 'word wrap'],
 				presentation: 'general',
 				groups: [
 					{
@@ -610,15 +677,6 @@ export const SettingsNavigation = [
 						description: localize('settings.chatInput.description', 'Choose a font, text size, and line spacing for the message input.'),
 						settings: ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight'],
 					},
-				],
-			},
-			{
-				id: 'chat-code-blocks',
-				label: localize({ bundle: 'ash.settings', key: 'categories.chat-code-blocks.label' }, 'Code blocks'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.chat-code-blocks.description' }, 'Set the font, spacing, and word wrap for code blocks in replies.'),
-				keywords: ['chat code', 'font', 'typography', 'word wrap'],
-				presentation: 'general',
-				groups: [
 					{
 						id: 'chat-code-blocks',
 						label: localize('settings.chatCodeBlocks.label', 'Code blocks'),
@@ -656,15 +714,7 @@ export const SettingsNavigation = [
 						description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
 						settings: ['chat.editing.autoAcceptDelay', 'chat.canvases.enabled'],
 					},
-					{
-						id: 'customization-discovery',
-						label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
-						description: localize(
-							{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
-							'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
-						),
-						settings: ['chat.customizations.marketplace.enabled'],
-					},
+
 				],
 			},
 			{
@@ -716,13 +766,35 @@ export const SettingsNavigation = [
 			},
 		],
 	},
+	{
+		id: 'extensions',
+		label: localize({ bundle: 'ash.settings', key: 'groups.extensions.label' }, 'Extensions'),
+		description: localize({ bundle: 'ash.settings', key: 'groups.extensions.description' }, 'Configure installed extensions.'),
+		categories: [
+			{
+				id: 'github',
+				label: localize({ bundle: 'ash.settings', key: 'categories.github.label' }, 'GitHub'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect GitHub accounts and manage Codex PR cloud reviews.'),
+				keywords: ['Codex', 'PR', 'review', 'Connector'],
+				presentation: 'general',
+				groups: [
+					{
+						id: 'repository',
+						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
+						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
+						settings: ['github.gitProtocol', 'github.branchProtection'],
+					},
+				],
+			},
+		],
+	},
 ] as const satisfies readonly SettingsNavigationDescriptor[];
 
 export const SettingsCategories: readonly SettingsCategoryDescriptor[] = SettingsNavigation.flatMap<SettingsCategoryDescriptor>(entry => ('categories' in entry ? entry.categories : [entry]));
 
 /** Projects registered configuration settings through the canonical layout. */
 export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
-	const remaining = new Map(settings.filter(setting => !setting.configuration.source).map(setting => [setting.id, setting]));
+	const remaining = new Map(settings.map(setting => [setting.id, setting]));
 	const categories: SettingsLayoutCategory[] = SettingsCategories.map(category => ({
 		descriptor: category,
 		id: category.id,
@@ -730,7 +802,7 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.map(group => {
 				// Each group applies the same rules to every remaining setting.
 				const patterns = group.settings.map(settingIdPattern);
-				const matches = [...remaining.values()].filter(setting => patterns.some(pattern => pattern.test(setting.id)));
+				const matches = [...remaining.values()].filter(setting => setting.configuration.source?.id === group.source && patterns.some(pattern => pattern.test(setting.id)));
 				for (const setting of matches) remaining.delete(setting.id);
 				return {
 					id: group.id,
@@ -742,12 +814,13 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.filter(group => group.settings.length > 0),
 	}));
 
-	if (remaining.size > 0) {
-		const ids = [...remaining.keys()].sort().join(', ');
+	const unplaced = [...remaining.values()].filter(setting => !setting.configuration.source);
+	if (unplaced.length > 0) {
+		const ids = unplaced.map(setting => setting.id).sort().join(', ');
 		throw new Error(`Registered settings are missing from settingsLayout.ts: ${ids}`);
 	}
 	const extensions = new Map<string, ISetting[]>();
-	for (const setting of settings) {
+	for (const setting of remaining.values()) {
 		const source = setting.configuration.source;
 		if (!source) continue;
 		const entries = extensions.get(source.id) ?? [];

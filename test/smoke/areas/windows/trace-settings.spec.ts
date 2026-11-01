@@ -22,7 +22,8 @@ test('Execution trace Settings supports disconnected help, search and Chinese la
 	await search.fill('requests');
 	await expect(settings.getByRole('switch', { name: 'Record detailed requests and responses' })).toBeVisible();
 	await search.fill('');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ workbench } = await restartWorkbench());

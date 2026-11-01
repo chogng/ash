@@ -522,8 +522,11 @@ for (const cancellation of ['signal', 'clear'] as const) {
 		let signalAcquisitionStarted: (() => void) | undefined;
 		const acquisitionStarted = new Promise<void>(resolve => { signalAcquisitionStarted = resolve; });
 		let deliver: ((reference: TextModelReference) => void) | undefined;
+		const requested: string[] = [];
 		const delayedModels: ITextModelResourceService = {
-			acquire: async () => {
+			acquire: async (input, signal) => {
+				requested.push(input.resource.toString());
+				if (input.resource.toString() !== originalInput.resource.toString()) return models.acquire(input, signal);
 				signalAcquisitionStarted?.();
 				return new Promise<TextModelReference>(resolve => { deliver = resolve; });
 			},
@@ -541,6 +544,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 			modified: { resource: URI.parse('git-change:/cancel/modified'), initialText: 'new' },
 		}], 'Cancel'), controller.signal);
 		await acquisitionStarted;
+		assert.deepEqual(requested, [originalInput.resource.toString(), 'git-change:/cancel/modified'], 'Both sides start before the delayed original resolves');
 		assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 1);
 		if (cancellation === 'signal') controller.abort();
 		else pane.clearInput();
@@ -862,6 +866,56 @@ suite('Multi-diff extension source lifecycle', () => {
 		await waitForPane(() => resolutions > initialResolutions);
 		assert.equal(pane.getControl()!.modifiedEditor.getModel(), model);
 		assert.equal(released, initialReleased);
+	});
+
+	test('returning to review refreshes an external snapshot without a source notification', async () => {
+		using owner = new DisposableStore();
+		const scopedServices = registerMultiDiffTestServices(createCodeEditorServices(owner));
+		let revision = 1;
+		const input = () => createMultiDiffEditorInput(URI.parse('ash-scm:/resume'), [
+			{ id: 'before', label: 'before.ts', original: { resource: URI.parse(`resume:/before-original/${revision}`), initialText: 'shared\n'.repeat(revision === 1 ? 160 : 3), readOnly: true }, modified: { resource: URI.parse(`resume:/before-modified/${revision}`), initialText: 'shared\n'.repeat(revision === 1 ? 160 : 3), readOnly: true } },
+			{ id: 'resume', label: 'resume.ts', original: { resource: URI.parse('resume:/before'), initialText: 'before\n'.repeat(40), readOnly: true }, modified: { resource: URI.parse(`resume:/after/${revision}`), initialText: `revision ${revision}\n`.repeat(40), readOnly: true } },
+			{ id: 'after', label: 'after.ts', original: { resource: URI.parse('resume:/tail-before'), initialText: 'tail\n'.repeat(160), readOnly: true }, modified: { resource: URI.parse('resume:/tail-after'), initialText: 'tail\n'.repeat(160), readOnly: true } },
+		], 'Review', { kind: 'external', providerId: 'test', repositoryId: 'repo', label: 'Review' });
+		registerDialogs(scopedServices, owner, {
+			canHandleUri: uri => uri.toString() === 'ash-scm:/resume',
+			resolveDiffSource: async () => { const next = input(); return { resource: next.resource, resources: next.items, label: next.label, source: next.source }; },
+			sourceActions: () => [], primaryRepositoryAction: () => undefined,
+		});
+		const scopedModels = owner.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {}));
+		scopedServices.registerInstance(ITextModelResourceService, scopedModels);
+		await scopedServices.get(IConfigurationService).updateValue(CodeEditorConfiguration.diffReviewPreview, true);
+		const host = parent.ownerDocument.createElement('div');
+		parent.append(host);
+		const disposeHost = () => host.remove();
+		owner.add({ dispose: disposeHost, [Symbol.dispose]: disposeHost });
+		const review = owner.add(scopedServices.createInstance(MultiDiffEditor, {}));
+		review.create(host);
+		review.layout({ width: 600, height: 300 });
+		await review.setInput(input(), new AbortController().signal);
+		review.setVisible(true);
+		const viewport = requiredElement<HTMLElement>(host, '.stanza-multi-diff-editor');
+		// jsdom has no layout; native scroll handling needs the virtual surface's dimensions.
+		Object.defineProperties(viewport, {
+			clientHeight: { get: () => 300 }, clientWidth: { get: () => 600 },
+			scrollHeight: { get: () => parseFloat(requiredElement<HTMLElement>(host, '.stanza-multi-diff-editor-content').style.height) },
+			scrollWidth: { get: () => 600 },
+		});
+		await waitForPane(() => host.textContent?.includes('shared') === true);
+		review.restoreViewState({ revealData: { resource: { original: URI.parse('resume:/before'), modified: URI.parse('resume:/after/1') } } });
+		await waitForPane(() => host.textContent?.includes('revision 1') === true);
+		viewport.scrollTop += 20;
+		viewport.dispatchEvent(new host.ownerDocument.defaultView!.Event('scroll'));
+		review.setVisible(false);
+		revision = 2;
+		review.setVisible(true);
+		await waitForPane(() => host.textContent?.includes('revision 2') === true);
+		const restored = [...host.querySelectorAll<HTMLElement>('.stanza-multi-diff-editor-section')].find(section => section.getAttribute('aria-label') === 'resume.ts')!;
+		assert.ok(restored, 'The reviewed file remains mounted when preceding heights change');
+		assert.ok(viewport.scrollTop >= parseFloat(restored.style.top) && viewport.scrollTop < parseFloat(restored.style.top) + parseFloat(restored.style.height), `The viewport stays inside the reviewed file: ${JSON.stringify({ scrollTop: viewport.scrollTop, top: restored.style.top, height: restored.style.height, state: review.saveViewState() })}`);
+		const labels = [...host.querySelectorAll('.stanza-multi-diff-editor-section')].map(section => section.getAttribute('aria-label'));
+		assert.equal(new Set(labels).size, labels.length, 'Retiring source models must not remount duplicate file sections');
+		assert.equal(host.querySelectorAll('.stanza-editor').length, 0);
 	});
 
 	test('replaces revisions in place and releases retired text models', async () => {
