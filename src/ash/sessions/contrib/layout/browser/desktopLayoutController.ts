@@ -142,7 +142,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public override start(): void {
 		super.start();
 		this._register(this.editor.onDidChangeEditors(event => {
-			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && this.context.isDocumentContent && !this.isRestoringEditors && !this.context.isChangingContent && this.documentGroups.every(group => group.inputs.length === 0)) {
+			if (event.kind !== 'groupChanged' || event.event.kind !== 'editorClosed' || !this.context.isDocumentContent) return;
+			if (this.isRestoringEditors || this.context.isChangingContent || (this.editor as DesktopMainEditorPart).filesVisible) return;
+			if (this.documentGroups.every(group => group.inputs.length === 0)) {
 				this.layout.hidePart('editor');
 			}
 		}));
@@ -191,6 +193,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails, this.documentGroups); }
 		if (this.isDisposed) { return; }
+		revealDetails = revealDetails && (this.editor as DesktopMainEditorPart).fileEditorsVisible;
 		await this.detailPanel.update(revealDetails);
 		if (revealDetails && !this.isDisposed) this.layout.showPart('editor');
 		if (this.migrationReady) await this.checkpointEditorLayout();
@@ -202,7 +205,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public focus(): void {
 		if (this.isDisposed) { return; }
 		const files = this.editor as DesktopMainEditorPart;
-		if (files.filesVisible && !files.fileNavigation.editorVisible) files.fileNavigation.focus();
+		if (this.documentsVisible && files.filesNavigationVisible && !files.fileNavigation.editorVisible) files.fileNavigation.focus();
 		else if (this.documentsVisible) { this.editor.focus(); }
 		else { this.layout.focus(); }
 	}
@@ -214,7 +217,10 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	protected override canRestoreSessionEditors(): boolean { return this.context.isSessionContent; }
 	protected override shouldShowEditor(): boolean {
-		return !this.context.isSessionContent || (this.context.isDocumentContent && this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)));
+		return !this.context.isSessionContent || (this.context.isDocumentContent && (
+			(this.layout.isPartVisible('editor') && (this.editor as DesktopMainEditorPart).filesVisible)
+			|| (this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
+		));
 	}
 	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
 	protected override getWorkingSet(key: string): EditorWorkingSet {
@@ -290,9 +296,10 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.detailPanel.update(false);
 		this.migrateLegacyLayout();
 		const editor = this.editor as DesktopMainEditorPart;
-		if (editor.filesVisible) {
-			const group = this.documentGroups.find(group => group.inputs.some(input => input.resource.scheme === 'ash-sessions-files')) ?? this.documentGroups[0]!;
-			editor.fileNavigation.show(group as EditorGroupView);
+		if (editor.filesVisible && this.documentsVisible) {
+			const visible = this.documentGroups.filter(group => editor.isGroupVisible(group.id) && (!group.activeInput || editor.isFileEditor(group.activeInput)));
+			const group = visible.find(group => group.id === editor.fileNavigation.groupId) ?? visible[0];
+			if (group) editor.fileNavigation.show(group as EditorGroupView);
 		}
 	}
 	public async hideEditor(): Promise<void> {
@@ -307,7 +314,10 @@ export class DesktopLayoutController extends BaseLayoutController {
 		this.setDocumentsVisible(true);
 		const files = (this.editor as DesktopMainEditorPart);
 		if (files.filesVisible) { files.fileNavigation.editorVisible = true; files.fileNavigation.layout(); }
-		this.editor.activateGroup(this.documentGroups[0]!.id);
+		if (!this.documentGroups.includes(this.editor.activeGroup) || !this.editor.isGroupVisible(this.editor.activeGroup.id)) {
+			const group = this.documentGroups.find(group => this.editor.isGroupVisible(group.id)) ?? this.documentGroups[0]!;
+			this.editor.activateGroup(group.id);
+		}
 		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, false, this.documentGroups); }
 		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
@@ -316,12 +326,22 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public async toggleFiles(): Promise<void> {
 		if (this.isDisposed) return;
 		const editor = this.editor as DesktopMainEditorPart;
-		if (editor.filesVisible) { editor.fileNavigation.hide(); this.layout.focus(); }
-		else { await this.openFiles(); this.layout.showPart('editor'); }
+		if (!this.documentsVisible) {
+			await this.openFiles();
+			return;
+		}
+		if (!await editor.toggleFileEditors()) await this.openFiles();
+		if (!this.documentGroups.some(group => editor.isGroupVisible(group.id))) this.layout.hidePart('editor');
+		else {
+			this.layout.showPart('editor');
+			if (!editor.isGroupVisible(editor.activeGroup.id)) editor.activateGroup(this.documentGroups.find(group => editor.isGroupVisible(group.id))!.id);
+		}
+		this.layout.focus();
 	}
 	public async toggleDetails(): Promise<void> {
 		if (this.isDisposed) return;
 		if (this.existingSession.toggleDetails()) { await this.detailPanel.openFiles(); }
+		else if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		if (!this.isDisposed) { this.focus(); }
 	}
 	public async toggleSidePane(): Promise<void> {

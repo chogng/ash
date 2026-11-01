@@ -12,6 +12,13 @@
 }
 
 .ash-editor-group-files > p {
+	position: absolute;
+	left: 0;
+	right: 0;
 	padding: var(--ash-spacing-size120);
 	color: var(--ash-description-foreground);
+}
+
+.ash-editor-group-files-empty .ash-pane-view-content {
+	display: none;
 }

@@ -62,7 +62,7 @@ DesktopWorkbenchLayout owns only outer Workbench Parts. EditorPart owns one grou
 
 DesktopLayoutController retains live group identities for session working sets. The base controller remains the single owner of serialized working-set state and restoration sequencing. Switching to an already retained set restores its group geometry and visibility without closing its panes; loading a cold set preserves other live groups and the product-page group. Entry changes hide Code groups while remembering which were already hidden. Default opens target the current set rather than inactive session groups.
 
-DesktopMainEditorPart owns the retained Explorer View and its attachment to one group. The tree moves with that group, keeps its expansion and selection state, and reserves space beside the group’s document content. Files landing content can show only navigation. AuxiliaryBarPart is reserved for independently contributed product properties.
+DesktopMainEditorPart owns the retained Explorer View and its attachment to one group. The tree moves with that group, keeps its expansion and selection state, and reserves space beside the group’s document content. Files uses the Explorer title and navigation without creating an EditorInput; document tabs appear only when files are opened. Closing the last document returns to navigation. AuxiliaryBarPart is reserved for independently contributed product properties.
 
 SessionInfoRail reads the active Code chat model and workspace/SCM services. It remains part of the retained conversation presentation, with existing docked and floating behavior; it does not introduce a tool Grid or another conversation model.
 

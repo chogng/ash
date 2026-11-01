@@ -55,7 +55,6 @@ import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
-import './contrib/editor/browser/emptyFileEditor.contribution.js';
 import './contrib/creator/browser/creatorEditor.contribution.js';
 import './contrib/creator/browser/creator.contribution.js';
 import './contrib/creator/contrib/design/browser/design.contribution.js';

@@ -9,7 +9,10 @@ import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { ILayoutService } from '../../platform/layout/browser/layoutService.js';
+import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import type { EditorGroupView } from '../../workbench/browser/parts/editor/editorGroupView.js';
+import { EditorHeaderControl } from '../../workbench/browser/parts/editor/editorHeaderControl.js';
 import { SessionsExplorerView, SESSIONS_FILES_VIEW_ID } from '../contrib/files/browser/filesView.js';
 
 /** Owns one retained Explorer View attached to a document group, never an outer Workbench Part. */
@@ -34,6 +37,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IViewsService views: IViewsService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@ILayoutService private readonly workbenchLayout: IAgentWorkbenchLayoutService,
 	) {
 		super();
 		this.element = h(editor.domNode.ownerDocument, 'aside', { className: 'ash-editor-group-files' });
@@ -41,9 +45,8 @@ export class DockedAuxiliaryBarController extends Disposable {
 		const context = this._register(contextKeys.createScoped(this.element));
 		context.createKey('sessionsFilesNavigationFocused', true);
 		this.tree = this._register(services.createInstance(SessionsExplorerView, this.element, {
-			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), canMoveView: false,
+			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), canMoveView: false, headerSize: EditorHeaderControl.HEIGHT,
 		}));
-		this.tree.setHeaderVisible(false);
 		this._register(views.registerView(this.tree, {
 			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
 		}, () => editor.openFiles(), () => this.hide()));
@@ -58,9 +61,9 @@ export class DockedAuxiliaryBarController extends Disposable {
 		this.retainedGroupId = storage.getNumber('sessions.code.filesGroup', StorageScope.WORKSPACE);
 		this._register(editor.onDidLayout(() => this.layout()));
 		this._register(editor.onDidChangeEditors(event => {
-			if (event.kind === 'groupChanged' && event.groupId === this.group?.id && event.event.kind === 'activeEditorChanged' && this.group.activeInput?.resource.scheme !== 'ash-sessions-files') this.editorVisible = true;
+			if (event.kind === 'groupChanged' && event.groupId === this.group?.id && event.event.kind === 'activeEditorChanged') this.editorVisible = !!this.group.activeInput;
 			if (this.group && !editor.groups.includes(this.group)) {
-				const replacement = editor.groups.find(group => editor.isGroupVisible(group.id) && group.inputs.some(input => input.resource.scheme === 'ash-sessions-files'));
+				const replacement = editor.groups.find(group => group.id !== editor.pageGroupId && editor.isGroupVisible(group.id));
 				if (replacement) this.attach(replacement as EditorGroupView);
 				else this.hide();
 			}
@@ -71,12 +74,17 @@ export class DockedAuxiliaryBarController extends Disposable {
 
 	public get view(): SessionsExplorerView { return this.tree; }
 	public get groupId(): number | undefined { return this.group?.id ?? this.retainedGroupId; }
+	public get isVisible(): boolean {
+		return this.visible && this.hostVisible && !!this.group && this.editor.groups.includes(this.group) && this.editor.isGroupVisible(this.group.id)
+			&& (!this.group.activeInput || this.editor.isFileEditor(this.group.activeInput));
+	}
 
 	public show(group: EditorGroupView): void {
 		this.attach(group);
 		this.visible = true;
-		this.editorVisible = group.activeInput?.resource.scheme !== 'ash-sessions-files';
+		this.editorVisible = !!group.activeInput;
 		this.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		this.workbenchLayout.showPart('editor');
 		this.layout();
 	}
 
@@ -114,6 +122,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 	private releaseGroup(): void {
 		this.sash.clear();
 		if (this.group && this.editor.groups.includes(this.group)) {
+			this.group.setTitleVisible(true);
 			this.group.setContentRightInset(0);
 			this.group.setEditorContentVisible(true);
 			this.group.layout(this.editor.getSize(this.group));
@@ -131,20 +140,24 @@ export class DockedAuxiliaryBarController extends Disposable {
 		const group = this.group;
 		if (!group || !this.editor.groups.includes(group)) return;
 		this.dimension = this.editor.getSize(group);
-		const landing = group.activeInput?.resource.scheme === 'ash-sessions-files';
-		const contentVisible = !landing && this.editorVisible;
+		const fileContent = !group.activeInput || this.editor.isFileEditor(group.activeInput);
+		const contentVisible = !!group.activeInput && (!fileContent || this.editorVisible);
+		// Explorer owns the empty group's title; tabs exist only for real editor inputs.
+		group.setTitleVisible(contentVisible);
+		this.tree.setHeaderVisible(!contentVisible);
 		this.width = contentVisible ? Math.min(Math.max(160, this.preferredWidth), Math.max(0, this.dimension.width - 160)) : this.dimension.width;
 		const top = group.titleHeight.offset;
 		const height = Math.max(0, this.dimension.height - top);
 		Object.assign(this.element.style, { top: top + 'px', right: '0px', width: this.width + 'px', height: height + 'px' });
-		const visible = this.visible && this.hostVisible && this.editor.isGroupVisible(group.id);
+		const visible = this.isVisible;
 		this.element.hidden = !visible;
 		const hasFolders = this.workspace.getWorkspace().folders.length > 0;
 		this.empty.hidden = hasFolders;
-		this.tree.element.hidden = !hasFolders;
-		this.tree.setVisible(visible && hasFolders);
+		this.empty.style.top = `${contentVisible ? 0 : EditorHeaderControl.HEIGHT}px`;
+		this.element.classList.toggle('ash-editor-group-files-empty', !hasFolders);
+		this.tree.setVisible(visible);
 		this.tree.layout(height, 0, this.width);
-		group.setContentRightInset(this.visible ? this.width : 0);
+		group.setContentRightInset(visible ? this.width : 0);
 		group.setEditorContentVisible(contentVisible);
 		group.layout(this.dimension);
 		if (this.sash.value) this.sash.value.state = contentVisible && visible ? SashState.Enabled : SashState.Disabled;

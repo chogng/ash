@@ -92,6 +92,36 @@ class TestDesktopEditorPart extends DesktopMainEditorPart {
 	public retain(resource: import('../../../base/common/lifecycle.js').IDisposable): void { this._register(resource); }
 }
 
+test('opening Files retains an empty group without creating an editor input or pane', async () => {
+	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
+	using registry = new EditorPaneRegistry();
+	const shown: number[] = [];
+	let focused = false;
+	class FilesEditorPart extends DesktopMainEditorPart {
+		public override get fileNavigation(): import('../../browser/dockedAuxiliaryBarController.js').DockedAuxiliaryBarController {
+			return { show: (group: import('../../../workbench/browser/parts/editor/editorGroupView.js').EditorGroupView) => shown.push(group.id), focus: () => { focused = true; } } as unknown as import('../../browser/dockedAuxiliaryBarController.js').DockedAuxiliaryBarController;
+		}
+	}
+	using editor = services.createInstance(FilesEditorPart, browserEnvironment.window.document.body, { registry });
+	const group = editor.activeGroup;
+	await editor.openFiles();
+	assert.deepEqual(group.inputs, []);
+	assert.equal(group.activePane, undefined);
+	assert.equal(group.domNode.querySelector('[role="tab"]'), null);
+	assert.deepEqual(shown, [group.id]);
+	assert.equal(focused, true);
+	const saved = editor.saveWorkingSet('legacy-files', [editor.pageGroupId]);
+	await editor.applyWorkingSet({
+		...saved,
+		groups: saved.groups.map(group => ({
+			...group, activeEditorIndex: 0,
+			editors: [{ input: { typeId: 'sessions.editorInput.files', value: {} }, paneId: 'ash.sessions.emptyFileEditor', preview: false }],
+		})),
+	});
+	assert.deepEqual(editor.activeGroup.inputs, [], 'Retired Files placeholders are skipped when restoring old working sets');
+});
+
 test('Desktop editor retains one tab-and-actions row above editor-only breadcrumbs', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
@@ -232,6 +262,24 @@ test('Code tools share one EditorPart and group movement and hiding retain every
 	editor.toggleMaximizeGroup(terminalGroup);
 	editor.toggleMaximizeGroup(terminalGroup);
 	assert.deepEqual(editor.serializeLayout(), before);
+	const filePane = fileGroup.activePane;
+	const otherGroups = editor.groups.filter(group => group !== fileGroup && group.id !== editor.pageGroupId);
+	await editor.toggleFileEditors();
+	assert.equal(editor.isGroupVisible(fileGroup.id), false);
+	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
+	assert.equal(fileGroup.activePane, filePane);
+	await editor.toggleFileEditors();
+	assert.equal(editor.isGroupVisible(fileGroup.id), true);
+	assert.equal(fileGroup.activePane, filePane);
+	assert.equal(created, 4);
+	const mixed = { resource: URI.file('/fixture/mixed.txt') };
+	await editor.openEditor(mixed, { pinned: true }, { groupId: terminalGroup.id });
+	await editor.toggleFileEditors();
+	assert.equal(editor.isGroupVisible(fileGroup.id), false);
+	assert.equal(editor.isGroupVisible(terminalGroup.id), true);
+	assert.equal(terminalGroup.activeInput, terminal);
+	assert.ok(terminalGroup.inputs.includes(mixed));
+	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
 });
 
 test('Sessions sidebar clamps at its minimum, snaps closed and restores from the window edge', () => {
@@ -981,7 +1029,8 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	controller.setDocumentGroupsVisible(true);
 	assert.deepEqual(editor.serializeLayout(), before);
 	await editor.openEditor(file, { pinned: true });
-	assert.equal(editor.activeGroup, second, "opening a resource must not activate another session's cached group");
+	assert.notEqual(editor.activeGroup, first, "opening a resource must not activate another session's cached group");
+	assert.notEqual(editor.activeGroup, second, 'Files uses its own group beside the retained Browser');
 	assert.equal(created, 3);
 });
 

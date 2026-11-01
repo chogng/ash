@@ -1314,7 +1314,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 	}
 
-	private removeEmptyGroup(group: EditorGroupView): void {
+	protected removeEmptyGroup(group: EditorGroupView): void {
 		// Sessions owns its fixed single-editor grid; only ordinary tab groups collapse.
 		if (this.isDisposed || this.groupOptions.editorLimit === 1 || this._groups.length === 1 || group.inputs.length > 0 || group.isOpening || this.openingIdentities.has(group.id) || this.groupOptions.configurationService?.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) === false) return;
 		const host = this._groups.find(candidate => candidate.group === group);

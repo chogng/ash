@@ -124,8 +124,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				void this.openEntry(entry).then(() => {
 					if (explicit && !this.isDisposed && this.isDocumentContent) return this.runOperation(() => this.controller.showEditor());
 				}).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
-			} else if (entry.content === 'documents') {
-				void this.runOperation(() => explicit ? this.controller.showEditor() : this.controller.updateDetails(true)).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
+			} else if (entry.content === 'documents' && explicit) {
+				void this.runOperation(() => this.controller.showEditor()).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			}
 		};
 		this._register((editor as SessionsEditorPart).onDidRevealActiveEditor(() => revealActiveEditor(true)));
@@ -227,7 +227,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
 				if (documents && !this.customViews.activeCustomView.get()) {
-					await this.controller.activate((this.editor as DesktopMainEditorPart).filesVisible || this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, true));
+					const filesVisible = (this.editor as DesktopMainEditorPart).filesVisible
+						|| this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, false);
+					// A retained Files preference must not open a side pane that is closed.
+					await this.controller.activate(state.documents && filesVisible);
 				}
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }

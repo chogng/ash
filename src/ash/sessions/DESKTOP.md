@@ -20,21 +20,22 @@ The window composes Sidebar, Conversation and one EditorPart. Files navigation b
 
 Toolbar selected states derive from the owning editor group, navigation or information rail. Terminal uses the registered terminal-session icon. Files can be shown before a document is open. The existing combined side-pane command remains available through menus and the command palette for compatibility.
 
-| Action                               | Result                                                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Toggle Terminal / Browser            | Hide retained tool-only groups, or select another tab in a mixed group. Reopening reuses the retained input and pane. |
-| Toggle Files / Toggle details        | Show or hide group-local navigation without closing documents.                                                        |
-| Open a file                          | Reveal its editor through IEditorService in the current session's groups.                                             |
-| Hide editor / Show editor            | Hide or restore document content beside Files while retaining its navigation.                                         |
-| Drag a group title                   | Move the complete group to an edge, or combine its tabs with another group at the center.                             |
-| Drag a tab                           | Move one editor or split at a group edge through the shared editor transfer lifecycle.                                |
-| Alt+Shift+Arrow on a header action   | Move the group beside its spatial neighbor.                                                                           |
-| Resize group separators              | Update the editor Grid through pointer or keyboard input.                                                             |
-| Maximize / restore a group           | Expand within EditorPart and restore the original geometry and hidden groups.                                         |
-| Switch Chat / Code or a product page | Retain group panes, unsaved documents, terminal processes and browser pages; restore Code geometry on return.         |
-| Change panel position                | No PanelPart or Grid leaf exists; legacy commands cannot create one.                                                  |
-| Toggle session information           | Show or hide the conversation's retained information rail.                                                            |
-| Collapse Environment / Context       | Retain section preference; Context's available percentage remains in its summary.                                     |
+| Action                               | Result                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Toggle Terminal / Browser            | Hide retained tool-only groups, or select another tab in a mixed group. Reopening reuses the retained input and pane.                     |
+| Toggle Files                         | Hide or restore the file editor groups and their attached navigation together, retaining documents and leaving other tool groups visible. |
+| Toggle details                       | Show or hide the navigation attached to a file editor group.                                                                              |
+| Open a file                          | Reveal its editor through IEditorService in the current session's groups.                                                                 |
+| Hide editor / Show editor            | Hide or restore document content beside Files while retaining its navigation.                                                             |
+| Drag a group title                   | Move the complete group to an edge, or combine its tabs with another group at the center.                                                 |
+| Drag a tab                           | Move one editor or split at a group edge through the shared editor transfer lifecycle.                                                    |
+| Alt+Shift+Arrow on a header action   | Move the group beside its spatial neighbor.                                                                                               |
+| Resize group separators              | Update the editor Grid through pointer or keyboard input.                                                                                 |
+| Maximize / restore a group           | Expand within EditorPart and restore the original geometry and hidden groups.                                                             |
+| Switch Chat / Code or a product page | Retain group panes, unsaved documents, terminal processes and browser pages; restore Code geometry on return.                             |
+| Change panel position                | No PanelPart or Grid leaf exists; legacy commands cannot create one.                                                                      |
+| Toggle session information           | Show or hide the conversation's retained information rail.                                                                                |
+| Collapse Environment / Context       | Retain section preference; Context's available percentage remains in its summary.                                                         |
 
 Environment shows the selected execution directory and available repository reference. Context uses the existing input-budget estimate; unavailable usage is an explicit empty state. Neither surface invents backend data or creates another business-state owner.
 

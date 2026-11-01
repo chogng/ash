@@ -63,7 +63,12 @@ test('editor contributions follow layout state, serialize open commands without 
 		isPartVisible: (part: keyof typeof parts) => parts[part],
 		onDidLayoutMainContainer: layoutChanged.event,
 	} as unknown as IAgentWorkbenchLayoutService);
-	services.registerInstance(IEditorPart, { onDidChangeEditors: editorChanged.event, fileNavigation, get filesVisible() { return parts.auxiliarybar; } } as unknown as IEditorPart);
+	services.registerInstance(IEditorPart, {
+		onDidChangeEditors: editorChanged.event, fileNavigation,
+		get filesVisible() { return parts.auxiliarybar; },
+		get filesNavigationVisible() { return parts.editor && parts.auxiliarybar; },
+		get fileEditorsVisible() { return true; },
+	} as unknown as IEditorPart);
 	services.registerInstance(IContextKeyService, contextKeys);
 	const menus = new MenuService(commands, contextKeys);
 	using title = menus.createMenu(MenuId.EditorTitle);
@@ -86,7 +91,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	dynamic.dispose();
 	assert.ok(!desktopIds().includes('test.desktopEditor.action'));
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
-	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Show editor', true, undefined]]);
+	assert.deepEqual(titleState(), [['Toggle details', true, false], ['Show editor', true, undefined]]);
 	assert.deepEqual(addTab.getActions(), []);
 	assert.deepEqual(paletteIds(), [
 		...existingPaletteIds,
@@ -101,6 +106,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
+	assert.equal(contextKeys.getValue('sessions.filesVisible'), true, 'Files remains selected while its editor is visible without the attached tree');
 	supportsDetails = false;
 	editorChanged.fire();
 	assert.equal(title.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleDetails')?.enabled, false);
@@ -136,6 +142,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	assert.equal(layoutChanged.hasListeners(), false);
 	assert.equal(editorChanged.hasListeners(), false);
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
+	assert.equal(contextKeys.getValue('sessions.filesVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.supportedDetails'), false);
 
 	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;

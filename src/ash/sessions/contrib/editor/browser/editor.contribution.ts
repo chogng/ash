@@ -16,6 +16,7 @@ import { registerAddTabActions } from './addTabActions.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
+const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
@@ -47,19 +48,21 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
+		const filesVisible = filesVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
-					(!(editor as DesktopMainEditorPart).filesVisible || (editor as DesktopMainEditorPart).fileNavigation.editorVisible));
-				detailsVisible.set((editor as DesktopMainEditorPart).filesVisible);
+					(!(editor as DesktopMainEditorPart).filesNavigationVisible || (editor as DesktopMainEditorPart).fileNavigation.editorVisible));
+				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).filesNavigationVisible);
+				filesVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).fileEditorsVisible);
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, filesVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -153,7 +156,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							id: 'ash.sessions.toggleFiles',
 							title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
 							icon: Lxicon.folder,
-							toggled: detailsVisibleContext.isEqualTo(true),
+							toggled: filesVisibleContext.isEqualTo(true),
 						},
 						when: codeWhen,
 						group: 'navigation',
