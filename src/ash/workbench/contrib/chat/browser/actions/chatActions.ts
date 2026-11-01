@@ -39,6 +39,8 @@ export function registerChatActions(): void {
 
 		override run(accessor: ServicesAccessor, anchor?: unknown): Promise<void> {
 			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve();
+			const navigation = accessor.get(IChatSessionNavigationService);
+			if (navigation.showConversationHistory) return Promise.resolve(navigation.showConversationHistory());
 			return accessor.get(IInstantiationService).createInstance(AgentSessionsPicker, isHTMLElement(anchor) ? anchor : undefined, undefined).pickAgentSession();
 		}
 	});

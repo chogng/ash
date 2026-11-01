@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IUntitledChatSession, SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -119,10 +119,12 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 	});
 }
 
-// ChatWidget shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
-registerAction2(class NewSessionsChatAction extends Action2 {
+// Shared Chat actions reach this window's creation policy through its navigation service.
+export class NewSessionsChatAction extends Action2 {
+	static readonly ID = 'sessions.chat.new';
+
 	constructor() {
-		super({ id: NEW_CHAT_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
+		super({ id: NewSessionsChatAction.ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<IUntitledChatSession | undefined> {
@@ -140,7 +142,8 @@ registerAction2(class NewSessionsChatAction extends Action2 {
 		});
 		if (chosen) { return view.openNewSession(localize('chat.sessions.new', 'New Session'), { providerId: chosen.providerId }); }
 	}
-});
+}
+registerAction2(NewSessionsChatAction);
 
 registerAction2(class NewSessionFromNavigationAction extends Action2 {
 	constructor() {
@@ -159,7 +162,7 @@ registerAction2(class NewSessionFromNavigationAction extends Action2 {
 			await commands.executeCommand('sessions.open.new');
 			return;
 		}
-		const created = await commands.executeCommand<IUntitledChatSession | undefined>(NEW_CHAT_COMMAND_ID);
+		const created = await commands.executeCommand<IUntitledChatSession | undefined>(NewSessionsChatAction.ID);
 		if (created) {
 			await commands.executeCommand(mode === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
 			accessor.get(ILayoutService).focus();
@@ -172,9 +175,11 @@ interface SessionsHistoryQuickPickItem extends IQuickPickItem {
 	readonly threadId: ThreadId;
 }
 
-registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
+export class ShowSessionsChatHistoryAction extends Action2 {
+	static readonly ID = 'sessions.chat.history';
+
 	constructor() {
-		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, 'Show Session History') });
+		super({ id: ShowSessionsChatHistoryAction.ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, 'Show Session History') });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -206,4 +211,5 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 		disposables.add(quickPick.onDidHide(() => disposables.dispose()));
 		quickPick.show();
 	}
-});
+}
+registerAction2(ShowSessionsChatHistoryAction);

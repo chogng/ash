@@ -142,7 +142,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/renderer/c
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
-import './actions/sessionsChatActions.js';
+import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
 import './actions/approvalEnvironmentActions.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
@@ -852,7 +852,8 @@ export abstract class Workbench extends Disposable {
 		updateSessionsPart();
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		services.registerInstance(IChatSessionNavigationService, {
-			createNewConversation: async () => { await view.openNewSession(localize('chat.sessions.new', 'New Session')); },
+			createNewConversation: async () => { await commandService.executeCommand(NewSessionsChatAction.ID); },
+			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => {
 				const scope = providerScopes.getScope(sessionId);
@@ -953,6 +954,8 @@ export abstract class Workbench extends Disposable {
 		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
 		services.registerInstance(IEditorGroupsService, editors);
+		// The browser host resolves Workbench browsing, which borrows the window's editor services.
+		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),

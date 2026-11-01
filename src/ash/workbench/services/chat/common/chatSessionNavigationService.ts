@@ -21,6 +21,8 @@ export interface IChatSessionNavigationService {
 	openConversationLink?(address: OpenSessionLink): Promise<void>;
 	/** Creates and selects an unsent draft through the window’s Session owner. */
 	createNewConversation(): void | Promise<void>;
+	/** Hosts with their own conversation presentation also own its history picker. */
+	showConversationHistory?(): void | Promise<void>;
 	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;
