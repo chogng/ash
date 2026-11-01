@@ -347,7 +347,8 @@
     "layout-sidebar-right-off": "E158",
     "layout-sidebar-right-session": "E159",
     "layout-sidebar-right": "E15A",
-    "dashboard": "E15B"
+    "dashboard": "E15B",
+    "image-session": "E15C"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -510,8 +511,9 @@
     "history": "14cf0c7547cc45a6faae4561eae8b83985ca94bc33dcd2ca3e25a456a76c666f",
     "home-filled": "531fe971016beb848655c5db24583662809e6610c93e174faff39d4e6c5ae125",
     "home": "2bb49b66560f7307632c9b2cb049d3a8b25c2c8b74529cfffd9eec92615142dd",
-    "image-filled": "09e7460f5962266a6ff1b2d47587ea01848238cc3e0536ec3640e8c841229855",
-    "image": "a78db325681730c62c8c36991b91cf797336de4ba17e4740b1a2d73bf658f76e",
+    "image-filled": "fd3946f119d3e559f907cbba97058d6bc920f79ed130bcd90449e20e67c21b6f",
+    "image-session": "516b52d6a22812a53989c73bdf38c40c4cf2a45932cf859efc34cfb130a91f4a",
+    "image": "042e8d9296272fce8c09318cf379388949557c769e2ce90206a52f714c962ac9",
     "info": "9aa637884722838ba53238992e560569c9df12bf4f918e2404fbce11d40178d5",
     "inspect": "b92172aa91de23b36c765e4a43f4059c7086bd83b27b435541c2fff1c99da76d",
     "issue-draft": "e0ed832579f75eacea32f79b3281e026ab54f6ec2b7d2b7c1985c82ebd8271c9",

@@ -812,6 +812,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "image-session",
+      "file": "image-session.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "info",
       "file": "info.svg",
       "rendering": "symbolic"
