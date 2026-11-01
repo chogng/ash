@@ -327,7 +327,9 @@
     "whole-word": "E144",
     "case-sensitive": "E145",
     "chat-session": "E146",
-    "open-in-product": "E147"
+    "open-in-product": "E147",
+    "global": "E148",
+    "progress": "E149"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -339,7 +341,7 @@
     "align-justified": "8672c66771f069ae4e4ef0897a692f47f9352fd02ede453669d6e8d8fc0b6605",
     "align-left": "0f70a46f64dd36c0d4b958216c6ea677ea2afaee600003bcc4460e83e0c8e409",
     "align-right": "835c5ac98d628cadd6de23151f3936fd6582ad928985685462ea77ec67fe6292",
-    "appearance": "365a6aecbbe74a02f2398025e47eaac84345d618b7a4e5432aa0dc0dcb4fd4a3",
+    "appearance": "3ae9d997f27565a542324205e95be7b476b4e638178eacd2336a47273cfeb407",
     "archive": "37f8cee0be060a348f4dd1bca0284aa1c03048fa01ea3be13154c6a11b9c73ec",
     "arrow-down": "3de326f3431dd60e138b492a9734c5e2bcd5ff0c0bda2f2c9eeb6683da2a1cf9",
     "arrow-left": "afe3d785df9762912d15eafe06c79db720f1021d17890942c698d64b61472947",
@@ -478,6 +480,7 @@
     "git-pull-request": "8b643eec88d30dbfa77b5eab64ebae43800cda3f9f05180067bc69bbd54cc2fb",
     "git": "5321b1613a9a939b28298fd7a1d8e3d121ff6bf5c346cb8f15c023dd121694ba",
     "github": "123388e994eab2995a612e8388af330a5d10578e3686c391a3053c6a1986012c",
+    "global": "b0436b33687597a8758c5a155925d1c687dfdffff570acc8a2399fe6d53c4845",
     "go-to-file": "f9df6182b5b57d3403cde2c1702b800a40213ce97083639cb3277dd64b5eb2cd",
     "h1": "37d28a8fa7bb1e1002b5db8d8054b04f17e54ebef7f75c90ab1cd3861ac6d89c",
     "h2": "4442a5fb5382967756641a0c3bcd18223ce4cd01a5dc1105dc7268f6aea2aecc",
@@ -562,6 +565,7 @@
     "preserve-case": "d230c5f7b95a2571e27026b6d3d139fe0f28506dc13b7b332eecbdcde707bfa8",
     "preview": "bd40c6821d8c030c4687687b900c39d9046481cfd76168e66f865fcf92fa635e",
     "primitive-square": "5baa0fc62fe952bf4c8a76e4ba6abfc99ecf89937ba0493e4498c9a3af46faac",
+    "progress": "41630335c7f00f1c3e0549bdae9e820703144cb8f1dacb4d262b66124fd55cf5",
     "projects-filled": "feb1176166ca551e515e793aae003fe7e8e7a01250235879aa75e9031e4ce28a",
     "projects": "273b87d7ce6f4c528a834fbac5cb1157278175cfcb1260b502872c02d7ebf786",
     "question": "35eefe38fb71cf59c185d7343fbab02b903327e458f034c72af16a973c13ab12",

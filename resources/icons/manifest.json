@@ -742,6 +742,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "global",
+      "file": "global.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "go-to-file",
       "file": "go-to-file.svg",
       "rendering": "symbolic"
@@ -1159,6 +1164,11 @@
     {
       "id": "primitive-square",
       "file": "primitive-square.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "progress",
+      "file": "progress.svg",
       "rendering": "symbolic"
     },
     {

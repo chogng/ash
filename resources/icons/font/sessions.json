@@ -77,6 +77,7 @@
     "collab": [0, 1],
     "copy": [0],
     "debug-start": [0],
+    "global": [0, 2],
     "git-branch": [0, 1, 2],
     "git-branch-changes": [0],
     "layout-panel-1": [0],
