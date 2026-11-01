@@ -99,7 +99,11 @@ def protocol_inputs(directories: list[str], root: Path) -> str:
 
 
 def generate_protocol(
-    *, root: Path = ROOT, cargo: str = "cargo", package_root: Path | None = None
+    *,
+    root: Path = ROOT,
+    cargo: str = "cargo",
+    package_root: Path | None = None,
+    allow_build: bool = True,
 ) -> None:
     build = root / ".build"
     build.mkdir(exist_ok=True)
@@ -147,6 +151,13 @@ def generate_protocol(
             package_contract = matching_package_contract(root, package)
             if package_contract is not None:
                 break
+        if package_contract is None and not allow_build:
+            raise RuntimeError(
+                "Protocol artifacts are missing, stale or incomplete. "
+                "Run `pnpm protocol:generate` explicitly, or supply a matching "
+                "prepared package through ASH_PROTOCOL_PACKAGE. "
+                "Frontend preparation does not run Cargo."
+            )
         if package_contract is not None:
             directories = [
                 str(owned_path(root, name))
@@ -247,7 +258,13 @@ def write_source_manifest(path: Path, sources: dict, artifacts: dict[str, str]) 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source-directories", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--source-directories", action="store_true")
+    mode.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Reuse validated protocol artifacts or a matching package without Cargo",
+    )
     parser.add_argument(
         "--package-root",
         type=Path,
@@ -260,7 +277,9 @@ def main() -> None:
         # while the first live compilation is running on Windows.
         print(json.dumps(protocol_source_directories()))
     else:
-        generate_protocol(package_root=arguments.package_root)
+        generate_protocol(
+            package_root=arguments.package_root, allow_build=not arguments.no_build
+        )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { generateTreeSitterRegistry } from './treeSitterRegistry.ts';
 import { generateLanguageRegistry } from './languageRegistry.ts';
-import { generateProtocol } from './protocol/generate.ts';
+import { prepareProtocol } from './protocol/generate.ts';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, '..');
 export async function prepareGenerated(): Promise<void> {
 	await generateLanguageRegistry();
 	await generateTreeSitterRegistry();
-	await generateProtocol();
+	await prepareProtocol();
 	const { generateLocalization } = await import('./resources/localization.ts');
 	await generateLocalization();
 	await runBun(['check', '-p', 'tsconfig.common.json', '--all']);

@@ -14,6 +14,16 @@ from build.protocol.generate import protocol_source_directories
 
 
 class ProtocolWatchInputTests(unittest.TestCase):
+    def test_frontend_cli_forbids_implicit_cargo_builds(self):
+        from build.protocol.generate import main
+
+        with (
+            patch("sys.argv", ["generate.py", "--no-build"]),
+            patch("build.protocol.generate.generate_protocol") as prepare,
+        ):
+            main()
+        prepare.assert_called_once_with(package_root=None, allow_build=False)
+
     def test_directory_query_does_not_prepare_or_rewrite_protocol_artifacts(self):
         from build.protocol.generate import main
 
@@ -126,6 +136,60 @@ class ProtocolPreparationTests(unittest.TestCase):
         from build.protocol.generate import generate_protocol
 
         generate_protocol(root=self.root)
+
+    def test_frontend_cold_preparation_fails_without_discovery_or_compilation(self):
+        from build.protocol.generate import generate_protocol
+
+        with self.assertRaisesRegex(RuntimeError, "pnpm protocol:generate"):
+            generate_protocol(root=self.root, allow_build=False)
+        self.discovery.assert_not_called()
+        self.exporter.assert_not_called()
+        self.assertFalse((self.root / ".build/protocol/metadata.json").exists())
+
+    def test_frontend_reuses_validated_artifacts_without_cargo(self):
+        from build.protocol.generate import generate_protocol
+
+        self.prepare()
+        self.discovery.reset_mock()
+        self.exporter.reset_mock()
+        output = self.root / ".build/protocol/typescript/index.ts"
+        modified = output.stat().st_mtime_ns
+        generate_protocol(root=self.root, allow_build=False)
+        self.discovery.assert_not_called()
+        self.exporter.assert_not_called()
+        self.assertEqual(modified, output.stat().st_mtime_ns)
+
+    def test_frontend_rejects_stale_and_incomplete_contracts_without_rebuilding(self):
+        from build.protocol.generate import generate_protocol
+
+        for change in [
+            lambda: (self.contract / "src/lib.rs").write_text("changed"),
+            lambda: (self.root / ".build/protocol/typescript/index.ts").write_text(
+                "tampered"
+            ),
+            lambda: (
+                self.root / ".build/protocol/typescript/AppServerProtocolDecoder.ts"
+            ).unlink(),
+        ]:
+            with self.subTest(change=change):
+                self.prepare()
+                self.discovery.reset_mock()
+                self.exporter.reset_mock()
+                change()
+                with self.assertRaisesRegex(RuntimeError, "does not run Cargo"):
+                    generate_protocol(root=self.root, allow_build=False)
+                self.discovery.assert_not_called()
+                self.exporter.assert_not_called()
+
+    def test_frontend_restores_a_matching_package_without_cargo(self):
+        from build.protocol.generate import generate_protocol
+
+        package = self.package_contract()
+        self.clear_contract()
+        generate_protocol(root=self.root, package_root=package, allow_build=False)
+        self.discovery.assert_not_called()
+        self.exporter.assert_not_called()
+        self.assertTrue((self.root / ".build/protocol/typescript/index.ts").is_file())
 
     def test_cold_preparation_and_cache_hits_do_not_write_source_or_run_cargo(self):
         self.prepare()

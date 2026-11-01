@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, link, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { access, link, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -8,6 +8,26 @@ import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
+const emptyWindowTest = test.extend({ openWorkspace: false });
+
+test('UI startup does not resolve or require a backend package', { tag: ['@electron-ui'] }, async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-ui-startup-'));
+	const lookup = join(directory, 'backend-lookup');
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		desktop = await launchElectron({
+			appServerMode: 'disabled', userDataDirectory: join(directory, 'home'),
+			environment: { ...process.env, ASH_TEST_REJECT_BACKEND_PACKAGE: lookup },
+		});
+		await expect(desktop.driver.workbench.element).toBeVisible();
+		expect(await readFile(`${lookup}.ready`, 'utf8')).toBe('ready');
+		expect(await desktop.application.evaluate(() => process.env.ASH_DESKTOP_UI_ONLY)).toBe('1');
+		expect(await access(lookup).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; })).toBe(false);
+	} finally {
+		try { await desktop?.close(); }
+		finally { await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+	}
+});
 
 test('Desktop development startup opens Agents with prepared runtime resources', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
@@ -33,7 +53,7 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 	}
 });
 
-test('Desktop uses the selected Ash home for UI and backend startup', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+emptyWindowTest('Desktop uses the selected Ash home for UI and backend startup', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) {
 		return;
 	}

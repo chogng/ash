@@ -6,8 +6,8 @@
     "test": "node --test \"**/*.test.ts\"",
     "test:prepared": "node --test \"**/*.test.ts\"",
     "typecheck": "bun check -p tsconfig.json --all",
-    "pretest": "node protocol/generate.ts && pnpm --dir ../test/scenario compile",
-    "pretypecheck": "node protocol/generate.ts"
+    "pretest": "node protocol/generate.ts --no-build && pnpm --dir ../test/scenario compile",
+    "pretypecheck": "node protocol/generate.ts --no-build"
   },
   "devDependencies": {
     "@ash/typescript-compiler": "npm:typescript@7.0.2",

@@ -576,7 +576,9 @@ export class AshApplication extends Disposable {
 			}
 			return service;
 		}));
-		const remoteExecutable = remoteExecutablePath({
+		// Runtime binaries are needed only when inbound hosting actually starts.
+		// UI-only windows must not require a prepared backend package at startup.
+		const remoteExecutable = () => remoteExecutablePath({
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
@@ -584,8 +586,8 @@ export class AshApplication extends Disposable {
 		});
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
-			executable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'),
-			backendExecutable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'),
+			get executable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'); },
+			get backendExecutable() { return join(dirname(remoteExecutable()), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'); },
 			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 			assets: this.rendererRoot,
 			environment: { ...process.env, ASH_HOME: this.profileRoot },

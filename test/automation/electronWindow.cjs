@@ -1,5 +1,21 @@
 const { app } = require('electron');
 
+// A startup regression can prohibit backend package discovery before Main loads.
+const backendLookup = process.env.ASH_TEST_REJECT_BACKEND_PACKAGE;
+if (backendLookup) {
+	const fs = require('node:fs');
+	const readdir = fs.readdirSync;
+	fs.readdirSync = function (path, ...args) {
+		if (String(path).replaceAll('\\', '/').includes('/.build/runtime/dev/store-v1/')) {
+			fs.writeFileSync(backendLookup, String(path));
+			throw new Error('UI startup must not resolve backend packages');
+		}
+		return readdir.call(this, path, ...args);
+	};
+	require('node:module').syncBuiltinESMExports();
+	fs.writeFileSync(`${backendLookup}.ready`, 'ready');
+}
+
 // The product must not interpret this test-only preload path as an app entry or file to open.
 const preloadIndex = process.argv.findIndex((argument, index) => argument === '--require' && process.argv[index + 1] === __filename);
 if (preloadIndex >= 0) process.argv.splice(preloadIndex, 2);

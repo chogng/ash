@@ -78,7 +78,7 @@ test('resolves configured aliases and CSS dependencies', t => {
 });
 
 test('unknown inputs, filesystem-only fixtures and dependency changes retain the full suite', t => {
-	for (const path of ['pnpm-lock.yaml', 'extensions/example/package.json', 'test/unit/editor-environment.ts', '.github/workflows/frontend.yml', 'src/test/fixtures/data.json', 'src/unknown.ts']) {
+	for (const path of ['pnpm-lock.yaml', 'extensions/example/package.json', 'test/unit/editor-environment.ts', '.github/workflows/frontend.yml', 'src/test/fixtures/data.json', 'src/test/fixtures/README.md', 'src/unknown.ts']) {
 		const f = fixture(t);
 		f.write(path, 'changed');
 		const plan = planAffectedTests(f.root, f.base, f.tests);
@@ -87,13 +87,34 @@ test('unknown inputs, filesystem-only fixtures and dependency changes retain the
 	}
 });
 
-test('a large selection and an unchanged tree retain the full suite', t => {
+test('an unchanged tree needs no tests instead of falling back to the full suite', t => {
 	const f = fixture(t);
-	assert.equal(planAffectedTests(f.root, f.base, f.tests).full, true);
+	assert.deepEqual(planAffectedTests(f.root, f.base, f.tests), { files: [], full: false, reason: 'no changed inputs' });
+});
+
+test('a large known selection does not add unrelated tests', t => {
+	const f = fixture(t);
 	for (const name of ['a', 'b', 'c', 'd']) f.write(`src/test/${name}.test.ts`, `export const ${name} = true;`);
 	const plan = planAffectedTests(f.root, f.base, f.tests);
-	assert.equal(plan.full, true);
-	assert.match(plan.reason, /more than half/u);
+	assert.equal(plan.full, false);
+	assert.deepEqual(plan.files, ['a', 'b', 'c', 'd'].map(name => `src/test/${name}.test.js`).concat('test/architecture/ownership.test.js'));
+});
+
+test('documentation alongside a source change does not expand the selection to all tests', t => {
+	const f = fixture(t);
+	f.write('src/value.ts', 'export const value = 2;');
+	f.write('src/DESKTOP.md', 'Updated ownership notes.');
+	assert.deepEqual(planAffectedTests(f.root, f.base, f.tests).files, ['src/test/a.test.js', 'test/architecture/ownership.test.js']);
+});
+
+test('documentation changes retain filesystem readers and architecture checks', t => {
+	const f = fixture(t);
+	f.write('src/test/c.test.ts', "import { readFileSync } from 'node:fs'; export const read = readFileSync;");
+	const base = f.commit();
+	f.write('README.md', 'Updated project documentation.');
+	const plan = planAffectedTests(f.root, base, f.tests);
+	assert.equal(plan.full, false);
+	assert.deepEqual(plan.files, ['src/test/c.test.js', 'test/architecture/ownership.test.js']);
 });
 
 test('retains filesystem readers, computed imports and rendered fixtures outside static import edges', t => {

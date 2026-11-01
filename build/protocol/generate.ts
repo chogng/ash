@@ -22,4 +22,14 @@ export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await runPython(['-B', 'build/protocol/generate.py'], { cwd: resolve(import.meta.dirname, '../..'), operation: 'Protocol generation', signal });
 }
 
-if (import.meta.main) await generateProtocol();
+/** Frontend consumers reuse validated contracts; only explicit generation may invoke Cargo. */
+export async function prepareProtocol(signal?: AbortSignal): Promise<void> {
+	await runPython(['-B', 'build/protocol/generate.py', '--no-build'], { cwd: resolve(import.meta.dirname, '../..'), operation: 'Protocol preparation', signal });
+}
+
+if (import.meta.main) {
+	const args = process.argv.slice(2);
+	if (args.length === 0) await generateProtocol();
+	else if (args.length === 1 && args[0] === '--no-build') await prepareProtocol();
+	else throw new Error('Usage: generate.ts [--no-build]');
+}

@@ -27,11 +27,14 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 	const changed = new Set(split(git(['diff', '--name-only', '--no-renames', '-z', comparison, ...(target ? [target] : []), '--'])));
 	if (!target) for (const path of split(git(['ls-files', '--others', '--exclude-standard', '-z']))) changed.add(path);
 	const full = (reason: string): TestPlan => ({ files: tests, full: true, reason });
-	if (changed.size === 0) return full('no changed inputs; running the complete suite');
+	if (changed.size === 0) return { files: [], full: false, reason: 'no changed inputs' };
+	// Documentation can still be read by opaque filesystem tests below. Markdown
+	// fixtures remain unknown inputs, rather than being dismissed as documentation.
+	const documentation = (path: string): boolean => path.endsWith('.md') && !/(?:^|\/)(?:test|tests|fixtures|test-data|testData|__snapshots__)(?:\/|$)/u.test(path);
 	// The dependency graph cannot describe toolchains, generated contracts, preload code,
 	// packages or test data loaded through arbitrary filesystem paths.
 	const outside = [...changed].find(path => /(?:^|\/)(?:package(?:-lock)?|tsconfig[^/]*)\.json$/u.test(path)
-		|| !/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path));
+		|| (!documentation(path) && !/^(?:src\/|extensions\/).*\.(?:[cm]?tsx?|[cm]?jsx?|css|json)$/u.test(path)));
 	if (outside) return full(`input outside the source graph: ${outside}`);
 
 	try {
@@ -108,13 +111,11 @@ export function planAffectedTests(root: string, base: string, tests: readonly st
 				return seen;
 			}
 		}
-		const unknown = [...changed].find(path => !reached.has(path));
+		const unknown = [...changed].find(path => !documentation(path) && !reached.has(path));
 		if (unknown) return full(`no known test dependency for: ${unknown}`);
-		if (affected.size === 0) return full('no known affected tests; running the complete suite');
 		// Architecture tests inspect source text and directories instead of importing the
 		// implementation, so runtime or type import edges cannot select them reliably.
 		const files = tests.filter((path, index) => affected.has(sources[index]) || path.startsWith('test/architecture/'));
-		if (files.length > tests.length / 2) return full('more than half of the test files are affected');
 		return { files, full: false, reason: `${changed.size} changed inputs; ${files.length} of ${tests.length} test files, including architecture checks` };
 	} catch (error) {
 		return full(`dependency analysis unavailable: ${error instanceof Error ? error.message : String(error)}`);

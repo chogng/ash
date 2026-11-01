@@ -105,10 +105,6 @@ test('default discovery and source filters include extension-owned units alongsi
 	const selected = run(['--run', paths[2].replace(/\.js$/u, '.ts')]);
 	assert.equal(selected.status, 0, selected.output);
 	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
-	const affected = run(['--affected', 'HEAD']);
-	assert.equal(affected.status, 0, affected.output);
-	assert.match(affected.output, /Unit test impact: full suite;/u);
-	assert.match(affected.output, /3 tests executed across 3 files; 0 failed files/u);
 });
 
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
@@ -127,6 +123,36 @@ test('affected selection rejects conflicting filters and incomplete revisions be
 		assert.match(result.output, /--affected (?:requires|cannot)|Missing value for --affected/u);
 		assert.doesNotMatch(result.output, /tests executed|runner regression sentinel/);
 	}
+});
+
+test('plans source tests without compiler output or preparation in every package mode', () => {
+	const path = 'src/ash/base/test/common/event.test.ts';
+	for (const mode of [[], ['--compile'], ['--prepared']]) {
+		const result = run([...mode, '--plan', '--run', path, '--grep', 'Event'], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.output, /Unit test plan: 1 files; grep: Event; no preparation, compilation or tests executed/u);
+		assert.match(result.output, /src\/ash\/base\/test\/common\/event.test.js/u);
+		assert.doesNotMatch(result.output, /Mocha:|Preparation exited|tsconfig.test.json/u);
+	}
+});
+
+test('compiling entries reject invalid and empty selections before preparation', () => {
+	for (const args of [['--grepp', 'selected'], ['--runGlob', '**/missing-unit-selection.test.js'], ['--run', 'src/../../outside.test.ts'], ['--run', 'src/missing-unit-selection.test.ts']]) {
+		const result = run(['--compile', ...args]);
+		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, /Unsupported unit test option|No unit tests matched|--run expects|Source unit test does not exist/u);
+		assert.doesNotMatch(result.output, /Mocha:|tsconfig.test.json/u);
+	}
+});
+
+test('source glob planning accepts the package-manager separator and rejects zero matches', () => {
+	const result = run(['--compile', '--', '--plan', '--runGlob', '**/localizationService.test.js']);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /Unit test plan: 1 files/u);
+	assert.match(result.output, /src\/ash\/.*\/localizationService.test.js/u);
+	const missing = run(['--plan', '--runGlob', '**/missing-unit-selection.test.js']);
+	assert.equal(missing.status, 1, missing.output);
+	assert.match(missing.output, /No unit tests matched the requested files/u);
 });
 
 test('exclusive tests fail instead of silently dropping their siblings', () => {

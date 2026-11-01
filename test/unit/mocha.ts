@@ -12,19 +12,83 @@ interface Selection {
 	readonly grep?: string;
 	readonly timeout: number;
 	readonly workers: number;
+	readonly plan: boolean;
 }
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 const compiledDirectory = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'));
 
-export async function runUnitTests(patterns: readonly string[], editorEnvironment: boolean): Promise<void> {
+export async function runUnitTests(patterns: readonly string[], editorEnvironment: boolean, project = 'tsconfig.test.json'): Promise<void> {
 	const requiredVersion = readFileSync(resolve(desktopDirectory, '.nvmrc'), 'utf8').trim();
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
 		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
 	}
-	// Reject invalid filters before creating a snapshot of the complete compiler output.
-	const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
+	const args = process.argv.slice(2);
+	// Package scripts choose preparation; the same runner owns selection in every mode.
+	const preparation = args[0] === '--compile' || args[0] === '--prepared' ? args.shift() : undefined;
+	if (args[0] === '--') args.shift();
+	const selection = parseSelection(args);
 	const preloads = ['test/unit/ignore-css-imports.ts', 'test/unit/theme-resources.ts', ...(editorEnvironment ? ['test/unit/editor-environment.ts'] : [])];
+	// Plans and compiling runs discover source tests, so they work on a cold checkout
+	// and cannot accidentally select stale output left by a deleted test.
+	const discoveryDirectory = preparation || selection.plan ? desktopDirectory : compiledDirectory;
+	const discover = (pattern: string): string[] => {
+		const sourcePattern = discoveryDirectory === desktopDirectory ? pattern.replace(/\.js$/u, '.ts') : pattern;
+		return globSync(sourcePattern, { cwd: discoveryDirectory, exclude: ['**/node_modules/**', '.git/**', '.build/**'] })
+			.map(path => path.replaceAll('\\', '/'))
+			.filter(path => /^(?:src|test|extensions)\//u.test(path))
+			.map(sourceFile);
+	};
+	let names: string[];
+	if (selection.runs.length > 0) {
+		names = selection.runs.map(sourceFile);
+	} else if (selection.runGlob) {
+		names = discover(selection.runGlob);
+	} else {
+		names = patterns.flatMap(pattern => {
+			const matches = discover(pattern);
+			if (matches.length === 0) throw new Error(`No ${discoveryDirectory === desktopDirectory ? 'source' : 'compiled'} unit tests matched the required pattern: ${pattern}`);
+			return matches;
+		});
+	}
+	names = [...new Set(names)].sort();
+	if (names.length === 0) throw new Error('No unit tests matched the requested files');
+	if (discoveryDirectory === desktopDirectory) {
+		for (const name of names) {
+			if (!existsSync(resolve(desktopDirectory, name.replace(/\.js$/u, '.ts')))) throw new Error(`Source unit test does not exist: ${name}`);
+		}
+	}
+	if (selection.affected) {
+		const plan = planAffectedTests(desktopDirectory, selection.affected, names, { preloads });
+		process.stdout.write(`Unit test impact: ${plan.full ? 'full suite' : 'selected files'}; ${plan.reason}\n`);
+		names = [...plan.files];
+	}
+	if (selection.plan) {
+		process.stdout.write(`Unit test plan: ${names.length} files${selection.grep ? `; grep: ${selection.grep}` : ''}; no preparation, compilation or tests executed\n`);
+		for (const name of names) process.stdout.write(`${name}\n`);
+		return;
+	}
+	if (names.length === 0) {
+		process.stdout.write('Unit tests skipped: no affected test files; no tests executed.\n');
+		return;
+	}
+	if (preparation) {
+		await withProcessRun(desktopDirectory, async (run, environment) => {
+			const commands = [
+				...(preparation === '--compile' ? [
+					['build/desktop/build.ts', 'prepare'],
+					['build/prepare.ts'],
+				] : []),
+				['test/unit/prepare.ts', project],
+				['node_modules/@ash/typescript-compiler/bin/tsc', '-p', project],
+			];
+			for (const command of commands) {
+				const result = await run.command(process.execPath, command, environment);
+				if (result.code !== 0) { process.exitCode = result.code; return; }
+			}
+		});
+		if (process.exitCode) return;
+	}
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
@@ -36,25 +100,6 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			const output = resolve(outputDirectory, path);
 			mkdirSync(dirname(output), { recursive: true });
 			copyFileSync(resolve(desktopDirectory, path), output);
-		}
-		let names: string[];
-		if (selection.runs.length > 0) {
-			names = selection.runs.map(sourceFile);
-		} else if (selection.runGlob) {
-			names = globSync(selection.runGlob, { cwd: outputDirectory });
-		} else {
-			names = patterns.flatMap(pattern => {
-				const matches = globSync(pattern, { cwd: outputDirectory });
-				if (matches.length === 0) {
-					throw new Error(`No compiled unit tests matched the required pattern: ${pattern}`);
-				}
-				return matches;
-			});
-		}
-		if (selection.affected) {
-			const plan = planAffectedTests(desktopDirectory, selection.affected, [...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(), { preloads });
-			process.stdout.write(`Unit test impact: ${plan.full ? 'full suite' : 'selected files'}; ${plan.reason}\n`);
-			names = [...plan.files];
 		}
 		const files = [...new Set(names.map(name => resolve(outputDirectory, name)))].sort();
 		if (files.length === 0) {
@@ -134,7 +179,7 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 }
 
 function sourceFile(value: string): string {
-	if (!value.startsWith('src/') && !value.startsWith('test/') && !value.startsWith('extensions/')) {
+	if ((!value.startsWith('src/') && !value.startsWith('test/') && !value.startsWith('extensions/')) || value.includes('\\') || value.split('/').includes('..')) {
 		throw new Error(`--run expects a path relative to the repository root: ${value}`);
 	}
 	return value.endsWith('.ts') ? `${value.slice(0, -3)}.js` : value;
@@ -147,8 +192,10 @@ function parseSelection(args: readonly string[]): Selection {
 	let grep: string | undefined;
 	let timeout = 60_000;
 	let workers = Math.min(4, availableParallelism());
+	let plan = false;
 	for (let index = 0; index < args.length; index += 1) {
 		const option = args[index];
+		if (option === '--plan') { plan = true; continue; }
 		const value = args[index + 1];
 		if (!value) throw new Error(`Missing value for ${option}`);
 		switch (option) {
@@ -180,5 +227,5 @@ function parseSelection(args: readonly string[]): Selection {
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
 	if (affected && (runs.length > 0 || runGlob)) throw new Error('--affected cannot be combined with --run or --runGlob');
-	return { runs, runGlob, affected, grep, timeout, workers };
+	return { runs, runGlob, affected, grep, timeout, workers, plan };
 }
