@@ -39,22 +39,31 @@ const categoryItems = categoryLabels.map((label, index) => ({
 	tabId: `preview-category-${index}`,
 }));
 categories.setTabs(categoryItems, '0');
+let draggedDocument: string | undefined;
+let documentItems: TabListItem<string>[] = [{ id: 'file', value: 'file', label: 'File', tabId: 'file-tab' }];
 const documents = resources.add(
-	new TabList(document.querySelector('#document')!, {
+	new TabList<string>(document.querySelector('#document')!, {
 		ariaLabel: 'Documents',
 		presentation: 'inset',
 		onActivate: () => {},
 		onClose: () => {},
 		draggable: true,
 		dragAndDrop: {
-			canDrop: () => false,
-			onDragStart: () => {},
-			onDrop: () => {},
-			onDragEnd: () => {},
+			canDrop: () => draggedDocument !== undefined,
+			onDragStart: id => { draggedDocument = id; },
+			onDrop: (target, position) => {
+				const source = documentItems.find(item => item.id === draggedDocument)!;
+				if (target === source.id) return;
+				documentItems = documentItems.filter(item => item !== source);
+				const insertionIndex = target === undefined ? documentItems.length : documentItems.findIndex(item => item.id === target) + (position === 'after' ? 1 : 0);
+				documentItems.splice(insertionIndex, 0, source);
+				documents.setTabs(documentItems, source.id);
+			},
+			onDragEnd: () => { draggedDocument = undefined; },
 		},
 	}),
 );
-documents.setTabs([{ id: 'file', value: 'file', label: 'File', tabId: 'file-tab' }], 'file');
+documents.setTabs(documentItems, 'file');
 documents.setSizing({ mode: 'fixed', minWidth: 120, maxWidth: 120 });
 
 declare global {
@@ -65,6 +74,7 @@ declare global {
 			presentation(value: TabListPresentation): void;
 			sizing(value: TabListSizing): void;
 			categoryActions(enabled: boolean): void;
+			documentTabs(count: number, presentation: TabListPresentation): void;
 		};
 	}
 }
@@ -73,6 +83,11 @@ window.ashTabListIntegration = {
 	refresh: () => navigation.setTabs(items.map(item => ({ ...item })), selectedId),
 	presentation: value => categories.setPresentation(value),
 	sizing: value => categories.setSizing(value),
+	documentTabs: (count, presentation) => {
+		documentItems = Array.from({ length: count }, (_, index) => ({ id: `file-${index}`, value: `file-${index}`, label: `File ${index}`, tabId: `file-${index}-tab` }));
+		documents.setPresentation(presentation);
+		documents.setTabs(documentItems, documentItems[0]!.id);
+	},
 	categoryActions: enabled =>
 		categories.setTabs(
 			categoryItems.map((item, index) => ({

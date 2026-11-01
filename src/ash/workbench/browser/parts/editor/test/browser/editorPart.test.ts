@@ -1075,6 +1075,109 @@ test('external attachment URI drop opens its source range without treating the s
 	}
 });
 
+for (const scenario of [
+	{ selected: [0, 1], primary: 1, target: 4, after: false, expected: [2, 3, 0, 1, 4] },
+	{ selected: [0, 2], primary: 0, target: 1, after: false, expected: [0, 2, 1, 3, 4] },
+	{ selected: [1, 3], primary: 3, target: 0, after: false, expected: [1, 3, 0, 2, 4] },
+	{ selected: [0, 2], primary: 2, target: 2, after: true, expected: [1, 0, 2, 3, 4] },
+	{ selected: [0, 2], primary: 2, target: undefined, after: true, expected: [1, 3, 4, 0, 2] },
+	{ selected: [0, 1], primary: 2, target: 0, after: false, expected: [2, 0, 1, 3, 4] },
+	{ selected: [1], primary: 1, target: 4, after: true, expected: [0, 2, 3, 4, 1], copy: true },
+]) {
+	test(`tab drag reorders selection ${scenario.selected} from ${scenario.primary} at ${scenario.target}:${scenario.after}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.batchDrop', '.ts', () => new TestEditorPane('test.batchDrop')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const group = editor.activeGroup;
+			const inputs = Array.from({ length: 5 }, (_, index) => input(`/project/${index}.ts`));
+			for (const input of inputs) await group.openEditor(input, { pinned: true });
+			const labels = group.domNode.querySelectorAll<HTMLElement>('[role="tab"]');
+			labels[scenario.selected[0]!]!.click();
+			for (const index of scenario.selected.slice(1)) labels[index]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, ctrlKey: true, metaKey: true }));
+			const tabs = [...group.domNode.querySelectorAll<HTMLElement>('.ash-tab')];
+			tabs.forEach((tab, index) => { tab.getBoundingClientRect = () => new dom.window.DOMRect(index * 100, 0, 100, 35); });
+			tabs[scenario.primary]!.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+			const selected = scenario.selected.includes(scenario.primary) ? scenario.selected : [scenario.primary];
+			assert.deepEqual(group.selectedInputs, selected.map(index => inputs[index]));
+			const target = scenario.target === undefined ? group.domNode.querySelector('[role="tablist"]')! : tabs[scenario.target]!;
+			target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, clientX: scenario.target === undefined ? 600 : scenario.target * 100 + (scenario.after ? 75 : 25), altKey: 'copy' in scenario, ctrlKey: 'copy' in scenario }));
+			assert.deepEqual(group.inputs, scenario.expected.map(index => inputs[index]));
+			assert.deepEqual(group.selectedInputs, scenario.expected.filter(index => selected.includes(index)).map(index => inputs[index]));
+			assert.equal(group.activeInput, inputs[scenario.primary]);
+		} finally { dom.window.close(); }
+	});
+}
+
+for (const operation of ['move', 'copy', 'singleton-copy', 'mixed-copy', 'pin-move', 'unpin-move'] as const) {
+	test(`tab drag transfers selected editors across groups with ${operation}`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.batchTransfer', '.ts', () => new TestEditorPane('test.batchTransfer')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const source = editor.activeGroup;
+			let copies = 0;
+			const first = { ...input('/project/first.ts'), ...(operation === 'singleton-copy' || operation === 'mixed-copy' ? { capabilities: EditorInputCapabilities.Singleton } : {}), copy() { copies++; return { ...this }; } };
+			const second = { ...input('/project/second.ts'), copy() { copies++; return { ...this }; } };
+			const retained = input('/project/retained.ts');
+			for (const input of [first, second, retained]) await source.openEditor(input);
+			if (operation === 'unpin-move') source.stickEditor(first);
+			const target = editor.addGroup(source.id, Direction.Right);
+			const existing = input('/project/target.ts');
+			await target.openEditor(existing);
+			if (operation === 'pin-move') target.stickEditor(existing);
+			const labels = source.domNode.querySelectorAll<HTMLElement>('[role="tab"]');
+			labels[0]!.click();
+			if (operation !== 'singleton-copy') labels[1]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, ctrlKey: true, metaKey: true }));
+			const selected = operation === 'singleton-copy' ? [first] : [first, second];
+			const sourceTab = source.domNode.querySelectorAll<HTMLElement>('.ash-tab')[operation === 'singleton-copy' ? 0 : 1]!;
+			sourceTab.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+			const targetTab = target.domNode.querySelector<HTMLElement>('.ash-tab')!;
+			targetTab.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 100, 35);
+			const transfer = { dropEffect: 'none' };
+			const copyRequested = operation === 'copy' || operation === 'singleton-copy' || operation === 'mixed-copy';
+			const over = new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 25, altKey: copyRequested, ctrlKey: copyRequested });
+			Object.defineProperty(over, 'dataTransfer', { value: transfer });
+			targetTab.dispatchEvent(over);
+			assert.equal(transfer.dropEffect, operation === 'copy' || operation === 'mixed-copy' ? 'copy' : 'move');
+			targetTab.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 25, altKey: copyRequested, ctrlKey: copyRequested }));
+			await nextTask();
+			await nextTask();
+			assert.deepEqual(target.inputs.map(input => input.resource.path), [...selected, existing].map(input => input.resource.path));
+			assert.deepEqual(source.inputs, operation === 'copy' ? [first, second, retained] : operation === 'singleton-copy' || operation === 'mixed-copy' ? [second, retained] : [retained]);
+			assert.deepEqual(target.selectedInputs.map(input => input.resource.path), [selected[selected.length - 1]!.resource.path]);
+			assert.equal(selected.every(input => target.isSticky(input)), operation === 'pin-move');
+			assert.equal(target.activeInput?.resource.path, selected[selected.length - 1]!.resource.path);
+			assert.equal(copies, operation === 'copy' ? 2 : operation === 'mixed-copy' ? 1 : 0);
+		} finally { dom.window.close(); }
+	});
+}
+
+for (const pin of [true, false]) {
+	test(`tab drag ${pin ? 'pins' : 'unpins'} editors when crossing pinned tab rows`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			using registration = registry.registerEditorPane(descriptor('test.pinnedDrop', '.ts', () => new TestEditorPane('test.pinnedDrop')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const group = editor.activeGroup;
+			const first = input('/project/first.ts'), second = input('/project/second.ts'), third = input('/project/third.ts');
+			for (const input of [first, second, third]) await group.openEditor(input);
+			group.stickEditor(first);
+			const tabs = [...group.domNode.querySelectorAll<HTMLElement>('.ash-tab')];
+			const source = tabs[pin ? 2 : 0]!;
+			const target = tabs[pin ? 0 : 1]!;
+			target.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 100, 35);
+			source.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+			target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 25 }));
+			assert.equal(group.isSticky(pin ? third : first), pin);
+			assert.deepEqual(group.inputs, pin ? [third, first, second] : [first, second, third]);
+		} finally { dom.window.close(); }
+	});
+}
+
 test('dragging a group title moves every retained pane without reopening editors', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -1191,15 +1294,15 @@ for (const move of ['drop', 'moveEditorTo', 'openEditor'] as const) {
 			await movePreview(move === 'openEditor' ? 1 : 2);
 			assert.deepEqual(group.inputs, [first, preview, last]);
 			assert.equal(group.isPreview(preview), true);
-			assert.deepEqual(changes, []);
+			assert.deepEqual(changes, move === 'drop' ? ['activeEditorChanged'] : []);
 
 			await movePreview(0);
 			assert.deepEqual(group.inputs, [preview, first, last]);
 			assert.equal(group.isPreview(preview), false);
 			assert.equal(group.isSticky(preview), false);
 			assert.equal(group.editors[0]!.instanceId, previewId);
-			assert.equal(group.activeInput, last);
-			assert.deepEqual(changes, ['editorMoved', 'editorStateChanged']);
+			assert.equal(group.activeInput, move === 'drop' ? preview : last);
+			assert.deepEqual(changes, [...(move === 'drop' ? ['activeEditorChanged'] : []), 'editorMoved', 'editorStateChanged']);
 			assert.equal(group.domNode.querySelector('.ash-tab.preview'), null);
 
 			const next = input('/project/next.ts');

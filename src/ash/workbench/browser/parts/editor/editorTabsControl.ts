@@ -29,7 +29,8 @@ export interface EditorTabsDelegate {
 	unstickEditor(input: IResourceEditorInput): void;
 	startDrag(input: IResourceEditorInput): void;
 	isDragging(): boolean;
-	drop(target: IResourceEditorInput | undefined, position: TabListDropPosition): void;
+	getDragOperation?(copyRequested: boolean): 'move' | 'copy';
+	drop(target: IResourceEditorInput | undefined, position: TabListDropPosition, copyRequested?: boolean): void;
 	dropExternal(event: DragEvent, target: IResourceEditorInput | undefined, position: TabListDropPosition): void;
 	endDrag(): void;
 }

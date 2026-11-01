@@ -258,6 +258,86 @@ suite('TabList incremental updates', () => {
 suite('TabList rendered layout', () => {
 	const browser = useBrowserTests();
 
+	for (const presentation of ['inset', 'flush'] as const)
+		for (const count of [1, 3]) {
+			test(`keeps the last tab's drop feedback through trailing whitespace (${presentation}, ${count} tabs)`, async () => {
+				const { page } = browser;
+				await page.goto('/tablist.html');
+				await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+				await page.evaluate(({ count, presentation }) => window.ashTabListIntegration.documentTabs(count, presentation), { count, presentation });
+				const strip = page.locator('#document .ash-tab-list');
+				const tabs = strip.getByRole('tab');
+				const source = tabs.filter({ hasText: 'File 0' });
+				const last = tabs.filter({ hasText: `File ${count - 1}` }).locator('..');
+				const viewport = (await strip.boundingBox())!;
+				const sourceBounds = (await source.boundingBox())!;
+				const lastBounds = (await last.boundingBox())!;
+				const trailingX = lastBounds.x + lastBounds.width + 40;
+				expect(trailingX).toBeLessThan(viewport.x + viewport.width);
+				const blankIsDropTarget = await strip.getByRole('tablist').evaluate((element, point) =>
+					element.contains(element.ownerDocument.elementFromPoint(point.x, point.y)),
+					{ x: trailingX, y: lastBounds.y + lastBounds.height / 2 },
+				);
+				expect(blankIsDropTarget, 'The trailing whitespace must participate in the tab row hit area').toBe(true);
+				await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2);
+				await page.mouse.down();
+				try {
+					await page.mouse.move(sourceBounds.x + sourceBounds.width / 2 + 12, sourceBounds.y + sourceBounds.height / 2, { steps: 4 });
+					await expect(source.locator('..')).toHaveClass(/ash-dnd-dragging/u);
+					await page.mouse.move(lastBounds.x + lastBounds.width - 3, lastBounds.y + lastBounds.height / 2, { steps: 8 });
+					await page.mouse.move(lastBounds.x + lastBounds.width - 3, lastBounds.y + lastBounds.height / 2);
+					await expect(last).toHaveClass(/ash-dnd-drop-after/u);
+					await page.mouse.move(trailingX, lastBounds.y + lastBounds.height / 2, { steps: 4 });
+					await page.mouse.move(trailingX, lastBounds.y + lastBounds.height / 2);
+					await expect(last).toHaveClass(/ash-dnd-drop-after/u);
+				} finally {
+					await page.mouse.up();
+				}
+				await expect(tabs).toHaveText(count === 1 ? ['File 0'] : ['File 1', 'File 2', 'File 0']);
+				await expect(strip.locator('.ash-dnd-dragging, .ash-dnd-drop-before, .ash-dnd-drop-after')).toHaveCount(0);
+			});
+		}
+
+	for (const edge of ['first', 'last'] as const) {
+		test(`keeps the ${edge} insertion marker inside the viewport at the overflow boundary`, async () => {
+			const { page } = browser;
+			await page.goto('/tablist.html');
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.evaluate(() => window.ashTabListIntegration.documentTabs(6, 'flush'));
+			const strip = page.locator('#document .ash-tab-list');
+			const tabs = strip.getByRole('tab');
+			await (edge === 'first' ? tabs.first() : tabs.last()).focus();
+			const source = tabs.nth(edge === 'first' ? 1 : 4);
+			const last = (edge === 'first' ? tabs.first() : tabs.last()).locator('..');
+			const sourceBounds = (await source.boundingBox())!;
+			const lastBounds = (await last.boundingBox())!;
+			await page.mouse.move(sourceBounds.x + sourceBounds.width / 2, sourceBounds.y + sourceBounds.height / 2);
+			await page.mouse.down();
+			try {
+				await page.mouse.move(sourceBounds.x + sourceBounds.width / 2 + 12, sourceBounds.y + sourceBounds.height / 2, { steps: 4 });
+				await expect(source.locator('..')).toHaveClass(/ash-dnd-dragging/u);
+				const targetX = edge === 'first' ? lastBounds.x + 3 : lastBounds.x + lastBounds.width - 3;
+				await page.mouse.move(targetX, lastBounds.y + lastBounds.height / 2, { steps: 8 });
+				await page.mouse.move(targetX, lastBounds.y + lastBounds.height / 2);
+				await expect(last).toHaveClass(edge === 'first' ? /ash-dnd-drop-before/u : /ash-dnd-drop-after/u);
+				const geometry = await last.evaluate((element, edge) => {
+					const bounds = element.getBoundingClientRect();
+					const viewport = element.closest('.ash-scrollbar-viewport')!.getBoundingClientRect();
+					const marker = getComputedStyle(element, '::before');
+					const markerWidth = parseFloat(marker.width);
+					const markerLeft = edge === 'first' ? bounds.left + parseFloat(marker.left) : bounds.right - parseFloat(marker.right) - markerWidth;
+					return { markerLeft, markerRight: markerLeft + markerWidth, markerWidth, viewportLeft: viewport.left, viewportRight: viewport.right };
+				}, edge);
+				expect(geometry.markerWidth).toBe(2);
+				expect(geometry.markerLeft).toBeGreaterThanOrEqual(geometry.viewportLeft);
+				expect(geometry.markerRight).toBeLessThanOrEqual(geometry.viewportRight);
+			} finally {
+				await page.mouse.up();
+			}
+			await expect(tabs).toHaveText(edge === 'first' ? ['File 1', 'File 0', 'File 2', 'File 3', 'File 4', 'File 5'] : ['File 0', 'File 1', 'File 2', 'File 3', 'File 5', 'File 4']);
+		});
+	}
+
 	test('shows the dragging cursor only during a drag, not when opening a context menu', async () => {
 		const { page } = browser;
 		await page.goto('/tablist.html');
@@ -613,6 +693,16 @@ test('TabList can opt its items into native drag-source presentation', () => {
 	assert.ok(item);
 	assert.equal(item.draggable, true);
 	assert.equal(item.classList.contains('ash-dnd-draggable'), true);
+	const dragImages: Array<{ element: Element; x: number; y: number; }> = [];
+	const event = dragEvent(dom.window, 'dragstart');
+	Object.defineProperty(event, 'dataTransfer', {
+		value: {
+			setData() { },
+			setDragImage: (element: Element, x: number, y: number) => dragImages.push({ element, x, y }),
+		},
+	});
+	item.querySelector('.ash-tab-label')!.dispatchEvent(event);
+	assert.deepEqual(dragImages, [{ element: item, x: 0, y: 0 }]);
 
 	tabList.dispose();
 	dom.window.close();

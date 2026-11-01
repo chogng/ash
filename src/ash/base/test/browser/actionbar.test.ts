@@ -357,7 +357,7 @@ test('ActionBar reports drop targets without enabling ordinary toolbars', () => 
 	dom.window.close();
 });
 
-test('ActionBar keeps insertion feedback continuous across gaps and hides no-op drops', () => {
+test('ActionBar shows insertion feedback on entry and across gaps, including no-op positions', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const dropped: string[] = [];
 	let dragging = false;
@@ -392,13 +392,198 @@ test('ActionBar keeps insertion feedback continuous across gaps and hides no-op 
 
 	first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
 	const dataTransfer = testDataTransfer();
+	second.dispatchEvent(dragEvent(dom.window, 'dragenter', 105, dataTransfer));
+	assert.equal(second.classList.contains('ash-dnd-drop-before'), true);
 	second.dispatchEvent(dragEvent(dom.window, 'dragover', 125, dataTransfer));
-	assert.equal(second.classList.contains('ash-dnd-drop-before'), false);
+	assert.equal(second.classList.contains('ash-dnd-drop-before'), true);
 	assert.equal(dataTransfer.dropEffect, 'move');
 	second.dispatchEvent(dragEvent(dom.window, 'drop', 125));
-	assert.deepEqual(dropped, ['second:before']);
+	assert.deepEqual(dropped, ['second:before', 'second:before']);
 	assert.equal(dragging, false);
+	assert.equal(second.classList.contains('ash-dnd-drop-before'), false);
+
+	third.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+	second.dispatchEvent(dragEvent(dom.window, 'dragenter', 203));
+	assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+	second.dispatchEvent(dragEvent(dom.window, 'dragover', 180));
+	assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+	second.dispatchEvent(dragEvent(dom.window, 'dragleave', 180));
+	assert.equal(second.classList.contains('ash-dnd-drop-after'), false);
+	third.dispatchEvent(dragEvent(dom.window, 'dragend'));
 	dom.window.close();
+});
+
+suite('ActionBar drag feedback lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('whitespace has no hovered item while feedback and drop retain the insertion neighbor', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const hovered: Array<string | undefined> = [];
+			const drops: string[] = [];
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [action('first'), action('second')],
+				dragAndDrop: {
+					canDrop: () => true,
+					onDragStart: () => { },
+					onDragOver: target => hovered.push(target?.id),
+					onDrop: (target, position) => drops.push(`${target?.id}:${position}`),
+					onDragEnd: () => { },
+				},
+			});
+			const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			assert.ok(first);
+			assert.ok(second);
+			first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
+			second.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+			bar.element.dispatchEvent(dragEvent(dom.window, 'dragover', 250));
+			assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+			assert.deepEqual(hovered, [undefined]);
+			bar.element.dispatchEvent(dragEvent(dom.window, 'drop', 250));
+			assert.deepEqual(drops, ['second:after']);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	test('leaving the previous item retains feedback on the newly entered item', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [action('first'), action('second')],
+				dragAndDrop: {
+					canDrop: () => true,
+					onDragStart: () => { },
+					onDrop: () => { },
+					onDragEnd: () => { },
+				},
+			});
+			const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			assert.ok(first);
+			assert.ok(second);
+			first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
+			second.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+			first.dispatchEvent(dragEvent(dom.window, 'dragenter', 25));
+			second.dispatchEvent(dragEvent(dom.window, 'dragenter', 175));
+			assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+			// Native DnD enters the new target before leaving the old one.
+			first.dispatchEvent(dragEvent(dom.window, 'dragleave', 25));
+			assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+			second.dispatchEvent(dragEvent(dom.window, 'dragleave', 175));
+			assert.equal(second.classList.contains('ash-dnd-drop-after'), false);
+		} finally {
+			dom.window.close();
+		}
+	});
+
+	for (const origin of ['internal', 'external'] as const)
+		for (const destination of ['item', 'background'] as const) {
+			test(`clears feedback when an ${origin} drop is rejected on the ${destination}`, () => {
+				const dom = new JSDOM('<!doctype html><body></body>');
+				try {
+					let acceptsDrop = true;
+					let dropped = 0;
+					let ended = 0;
+					using bar = new ActionBar(dom.window.document.body, {
+						actions: [action('first'), action('second')],
+						actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: true }),
+						dragAndDrop: {
+							canDrop: () => acceptsDrop,
+							onDragStart: () => { },
+							onDrop: () => { dropped++; },
+							onDragEnd: () => { ended++; },
+						},
+					});
+					const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+					assert.ok(first);
+					assert.ok(second);
+					first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
+					second.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+					if (origin === 'internal') first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+					const target = destination === 'item' ? second : bar.element;
+					const coordinate = destination === 'item' ? 175 : 225;
+					target.dispatchEvent(dragEvent(dom.window, 'dragover', coordinate));
+					assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
+					acceptsDrop = false;
+					target.dispatchEvent(dragEvent(dom.window, 'drop', coordinate));
+					assert.equal(bar.element.querySelector('.ash-dnd-drop-after, .ash-dnd-dragging'), null);
+					assert.equal(dropped, 0);
+					assert.equal(ended, origin === 'internal' ? 1 : 0);
+				} finally {
+					dom.window.close();
+				}
+			});
+		}
+
+	for (const change of ['remove', 'replace', 'dispose'] as const) {
+		test(`ends a drag when its source is subject to ${change}`, () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				const first = action('first');
+				const second = action('second');
+				let ended = 0;
+				using bar = new ActionBar(dom.window.document.body, {
+					actions: [first, second],
+					actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: true }),
+					dragAndDrop: {
+						canDrop: () => true,
+						onDragStart: () => { },
+						onDrop: () => { },
+						onDragEnd: () => { ended++; },
+					},
+				});
+				const [source, target] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+				assert.ok(source);
+				assert.ok(target);
+				target.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+				source.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+				target.dispatchEvent(dragEvent(dom.window, 'dragover', 175));
+				if (change === 'remove') bar.setActions([second]);
+				else if (change === 'replace') bar.updateActions([{ ...first, label: 'Replacement' }, second]);
+				else bar.dispose();
+				assert.equal(source.classList.contains('ash-dnd-dragging'), false);
+				assert.equal(target.classList.contains('ash-dnd-drop-after'), false);
+				assert.equal(ended, 1);
+				bar.element.dispatchEvent(dragEvent(dom.window, 'dragend'));
+				assert.equal(ended, 1);
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+
+	test('removing the drop target clears feedback while retaining the live drag source', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const first = action('first');
+			const second = action('second');
+			let ended = 0;
+			using bar = new ActionBar(dom.window.document.body, {
+				actions: [first, second],
+				actionViewItemProvider: item => new LabelActionViewItem(item, { draggable: true }),
+				dragAndDrop: {
+					canDrop: () => true,
+					onDragStart: () => { },
+					onDrop: () => { },
+					onDragEnd: () => { ended++; },
+				},
+			});
+			const [source, target] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			assert.ok(source);
+			assert.ok(target);
+			target.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
+			source.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+			target.dispatchEvent(dragEvent(dom.window, 'dragover', 175));
+			bar.setActions([first]);
+			assert.equal(source.classList.contains('ash-dnd-dragging'), true);
+			assert.equal(target.classList.contains('ash-dnd-drop-after'), false);
+			assert.equal(ended, 0);
+			source.dispatchEvent(dragEvent(dom.window, 'dragend'));
+			assert.equal(ended, 1);
+		} finally {
+			dom.window.close();
+		}
+	});
 });
 
 test('ActionBar owns horizontal keyboard navigation', () => {

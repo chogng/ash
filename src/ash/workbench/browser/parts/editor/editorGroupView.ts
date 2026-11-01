@@ -223,9 +223,14 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			showContextMenu: (input, event, tab) => this.showTabContextMenu(input, event, tab),
 			pinEditor: input => this.pinEditor(input),
 			unstickEditor: input => this.unstickEditor(input),
-			startDrag: input => options.dragAndDrop?.start(this, input),
+			startDrag: input => {
+				const selected = this.selectedInputs.includes(input) ? this.selectedInputs.filter(candidate => candidate !== input) : [];
+				this.setSelection(input, selected);
+				options.dragAndDrop?.start(this, input);
+			},
 			isDragging: () => options.dragAndDrop?.isDragging() ?? false,
-			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
+			getDragOperation: copyRequested => options.dragAndDrop?.getOperation(this, copyRequested) ?? 'move',
+			drop: (target, position, copyRequested) => options.dragAndDrop?.drop(this, target, position, undefined, copyRequested),
 			dropExternal: (event, target, position) => {
 				void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
 					console.error('Failed to open dropped editor resources', error);
@@ -963,8 +968,15 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		else { this.domNode.focus(); }
 	}
 
-	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
+	setSelection(active: IResourceEditorInput, inactiveSelection: readonly IResourceEditorInput[] = []): void {
+		this.activateEntry(this.requireEntry(active), false, inactiveSelection);
+	}
+
+	private activateEntry(entry: EditorGroupEntry, focus: boolean, inactiveSelection: readonly IResourceEditorInput[] = []): void {
 		const changed = this.model.setActive(entry.input);
+		for (const input of inactiveSelection) {
+			if (input !== entry.input) this.model.setSelection(input, { toggle: true, range: false });
+		}
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		this.panes.activate(entry.paneInstance, this.dimension);

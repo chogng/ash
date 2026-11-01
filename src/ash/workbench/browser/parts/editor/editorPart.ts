@@ -1001,7 +1001,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				start: (source, input) => { this.tabDragAndDrop.start(source, input); this.showDragOverlays(); },
 				startGroup: source => { this.tabDragAndDrop.startGroup(source); this.showDragOverlays(); },
 				isDragging: () => this.tabDragAndDrop.isDragging(),
-				drop: (target, targetInput, position, splitDirection) => this.tabDragAndDrop.drop(target, targetInput, position, splitDirection),
+				getOperation: (target, copyRequested, splitDirection) => this.tabDragAndDrop.getOperation(target, copyRequested, splitDirection),
+				drop: (target, targetInput, position, splitDirection, copyRequested) => this.tabDragAndDrop.drop(target, targetInput, position, splitDirection, copyRequested),
 				end: () => { this.tabDragAndDrop.end(); this.dragOverlays.clear(); },
 			},
 		} satisfies EditorGroupOptions);
@@ -1091,7 +1092,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private dropEditor(event: EditorTabDropEvent): void {
 		const source = event.source;
-		if (source && event.wholeGroup && this.groupHosts.get(source.id)?.group === source) {
+		if (source && event.wholeGroup && !event.copy && this.groupHosts.get(source.id)?.group === source) {
 			if (source === event.target) return;
 			if (event.splitDirection !== undefined) {
 				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
@@ -1111,22 +1112,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 		// Independent editor hosts can have different pane registries. Reject a transfer
 		// the receiving host cannot render before moving or closing its source input.
-		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
-		if (!source) {
-			const created = event.splitDirection !== undefined ? this.insertGroup(event.target, event.splitDirection) : undefined;
-			const target = created?.group ?? event.target;
-			const index = created ? 0 : target.getEditorInsertionIndex(event.targetInput, event.position);
-			void target.openEditor(event.input, { pinned: true, index }).then(() => {
-				this.setActiveGroup(target);
-				target.focus();
-			}).catch(error => {
-				if (created && this._groups.includes(created)) this.removeGroupHost(created);
-				console.error('Failed to open dropped Editor tab', error);
-			});
-			return;
-		}
-		if (event.splitDirection !== undefined) {
-			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(source.id)?.group === source) {
+		const inputs = source && event.wholeGroup ? [...source.inputs] : event.inputs ?? [event.input];
+		if (!inputs.every(input => this.groupOptions.registry.getEditorPanesForInput(input).length)) return;
+		if (this.groupOptions.editorLimit === 1 && inputs.length > 1) return;
+		if (source && event.splitDirection !== undefined) {
+			if (!event.copy && this.groupOptions.editorLimit === 1 && this.groupHosts.get(source.id)?.group === source) {
 				// A single-content tab represents its whole group. Move that group
 				// to retain its pane and identity instead of leaving an empty source.
 				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
@@ -1135,33 +1125,63 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				source.focus();
 				return;
 			}
-			const created = this.insertGroup(event.target, event.splitDirection);
-			void source.moveEditorTo(event.input, created.group, 0)
-				.then(() => {
-					this.setActiveGroup(created.group);
-					created.group.focus();
-				})
-				.catch(error => {
-					if (this._groups.includes(created)) this.removeGroupHost(created);
-					console.error('Failed to split Editor tab', error);
-				});
+		}
+		const viewStates = new Map(source ? inputs.map(input => [input, source.saveEditorViewState(input)] as const) : []);
+		const created = event.splitDirection !== undefined ? this.insertGroup(event.target, event.splitDirection) : undefined;
+		const target = created?.group ?? event.target;
+		const targetIndex = created ? 0 : target.getEditorInsertionIndex(event.targetInput, event.position);
+		const sticky = !created && !!event.targetInput && target.isSticky(event.targetInput);
+		if (source === target) {
+			const selected = new Set(inputs);
+			const insertion = target.inputs.slice(0, targetIndex).filter(input => !selected.has(input)).length;
+			const remaining = target.inputs.filter(input => !selected.has(input));
+			const desired = [...remaining.slice(0, insertion), ...inputs, ...remaining.slice(insertion)];
+			// Resolve the boundary before changing pinned rows or moving any selected tab.
+			const anchor = remaining[insertion];
+			for (const input of inputs) {
+				if (sticky) target.stickEditor(input);
+				else if (target.isSticky(input)) target.unstickEditor(input);
+			}
+			if (desired.some((input, index) => target.inputs[index] !== input)) {
+				for (const input of inputs) target.moveEditor(input, anchor ? target.inputs.indexOf(anchor) : target.inputs.length);
+			}
+			target.setSelection(event.input, inputs.filter(input => input !== event.input));
+			this.setActiveGroup(target);
+			target.focus();
 			return;
 		}
-		const targetIndex = event.target.getEditorInsertionIndex(event.targetInput, event.position);
-		if (source === event.target) {
-			event.target.moveEditor(event.input, targetIndex);
-			this.setActiveGroup(event.target);
-			event.target.focus();
-			return;
-		}
-		void source.moveEditorTo(event.input, event.target, targetIndex)
-			.then(() => {
-				this.setActiveGroup(event.target);
-				event.target.focus();
-			})
-			.catch((error) => {
-				console.error('Failed to move Editor tab', error);
-			});
+		void (async () => {
+			const transferred: IResourceEditorInput[] = [];
+			let index = targetIndex;
+			for (const input of inputs) {
+				let dropped = input;
+				if (source && event.copy && !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton)) {
+					const preferredEditorId = source.editors.find(editor => editor.input === input)?.paneId;
+					dropped = input.copy?.() ?? input;
+					await target.openEditor(dropped, { index, pinned: true, preferredEditorId });
+				} else if (source) {
+					await source.moveEditorTo(input, target, index);
+				} else {
+					await target.openEditor(input, { index, pinned: true });
+				}
+				dropped = target.inputs.find(candidate => this.isSameEditor(candidate, dropped))!;
+				if (sticky) target.stickEditor(dropped);
+				else if (target.isSticky(dropped)) target.unstickEditor(dropped);
+				// Opening and changing rows can clamp the index before its final pin state is known.
+				target.moveEditor(dropped, target.inputs.indexOf(dropped) < index ? index + 1 : index);
+				if (source) target.restoreEditorViewState(dropped, viewStates.get(input));
+				transferred.push(dropped);
+				index = target.inputs.indexOf(dropped) + 1;
+			}
+			// Cross-group opens activate the final member, while same-group reorders retain the selection.
+			target.activateEditor(transferred[transferred.length - 1]!);
+			this.setActiveGroup(target);
+			target.focus();
+		})().catch(error => {
+			// A completed transfer owns its pane even if a later member fails.
+			if (created && target.inputs.length === 0 && this._groups.includes(created)) this.removeGroupHost(created);
+			console.error('Failed to transfer Editor tabs', error);
+		});
 	}
 
 	saveWorkingSet(id: string, excludedGroups: readonly EditorGroupId[] = []): EditorWorkingSet {

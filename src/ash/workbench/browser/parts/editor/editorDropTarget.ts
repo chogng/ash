@@ -5,7 +5,7 @@ import { DndCssClasses } from '../../../../base/browser/ui/dnd/dnd.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { EditorGroupView } from './editorGroupView.js';
-import type { IEditorTabDragAndDrop } from './editorTabDragAndDrop.js';
+import { isEditorTabCopyRequested, type IEditorTabDragAndDrop } from './editorTabDragAndDrop.js';
 
 /** Owns the editor area's drop feedback and routes a dropped tab to its group. */
 export class EditorDropTarget extends Disposable {
@@ -40,8 +40,8 @@ export class EditorDropTarget extends Disposable {
 			this.clearFeedback();
 			this.activeGroup = group;
 		}
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 		this.splitDirection = dropSplitDirection(event, group.domNode.getBoundingClientRect());
+		if (event.dataTransfer) event.dataTransfer.dropEffect = this.dragAndDrop.getOperation(group, isEditorTabCopyRequested(event), this.splitDirection);
 		if (this.splitDirection !== undefined) group.domNode.dataset.editorDropDirection = Direction[this.splitDirection].toLowerCase();
 		else delete group.domNode.dataset.editorDropDirection;
 		group.domNode.classList.add(DndCssClasses.DropTarget);
@@ -59,7 +59,7 @@ export class EditorDropTarget extends Disposable {
 		event.stopPropagation();
 		const direction = group === this.activeGroup ? this.splitDirection : undefined;
 		this.clearFeedback();
-		this.dragAndDrop.drop(group, undefined, 'after', direction);
+		this.dragAndDrop.drop(group, undefined, 'after', direction, isEditorTabCopyRequested(event));
 	}
 
 	private isOverTitle(group: EditorGroupView, target: EventTarget | null): boolean {
