@@ -397,6 +397,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "dashboard",
+      "file": "dashboard.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "database",
       "file": "database.svg",
       "rendering": "symbolic"

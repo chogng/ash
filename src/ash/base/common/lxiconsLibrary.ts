@@ -83,6 +83,7 @@ export const lxiconsLibrary = {
 	cursor: registerLxicon("cursor", 0xe04b),
 	cursor2: registerLxicon("cursor-2", 0xe049),
 	cursorFilled: registerLxicon("cursor-filled", 0xe04a),
+	dashboard: registerLxicon("dashboard", 0xe15b),
 	database: registerLxicon("database", 0xe04d),
 	databaseFlat: registerLxicon("database-flat", 0xe04c),
 	debug: registerLxicon("debug", 0xe051),
