@@ -158,7 +158,7 @@ suite('Desktop built-in Voice Mode command', () => {
 		widget.isTranscriptProgressActive = true;
 		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
 		widget.isTranscriptProgressActive = false;
-		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget: { ...widget } });
+		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget: Object.create(widget) });
 		registration.dispose();
 		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
 		assert.equal(starts, 1);

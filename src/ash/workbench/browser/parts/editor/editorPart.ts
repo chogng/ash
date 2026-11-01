@@ -1090,17 +1090,18 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private dropEditor(event: EditorTabDropEvent): void {
-		if (event.wholeGroup && this.groupHosts.get(event.source.id)?.group === event.source) {
-			if (event.source === event.target) return;
+		const source = event.source;
+		if (source && event.wholeGroup && this.groupHosts.get(source.id)?.group === source) {
+			if (source === event.target) return;
 			if (event.splitDirection !== undefined) {
 				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
-				this.moveGroup(event.source, event.target, directions[event.splitDirection]);
-				this.setActiveGroup(event.source);
-				event.source.focus();
+				this.moveGroup(source, event.target, directions[event.splitDirection]);
+				this.setActiveGroup(source);
+				source.focus();
 			} else {
 				void (async () => {
-					for (const input of [...event.source.inputs]) {
-						await event.source.moveEditorTo(input, event.target, event.target.inputs.length);
+					for (const input of [...source.inputs]) {
+						await source.moveEditorTo(input, event.target, event.target.inputs.length);
 					}
 					this.setActiveGroup(event.target);
 					event.target.focus();
@@ -1111,18 +1112,31 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// Independent editor hosts can have different pane registries. Reject a transfer
 		// the receiving host cannot render before moving or closing its source input.
 		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
+		if (!source) {
+			const created = event.splitDirection !== undefined ? this.insertGroup(event.target, event.splitDirection) : undefined;
+			const target = created?.group ?? event.target;
+			const index = created ? 0 : target.getEditorInsertionIndex(event.targetInput, event.position);
+			void target.openEditor(event.input, { pinned: true, index }).then(() => {
+				this.setActiveGroup(target);
+				target.focus();
+			}).catch(error => {
+				if (created && this._groups.includes(created)) this.removeGroupHost(created);
+				console.error('Failed to open dropped Editor tab', error);
+			});
+			return;
+		}
 		if (event.splitDirection !== undefined) {
-			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(event.source.id)?.group === event.source) {
+			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(source.id)?.group === source) {
 				// A single-content tab represents its whole group. Move that group
 				// to retain its pane and identity instead of leaving an empty source.
 				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
-				this.moveGroup(event.source, event.target, directions[event.splitDirection]);
-				this.setActiveGroup(event.source);
-				event.source.focus();
+				this.moveGroup(source, event.target, directions[event.splitDirection]);
+				this.setActiveGroup(source);
+				source.focus();
 				return;
 			}
 			const created = this.insertGroup(event.target, event.splitDirection);
-			void event.source.moveEditorTo(event.input, created.group, 0)
+			void source.moveEditorTo(event.input, created.group, 0)
 				.then(() => {
 					this.setActiveGroup(created.group);
 					created.group.focus();
@@ -1134,13 +1148,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			return;
 		}
 		const targetIndex = event.target.getEditorInsertionIndex(event.targetInput, event.position);
-		if (event.source === event.target) {
+		if (source === event.target) {
 			event.target.moveEditor(event.input, targetIndex);
 			this.setActiveGroup(event.target);
 			event.target.focus();
 			return;
 		}
-		void event.source.moveEditorTo(event.input, event.target, targetIndex)
+		void source.moveEditorTo(event.input, event.target, targetIndex)
 			.then(() => {
 				this.setActiveGroup(event.target);
 				event.target.focus();

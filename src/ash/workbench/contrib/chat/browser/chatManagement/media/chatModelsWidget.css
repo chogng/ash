@@ -116,13 +116,13 @@
 	visibility: hidden;
 }
 
-.ash-model-context-button[aria-pressed="true"] .ash-model-context-default {
+.ash-model-context-button.checked .ash-model-context-default {
 	transform: translateY(-50%) rotateX(90deg);
 	opacity: 0;
 	visibility: hidden;
 }
 
-.ash-model-context-button[aria-pressed="true"] .ash-model-context-extended {
+.ash-model-context-button.checked .ash-model-context-extended {
 	transform: translateY(0) rotateX(0);
 	opacity: 1;
 	visibility: visible;

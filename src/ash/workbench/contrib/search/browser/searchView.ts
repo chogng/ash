@@ -239,12 +239,9 @@ export class SearchView extends ViewPane {
 		this._register(this.tree.onDidChangeSelection(() => this.updateResultActions()));
 		this._register(this.tree.onDidChangeCollapseState(() => this.updateResultActions()));
 		this._register(this.onDidChangeBodyVisibility(visible => { if (!visible) { this.resultMenu.clear(); } }));
-		this._register(addDisposableListener(this.tree.domNode, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.target !== this.tree.element) { return; }
-			if (((event.key === 'ContextMenu' && !event.shiftKey) || (event.key === 'F10' && event.shiftKey)) && this.tree.focus) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.showResultContextMenu(this.tree.focus, this.tree.domNode);
+		this._register(this.tree.onContextMenu(event => {
+			if ('key' in event.browserEvent && event.element) {
+				this.showResultContextMenu(event.element, event.anchor);
 			}
 		}));
 		this._register(this.searchWidget.onDidChange(() => this.updateResultActions()));
@@ -789,6 +786,8 @@ export class SearchView extends ViewPane {
 		} else {
 			this.tree.setChildren(treeEntries);
 		}
+		// Result nodes retain identity while counts, previews and display settings change.
+		this.tree.rerender();
 		this.updateResultActions();
 	}
 

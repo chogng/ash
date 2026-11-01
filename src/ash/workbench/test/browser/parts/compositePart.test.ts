@@ -400,7 +400,7 @@ suite('composite browser component', () => {
 		}
 		await expect(alpha).toHaveCSS('font-weight', '400');
 		await alpha.focus();
-		await expect(alpha).toHaveCSS('outline-style', 'solid');
+		await expect(alpha.locator('..')).toHaveCSS('outline-style', 'solid');
 		await alpha.press('ArrowRight');
 		await expect(beta).toBeFocused();
 		await alpha.focus();
@@ -416,7 +416,7 @@ suite('composite browser component', () => {
 		}
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
-			await expect(alpha).toHaveCSS('outline-style', 'solid');
+			await expect(alpha.locator('..')).toHaveCSS('outline-style', 'solid');
 			const colors = await tabs.evaluateAll(elements => elements.map(element => ({ background: getComputedStyle(element).backgroundColor, selection: getComputedStyle(element).borderTopColor })));
 			if (theme.includes('high-contrast')) {
 				expect(colors[0]!.selection).not.toBe('rgba(0, 0, 0, 0)');
@@ -1101,7 +1101,7 @@ suite('composite browser component', () => {
 				for (const [part, tab] of [[editorPart, editorTab], [chatPart, chatTab]] as const) {
 					await tab.focus();
 					await expect(tab).toBeFocused();
-					await expect(tab).toHaveCSS('outline-style', 'solid');
+					await expect(tab === editorTab ? tab.locator('..') : tab).toHaveCSS('outline-style', 'solid');
 					await expect(part).toHaveCSS('border-radius', '8px');
 					const screenshot = await part.screenshot();
 					const corners = await page.evaluate(async base64 => {
@@ -1434,7 +1434,7 @@ suite('composite browser component', () => {
 			const tab = active.getByRole('tab');
 			await page.keyboard.press('Tab');
 			await tab.focus();
-			await expect(tab).toHaveCSS('outline-style', 'solid');
+			await expect(active).toHaveCSS('outline-style', 'solid');
 			await page.evaluate(() => window.ashCompositeIntegration.setActiveEditorSticky(true));
 			await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
 			await expect(strip).toHaveCSS('background-color', stripColor);

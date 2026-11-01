@@ -23,7 +23,7 @@ export interface IEditorTabDragAndDrop {
 /** One editor tab retained as an in-renderer drag payload. */
 export class DraggedEditorIdentifier {
 	constructor(
-		readonly source: EditorGroupView,
+		readonly source: EditorGroupView | undefined,
 		readonly input: IResourceEditorInput,
 		readonly wholeGroup = false,
 	) { }
@@ -31,7 +31,8 @@ export class DraggedEditorIdentifier {
 
 /** The resolved target of an editor tab drag. */
 export interface EditorTabDropEvent {
-	readonly source: EditorGroupView;
+	/** Absent when a contribution lends an input that has no editor group yet. */
+	readonly source: EditorGroupView | undefined;
 	readonly input: IResourceEditorInput;
 	readonly target: EditorGroupView;
 	readonly targetInput: IResourceEditorInput | undefined;

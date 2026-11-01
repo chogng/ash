@@ -10,6 +10,7 @@ import type { ChatViewPane } from '../viewPane/chatViewPane.js';
 import { IViewsService } from '../../../../../services/views/common/viewsService.js';
 import { CHAT_VIEW_ID } from '../../../common/chat.js';
 import { ChatEditorInput } from './chatEditorInput.js';
+import type { IEditorCloseHandler } from '../../../../../common/editor/editorInput.js';
 
 /** Owns an editor host and borrows the window Chat's content for its input lifetime. */
 export class ChatEditor extends EditorPane {
@@ -18,6 +19,9 @@ export class ChatEditor extends EditorPane {
 	private view: ChatViewPane | undefined;
 	private readonly mount = this._register(new MutableDisposable());
 	private shown = false;
+	private session: Awaited<ReturnType<ChatViewPane['attachSessionEditor']>> | undefined;
+	private input: ChatEditorInput | undefined;
+	private closeHandler: IEditorCloseHandler | undefined;
 
 	constructor(
 		@IViewsService private readonly views: IViewsService,
@@ -36,7 +40,22 @@ export class ChatEditor extends EditorPane {
 		signal.throwIfAborted();
 		if (!view || typeof view.attachEditor !== 'function') throw new Error('Chat editor requires its window conversation owner');
 		if (!(input instanceof ChatEditorInput)) throw new TypeError('Invalid Chat editor input');
-		input.closeHandler = {
+		if (input.paneId !== undefined) {
+			const session = await view.attachSessionEditor(input, this.element);
+			if (signal.aborted) { session.dispose(); signal.throwIfAborted(); }
+			this.session = session;
+			this.mount.value = session;
+			this.input = input;
+			input.closeHandler = this.closeHandler = {
+				showConfirm: () => true,
+				confirm: async () => { await session.widget.captureDraft(); return ConfirmResult.DONT_SAVE; },
+			};
+			session.widget.setTabId(undefined);
+			session.setVisible(this.shown);
+			return;
+		}
+		this.input = input;
+		input.closeHandler = this.closeHandler = {
 			showConfirm: () => true,
 			confirm: async () => { await view.captureActiveDraft(); return ConfirmResult.DONT_SAVE; },
 		};
@@ -48,11 +67,17 @@ export class ChatEditor extends EditorPane {
 	override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.shown = visible;
+		this.session?.setVisible(visible);
 		this.view?.setEditorVisible(this.element, visible);
 	}
 
 	override clearInput(): void {
+		// A group move may already have installed the target editor's handler on this input.
+		if (this.input?.closeHandler === this.closeHandler && this.input) this.input.closeHandler = undefined;
+		this.input = undefined;
+		this.closeHandler = undefined;
 		this.mount.clear();
+		this.session = undefined;
 		this.view = undefined;
 	}
 
@@ -61,6 +86,6 @@ export class ChatEditor extends EditorPane {
 		this.element.style.height = `${dimension.height}px`;
 	}
 
-	override focus(): void { this.view?.focus(); }
+	override focus(): void { if (this.session) this.session.widget.focus(); else this.view?.focus(); }
 	protected override disposeCore(): void { this.clearInput(); super.disposeCore(); }
 }

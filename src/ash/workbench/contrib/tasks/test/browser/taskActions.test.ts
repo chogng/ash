@@ -1,3 +1,6 @@
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/taskService.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
@@ -111,6 +114,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 	for (const failure of [false, true]) {
 		test(`Run Task uses the latest open picker catalog and ${failure ? 'reports failure' : 'leaves presentation to the execution owner'} after command invocation ends`, async () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
+			using storage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'task-actions', flushInterval: 0 });
 			using picker = new Picker();
 			using services = new InstantiationService();
 			services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -135,6 +139,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
 				terminate: async () => { }, dispose() { }, [Symbol.dispose]() { },
 			};
+			services.registerInstance(IStorageService, storage);
 			services.registerInstance(ITaskService, tasks);
 			services.registerInstance(IQuickInputService, {
 				...quickInputServiceTestControls,

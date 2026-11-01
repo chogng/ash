@@ -80,12 +80,13 @@ suite('Workspace task progress signals', () => {
 		using resources = new DisposableStore();
 		try {
 			const root = URI.file('/project');
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
 				onDidChangeWorkspaceName: Event.None,
-				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
+				getWorkspace: () => workspaceState,
 				getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
 			};
 			const terminals = resources.add(new FakeTerminalService());
@@ -157,12 +158,13 @@ test('TaskService discovers UTF-8 configuration through the provider text contra
 		},
 		readFile: async () => { throw new Error('A binary resource cannot be read on this Session route'); },
 	});
+	const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'task-text', index: 0 }] };
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'task-text', index: 0 }] }),
+		getWorkspace: () => workspaceState,
 		getWorkbenchState: () => 2, getWorkspaceFolder: () => null,
 	};
 	using resources = new DisposableStore();
@@ -181,12 +183,13 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 		'pnpm-lock.yaml': 'lockfileVersion: 9',
 		'Cargo.toml': '[workspace]',
 	});
+	const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] };
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
+		getWorkspace: () => workspaceState,
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
@@ -223,12 +226,13 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 test('TaskService atomically owns dynamic providers and merges their tasks on refresh', async () => {
 	const root = URI.file('C:\\project');
 	const files = new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
+	const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] };
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
+		getWorkspace: () => workspaceState,
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
@@ -257,12 +261,13 @@ test('TaskService atomically owns dynamic providers and merges their tasks on re
 
 test('TaskService retains the last good task set when a provider refresh fails', async () => {
 	const root = URI.file('C:\\project');
+	const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] };
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
+		getWorkspace: () => workspaceState,
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
@@ -1056,11 +1061,12 @@ suite('TaskService terminal availability', () => {
 				write: async () => { throw new Error('A configured task must not write shell command input'); },
 				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
-				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => null
 			};
 			const logs: string[] = [];
 			const output = { createChannel: () => ({ ...Disposable.None, appendLine: (entry: { text: string; }) => { logs.push(entry.text); } }) } as unknown as IOutputService;
@@ -1124,12 +1130,13 @@ suite('TaskService terminal availability', () => {
 				resize: async () => { },
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
 				onDidChangeWorkspaceName: Event.None,
-				getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }),
+				getWorkspace: () => workspaceState,
 				getWorkbenchState: () => 2,
 				getWorkspaceFolder: () => null,
 			};
@@ -1383,11 +1390,12 @@ suite('TaskService configuration capabilities', () => {
 			using terminals = new FakeTerminalService();
 			const root = URI.file('/workspace');
 			const contents: Record<string, string> = { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'check', ...configuration }] }) };
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
-				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => null
 			};
 			const services = taskServices(resources, new FakeFileService(root, contents), workspace, terminals);
 			using service = services.createInstance(TaskService);
@@ -1409,11 +1417,12 @@ suite('TaskService configuration capabilities', () => {
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
 		const contents: Record<string, string> = { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' };
+		const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] };
 		const workspace: IWorkspaceContextService = {
 			onDidChangeWorkspace: Event.None,
 			onDidChangeWorkspaceFolders: Event.None,
 			onDidChangeWorkbenchState: Event.None,
-			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => null
 		};
 		using service = taskServices(resources, new FakeFileService(root, contents), workspace, terminals).createInstance(TaskService);
 		const task = (await service.refresh())[0];
@@ -1434,11 +1443,12 @@ suite('TaskService configuration capabilities', () => {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
+		const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] };
 		const workspace: IWorkspaceContextService = {
 			onDidChangeWorkspace: Event.None,
 			onDidChangeWorkspaceFolders: Event.None,
 			onDidChangeWorkbenchState: Event.None,
-			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => null
 		};
 		using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Check","command":"check"}]}' }), workspace, terminals).createInstance(TaskService);
 		const delayed = new DeferredPromise<void>();
@@ -1467,11 +1477,12 @@ suite('TaskService configuration resolution', () => {
 			using resources = new DisposableStore();
 			using terminals = new FakeTerminalService();
 			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [folder] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
-				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
 			};
 			const command = 'echo "${workspaceFolder:Project}" ${workspaceFolderBasename} "${env:HOME}"';
 			using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command }] }) }), workspace, terminals, os).createInstance(TaskService);
@@ -1488,11 +1499,12 @@ suite('TaskService configuration resolution', () => {
 			using resources = new DisposableStore();
 			using terminals = new FakeTerminalService();
 			const folder = { id: 'workspace', uri: root, name: 'Project', index: 0 };
+			const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [folder] };
 			const workspace: IWorkspaceContextService = {
 				onDidChangeWorkspace: Event.None,
 				onDidChangeWorkspaceFolders: Event.None,
 				onDidChangeWorkbenchState: Event.None,
-				onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [folder] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
+				onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => folder
 			};
 			const creates: ITerminalCreateOptions[] = [];
 			const create = terminals.createTerminal.bind(terminals);
@@ -1515,11 +1527,12 @@ suite('TaskService configuration resolution', () => {
 		using resources = new DisposableStore();
 		using terminals = new FakeTerminalService();
 		const root = URI.file('/workspace');
+		const workspaceState: ReturnType<IWorkspaceContextService['getWorkspace']> = { id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Project', index: 0 }] };
 		const workspace: IWorkspaceContextService = {
 			onDidChangeWorkspace: Event.None,
 			onDidChangeWorkspaceFolders: Event.None,
 			onDidChangeWorkbenchState: Event.None,
-			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Project', index: 0 }] }), getWorkbenchState: () => 2, getWorkspaceFolder: () => null
+			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspaceState, getWorkbenchState: () => 2, getWorkspaceFolder: () => null
 		};
 		using service = taskServices(resources, new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Resolve', command: '${workspaceFolder:Missing}/build' }] }) }), workspace, terminals).createInstance(TaskService);
 		await assert.rejects(service.run((await service.refresh())[0]!));

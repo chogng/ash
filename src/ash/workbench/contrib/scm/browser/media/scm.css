@@ -335,12 +335,12 @@
 		display var(--ash-animation-durationFast) allow-discrete;
 }
 
-/* A remembered row focus reveals actions only while the tree has keyboard focus. */
+/* Keep actions visible as keyboard focus moves from the tree into a row control. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
 .ash-scm-graph-actions.dropdown-visible,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
@@ -405,7 +405,7 @@
 .ash-scm-graph-change-row:is(
 		:hover,
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-actions {
 	display: flex;
@@ -868,7 +868,7 @@
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay::before,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,
@@ -890,14 +890,14 @@
 .ash-scm-change:focus-within > .ash-scm-change-actions,
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay
 	> .ash-scm-graph-actions,
 .ash-scm-graph-change-row:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-actions,
 :is(
@@ -907,7 +907,7 @@
 ):has(button[aria-expanded="true"]),
 .ash-scm-graph-commit:is(
 		:focus-within,
-		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
+		.ash-scm-graph-tree:focus-within:not(.pointer-navigation) .focused
 	)
 	> .ash-scm-graph-row
 	> .ash-scm-graph-overlay::before,

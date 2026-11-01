@@ -144,7 +144,7 @@ suite('Frontend diff Worker', () => {
 		}
 	});
 
-	test('recomputes diff highlights when model languages change without text edits', async () => {
+	test('refreshes language-sensitive diff highlights without text edits', async () => {
 		using original = new TextModel('.ash-old-host {', { languageId: 'css' });
 		using modified = new TextModel('.ash-new-sidebar {', { languageId: 'css' });
 		using diffProvider = new WorkerDiffComputationService(() => new DiffTestPort());
@@ -161,14 +161,17 @@ suite('Frontend diff Worker', () => {
 		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 1);
 		let pending = ready();
 		original.setLanguage('javascript');
+		model.refresh();
 		await pending;
 		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 2);
 		pending = ready();
 		original.setLanguage('css');
+		model.refresh();
 		await pending;
 		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 1);
 		pending = ready();
 		modified.setLanguage('javascript');
+		model.refresh();
 		await pending;
 		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 2);
 	});

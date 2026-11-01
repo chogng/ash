@@ -19,6 +19,37 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 suite('ObjectTree partial update lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('rerender without a target refreshes every visible row while retaining focus and selection', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			let reviewed = false;
+			const rendered: string[] = [];
+			using tree = new ObjectTree<string>(dom.window.document.body, {
+				reuseRows: true,
+				modelOptions: { identityProvider: { getId: item => item } },
+				renderElement: item => {
+					rendered.push(item);
+					const label = h(dom.window.document, 'span');
+					label.textContent = `${item}: ${reviewed ? 'reviewed' : 'unread'}`;
+					return label;
+				},
+			});
+			tree.setChildren([{ element: 'first' }, { element: 'second' }]);
+			tree.setSelection(['second']);
+			tree.setFocus('second');
+			tree.domFocus();
+			const rows = [...tree.domNode.querySelectorAll('[role=treeitem]')];
+			rendered.length = 0;
+			reviewed = true;
+			tree.rerender();
+			assert.deepEqual(rendered, ['first', 'second']);
+			assert.deepEqual([...tree.domNode.querySelectorAll('[role=treeitem]')], rows);
+			assert.deepEqual(rows.map(row => row.textContent), ['first: reviewed', 'second: reviewed']);
+			assert.deepEqual(tree.selection, ['second']);
+			assert.equal(dom.window.document.activeElement, tree.domNode);
+		} finally { dom.window.close(); }
+	});
+
 	test('template renderers receive the projected row index after tree find filters the model', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {

@@ -1388,8 +1388,8 @@ suite('extensions browser component', () => {
 			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
 			const provider = plugins.locator('[data-package-id="ash.rust"]');
 			await expect(provider).toBeVisible();
-			await expect(provider.locator('.extension-metadata')).toHaveText('IDE · The Rust Programming Language');
-			await expect(provider.locator('.extension-body > .ash-icon-label')).toHaveText(['Rust', 'IDE · The Rust Programming Language', locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。']);
+			await expect(provider.locator('.extension-metadata')).toHaveText('The Rust Programming Language');
+			await expect(provider.locator('.extension-body > .ash-icon-label')).toHaveText(['Rust', 'The Rust Programming Language', locale === 'en' ? 'Rust language configuration, syntax highlighting and language server support.' : 'Rust 语言配置、语法高亮和语言服务器支持。']);
 			await expect(provider).toHaveAccessibleName(/The Rust Programming Language/u);
 			await expect(provider.getByRole('button')).toHaveCount(0);
 			await provider.click();

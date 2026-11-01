@@ -78,7 +78,7 @@ test('EditorTitleControl starts breadcrumbs at the owning workspace and refreshe
 		const group = new EditorGroupModel();
 		let selected: FileElement | undefined;
 		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration,
-			(element: FileElement) => { selected = element; }, undefined, undefined, undefined, undefined);
+			(element: FileElement) => { selected = element; }, undefined, undefined, undefined, undefined, {});
 		const file = { ...input('engine #1.ts'), resource: URI.file('/Users/lx/Desktop/ash/源 码/engine #1.ts') };
 		group.openEditor(file);
 		control.setEditors([descriptor(file)], file);
@@ -406,7 +406,7 @@ test('editor tab width changes reach both rows and preserve focused actions', as
 		group.openEditor(first);
 		group.openEditor(second);
 		group.stick(first);
-		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
+		using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined, {});
 		control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
 		const lists = [...control.domNode.querySelectorAll<HTMLElement>('.ash-tab-list')];
 		const action = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
@@ -445,7 +445,7 @@ test('EditorTitleControl follows nested document symbols and opens outline selec
 	const group = new EditorGroupModel();
 	using services = createTestEditorServices(configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
-		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); });
+		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); }, {});
 	const resource = input('folder/symbols.ts');
 	group.openEditor(resource);
 	control.setEditors([descriptor(resource)], resource, pane);
@@ -508,7 +508,7 @@ suite('Editor tab label format', () => {
 			const tab = (input: IResourceEditorInput) => ({ ...descriptor(input), instanceId: input.resource.path, tabId: `${input.resource.path}-tab`, panelId: `${input.resource.path}-panel` });
 			group.openEditor(first);
 			group.openEditor(unique);
-			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+			using control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, undefined, undefined, undefined, undefined, undefined, undefined, {});
 			control.setEditors([tab(first), tab(unique)], first);
 			const names = () => [...control.domNode.querySelectorAll('.ash-tab-label')].map(label => label.textContent?.replaceAll('\\', '/'));
 			assert.deepEqual(names(), ['index.ts', '.cursorignore']);

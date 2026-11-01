@@ -15,7 +15,7 @@ import { IQuickInputService, type IQuickPickItem, type IQuickPickItemButton } fr
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { FileSystemFileSearchProvider } from '../../../../workbench/services/search/common/fileSystemFileSearchProvider.js';
+import { FileSystemFileSearchProvider } from '../../../../workbench/services/search/browser/fileSystemFileSearchProvider.js';
 import { QueryType, SearchProviderType, ISearchService } from '../../../../workbench/services/search/common/search.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { GITHUB_REMOTE_FILE_SCHEME } from '../../../services/sessions/common/session.js';

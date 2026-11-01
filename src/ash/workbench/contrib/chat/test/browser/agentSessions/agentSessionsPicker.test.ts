@@ -11,6 +11,7 @@ import { TestQuickInputService } from '../../../../../../platform/quickinput/tes
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { registerChatActions } from '../../../browser/actions/chatActions.js';
+import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 import { IAgentSessionsService, type IAgentSessionPickerItem } from '../../../browser/agentSessions/agentSessionsService.js';
 import { SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../common/chat.js';
 
@@ -37,6 +38,7 @@ test('Workbench history renders a borrowed host catalog without Session services
 				get items() { return items; },
 			}
 		});
+		services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IQuickInputService, quickInput);
 		services.registerInstance(INotificationService, { error: () => assert.fail('The host operation must succeed') } as unknown as INotificationService);

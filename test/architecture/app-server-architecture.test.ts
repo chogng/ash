@@ -24,7 +24,10 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
 			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
 			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
-			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name));
+			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name)
+			// These native carriers terminate protocol connections at the product host boundary.
+			|| name === 'workbench/electron-browser/rendererApi.ts'
+			|| name === 'sessions/contrib/chatgptweb/electron-main/chatGPTAuthentication.ts');
 		// Generated product definitions are metadata, not wire data or transport APIs.
 		const metadataOnly = source.statements.filter(ts.isImportDeclaration).every(statement => {
 			if (!ts.isStringLiteral(statement.moduleSpecifier) || protocolPath(file, statement.moduleSpecifier.text) === undefined) return true;

@@ -39,6 +39,10 @@ import { onUnexpectedError } from '../../../../../../base/common/errors.js';
 import { Separator, type IAction } from '../../../../../../base/common/actions.js';
 import { ChatEditorInput } from '../editor/chatEditorInput.js';
 import { ChatViewTitleControl } from './chatViewTitleControl.js';
+import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
+import { DraggedEditorIdentifier } from '../../../../../browser/parts/editor/editorTabDragAndDrop.js';
+import { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
+import type { URI } from '../../../../../../base/common/uri.js';
 
 let chatViewInstanceId = 0;
 // The Part owns the hard minimum; side-by-side layout reserves room for both columns.
@@ -93,6 +97,9 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	private readonly closingPanes = new Set<string>();
 	private readonly empty: HTMLDivElement;
 	private renderedPanes: readonly IChatViewPaneEntry<TModel>[] = [];
+	private sidebarPane: ChatWidget<TModel> | undefined;
+	private readonly editorTransfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+	private readonly sessionEditors = new Map<ChatWidget<TModel>, { readonly input: ChatEditorInput; visible: boolean; readonly lease: IDisposable; }>();
 	private onNewSession!: () => void;
 
 	constructor(
@@ -105,6 +112,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		@INotificationService protected readonly notifications: INotificationService,
 		@ILifecycleService protected readonly lifecycleService: ILifecycleService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IEditorGroupsService private readonly editorGroups: IEditorGroupsService,
 		@IEditorService protected readonly editorService?: IEditorService,
 	) {
 		super(container, options);
@@ -114,12 +122,24 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			onClose: id => { void this.closePane(id).catch(onUnexpectedError); },
 			draggable: true,
 			dragAndDrop: {
-				canDrop: () => this.draggedPaneId !== undefined,
+				canDrop: () => this.sessionsPresentation === AgentSessionsPresentation.Tabs && (this.draggedPaneId !== undefined || this.getDraggedSession() !== undefined),
 				onDragStart: (id, event) => {
+					if (this.sessionsPresentation !== AgentSessionsPresentation.Tabs) return;
 					this.draggedPaneId = id;
 					event.dataTransfer?.setData('text/plain', id);
+					if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+					const entry = this.renderedPanes.find(entry => entry.id === id);
+					if (entry && !entry.detached && !this.editorMount) {
+						this.editorTransfer.setData([new DraggedEditorIdentifier(undefined, new ChatEditorInput(id, entry.label))], DraggedEditorIdentifier.prototype);
+					}
 				},
 				onDrop: (target, position) => {
+					const dragged = this.getDraggedSession();
+					if (dragged && dragged.input instanceof ChatEditorInput) {
+						this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+						void this.moveSessionToSideBar(dragged.input.resource, target, position).catch(onUnexpectedError);
+						return;
+					}
 					const source = this.draggedPaneId;
 					if (!source || source === target) {
 						return;
@@ -134,7 +154,10 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 					this.syncSessions();
 					this.saveViewState();
 				},
-				onDragEnd: () => { this.draggedPaneId = undefined; },
+				onDragEnd: () => {
+					this.draggedPaneId = undefined;
+					this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+				},
 			},
 		};
 		this.element.classList.add('ash-chat-view-pane');
@@ -211,6 +234,10 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			this.saveViewState();
 		}));
 		this.contentElement.append(this.body);
+		this._register(addDisposableListener(this.paneHost, 'focusin', event => {
+			const entry = this.renderedPanes.find(entry => entry.pane.element.contains(event.target as Node));
+			if (entry && entry.pane !== this.activePane) this.activatePane(entry.id);
+		}));
 		// The same retained body can also be lent to an editor host with independent geometry.
 		this._register(observeElementSize(this.body, size => this.updateSessionsSidebarLayout(size.width)));
 		this._register(addDisposableListener(this.body, 'keydown', event => {
@@ -230,6 +257,10 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			}
 		}));
 		this._register(toDisposable(() => this.editorMount?.dispose()));
+		this._register(toDisposable(() => {
+			this.editorTransfer.clearData(DraggedEditorIdentifier.prototype);
+			for (const mount of [...this.sessionEditors.values()]) mount.lease.dispose();
+		}));
 	}
 
 	/** Connects a product-owned catalog after the adapter has initialized its state. */
@@ -260,6 +291,95 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	public abstract createQuickChat(parent: HTMLElement, titleId: string): IQuickChatSession;
 	/** Invalidates pending work even when navigation returns to the same retained composer. */
 	protected abstract get selectionRevision(): number;
+	/** Restores a requested conversation through the product owner before an editor borrows it. */
+	protected abstract restoreEditorPane(id: string): Promise<void>;
+
+	private getDraggedSession(): DraggedEditorIdentifier | undefined {
+		const dragged = this.editorTransfer.getData(DraggedEditorIdentifier.prototype)?.[0];
+		return dragged?.source && !dragged.wholeGroup && [...this.sessionEditors.values()].some(mount => mount.input === dragged.input) ? dragged : undefined;
+	}
+
+	/** Moves one tab without moving the shared Chat frame or changing the conversation lifetime. */
+	public async moveSessionToEditor(id: string): Promise<void> {
+		const entry = this.renderedPanes.find(entry => entry.id === id);
+		if (this.sessionsPresentation !== AgentSessionsPresentation.Tabs || this.editorMount || !entry || entry.detached) return;
+		await this.editorService!.openEditor(new ChatEditorInput(entry.id, entry.label), { pinned: true });
+	}
+
+	/** Releases an editor lease, or leaves a side-bar conversation on its synchronous host path. */
+	protected releaseSessionEditor(pane: ChatWidget<TModel>): Promise<boolean> | undefined {
+		const input = this.sessionEditors.get(pane)?.input;
+		if (!input) return undefined;
+		return (async () => {
+			for (const group of this.editorGroups.groups) {
+				if (group.inputs.includes(input) && !await group.closeEditor(input)) return false;
+			}
+			return !this.sessionEditors.has(pane);
+		})();
+	}
+
+	/** A close releases the editor's lease; only then can the tab be selected and ordered in the side bar. */
+	public async moveSessionToSideBar(resource: URI, target?: string, position: 'before' | 'after' = 'after'): Promise<void> {
+		if (this.sessionsPresentation !== AgentSessionsPresentation.Tabs) return;
+		const mounted = [...this.sessionEditors].find(([, mount]) => mount.input.resource.toString() === resource.toString());
+		if (!mounted) return;
+		const [pane] = mounted;
+		if (!await this.releaseSessionEditor(pane) || this.isDisposed) return;
+		const entry = this.renderedPanes.find(entry => entry.pane === pane);
+		if (!entry) return;
+		const ids = this.openedPaneIds.filter(id => id !== entry.id);
+		const index = target ? ids.indexOf(target) : ids.length;
+		if (index >= 0) {
+			ids.splice(index + (target && position === 'after' ? 1 : 0), 0, entry.id);
+			this.openedPaneIds = ids;
+		}
+		this.activatePane(entry.id);
+		this.syncSessions();
+		this.saveViewState();
+		this.layoutService.showPart('auxiliarybar');
+		pane.focus();
+	}
+
+	/** Borrows the original widget; selection, draft storage and execution remain with the product adapter. */
+	public async attachSessionEditor(input: ChatEditorInput, parent: HTMLElement): Promise<IDisposable & { readonly widget: ChatWidget<TModel>; setVisible(visible: boolean): void; }> {
+		if (input.paneId === undefined) throw new TypeError('A session editor requires a conversation');
+		await this.restoreEditorPane(input.paneId);
+		if (this.isDisposed) throw new Error('Chat view is disposed');
+		const entry = this.renderedPanes.find(entry => entry.id === input.paneId);
+		if (!entry || entry.detached) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		const pane = entry.pane;
+		const previous = this.sessionEditors.get(pane);
+		if (previous && previous.input !== input) throw new Error('Conversation already has an editor host');
+		const focused = pane.element.ownerDocument.activeElement;
+		const focusListener = addDisposableListener(pane.element, 'focusin', () => {
+			const current = this.renderedPanes.find(candidate => candidate.pane === pane);
+			if (current && this.activePane !== pane) this.activatePane(current.id);
+		});
+		const lease = toDisposable(() => {
+			focusListener.dispose();
+			if (this.sessionEditors.get(pane)?.lease !== lease) return;
+			this.sessionEditors.delete(pane);
+			if (!pane.isDisposed) this.paneHost.append(pane.element);
+			if (!this.isDisposed) this.syncSessions();
+		});
+		this.sessionEditors.set(pane, { input, visible: true, lease });
+		this.draggedPaneId = undefined;
+		previous?.lease.dispose();
+		parent.append(pane.element);
+		this.syncSessions();
+		if (isHTMLElement(focused) && pane.element.contains(focused)) focused.focus({ preventScroll: true });
+		return {
+			[Symbol.dispose]: () => lease.dispose(),
+			widget: pane,
+			setVisible: visible => {
+				const mount = this.sessionEditors.get(pane);
+				if (mount?.lease !== lease || pane.isDisposed) return;
+				mount.visible = visible;
+				pane.setVisible(visible);
+			},
+			dispose: () => lease.dispose(),
+		};
+	}
 
 	public async moveToEditor(): Promise<void> {
 		const revision = this.selectionRevision;
@@ -346,7 +466,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		}
 		this.editorVisible = visible;
 		this.updateSessionsControlVisibility();
-		this.activePane?.setVisible(visible || this.isActivePaneDetached());
+		this.syncSessions();
 	}
 
 	public override focus(): void {
@@ -354,6 +474,11 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	}
 
 	public focusInput(): void {
+		const mount = this.activePane && this.sessionEditors.get(this.activePane);
+		if (mount && !mount.visible) {
+			void this.editorService!.openEditor(mount.input).catch(onUnexpectedError);
+			return;
+		}
 		this.activePane?.focus();
 	}
 
@@ -507,9 +632,13 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		const projection = this.updateSessions(openPaneId);
 		const entries = [...projection.entries].sort((a, b) => this.openedPaneIds.indexOf(a.id) - this.openedPaneIds.indexOf(b.id));
 		this.renderedPanes = entries;
-		const activeEntry = entries.find(entry => entry.id === projection.activePaneId);
+		const sidebarEntries = entries.filter(entry => !this.sessionEditors.has(entry.pane));
+		const selectedEntry = entries.find(entry => entry.id === projection.activePaneId);
+		const activeEntry = selectedEntry && (sidebarEntries.find(entry => entry === selectedEntry)
+			?? sidebarEntries.find(entry => entry.pane === this.sidebarPane) ?? sidebarEntries[0]);
 		const activePane = activeEntry?.pane;
-		const orderedNodes = [...entries.map(entry => entry.detached?.placeholder ?? entry.pane.element), this.empty];
+		this.sidebarPane = activePane;
+		const orderedNodes = [...sidebarEntries.map(entry => entry.detached?.placeholder ?? entry.pane.element), this.empty];
 		for (let index = 0; index < orderedNodes.length; index += 1) {
 			const node = orderedNodes[index]!;
 			// Retained editors stay attached while the product's session metadata refreshes.
@@ -517,23 +646,27 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 				this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 			}
 		}
-		this.activePane = activePane;
+		this.activePane = selectedEntry?.pane;
 		for (const entry of entries) {
-			entry.pane.setVisible(entry.detached ? entry.detached.visible !== false : entry.pane === activePane && (!this.editorMount || this.editorVisible));
+			const mount = this.sessionEditors.get(entry.pane);
+			if (mount) mount.input.updateSession(entry.id, entry.label);
+			entry.pane.setVisible(mount ? mount.visible : entry.detached ? entry.detached.visible !== false : entry.pane === activePane && (!this.editorMount || this.editorVisible));
 			if (entry.detached) {
 				entry.detached.placeholder.hidden = entry.pane !== activePane;
 			}
 		}
-		this.empty.hidden = entries.length > 0;
+		for (const [pane, mount] of this.sessionEditors) {
+			if (entries.some(entry => entry.pane === pane)) continue;
+			for (const group of this.editorGroups.groups) {
+				if (group.inputs.includes(mount.input)) void group.closeEditor(mount.input, { skipConfirmation: true }).catch(onUnexpectedError);
+			}
+		}
+		this.empty.hidden = sidebarEntries.length > 0;
 		this.titleControl.update(activeEntry?.label, activeEntry ? activeEntry.detached?.placeholder.id ?? activeEntry.pane.element.id : undefined);
-		this.updateSessionTabs(entries);
+		this.updateSessionTabs(sidebarEntries);
 		if (restoreFocus && activePane?.element.contains(focusedElement)) {
 			focusedElement.focus();
 		}
-	}
-
-	private isActivePaneDetached(): boolean {
-		return this.renderedPanes.some(entry => entry.pane === this.activePane && entry.detached !== undefined);
 	}
 
 	private updateSessionTabs(entries: readonly IChatViewPaneEntry<TModel>[]): void {
@@ -547,7 +680,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			tabId: `${entry.pane.element.id}-tab`,
 			panelId: entry.detached?.placeholder.id ?? entry.pane.element.id,
 			closeActionTooltip: localize('chat.sessions.closeTab', 'Close session tab'),
-		})), this.activePane?.element.id, tabs ? this.tabsOptions : undefined, id => this.getTabActions(id));
+		})), this.sidebarPane?.element.id, tabs ? this.tabsOptions : undefined, id => this.getTabActions(id));
 		for (const entry of entries) {
 			entry.pane.element.setAttribute('role', tabs ? 'tabpanel' : 'region');
 			entry.pane.setTabId(entry.detached?.titleId
@@ -558,13 +691,19 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	private getTabActions(id: string): readonly IAction[] {
 		const entry = this.renderedPanes.find(entry => entry.id === id);
 		if (!entry) return [];
-		const ids = this.renderedPanes.map(entry => entry.id);
+		const ids = this.renderedPanes.filter(entry => !this.sessionEditors.has(entry.pane)).map(entry => entry.id);
 		const others = ids.filter(candidate => candidate !== id);
 		const right = ids.slice(ids.indexOf(id) + 1);
 		const close = async (targets: readonly string[]): Promise<void> => {
 			for (const target of targets) await this.closePane(target);
 		};
 		return Separator.join([...(entry.getActions?.() ?? [])], [
+			{
+				id: 'chat.moveSessionToEditor', label: localize({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, 'Move Chat to Editor Area'),
+				tooltip: '', enabled: !entry.detached && !this.editorMount,
+				run: () => this.moveSessionToEditor(id),
+			},
+		], [
 			{
 				id: 'chat.closeTab', label: localize({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'),
 				tooltip: '', enabled: true, run: () => close([id]),

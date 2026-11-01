@@ -127,7 +127,7 @@ for (const operation of ['start', 'steer', 'enqueue', 'rewrite'] as const) {
 			}
 			assert.equal(new TextDecoder('utf-8', { fatal: true }).decode(bytes), content);
 			await owner.release(handle);
-			if (operation === 'enqueue') { return { status: 'pending' }; }
+			if (operation === 'enqueue') { return { status: 'pending', revision: 1, request: { sessionId: 'session', threadId: 'thread', commandId: 'queued', mode: 'followUp', input: params.input } }; }
 			if (operation === 'rewrite') { return { type: 'rewrite', value: { session: { sessionId: 'session' }, threadId: 'replacement' } }; }
 			return { type: operation === 'steer' ? 'turnSteer' : 'turn', value: { turnId: 'turn', sequence: 1 } };
 		};

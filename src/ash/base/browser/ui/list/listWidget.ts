@@ -171,7 +171,8 @@ export class List<T> extends Disposable {
 		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
 		// Open on release so the trigger key cannot also act on the newly opened menu.
 		let contextMenuKeyDown = false;
-		const isContextMenuKey = (event: KeyboardEvent) => event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10';
+		const isContextMenuKey = (event: KeyboardEvent) => !event.isComposing && !event.ctrlKey && !event.altKey && !event.metaKey
+			&& ((!isMacintosh && event.key === 'ContextMenu' && !event.shiftKey) || event.shiftKey && event.key === 'F10');
 		this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => {
 			if (event.target !== this.element || !isContextMenuKey(event)) return;
 			contextMenuKeyDown = true;

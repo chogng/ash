@@ -1,3 +1,4 @@
+import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerCodeEditorServices } from '../../../editor/test/browser/testCodeEditor.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
@@ -139,7 +140,7 @@ test('opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService), services.get(IContextKeyService),
+		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService), services.get(IContextKeyService), emptyEditorGroupsService,
 	);
 
 	assert.deepEqual(escaped, []);

@@ -1,5 +1,10 @@
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
+import { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
+import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
+import { constObservable } from '../../../base/common/observable.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -52,6 +57,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
@@ -88,7 +94,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const previousErrorHandler = errorHandler.getUnexpectedErrorHandler();
 	errorHandler.setUnexpectedErrorHandler(error => unexpectedErrors.push(error));
 	using restoreErrorHandler = toDisposable(() => errorHandler.setUnexpectedErrorHandler(previousErrorHandler));
-	const browser = new JSDOM('<!doctype html><body></body>');
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-preferences.test/' });
 	const { window } = browser;
 	for (const [name, value] of Object.entries({ window, document: window.document, Node: window.Node, Element: window.Element, HTMLElement: window.HTMLElement, Event: window.Event, MouseEvent: window.MouseEvent })) {
 		Object.defineProperty(globalThis, name, { configurable: true, value });
@@ -242,6 +248,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
 	services.registerInstance(IChatSessionNavigationService, { createNewConversation: () => { throw new Error('Unexpected draft creation'); }, revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
+	using storage = new BrowserStorageService({ ownerWindow: window as unknown as Window, workspaceId: 'sessions-preferences', flushInterval: 0 });
+	services.registerInstance(IStorageService, storage);
+	services.registerInstance(IAgentSessionService, { listAgents: async () => ({ agents: [], diagnostics: [] }), readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
+	services.registerInstance(ITeamsManagementService, { teams: constObservable([]), refresh: async () => { } } as unknown as ITeamsManagementService);
+	services.registerInstance(ISessionsService, { onDidChange: Event.None, openThread: async () => { throw new Error('Unexpected team conversation navigation'); } } as unknown as ISessionsService);
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
@@ -284,18 +295,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const settingsHost = { ...baseHost, executionSettings: services.get(IAgentExecutionSettingsService), workspaceTrust: services.get(IWorkspaceTrustApi), agentCapabilities: services.get(IAgentCapabilitiesService), appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready' as const } };
 	const settingsScope: ISessionProviderScope = { providerId: 'primary', services: { host: settingsHost } as SessionProviderServices, thread: settingsHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
 	services.registerInstance(ISessionProviderScopeService, { getScope: () => settingsScope, onDidChange: Event.None, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService);
-	const [{ ISessionsService }, { ITeamsManagementService }, { IStorageService }, { IAgentSessionService }, { observableValue }] = await Promise.all([
-		import('../../services/sessions/browser/sessionsService.js'),
-		import('../../services/teams/common/teamsManagement.js'),
-		import('../../../platform/storage/common/storage.js'),
-		import('../../../platform/agentHost/common/agentService.js'),
-		import('../../../base/common/observable.js'),
-	]);
-	services.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as import('../../services/sessions/browser/sessionsService.js').ISessionsService);
-	services.registerInstance(ITeamsManagementService, { teams: observableValue('teams', []) } as unknown as import('../../services/teams/common/teamsManagement.js').ITeamsManagementService);
-	const savedState = new Map<string, string>();
-	services.registerInstance(IStorageService, { get: (key: string) => savedState.get(key), store: (key: string, value: string) => { savedState.set(key, value); } } as unknown as import('../../../platform/storage/common/storage.js').IStorageService);
-	services.registerInstance(IAgentSessionService, { readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as import('../../../platform/agentHost/common/agentService.js').IAgentSessionService);
 	let editorReveals = 0;
 	let editorRevealing = false;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, async () => {

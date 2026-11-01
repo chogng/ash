@@ -1,3 +1,7 @@
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -48,6 +52,11 @@ suite('Terminal editing focus', () => {
 			document.body.append(container);
 			using quickInput = new TestQuickInputService({ container });
 			using services = new InstantiationService();
+			using workspace = new TestWorkspaceService({ id: 'terminal-editing' });
+			services.registerInstance(IWorkspaceContextService, workspace);
+			using trust = new TestWorkspaceTrustManagementService();
+			services.registerInstance(IWorkspaceTrustManagementService, trust);
+			services.registerInstance(IWorkspaceTrustRequestService, {} as IWorkspaceTrustRequestService);
 			const creating = new DeferredPromise<void>();
 			const created = new DeferredPromise<void>();
 			const revealing = new DeferredPromise<void>();

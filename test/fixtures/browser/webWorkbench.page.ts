@@ -1,3 +1,5 @@
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
@@ -133,6 +135,7 @@ updateServices.registerInstance(IDialogService, {} as IDialogService);
 updateServices.registerInstance(IPathService, {} as IPathService);
 updateServices.registerInstance(IHostService, resources.add(updateServices.createInstance(BrowserHostService, {})));
 updateServices.registerInstance(IUpdateService, resources.add(updateServices.createInstance(BrowserUpdateService)));
+updateServices.registerInstance(IClipboardService, new BrowserClipboardService(navigator.clipboard));
 const notifications = resources.add(new TestNotificationService());
 updateServices.registerInstance(INotificationService, notifications);
 resources.add(updateServices.createInstance(NotificationsToasts, root, notifications.model, resources.add(new ActionRunner())));

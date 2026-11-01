@@ -28,6 +28,7 @@ import { BrowserLayoutService, ILayoutService } from '../../../../../../platform
 import { QuickInputService } from '../../../../../../platform/quickinput/browser/quickInputService.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
@@ -69,6 +70,7 @@ const menus = resources.add(new BrowserContextMenuService(new MenuService(comman
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, contextView, notifications));
 services.registerInstance(IContextMenuService, menus);
 services.registerInstance(IHoverService, resources.add(new HoverService(configuration, contextView, menus)));
+services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected collaboration picker link'); } } as unknown as IOpenerService);
 services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 services.registerInstance(IAccessibleViewService, {
 	getOpenAriaHint: key => configuration.getValue<boolean>(key) ? 'Alt+F1' : undefined,

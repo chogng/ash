@@ -1,3 +1,4 @@
+import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from '../../browser/sessionActionsService.js';
@@ -78,16 +79,16 @@ test('Workspace changes focus SCM only after their opening command completes', a
 	assert.deepEqual(calls, ['git.openWorkspaceChanges', VIEW_PANE_ID]);
 });
 
-test('Sessions Files contribution loads and opens its container through the invoking window', async () => {
+test('Sessions Files contribution opens its editor through the invoking window', async () => {
 	using services = new InstantiationService();
-	const opened: unknown[][] = [];
-	services.registerInstance(IViewsService, {
-		openViewContainer: async (...args: unknown[]) => { opened.push(args); return null; },
-	} as unknown as IViewsService);
+	const opened: string[] = [];
+	services.registerInstance(ICommandService, {
+		executeCommand: async (id: string) => { opened.push(id); },
+	} as unknown as ICommandService);
 	const command = CommandsRegistry.getCommand(SESSIONS_FILES_CONTAINER_ID);
 	assert.ok(command);
 	await services.invokeFunction(command);
-	assert.deepEqual(opened, [[SESSIONS_FILES_CONTAINER_ID, true]]);
+	assert.deepEqual(opened, [NEW_FILE_TAB_COMMAND_ID]);
 });
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {

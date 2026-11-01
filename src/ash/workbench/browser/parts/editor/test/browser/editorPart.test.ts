@@ -1,4 +1,6 @@
 import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
+import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
+import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
 import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
@@ -1099,6 +1101,30 @@ test('dragging a group title moves every retained pane without reopening editors
 		assert.equal(panes.length, 3);
 		assert.equal(editor.serializeLayout().type, 'branch');
 	} finally { dom.window.close(); }
+});
+
+for (const surface of ['tabs', 'content', 'split'] as const) test(`a contribution input without a source group opens through the ${surface} drop target`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const transfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.contributionDrop', '.ts', () => new TestEditorPane('test.contributionDrop')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(input('/existing.ts'));
+		const group = editor.activeGroup;
+		group.domNode.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 800, 600);
+		const dropped = input('/contribution.ts');
+		transfer.setData([new DraggedEditorIdentifier(undefined, dropped)], DraggedEditorIdentifier.prototype);
+		const target = surface === 'tabs' ? group.domNode.querySelector('.ash-tab')! : group.domNode;
+		const coordinates = { clientX: 400, clientY: surface === 'split' ? 5 : 300 };
+		target.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, ...coordinates }));
+		target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, ...coordinates }));
+		await nextTask();
+		assert.equal(editor.activeGroup.activeInput, dropped);
+		assert.equal(editor.groups.length, surface === 'split' ? 2 : 1);
+		assert.equal(group.inputs.some(input => input.resource.path === '/existing.ts'), true);
+		assert.equal(transfer.hasData(DraggedEditorIdentifier.prototype), false);
+	} finally { transfer.clearData(DraggedEditorIdentifier.prototype); dom.window.close(); }
 });
 
 test('dropping a tab above its group preserves the zero-valued Up direction and creates a vertical split', async () => {

@@ -1,3 +1,4 @@
+import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { DebugStorage } from '../../common/debugStorage.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
@@ -1613,6 +1614,7 @@ for (const selection of ['accept', 'escape', 'workspace replacement'] as const) 
 		using processes = new FakeDebugAdapterProcessService();
 		using adapters = new AdapterManager();
 		const dom = new JSDOM('<!doctype html><body></body>');
+		resources.add(installTestElementHeights(dom.window.document));
 		resources.add(toDisposable(() => dom.window.close()));
 		const context = resources.add(new ContextKeyService());
 		const quickInput = resources.add(new TestQuickInputService({ container: dom.window.document.body, contextKeyService: context }));

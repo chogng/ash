@@ -478,10 +478,10 @@ class QuickInputButtonActionViewItem extends ActionViewItem {
 		button.type = 'button';
 		button.disabled = !this.action.enabled;
 		button.className = 'ash-quick-pick-row-action';
-		if (this.action.class) button.classList.add(...this.action.class.split(/\s+/).filter(Boolean));
+		if (this.descriptor.alwaysVisible) button.classList.add('always-visible');
 		button.textContent = iconClass || this.descriptor.iconPath ? '' : this.action.label;
 		if (this.action.checked !== undefined) button.setAttribute('aria-pressed', String(this.action.checked));
-		button.setAttribute('aria-label', this.action.label);
+		button.setAttribute('aria-label', this.descriptor.label ?? this.descriptor.tooltip ?? this.action.label);
 		if (this.descriptor.hasPopup) {
 			button.setAttribute('aria-haspopup', this.descriptor.hasPopup);
 			button.setAttribute('aria-expanded', 'false');

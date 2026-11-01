@@ -65,7 +65,7 @@
 }
 
 .ash-quick-input-title-button:hover,
-.ash-quick-input-title-button[aria-pressed="true"] {
+.ash-quick-input-title-button.checked {
 	background: var(--ash-toolbar-hoverBackground);
 }
 

@@ -808,8 +808,8 @@ suite('sessions browser component', () => {
 		await settingsAction.click();
 		const settings = page.locator('.ash-sessions-settings');
 		await expect(settings.getByRole('searchbox')).toHaveCSS('font-size', '14px');
-		await settings.getByRole('searchbox').fill('@id:chat.disableAIFeatures');
-		await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"] .ash-configuration-setting-description')).toHaveCSS('font-size', '14px');
+		await settings.getByRole('searchbox').fill('@id:sessions.experimental.layoutScope');
+		await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"] .ash-configuration-setting-description:not([hidden])')).toHaveCSS('font-size', '14px');
 		await page.screenshot({ path: testInfo.outputPath(`sessions-typography-settings-${locale}.png`) });
 		const ide = await context.newPage();
 		try {

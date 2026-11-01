@@ -221,14 +221,23 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.emitFindResult();
 	}
 
-	rerender(id: string): void {
+	rerender(id?: string): void {
 		if (this.findController?.query) {
 			this.items = this.sourceItems;
 			return;
 		}
-		const index = this.items.findIndex(node => node.id === id);
-		if (index < 0) return;
-		this.list.rerender(index);
+		const rerenderRow = (index: number): void => {
+			const row = this.list.row(index);
+			if (row) this.renderedElements.delete(row as HTMLDivElement);
+			this.list.rerender(index);
+		};
+		if (id === undefined) {
+			this.items.forEach((_node, index) => rerenderRow(index));
+		} else {
+			const index = this.items.findIndex(node => node.id === id);
+			if (index < 0) return;
+			rerenderRow(index);
+		}
 		this.updateActiveIndentGuides();
 		this.updateStickyScroll();
 	}

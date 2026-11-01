@@ -6,7 +6,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { BrowserFileSearchService } from '../../../../platform/search/browser/browserFileSearchService.js';
 import { localize } from '../../../../nls.js';
-import type { IFileQuery, ISearchComplete, ISearchResultProvider } from './search.js';
+import type { IFileQuery, ISearchComplete, ISearchResultProvider } from '../common/search.js';
 
 /** Adapts provider-backed directory discovery to Workbench filename queries. */
 export class FileSystemFileSearchProvider extends Disposable implements ISearchResultProvider {

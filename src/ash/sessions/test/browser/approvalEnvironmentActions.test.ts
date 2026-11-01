@@ -30,7 +30,7 @@ test('permission command uses stable IDs and keeps bypass confirmation on the re
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	const choices: string[] = [];
-	const model = { selectApprovalMode: (mode: string) => choices.push(mode) } as unknown as IChatWidgetModel;
+	const model = { inputState: { aiDisabled: false }, composerGeneration: 1, selectApprovalMode: (mode: string) => choices.push(mode) } as unknown as IChatWidgetModel;
 	await commands.executeCommand('chat.permission', model, 'auto');
 	await assert.rejects(commands.executeCommand('chat.permission', model, '1'), /Use \/permission/);
 	let confirmed = false;

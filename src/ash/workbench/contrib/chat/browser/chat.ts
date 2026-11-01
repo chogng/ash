@@ -126,5 +126,6 @@ export interface IChatViewPane extends IView {
 	focusInput(): void;
 	focusSessions(): boolean;
 	moveToEditor(): Promise<void>;
+	moveSessionToSideBar(resource: URI): Promise<void>;
 	openInNewWindow(): Promise<void>;
 }

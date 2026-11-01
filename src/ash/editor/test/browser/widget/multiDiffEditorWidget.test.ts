@@ -1,9 +1,10 @@
+import { FontMeasurements } from '../../../browser/config/fontMeasurements.js';
 import { computeDiffRowLayout, computeDiffPreviewLayout } from '../../../browser/widget/multiDiffEditor/compressedVirtualizedScrollLayout.js';
 import { TEST_FONT_INFO } from '../config/testConfiguration.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
-import { test, suite, suiteTeardown } from 'mocha';
+import { test, suite, suiteTeardown, teardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -49,6 +50,7 @@ suiteTeardown(() => {
 const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
 
 suite('MultiDiff comparison retention', () => {
+	teardown(() => FontMeasurements.clearAllFontInfos());
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('review projection keeps source rows stable when hidden regions expand', async () => {
 		using resources = new DisposableStore();
@@ -546,6 +548,7 @@ test('MultiDiff scrolling preserves child layout while resize and remount apply 
 });
 
 suite('MultiDiff editor reuse', () => {
+	teardown(() => FontMeasurements.clearAllFontInfos());
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('crossing files bounds editor creation and restores file state without retaining idle models', async () => {

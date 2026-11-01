@@ -38,7 +38,6 @@ import { Part } from '../../../../browser/part.js';
 import { PaneComposite } from '../../../../browser/panecomposite.js';
 import type { PartTitleProjection } from '../../../../browser/parts/views/viewPane.js';
 import { ChatViewTitleControl } from '../../../../contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
-import { CopyChatSessionLinkAction } from '../../../../contrib/chat/browser/actions/chatCopyActions.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -70,7 +69,7 @@ import { CommandRegistry, ICommandService } from '../../../../../platform/comman
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { ShowAllCommandsCommandId } from '../../../../browser/quickaccess.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { IMenuService, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -90,7 +89,7 @@ import { BrowserStorageService } from '../../../../services/storage/browser/stor
 import { ViewDescriptorService } from '../../../../services/views/browser/viewDescriptorService.js';
 import { ViewsService } from '../../../../services/views/browser/viewsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { createTestEditorServices, registerTestComponentServices } from '../../../common/testEditorServices.js';
+
 import { EditorPaneRegistry } from '../../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js';
 import { EditorPart, IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
@@ -238,6 +237,7 @@ if (locale) {
 		: {};
 	setNlsMessages(catalog.locale, { ...catalog.bundles, ash: { ...catalog.bundles.ash, ...linkMessages } });
 }
+const { createTestEditorServices, registerTestComponentServices } = await import('../../../common/testEditorServices.js');
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const registry = new WorkbenchViewRegistry();
 for (const id of ['first', 'second']) {
@@ -512,7 +512,6 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		editorServices.registerInstance(IChatService, { readThread: async (sessionId, threadId) => ({ thread: { sessionId, threadId } }) } as IChatService);
 		editorServices.registerInstance(IClipboardService, { writeText: async value => { copiedLinks.push(value); } } as IClipboardService);
 		editorServices.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root: document.body, contextKeyService: editorServices.get(IContextKeyService), configurationService: editorServices.get(IConfigurationService) })));
-		resources.add(registerAction2(CopyChatSessionLinkAction));
 	} else {
 		editorServices.registerInstance(IMenuService, services.get(IMenuService));
 		editorServices.registerInstance(IContextMenuService, services.get(IContextMenuService));

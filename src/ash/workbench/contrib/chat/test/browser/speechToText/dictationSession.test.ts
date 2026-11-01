@@ -280,7 +280,7 @@ suite('Chat dictation command targeting', () => {
 		f.widget.isTranscriptProgressActive = true;
 		await f.run('holdToSpeechToText');
 		f.widget.isTranscriptProgressActive = false;
-		await f.run('toggleSpeechToText', { widget: { ...f.widget } });
+		await f.run('toggleSpeechToText', { widget: Object.create(f.widget) });
 		f.registration.dispose();
 		await f.run('toggleSpeechToText', { widget: f.widget });
 		assert.equal(f.speech.starts, 0);

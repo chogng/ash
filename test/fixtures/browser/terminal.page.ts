@@ -488,7 +488,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		const legacyTerminals: ITerminalService = {
 			importTerminalState: async () => { throw new Error('This fixture does not transfer terminals'); },
 			confirmTerminalClose: async () => true,
-			whenConnected: Promise.resolve(),
+			get whenConnected() { return pending; },
 			safeDisposeTerminal: async instance => { await terminals.closeTerminal(instance); },
 			...Disposable.None,
 			instances,
@@ -804,6 +804,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
 			container.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 			container.registerInstance(ICommandService, widgetServices.get(ICommandService));
+			container.registerInstance(INotificationService, resources.add(new TestNotificationService()));
 			container.registerInstance(IEditorService, widgetServices.get(IEditorService));
 			setupTerminalFixtureServices(container, resources, false);
 			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => { } });
@@ -1421,6 +1422,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			if (new URLSearchParams(location.search).has('voice')) root.prepend(groupPane.partTitleProjection.actions!);
 			if (panelLayout) panelLayout.layout(new Dimension(1000, 700));
 			else groupPane.layout(root.clientHeight, 0, root.clientWidth);
+			const [{ ITerminalEditingService }, { TerminalEditingService }] = await Promise.all([
+				import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js'),
+				import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditingService.js'),
+			]);
+			services.registerSingleton(ITerminalEditingService, () => services.createInstance(TerminalEditingService));
 			if (new URLSearchParams(location.search).has('editor')) {
 				// Individual scenarios enable the shared confirmation policy when testing close preflight.
 				await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'never');
@@ -1494,11 +1500,6 @@ if (new URLSearchParams(location.search).has('input')) {
 					},
 				};
 			}
-			const [{ ITerminalEditingService }, { TerminalEditingService }] = await Promise.all([
-				import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js'),
-				import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditingService.js'),
-			]);
-			services.registerSingleton(ITerminalEditingService, () => services.createInstance(TerminalEditingService));
 			window.ashTerminalGroupsIntegration = {
 				command: (id, args) => commands.executeCommand(id, args),
 				metadata: () => ({ title: terminals.activeInstance?.title, icon: terminals.activeInstance?.profile.icon?.id, created: nextTerminal }),

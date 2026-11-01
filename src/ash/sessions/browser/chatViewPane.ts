@@ -38,6 +38,7 @@ import { INotificationService } from '../../platform/notification/common/notific
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import type { IAction } from '../../base/common/actions.js';
 import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
+import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
 
 let chatPaneInstanceId = 0;
 
@@ -61,6 +62,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: ChatAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
 	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
 	private quickChat: { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; } | undefined;
+	private readonly sessionsReady: Promise<void>;
 
 	constructor(
 		container: HTMLElement,
@@ -82,10 +84,11 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@ISessionGroupsService groups: ISessionGroupsService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IEditorGroupsService editorGroups: IEditorGroupsService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService editorService?: IEditorService,
 	) {
-		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorService);
+		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
@@ -139,6 +142,12 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 		});
 		void this.getProgressIndicator().showWhile(restoring, 150);
+		this.sessionsReady = restoring;
+	}
+
+	protected override async restoreEditorPane(id: string): Promise<void> {
+		await this.sessionsReady;
+		this.syncSessions(id);
 	}
 
 	private restoreViewState(raw: string | undefined): { readonly sessionId: string; readonly threadId: string; } | undefined {
@@ -220,6 +229,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.syncSessions(paneId);
 		const pane = this.panes.get(paneId);
 		if (!pane) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
+		const releasingEditor = this.releaseSessionEditor(pane);
+		if (releasingEditor && !await releasingEditor || this.viewDisposed || pane.isDisposed) return;
 		const existing = this.popouts.get(pane);
 		if (existing) { existing.shell.window.window.focus(); pane.focus(); return; }
 		let pending = this.openingPopouts.get(pane);

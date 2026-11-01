@@ -78,6 +78,7 @@ test('workbench context keys describe the current workspace', () => {
 		'dirtyWorkingCopies',
 		'editorAreaVisible',
 		'editorIsOpen',
+		'isDevelopment',
 		'isLinux',
 		'isMac',
 		'isNative',

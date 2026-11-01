@@ -85,7 +85,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 				return { dispose: () => { subscriptions.delete(listener); listeners.delete(listener); if (listeners.size === 0) ipcListeners.delete(channel); } };
 			},
 			invoke: async (channel, payload) => {
-				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) { hostOpens.push(payload as typeof hostOpens[number]); await beforeHostOpen?.(); return; }
+				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) { hostOpens.push(payload as typeof hostOpens[number]); await beforeHostOpen?.(); return (payload as typeof hostOpens[number]).connection; }
 				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) { hostCloses.push((payload as { id: string; }).id); return; }
 				if (channel === 'ash:remote:connection') return windowConnection;
 				if (channel === 'ash:workspace:context:read') { await beforeWorkspaceRead?.(); return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] }; }
@@ -105,6 +105,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
 					} else if (frame.method === 'config/directoryGrants/read') {
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: directoryAuthorized ? [] : undefined } }) + '\n') });
+					} else if (frame.method === 'fs/resolvePath') {
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { root: frame.params.path, target: { type: 'environment', dirId: `agent-host:${hostOpens.at(-1)!.id}` } } }) + '\n') });
 					} else if (frame.method === 'env/dirs/set') {
 						directoryBindings.push({ channel, dirs: frame.params.dirs });
 						const response = failDirectoryBinding

@@ -41,7 +41,7 @@ test('file dialog service owns the save, discard, and cancel decision', async ()
 		kind: 'choice', severity: DialogSeverity.Warning, title: 'Save Changes',
 		message: 'Do you want to save the changes you made to draft.md?',
 		detail: "Your changes will be lost if you don't save them.\nThe file changed on disk.",
-		checkbox: undefined, buttons: ['Save', "Don't Save"], cancelButton: 'Cancel',
+		checkbox: undefined, custom: undefined, buttons: ['Save', "Don't Save"], cancelButton: 'Cancel',
 	});
 	item?.close({ button: DialogResult.Primary, buttonIndex: 1 });
 	assert.equal(await result, ConfirmResult.DONT_SAVE);

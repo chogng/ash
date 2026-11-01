@@ -206,9 +206,9 @@ export class ObjectTree<TNode> extends Disposable {
 		this.onDidScroll = this.tree.onDidScroll;
 		this.onContextMenu = Event.map(this.tree.onContextMenu, ({ element, ...event }) => ({ ...event, element: element?.element }));
 		this._register(this.model.onDidChange(({ kind, node, visibleSplice }) => {
-			if (kind === 'rerender' && node) {
+			if (kind === 'rerender') {
 				this.onWillRender?.();
-				this.tree.rerender(node.id);
+				this.tree.rerender(node?.id);
 				return;
 			}
 			this.render(kind === 'structure' || kind === 'sort', visibleSplice);

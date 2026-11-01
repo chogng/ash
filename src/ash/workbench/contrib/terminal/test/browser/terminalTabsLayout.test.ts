@@ -238,6 +238,8 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	assert.equal(panes[1]?.style.width, '46px');
 	assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), true);
 	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120, 'live presentation does not persist an unfinished drag');
+	layout.layout(1_000, 200);
+	assert.equal(panes[1]?.style.width, '46px', 'layout during a drag retains the live width until the sash commits');
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 950, bubbles: true }));
 	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 46);
 

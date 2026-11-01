@@ -190,7 +190,11 @@ export class TreeView extends Disposable {
 		while (this.dirty && this.visible && tree === this.tree) {
 			this.dirty = false;
 			try {
-				if (this.initialized) { await tree.updateChildren(null, { recursive: true }); }
+				if (this.initialized) {
+					await tree.updateChildren(null, { recursive: true });
+					// Providers may update their retained node objects without changing identity.
+					tree.rerender();
+				}
 				else { await tree.setInput(null); if (tree === this.tree) { this.initialized = true; } }
 			} catch (error) {
 				if (tree === this.tree) {

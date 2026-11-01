@@ -3,7 +3,6 @@ import { SessionActionsService } from './sessionActionsService.js';
 import { ChatViewPane } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
-import { Schemas } from '../../base/common/network.js';
 import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
@@ -118,7 +117,7 @@ EditorInputSerializers.registerStatic(new ChatEditorInputSerializer());
 registerEditorPane({
 	id: ChatEditorInput.EditorID,
 	name: localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'),
-	canOpen: input => input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input => input instanceof ChatEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(ChatEditor),
 });
 

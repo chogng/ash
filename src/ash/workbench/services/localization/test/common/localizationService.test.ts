@@ -144,7 +144,7 @@ suite('Workbench localization', () => {
 			],
 			['切换终端', '隐藏编辑器', '显示编辑器', '打开更改标签'],
 		);
-		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读文件列表和更改前后的内容/u);
+		assert.match(localize('sessions.changes.editorHelp', ''), /Alt\+F2 阅读文件列表和前后内容/u);
 		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
 	});
 

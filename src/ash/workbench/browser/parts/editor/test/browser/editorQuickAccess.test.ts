@@ -20,6 +20,7 @@ import type { EditorPartChangeEvent } from '../../../../../services/editor/commo
 
 test('Show All Editors opens the MRU quick access mode and activates the chosen editor', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
+	using heights = installTestElementHeights(dom.window.document);
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>();
 	for (const [name, value] of Object.entries({
 		window: dom.window,
