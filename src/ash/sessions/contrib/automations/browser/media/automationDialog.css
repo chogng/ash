@@ -1,15 +1,15 @@
-.ash-sessions-window .ash-automation-dialog {
+.ash-automation-dialog.ash-dialog {
 	width: min(560px, calc(100vw - 32px));
 	max-height: calc(100vh - 32px);
 }
-.ash-sessions-window .ash-automation-dialog .ash-dialog-body {
+.ash-automation-dialog > .ash-dialog-body {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	overflow: hidden;
 	max-height: calc(100vh - 120px);
 }
-.ash-sessions-window .ash-automation-dialog .ash-dialog-actions {
+.ash-automation-dialog .ash-dialog-actions {
 	flex-shrink: 0;
 }
 .ash-sessions-window .ash-automation-form {

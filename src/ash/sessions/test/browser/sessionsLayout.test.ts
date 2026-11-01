@@ -235,6 +235,11 @@ suite('sessions browser component', () => {
 			const { page } = browserTests;
 			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 			await expect(settings).toBeVisible();
+			// A later-loaded base widget must preserve the Settings presentation.
+			await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
+			await expect(settings).toHaveCSS('width', '920px');
+			await expect(settings).toHaveCSS('border-radius', '12px');
+			await expect(settings).toHaveCSS('padding', '0px');
 			await settings.getByRole('button', { name: 'Voice', exact: true }).click();
 			await expect(settings.locator('.ash-dialog-title')).toBeHidden();
 			await expect(settings).toHaveCSS('border-top-width', '1px');
@@ -257,6 +262,7 @@ suite('sessions browser component', () => {
 			const originalViewport = page.viewportSize();
 			if (!originalViewport) throw new Error('Browser test requires a viewport');
 			await page.setViewportSize({ width: 540, height: 500 });
+			await expect(settings).toHaveCSS('width', '508px');
 			const narrowSidebarBounds = await sidebar.boundingBox();
 			const narrowPageBounds = await settingsPage.boundingBox();
 			expect(narrowSidebarBounds).not.toBeNull();

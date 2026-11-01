@@ -606,6 +606,11 @@ suite('automations browser component', () => {
 			await page.getByRole('button', { name: zh ? '新建自动化' : 'New automation', exact: true }).press('Enter');
 			const dialog = page.getByRole('dialog');
 			const name = dialog.getByLabel(zh ? '名称' : 'Name', { exact: true });
+			await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
+			await expect(dialog).toHaveCSS('width', '560px');
+			await expect(dialog).toHaveCSS('padding', '0px');
+			await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('display', 'flex');
+			await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px 20px 16px');
 			await expect(name).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(dialog.getByLabel(zh ? '指令' : 'Instructions', { exact: true })).toBeFocused();

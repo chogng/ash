@@ -1,4 +1,4 @@
-.ash-sessions-settings-dialog {
+.ash-sessions-settings-dialog.ash-dialog {
 	width: min(920px, calc(100vw - var(--ash-spacing-size320)));
 	border-radius: var(--ash-cornerRadius-xLarge);
 	overflow: hidden;

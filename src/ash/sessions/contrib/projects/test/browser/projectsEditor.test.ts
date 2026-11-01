@@ -9,6 +9,38 @@ suite('Projects toolbar', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`keeps project dialog sizing and content insets independent of stylesheet order (${locale})`, async () => {
+			const { page, info } = browser;
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			const create = page.locator('.ash-projects').getByRole('button', { name: locale === 'zh-CN' ? '新建项目' : 'New project', exact: true });
+			await create.press('Enter');
+			const dialog = page.getByRole('dialog');
+			// Loading the base widget last must not replace the host's geometry.
+			const lateBaseStyles = await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
+			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+				for (const width of [1280, 600]) {
+					await page.setViewportSize({ width, height: 720 });
+					await expect(dialog).toHaveCSS('width', `${Math.min(700, width - 40)}px`);
+					await expect(dialog).toHaveCSS('padding', '0px');
+					await expect(dialog.locator('.ash-dialog-header')).toHaveCSS('gap', '8px');
+					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('width', '28px');
+					await expect(dialog.locator('.ash-dialog-close')).toHaveCSS('height', '28px');
+					await expect(dialog.locator('.ash-dialog-body')).toHaveCSS('padding', '0px 20px 16px');
+					const bounds = (await dialog.boundingBox())!;
+					expect(bounds.x).toBeGreaterThanOrEqual(20);
+					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width - 20);
+					if (theme === 'ash-light') await page.screenshot({ path: info.outputPath(`project-dialog-${locale}-${width}.png`) });
+				}
+			}
+			await lateBaseStyles.evaluate(element => element.parentNode?.removeChild(element));
+			await page.keyboard.press('Escape');
+			await expect(dialog).toHaveCount(0);
+			await expect(create).toBeFocused();
+		});
+
 		test(`renames from the breadcrumb with selection, cancellation and failure recovery (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
