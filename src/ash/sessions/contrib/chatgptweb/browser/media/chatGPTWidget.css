@@ -55,7 +55,9 @@
 }
 .ash-chatgpt-welcome {
 	margin: 0 auto;
+	min-width: 0;
 	max-width: 760px;
+	overflow-wrap: anywhere;
 	text-align: center;
 	font-size: var(--ash-fontSize-heading1, 26px);
 	font-weight: var(--ash-fontWeight-semiBold, 600);
