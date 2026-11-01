@@ -65,7 +65,7 @@ export class BrowserEditorInput extends EditorInput {
 		return title.trim() || new URL(url).host;
 	}
 
-	public getIcon(): typeof Lxicon.browserWeb { return Lxicon.browserWeb; }
+	public getIcon(): typeof Lxicon.global { return Lxicon.global; }
 
 	public resolve(): Promise<IBrowserViewModel> {
 		this.assertNotDisposed();

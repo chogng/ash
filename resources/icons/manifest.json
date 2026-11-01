@@ -152,11 +152,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "browser-web",
-      "file": "browser-web.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "bug",
       "file": "bug.svg",
       "rendering": "symbolic"

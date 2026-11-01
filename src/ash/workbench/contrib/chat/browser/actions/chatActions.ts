@@ -78,7 +78,7 @@ export function registerChatActions(): void {
 			super({
 				id: OPEN_CHAT_BROWSER_COMMAND_ID,
 				title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatBrowserAction' }, 'Open Browser'),
-				icon: Lxicon.browserWeb,
+				icon: Lxicon.global,
 				precondition: IsNativeContext.isEqualTo(true),
 				menu: {
 					id: MenuId.ChatTitle,

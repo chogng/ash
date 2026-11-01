@@ -586,7 +586,7 @@ export class SessionsPreferences extends Disposable {
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },
 				{ id: 'github', title: localize('sessions.settings.gitPrs', 'Git & PRs'), icon: Lxicon.git, settings: [], content: githubContent },
-				{ id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.browserWeb, settings: [], content: management.get('browser') },
+				{ id: 'browser', title: localize('sessions.settings.browser', 'Browser'), icon: Lxicon.global, settings: [], content: management.get('browser') },
 				{ id: 'tab', title: localize('sessions.settings.tab', 'Tab'), icon: Lxicon.keyboardTab, settings: [], content: management.get('tab') },
 				{ id: 'code-intelligence', title: localize('sessions.settings.codeIntelligence', 'Code Intelligence'), icon: Lxicon.code, settings: [], content: management.get('code-intelligence') },
 				{ id: 'environment', title: localize('sessions.settings.environment', 'Environment'), icon: Lxicon.terminal, settings: [], content: management.get('environment') },

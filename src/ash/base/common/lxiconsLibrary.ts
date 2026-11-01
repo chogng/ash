@@ -34,7 +34,6 @@ export const lxiconsLibrary = {
 	briefcase: registerLxicon("briefcase", 0xe01d),
 	briefcaseFilled: registerLxicon("briefcase-filled", 0xe01c),
 	browserExplore: registerLxicon("browser-explore", 0xe01e),
-	browserWeb: registerLxicon("browser-web", 0xe01f),
 	bug: registerLxicon("bug", 0xe020),
 	calendar: registerLxicon("calendar", 0xe021),
 	caseSensitive: registerLxicon("case-sensitive", 0xe145),
