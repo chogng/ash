@@ -22,7 +22,6 @@ import { registerChatSessionsActions } from '../../workbench/contrib/chat/browse
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
-import './actions/chatLayoutActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 
 class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {

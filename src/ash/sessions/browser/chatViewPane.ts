@@ -1,3 +1,4 @@
+import type { IChatViewPane } from '../../workbench/contrib/chat/browser/chat.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
@@ -73,7 +74,7 @@ interface ChatPaneEntry {
  * selection remains internal to durable panes, while untitled sessions
  * materialize when sent or organized through their item actions.
  */
-export class ChatViewPane extends ViewPane implements IChatContextTarget {
+export class ChatViewPane extends ViewPane implements IChatContextTarget, IChatViewPane {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly contextMenuService: IContextMenuService;

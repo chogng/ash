@@ -50,6 +50,11 @@ connection owner independently of visible history. `ChatWidget` owns pagination,
 focus and reading-position presentation. Consumers that omit the history option,
 including Cowork, retain full-history behavior.
 
+Workbench Chat owns its layout and move actions, presentation configuration and
+menus. The Session-backed `ChatViewPane` implements the Workbench `IChatViewPane`
+host contract; actions use that contract and `IChatSessionNavigationService`
+without importing Sessions implementations.
+
 Regular Workbench Chat presents opened Sessions through the shared Workbench tab
 control by default, with a List alternative in Chat More Actions. ChatViewPane
 owns opened-tab order and per-session Thread selection in `chat.viewState` version

@@ -36,6 +36,26 @@ registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, Instantiati
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
+	key: AGENT_SESSIONS_PRESENTATION_SETTING,
+	defaultValue: AgentSessionsPresentation.Tabs,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(AgentSessionsPresentation) },
+	parse(value: unknown): AgentSessionsPresentation {
+		if (value === AgentSessionsPresentation.Tabs || value === AgentSessionsPresentation.List) return value;
+		throw new TypeError(localize('chat.sessions.presentation.invalid', 'Invalid session display mode.'));
+	},
+	setting: {
+		title: localize('chat.sessions.presentation.title', 'Session display'),
+		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list. The list opens beside Chat when there is enough width.'),
+		valueType: 'select',
+		options: [
+			{ value: AgentSessionsPresentation.Tabs, label: localize('chat.sessions.presentation.tabs', 'Tabs') },
+			{ value: AgentSessionsPresentation.List, label: localize('chat.sessions.presentation.list', 'List') },
+		],
+	},
+});
+
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'stacked' | 'sideBySide'>({
 	key: ChatConfiguration.ChatViewSessionsOrientation,
 	defaultValue: 'sideBySide',

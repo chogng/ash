@@ -1,4 +1,11 @@
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IsNativeContext } from '../../../../../platform/contextkey/common/contextkeys.js';
+import { BrowserViewCommandId } from '../../../../../platform/browserView/common/browserView.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID } from '../../common/chat.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IMessageHistoryService } from '../../../../../platform/messageHistory/common/messageHistory.js';
 import { localize, localize2 } from '../../../../../nls.js';
@@ -37,6 +44,71 @@ export function registerChatActions(): void {
 			const history = accessor.get(IMessageHistoryService);
 			if (!history) throw new Error(localize('chat.history.unavailable', 'Input history is unavailable on this connection.'));
 			await history.clear();
+		}
+	});
+	MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
+		submenu: MenuId.ChatSessionsLayout,
+		title: localize2('chat.sessions.presentation.title', 'Session display'),
+		group: 'layout',
+		order: 1,
+	});
+
+	for (const [presentation, title, id] of [
+		[AgentSessionsPresentation.Tabs, localize2('chat.sessions.presentation.tabs', 'Tabs'), 'workbench.action.chat.setAgentSessionsPresentationTabs'],
+		[AgentSessionsPresentation.List, localize2('chat.sessions.presentation.list', 'List'), 'workbench.action.chat.setAgentSessionsPresentationList'],
+	] as const) {
+		registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id,
+					title,
+					toggled: AgentSessionsPresentationContext.isEqualTo(presentation),
+					menu: { id: MenuId.ChatSessionsLayout, group: 'navigation', order: presentation === AgentSessionsPresentation.Tabs ? 1 : 2 },
+					f1: true,
+				});
+			}
+			override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, presentation, ConfigurationTarget.USER_LOCAL);
+			}
+		});
+	}
+
+	registerAction2(class OpenChatBrowserAction extends Action2 {
+		constructor() {
+			super({
+				id: OPEN_CHAT_BROWSER_COMMAND_ID,
+				title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatBrowserAction' }, 'Open Browser'),
+				icon: Lxicon.browserWeb,
+				precondition: IsNativeContext.isEqualTo(true),
+				menu: {
+					id: MenuId.ChatTitle,
+					group: '0_browser',
+					order: 1,
+				},
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			await accessor.get(ICommandService).executeCommand(BrowserViewCommandId.Open);
+		}
+	});
+
+	registerAction2(class OpenChatSettingsAction extends Action2 {
+		constructor() {
+			super({
+				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+				title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, 'Chat Settings'),
+				icon: Lxicon.settings,
+				menu: {
+					id: MenuId.ChatTitle,
+					group: 'chatActions',
+					order: 4,
+				},
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			await accessor.get(IPreferencesService).openSettings({ section: 'chat-appearance', jsonEditor: false });
 		}
 	});
 }

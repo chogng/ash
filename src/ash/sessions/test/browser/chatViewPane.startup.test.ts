@@ -63,7 +63,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { ChatViewPane } = await import('../../browser/chatViewPane.js');
-await import('../../browser/actions/chatLayoutActions.js');
+await import('../../../workbench/contrib/chat/browser/chat.contribution.js');
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 const { BrowserLayoutService } = await import('../../../platform/layout/browser/layoutService.js');
 

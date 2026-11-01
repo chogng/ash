@@ -1,3 +1,5 @@
+import { registerMoveActions } from './actions/chatMoveActions.js';
+import { registerAgentSessionsLayoutActions } from './agentSessions/agentSessionsActions.js';
 import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
 import { IChatDebugService } from '../common/chatDebugService.js';
 import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService.js';
@@ -37,6 +39,8 @@ registerSingleton(IDictationOnboardingService, DictationOnboardingService, Insta
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
+registerMoveActions();
+registerAgentSessionsLayoutActions();
 registerChatOpenAgentDebugPanelAction();
 registerAction2(ExportAgentHostDebugLogsAction);
 registerChatCopyActions();

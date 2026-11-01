@@ -217,7 +217,7 @@ for (const [name, value] of Object.entries({
 await import(
 	'../../browser/workbenchChat.contribution.js'
 );
-await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
+await import('../../../workbench/contrib/chat/browser/chat.contribution.js');
 const { BrowserContextViewService } = await import(
 	'../../../platform/contextview/browser/contextViewService.js'
 );
@@ -670,7 +670,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		],
 	);
 	assert.deepEqual(menuService.getMenuActions(MenuId.ChatTitle).find(([group]) => group === 'layout')?.[1].map(action => action.label), ['Session display']);
-	const layoutChoices = () => menuService.getMenuActions(Menus.ChatSessionsLayout).flatMap(([, actions]) => actions);
+	const layoutChoices = () => menuService.getMenuActions(MenuId.ChatSessionsLayout).flatMap(([, actions]) => actions);
 	assert.deepEqual(layoutChoices().map(action => [action.label, action.checked]), [['Tabs', false], ['List', true]]);
 	await assert.rejects(configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, 'diagonal'), /Invalid session display mode/);
 	const activeInput = paneHost.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;

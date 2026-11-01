@@ -1,3 +1,5 @@
+import type { IView } from '../../../common/views.js';
+import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
@@ -50,3 +52,15 @@ export interface IChatPasteTargetService {
 }
 
 export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetService>('chatPasteTargetService');
+
+/** Workbench Chat host operations; Session selection, drafts and conversation ownership stay with the host. */
+export interface IChatViewPane extends IView {
+	/** Borrowed root used only to measure the host's content frame. */
+	readonly element: HTMLElement;
+	getOptimalWidth(): number;
+	getSessionsViewerOrientation(): AgentSessionsViewerOrientation;
+	getLastDimensions(orientation: AgentSessionsViewerOrientation): { height: number; width: number; } | undefined;
+	toggleSessionsSidebar(options?: { readonly visible: boolean; }): boolean;
+	moveToEditor(): Promise<void>;
+	openInNewWindow(): Promise<void>;
+}
