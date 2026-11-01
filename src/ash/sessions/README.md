@@ -146,6 +146,16 @@ Turn revision and remain window-local; they neither change the ledger nor grant
 commit eligibility. Repository tracking and working-tree counts come from the
 optional Git provider, independently of the immutable Turn list.
 
+The Code tool layout retains Terminal, Files, Changes, Browser and session
+information in one movable Grid. DesktopWorkbenchLayout owns its geometry;
+DesktopLayoutController supplies the selected Session identity without owning
+another layout map. Each Session remembers its tool arrangement, while navigation
+and tool visibility remain window-owned. Browser has its own retained editor host,
+and BrowserView continues to own page models and native Chromium content. Closing
+a tool hides its presentation without closing its documents, terminal or pages.
+See [Code tool composition](LAYOUT.md#editor-presentation) for host boundaries and
+[layout state](LAYOUT_CONTROLLER.md#6-persistence) for persistence.
+
 Create pull request prepares an editable form without publishing or creating
 anything. Submission checks the captured repository, local commit, remote and
 account again. Once sent, completion belongs to the initiating Session even when

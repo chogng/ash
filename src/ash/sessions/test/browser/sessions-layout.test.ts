@@ -34,7 +34,7 @@ const { Dimension } = await import('../../../base/browser/dom.js');
 const { Part } = await import('../../../workbench/browser/part.js');
 const { WorkbenchWindowBarHeight } = await import('../../../workbench/browser/parts/workbenchPartDimensions.js');
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
-const { IStorageService, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
+const { IStorageService, WillSaveStateReason, StorageScope } = await import('../../../platform/storage/common/storage.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 const { ILayoutService } = await import('../../../platform/layout/browser/layoutService.js');
 const { DesktopExistingSessionStrategy } = await import('../../contrib/layout/browser/desktop/desktopExistingSessionStrategy.js');
@@ -1422,6 +1422,117 @@ test('Saved Code card layouts reject duplicate, missing and malformed leaves', a
 	);
 	assert.equal(readCodeCardLayout(JSON.stringify({ ...leaf, size: -1 }), ['panel']), undefined);
 	assert.equal(readCodeCardLayout('{broken', ['panel']), undefined);
+});
+
+test('Saved session arrangements validate complete tool trees without retaining window navigation', async () => {
+	const { readCodeCardLayoutState } = await import('../../browser/codeCardLayout.js');
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'card-validation', flushInterval: 0 });
+	const parts = createParts(dom.window.document, storage);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1800, 1000) });
+		layout.setSessionLayout('session:valid');
+		layout.setBrowserVisible(true);
+		const raw = JSON.parse(storage.get('sessions.code.cardLayouts', StorageScope.WORKSPACE)!);
+		const valid = raw.sessions[0][1];
+		assert.doesNotMatch(JSON.stringify(valid), /titlebar|sidebar|customview/);
+		const bad = { ...valid, tree: { ...valid.tree, children: [valid.tree, valid.tree] } };
+		const decoded = readCodeCardLayoutState(JSON.stringify({
+			...raw, sessions: [['session:valid', valid], ['session:duplicate', bad]],
+			widths: [['terminal', 480], ['browser', -1], ['sidebar', 300]],
+		}));
+		assert.deepEqual([...decoded.sessions.keys()], ['session:valid']);
+		assert.deepEqual([...decoded.widths], [['terminal', 480]]);
+		assert.equal(readCodeCardLayoutState('{broken').sessions.size, 0);
+		assert.equal(readCodeCardLayoutState(JSON.stringify({ ...raw, version: 99 })).fallback, undefined);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Code first opens stack a rightmost pane, then add a new column and retain a manually nested browser', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, {
+			initialDimension: new Dimension(1800, 1000),
+			initialState: {
+				version: 1, sidebar: { width: 300, visible: true },
+				auxiliarybar: { width: 340, visible: false }, editor: { width: 600, visible: false },
+				panel: { position: Position.RIGHT, width: 300, height: 280, visible: false },
+			},
+		});
+		layout.showPart('panel');
+		assert.equal(layout.getPartSize('panel').width, 500);
+		assert.equal(layout.getPartSize('panel').height, 1000 - WorkbenchWindowBarHeight);
+		layout.setChangesVisible(true);
+		const terminal = parts.get('panel')!.domNode.parentElement!;
+		assert.equal(terminal.closest('.ash-split-view-vertical'), layout.changes.element.closest('.ash-split-view-vertical'));
+		layout.setBrowserVisible(true);
+		assert.notEqual(terminal.closest('.ash-split-view-vertical'), layout.browser.element.closest('.ash-split-view-vertical'));
+		const browser = layout.browser.card;
+		const draft = h(dom.window.document, 'input');
+		browser.append(draft);
+		draft.value = 'retained browser view';
+		layout.moveCard('browser', 'changes', Direction.Down);
+		layout.closeCard('browser');
+		layout.setBrowserVisible(true);
+		assert.equal(layout.browser.card, browser);
+		assert.equal(draft.value, 'retained browser view');
+		assert.equal(layout.browser.element.closest('.ash-split-view-vertical'), layout.changes.element.closest('.ash-split-view-vertical'));
+		layout.expandCard('browser');
+		assert.equal(layout.expandedCard, 'browser');
+		layout.expandCard('browser');
+		assert.equal(layout.isCardVisible('changes'), true);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Session tool geometry restores independently of window navigation and survives draft materialization and reload', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'card-sessions', flushInterval: 0 });
+	const parts = createParts(dom.window.document, storage);
+	const layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1800, 1000) });
+	try {
+		layout.setSessionLayout('untitled:a');
+		layout.showPart('panel');
+		layout.setBrowserVisible(true);
+		layout.moveCard('browser', 'files', Direction.Down);
+		const filesSize = layout.getPartSize('auxiliarybar');
+		layout.setSessionLayout('session:b');
+		layout.moveCard('browser', 'sessions', Direction.Left);
+		layout.resizePart('sidebar', new Dimension(360, 1000));
+		layout.hidePart('sidebar');
+		layout.setSessionLayout('untitled:a');
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		assert.equal(layout.getPartSize('sidebar').width, 360);
+		assert.equal(layout.browser.element.closest('.ash-split-view-vertical'), layout.files.element.closest('.ash-split-view-vertical'));
+		layout.showPart('sidebar');
+		layout.resizePart('sidebar', new Dimension(300, 1000));
+		assert.deepEqual(layout.getPartSize('auxiliarybar'), filesSize);
+		layout.renameSessionLayout('untitled:a', 'session:a');
+		const state = JSON.parse(storage.get('sessions.code.cardLayouts', StorageScope.WORKSPACE)!);
+		assert.equal(state.sessions.some(([key]: [string]) => key === 'untitled:a'), false);
+		assert.equal(state.sessions.some(([key]: [string]) => key === 'session:a'), true);
+		layout.dispose();
+		for (const part of parts.values()) part.dispose();
+		const restoredParts = createParts(dom.window.document, storage);
+		try {
+			using restored = createLayout(dom.window.document.body, restoredParts, { storageService: storage, initialDimension: new Dimension(1800, 1000) });
+			restored.setSessionLayout('session:a');
+			restored.setBrowserVisible(true);
+			assert.equal(restored.browser.element.closest('.ash-split-view-vertical'), restored.files.element.closest('.ash-split-view-vertical'));
+		} finally {
+			for (const part of restoredParts.values()) part.dispose();
+		}
+	} finally {
+		layout.dispose();
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test('A legacy editor-only layout migrates into Files and keeps the grouped identity when closed', () => {

@@ -53,6 +53,8 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 			active: true,
 			expandedCard: undefined,
 			onDidChangeCards: Event.None,
+			setSessionLayout: () => { },
+			renameSessionLayout: () => { },
 			filesVisible: false,
 			files: { editorVisible: true, auxiliaryBarVisible: false },
 			setFilesVisible: (visible: boolean) => {

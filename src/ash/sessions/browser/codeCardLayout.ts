@@ -15,8 +15,9 @@ import { AGENTS_FLOATING_PANEL_GAP } from '../common/sizes.js';
 import { localize } from '../../nls.js';
 import type { DockedAuxiliaryBarController } from './dockedAuxiliaryBarController.js';
 import type { EditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
+import type { IResourceEditorInput } from '../../workbench/common/editor.js';
 
-export type CodeCardId = 'terminal' | 'files' | 'changes' | 'info';
+export type CodeCardId = 'terminal' | 'files' | 'changes' | 'browser' | 'info';
 export type CodeCardTarget = CodeCardId | 'sessions';
 
 /** Window-local presentation of retained content. The desktop Grid owns topology and geometry. */
@@ -26,10 +27,16 @@ export interface ICodeCardLayout {
 	readonly information: CodeInformationView;
 	readonly files: DockedAuxiliaryBarController;
 	readonly filesVisible: boolean;
-	readonly changes: CodeChangesView;
+	readonly changes: CodeEditorView;
+	readonly browser: CodeEditorView;
 	setFilesVisible(visible: boolean): void;
 	setChangesPart(part: EditorPart): void;
 	setChangesVisible(visible: boolean): void;
+	setBrowserPart(part: EditorPart): void;
+	setBrowserVisible(visible: boolean): void;
+	/** Geometry follows one selected Session; undefined keeps the shared multi-session arrangement. */
+	setSessionLayout(key: string | undefined): void;
+	renameSessionLayout(from: string, to: string): void;
 	readonly expandedCard: CodeCardId | undefined;
 	isCardVisible(id: CodeCardId): boolean;
 	setInformation(element: HTMLElement | undefined): void;
@@ -37,8 +44,8 @@ export interface ICodeCardLayout {
 	closeCard(id: CodeCardId): void;
 	moveCard(id: CodeCardId, target: CodeCardTarget, direction: Direction): void;
 	expandCard(id: CodeCardId): void;
-	detachCard(id: CodeCardId, detached: boolean): void;
-	openAuxiliaryView(id: CodeCardId): Promise<void>;
+	detachCard(id: Exclude<CodeCardId, 'browser'>, detached: boolean): void;
+	openAuxiliaryView(id: Exclude<CodeCardId, 'browser'>): Promise<void>;
 	isViewDetached(id: CodeCardId): boolean;
 }
 
@@ -52,14 +59,16 @@ export function getViewTitleActions(layout: ICodeCardLayout, id: CodeCardId): re
 			: localize('sessions.cards.expand', 'Expand card');
 	const closeLabel = localize('sessions.cards.close', 'Close card');
 	return [
-		{
+		// Native browser pages are owned by their creating window. Moving that DOM
+		// to an auxiliary window would leave the Chromium view in the main window.
+		...(id !== 'browser' ? [{
 			id: `sessions.views.${id}.openWindow`,
 			label: openLabel,
 			tooltip: openLabel,
 			icon: Lxicon.linkExternal,
 			enabled: true,
 			run: () => layout.openAuxiliaryView(id),
-		},
+		}] : []),
 		{
 			id: `sessions.views.${id}.expand`,
 			label: expandLabel,
@@ -91,8 +100,8 @@ const filesCardHeaderHeight = 36;
 const filesCardBorderSize = 2;
 const filesCardFrameSize = 2 * AGENTS_FLOATING_PANEL_GAP;
 
-/** Hosts the retained Changes editor independently of the Files document groups. */
-export class CodeChangesView extends Disposable implements ISerializableView {
+/** Hosts a retained tool editor independently of the Files document groups. */
+export class CodeEditorView extends Disposable implements ISerializableView {
 	public readonly element: HTMLElement;
 	public readonly card: HTMLElement;
 	public readonly header: HTMLElement;
@@ -103,21 +112,20 @@ export class CodeChangesView extends Disposable implements ISerializableView {
 	private readonly body: HTMLElement;
 	private part: EditorPart | undefined;
 
-	constructor(document: Document, layout: ICodeCardLayout) {
+	constructor(document: Document, layout: ICodeCardLayout, private readonly id: 'changes' | 'browser', title: string) {
 		super();
-		this.element = h(document, 'div', { className: 'ash-workbench-part-frame ash-code-changes-frame' });
-		this.card = h(document, 'section', { className: 'ash-code-changes-card ash-sessions-tool-card' });
+		this.element = h(document, 'div', { className: 'ash-workbench-part-frame ash-code-editor-frame' });
+		this.card = h(document, 'section', { className: 'ash-code-editor-card ash-sessions-tool-card' });
 		this.card.setAttribute('role', 'region');
-		const title = localize('sessions.changes.title', 'Changes');
 		this.card.setAttribute('aria-label', title);
 		this.header = h(document, 'header', { className: 'ash-code-card-header' });
 		const label = h(document, 'span', { className: 'ash-code-card-title' });
 		label.textContent = title;
 		this.header.append(label);
-		this.body = h(document, 'div', { className: 'ash-code-changes-body' });
+		this.body = h(document, 'div', { className: 'ash-code-editor-body' });
 		this.card.append(this.header, this.body);
 		this.element.append(this.card);
-		this.card.dataset.codeCard = 'changes';
+		this.card.dataset.codeCard = id;
 		const actions = this._register(new ActionBar(this.header, {
 			ariaLabel: title,
 			actionViewItemProvider: (action, options) => new ViewTitleActionViewItem(action, options),
@@ -126,7 +134,7 @@ export class CodeChangesView extends Disposable implements ISerializableView {
 		actions.element.classList.add('ash-code-card-controls');
 		const update = (): void => {
 			actions.element.hidden = !layout.active;
-			actions.updateActions(getViewTitleActions(layout, 'changes'));
+			actions.updateActions(getViewTitleActions(layout, id));
 		};
 		this._register(layout.onDidChangeCards(update));
 		update();
@@ -144,6 +152,11 @@ export class CodeChangesView extends Disposable implements ISerializableView {
 
 	public focus(): void { this.part?.focus(); }
 
+	public async openEditor(input: IResourceEditorInput): Promise<void> {
+		if (!this.part) throw new Error('Tool editor has not been mounted');
+		await this.part.openEditor(input, { pinned: true, preserveFocus: true });
+	}
+
 	public layout(dimension: IDimension): void {
 		this.layoutCard({ width: dimension.width - filesCardFrameSize, height: dimension.height - filesCardFrameSize });
 	}
@@ -155,7 +168,7 @@ export class CodeChangesView extends Disposable implements ISerializableView {
 		});
 	}
 
-	public toJSON(): string { return 'changes'; }
+	public toJSON(): string { return this.id; }
 }
 
 /** A Grid leaf, not a second session model or a shared Workbench Part. */
@@ -242,4 +255,146 @@ export function readCodeCardLayout(
 	} catch {
 		return undefined;
 	}
+}
+
+const codeLayoutIds = ['sessions', 'panel', 'files', 'changes', 'browser', 'info'];
+
+export interface CodeCardLayoutSnapshot {
+	readonly tree: SerializedGridDescriptor;
+	/** A hidden, previously placed pane retains its slot instead of using the first-open policy. */
+	readonly placed: readonly CodeCardId[];
+}
+
+export interface CodeCardLayoutState {
+	readonly fallback: CodeCardLayoutSnapshot | undefined;
+	readonly sessions: ReadonlyMap<string, CodeCardLayoutSnapshot>;
+	readonly widths: ReadonlyMap<CodeCardId, number>;
+	readonly browserVisible: boolean;
+}
+
+/** Only tool geometry is session-owned. Window navigation never enters these snapshots. */
+export function getCodeCardArrangement(tree: SerializedGridDescriptor): SerializedGridDescriptor {
+	return filterCodeLayout(tree, node => codeLayoutIds.includes(String(node.data)))!;
+}
+
+function filterCodeLayout(
+	tree: SerializedGridDescriptor,
+	include: (leaf: Extract<SerializedGridDescriptor, { type: 'leaf'; }>) => boolean,
+): SerializedGridDescriptor | undefined {
+	if (tree.type === 'leaf') return include(tree) ? tree : undefined;
+	const children = tree.children.map(child => filterCodeLayout(child, include))
+		.filter((child): child is SerializedGridDescriptor => child !== undefined);
+	if (children.length === 0) return undefined;
+	if (children.length === 1) return { ...children[0]!, size: tree.size };
+	return { ...tree, children };
+}
+
+/** Reattach the saved content tree to the current window's title bar and sidebar. */
+export function composeCodeCardLayout(
+	windowTree: SerializedGridDescriptor,
+	content: SerializedGridDescriptor,
+	dimension: IDimension,
+): SerializedGridDescriptor {
+	const leaves = new Map<string, Extract<SerializedGridDescriptor, { type: 'leaf'; }>>();
+	const visit = (node: SerializedGridDescriptor): void => {
+		if (node.type === 'leaf') leaves.set(String(node.data), node);
+		else node.children.forEach(visit);
+	};
+	visit(windowTree);
+	const titlebar = leaves.get('titlebar')!;
+	const sidebar = leaves.get('sidebar')!;
+	const width = Math.max(0, dimension.width - (sidebar.visible ? sidebar.size : 0));
+	const custom = leaves.get('customview');
+	const children = content.type === 'branch' && content.orientation === Orientation.HORIZONTAL
+		? content.children : [{ ...content, size: width }];
+	return {
+		type: 'branch', orientation: Orientation.VERTICAL, size: dimension.height, priority: LayoutPriority.Normal,
+		children: [titlebar, {
+			type: 'branch', orientation: Orientation.HORIZONTAL,
+			size: Math.max(0, dimension.height - titlebar.size), priority: LayoutPriority.High,
+			children: [sidebar, ...children, ...(custom ? [{ ...custom, size: width }] : [])],
+		}],
+	};
+}
+
+/** First opens extend the visible arrangement; retained hidden panes keep their own places. */
+export function placeCodeCard(
+	tree: SerializedGridDescriptor,
+	id: CodeCardId,
+	dimension: IDimension,
+	preferredWidth?: number,
+): SerializedGridDescriptor {
+	const data = id === 'terminal' ? 'panel' : id;
+	const remaining = filterCodeLayout(tree, leaf => leaf.data !== data)!;
+	const visible = filterCodeLayout(remaining, leaf => leaf.visible)!;
+	const first = visible.type === 'leaf' && visible.data === 'sessions';
+	const last = visible.type === 'branch' && visible.orientation === Orientation.HORIZONTAL
+		? visible.children.at(-1)! : visible;
+	const stack = !first && last.type === 'leaf' && last.data !== 'sessions';
+	const width = dimension.width;
+	const size = stack ? dimension.height / 2 : preferredWidth ?? width * (id === 'terminal' || id === 'info' ? 1 / 3 : 3 / 5);
+	const pane: SerializedGridDescriptor = { type: 'leaf', data, size, visible: true, priority: LayoutPriority.Normal };
+	if (!first && !stack) {
+		return remaining.type === 'branch' && remaining.orientation === Orientation.HORIZONTAL
+			? { ...remaining, children: [...remaining.children, pane] }
+			: { type: 'branch', orientation: Orientation.HORIZONTAL, size: width, priority: LayoutPriority.High, children: [remaining, pane] };
+	}
+	const anchor = first ? 'sessions' : last.type === 'leaf' ? last.data : undefined;
+	const orientation = stack ? Orientation.VERTICAL : Orientation.HORIZONTAL;
+	const insert = (node: SerializedGridDescriptor): SerializedGridDescriptor => {
+		if (node.type === 'leaf') {
+			if (node.data !== anchor) return node;
+			return {
+				type: 'branch', orientation, size: node.size, priority: node.priority,
+				children: [{ ...node, size: stack ? size : Math.max(0, width - size) }, pane],
+			};
+		}
+		const children = node.children.flatMap(child => {
+			const placed = insert(child);
+			return placed.type === 'branch' && placed.orientation === node.orientation ? placed.children : [placed];
+		});
+		return { ...node, children };
+	};
+	return insert(remaining);
+}
+
+/** A bounded, versioned UI-state envelope is decoded before any retained views are attached. */
+export function readCodeCardLayoutState(value: string | undefined): CodeCardLayoutState {
+	const sessions = new Map<string, CodeCardLayoutSnapshot>();
+	const widths = new Map<CodeCardId, number>();
+	let fallback: CodeCardLayoutSnapshot | undefined;
+	let browserVisible = false;
+	if (!value) return { fallback, sessions, widths, browserVisible };
+	try {
+		const state: unknown = JSON.parse(value);
+		if (!state || typeof state !== 'object' || !('version' in state) || state.version !== 1) return { fallback, sessions, widths, browserVisible };
+		const record = state as Record<string, unknown>;
+		browserVisible = record.browserVisible === true;
+		const snapshot = (candidate: unknown): CodeCardLayoutSnapshot | undefined => {
+			if (!candidate || typeof candidate !== 'object') return undefined;
+			const item = candidate as Record<string, unknown>;
+			const tree = readCodeCardLayout(JSON.stringify(item.tree), codeLayoutIds);
+			if (!tree || !Array.isArray(item.placed) || item.placed.some(id => !isCodeCardId(id))) return undefined;
+			return { tree, placed: [...new Set(item.placed as CodeCardId[])] };
+		};
+		fallback = snapshot(record.fallback);
+		if (Array.isArray(record.sessions)) {
+			for (const entry of record.sessions.slice(-100)) {
+				if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0].length > 2048) continue;
+				const layout = snapshot(entry[1]);
+				if (layout) sessions.set(entry[0], layout);
+			}
+		}
+		if (Array.isArray(record.widths)) {
+			for (const entry of record.widths) {
+				if (Array.isArray(entry) && isCodeCardId(entry[0]) && typeof entry[1] === 'number'
+					&& Number.isFinite(entry[1]) && entry[1] > 0 && entry[1] <= 100000) widths.set(entry[0], entry[1]);
+			}
+		}
+	} catch { /* Invalid reconstructable UI state falls back to the current window's default arrangement. */ }
+	return { fallback, sessions, widths, browserVisible };
+}
+
+function isCodeCardId(value: unknown): value is CodeCardId {
+	return value === 'terminal' || value === 'files' || value === 'changes' || value === 'browser' || value === 'info';
 }

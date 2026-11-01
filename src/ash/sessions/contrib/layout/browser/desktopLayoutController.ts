@@ -1,4 +1,4 @@
-import type { IObservable } from '../../../../base/common/observable.js';
+import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
@@ -65,6 +65,19 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	public override start(): void {
 		super.start();
+		this._register(autorun(reader => {
+			const selected = this.sessions.getSelection(reader);
+			const materialized = this.management.materializedSessions.read(reader);
+			const documents = this.context.documentContent.read(reader);
+			const cards = this.layout.codeCards;
+			if (!cards) return;
+			for (const [draft, created] of materialized) cards.renameSessionLayout(`untitled:${draft}`, `session:${created.sessionId}`);
+			if (!documents) return;
+			const active = selected.visibleSelections.length === 1 ? selected.activeSelection : undefined;
+			const created = active?.kind === 'untitled' ? materialized.get(active.session.untitledSessionId) : undefined;
+			cards.setSessionLayout(active?.kind === 'session' ? `session:${active.active.session.sessionId}`
+				: created ? `session:${created.sessionId}` : active ? `untitled:${active.session.untitledSessionId}` : undefined);
+		}));
 		this._register(this.editor.onDidChangeEditors(event => {
 			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && this.context.isDocumentContent && !this.isRestoringEditors && !this.context.isChangingContent && this.documentGroups.every(group => group.inputs.length === 0)) {
 				this.layout.hidePart('editor');

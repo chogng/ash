@@ -172,13 +172,8 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-1",
-      "file": "chat-1.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "chat-1-filled",
-      "file": "chat-1-filled.svg",
+      "id": "chat",
+      "file": "chat.svg",
       "rendering": "symbolic"
     },
     {
@@ -209,6 +204,21 @@
     {
       "id": "chat-4-filled",
       "file": "chat-4-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-filled",
+      "file": "chat-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-mode",
+      "file": "chat-mode.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-mode-filled",
+      "file": "chat-mode-filled.svg",
       "rendering": "symbolic"
     },
     {

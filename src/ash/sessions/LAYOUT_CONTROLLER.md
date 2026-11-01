@@ -33,17 +33,18 @@ It is the detailed companion to the [layout-controller boundary](LAYOUT.md#layou
 
 The Agents window keeps a single active selection but lets the user move between many. `sessions.experimental.layoutScope` defaults to `session-shared`: each Session owns its document working set and panel view, with shared visibility. `chat-shared` scopes those documents and views to a Session/Thread pair while sharing Editor/Details visibility. `chat` additionally remembers Editor/Details visibility for that pair. BaseLayoutController remains the only owner of these maps and the restore queue. A newly selected scope adopts current documents until it has its own saved working set.
 
-| State                          | Storage                             | Scope                                                           |
-| ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
-| Editor working set             | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                      |
-| Panel view                     | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                      |
-| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                              |
-| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                       |
-| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                     |
-| Normal Code card tree          | `sessions.code.cardLayout`          | Profile, window geometry; excludes expansion and detachment     |
-| Files card visibility          | `sessions.code.filesVisible`        | Profile; independent of its retained Editor/Details preferences |
-| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                         |
-| Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope    |
+| State                          | Storage                             | Scope                                                               |
+| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------- |
+| Editor working set             | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                          |
+| Panel view                     | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                          |
+| Tool topology and dimensions   | `sessions.code.cardLayouts`         | Workspace UI state, keyed by Session; shared multi-session fallback |
+| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                                  |
+| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                           |
+| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                         |
+| Normal Code card tree          | `sessions.code.cardLayout`          | Profile, window geometry; excludes expansion and detachment         |
+| Files card visibility          | `sessions.code.filesVisible`        | Profile; independent of its retained Editor/Details preferences     |
+| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                             |
+| Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope        |
 
 Session changes restore document working sets without selecting another product mode. Shared scopes preserve visibility; `chat` restores the pair's saved Editor/Details visibility. A Code composition with only managed inputs initially shows Details-only; opening an ordinary document reveals its content. Persistence retains existing `session:<id>` keys and adds `chat:[sessionId,threadId]` entries with optional validated `partVisibility`. Draft materialization transfers all three maps to the durable scope key.
 
@@ -65,7 +66,7 @@ DesktopExistingSessionStrategy controls the Editor/Details composition inside Fi
 
 DesktopLayoutController restores document working sets and retains the existing combined side-pane command for compatibility. Files and Terminal toolbar actions independently open or hide their retained view containers. DesktopDetailPanelCoordinator opens Files and migrates a retired Auxiliary Bar Changes selection back to Files. Files hosts the retained document EditorPart and file tree in one card, with document tabs projected into its header. Changes opens in a separate retained EditorPart, whose Changes editor owns the list/comparison composition. The window editor coordinator routes Changes inputs to that host and workspace files to Files; document working sets exclude the Changes host. Document selection never implicitly hides Files; closing the last document hides only EditorPart. Restored Changes inputs migrate out of document working sets. The Changes host follows the selected session without reopening a closed card; tool visibility belongs to the window layout.
 
-SessionInfoRail reads the active Code chat model and workspace/SCM services. DesktopWorkbenchLayout mounts the active rail as a Grid leaf; profile UI state remembers its visibility, section expansion and normal Code card tree. Expansion and native-window detachment retain the base geometry without persisting their temporary hidden leaves. The rail creates no copy of conversation, workspace or context-usage business state.
+SessionInfoRail reads the active Code chat model and workspace/SCM services. DesktopWorkbenchLayout mounts the active rail as a Grid leaf; profile UI state remembers its visibility and section expansion. DesktopLayoutController projects the single selected Session identity into DesktopWorkbenchLayout, which owns the tool tree snapshots and width preferences. Multiple visible Sessions use the shared fallback rather than attributing shared tools to the active Session. Draft materialization transfers the geometry to the durable Session identity. Expansion and native-window detachment retain the base geometry without persisting their temporary hidden leaves. The rail creates no copy of conversation, workspace or context-usage business state.
 
 ## 4. Panel
 
@@ -98,7 +99,9 @@ Closing or archiving a session removes its working set and panel-view state. Rep
 
 Persisted state is validated by its owner before use. Legacy page resources are removed from session working sets; feature-editor restoration belongs to the feature's command.
 
-Workbench-owned side-pane geometry and part visibility are restored before the layout controller starts. Layout restoration must not recalculate or overwrite that geometry.
+Window navigation geometry and part visibility are restored before the layout controller starts. Applying a Session's tool geometry preserves that navigation and the window's desired tool visibility.
+
+The versioned `sessions.code.cardLayouts` envelope stores bounded Session tool trees, the shared fallback and tool width preferences in workspace UI state. It excludes titlebar, sidebar and Custom View geometry. The previous profile-scoped `sessions.code.cardLayout` tree migrates into the fallback once; writers use only the new envelope and remove the legacy key after writing it. Each tree is validated for known, unique and complete tool identities before retained views are attached. Product-editor startup defers applying the Code tree until the Code composition is active. Session selection restores geometry without changing window-owned tool visibility, content models or documents.
 
 ## 7. Key invariants
 

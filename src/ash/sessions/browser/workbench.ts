@@ -162,7 +162,11 @@ import { DesignEditorService, IDesignEditorService } from '../contrib/creator/br
 import { Disposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
-import { localize } from '../../nls.js';
+import { localize, localize2 } from '../../nls.js';
+import { BrowserViewUri } from '../../platform/browserView/common/browserViewUri.js';
+import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
+import type { EditorWorkingSet } from '../../workbench/services/editor/common/editorWorkingSet.js';
+import { MenusRegistry, MenuId } from '../../platform/actions/common/actions.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
@@ -204,7 +208,7 @@ import { IAgentHostConnectionsService } from '../../platform/agentHost/common/ag
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
-import { IStorageService, WillSaveStateReason, StorageScope } from '../../platform/storage/common/storage.js';
+import { IStorageService, WillSaveStateReason, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from '../../platform/workspace/common/workspace.js';
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
@@ -933,9 +937,17 @@ export abstract class Workbench extends Disposable {
 			...editorOptions, editorLimit: 1, contextKeyService: changesContext,
 		}));
 		changesEditor.activeGroup.setTitleVisible(false);
+		const browserHost = h(ownerWindow.document, 'div');
+		const browserScope = this._register(services.createChild());
+		const browserContext = this._register(contextKeys.createScoped(browserHost));
+		browserScope.registerInstance(IContextKeyService, browserContext);
+		const browserEditor = this._register(browserScope.createInstance(WorkbenchEditorPart, browserHost, {
+			...editorOptions, contextKeyService: browserContext,
+		}));
 		const editorParts = this._register(services.createInstance(EditorParts, editor,
 			services.get(IAuxiliaryWindowService), undefined, services.get(IAccessibilityService), storage));
 		this._register(editorParts.registerEditorPart(changesEditor, input => input.resource.scheme === 'ash-session-changes', () => layout.codeCards?.setChangesVisible(true)));
+		this._register(editorParts.registerEditorPart(browserEditor, input => input.resource.scheme === BrowserViewUri.scheme, () => layout.codeCards?.setBrowserVisible(true)));
 		services.registerInstance(IEditorPartsService, editorParts);
 		services.registerInstance(IEditorPart, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
@@ -980,8 +992,33 @@ export abstract class Workbench extends Disposable {
 		if (layout.codeCards) {
 			const cards = layout.codeCards;
 			cards.setChangesPart(changesEditor);
+			cards.setBrowserPart(browserEditor);
+			if (options.createBrowserHost) {
+				const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
+				this._register(toDisposable(() => browserVisible.reset()));
+				this._register(cards.onDidChangeCards(() => browserVisible.set(cards.isCardVisible('browser'))));
+				this._register(CommandsRegistry.register('ash.sessions.toggleBrowser', async () => {
+					await commandService.executeCommand('sessions.open.code');
+					if (cards.isCardVisible('browser')) cards.closeCard('browser');
+					else if (browserEditor.activeInput) {
+						cards.setBrowserVisible(true);
+						browserEditor.focus();
+					} else await services.get(IBrowserViewWorkbenchService).createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
+				}));
+				this._register(MenusRegistry.appendMenuItems([Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
+					id, item: {
+						command: {
+							id: 'ash.sessions.toggleBrowser',
+							title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
+							icon: Lxicon.browserExplore,
+							toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
+						},
+						when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 1.5,
+					},
+				}))));
+			}
 			// Projected headers keep window commands targeted at the card receiving focus.
-			for (const [header, part] of [[cards.files.header, editor], [cards.changes.header, changesEditor]] as const) {
+			for (const [header, part] of [[cards.files.header, editor], [cards.changes.header, changesEditor], [cards.browser.header, browserEditor]] as const) {
 				for (const event of ['focusin', 'pointerdown'] as const) {
 					this._register(addDisposableListener(header, event, () => editorParts.activateGroup(part.activeGroup.id)));
 				}
@@ -995,6 +1032,11 @@ export abstract class Workbench extends Disposable {
 					&& changesEditor.groups.every(group => group.inputs.length === 0)) {
 					cards.setChangesVisible(false);
 				}
+			}));
+			this._register(browserEditor.onDidChangeEditors(event => {
+				if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed'
+					&& event.event.reason !== 'replace' && event.event.reason !== 'previewReplace'
+					&& browserEditor.groups.every(group => group.inputs.length === 0)) cards.setBrowserVisible(false);
 			}));
 			const changesUpdates = new TaskQueue();
 			this._register(toDisposable(() => changesUpdates.clearPending()));
@@ -1044,6 +1086,33 @@ export abstract class Workbench extends Disposable {
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
+		if (options.createBrowserHost && layout.codeCards) {
+			// Embedded editor hosts own their working sets; the document coordinator deliberately excludes them.
+			const browserStateKey = 'sessions.browser.editorState';
+			const browserViews = services.get(IBrowserViewWorkbenchService);
+			let restoringBrowser = true;
+			const saveBrowser = (): void => {
+				if (!restoringBrowser) storage.store(browserStateKey, JSON.stringify(browserEditor.saveWorkingSet(browserStateKey)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			};
+			this._register(storage.onWillSaveState(saveBrowser));
+			this._register(browserEditor.onDidChangeEditors(saveBrowser));
+			this._register(this.lifecycleService.onWillShutdown(event => {
+				event.join(Promise.resolve().then(saveBrowser), 'browser pane editors');
+			}));
+			this._register(this.lifecycleService.onDidShutdown(() => { restoringBrowser = true; }));
+			serviceContributionReady.push((async () => {
+				try {
+					await browserViews.initialize();
+					const saved = storage.get(browserStateKey, StorageScope.WORKSPACE);
+					if (saved && !this.isDisposed) {
+						// EditorPart validates the complete serialized working set before opening its inputs.
+						await browserEditor.applyWorkingSet(JSON.parse(saved) as EditorWorkingSet, { preserveFocus: true });
+					}
+				} catch (error) {
+					if (!this.isDisposed) notificationService.error(localize('sessions.cards.browserRestoreFailed', 'Could not restore browser panes: {0}', getErrorMessage(error)));
+				} finally { restoringBrowser = false; }
+			})());
+		}
 		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
