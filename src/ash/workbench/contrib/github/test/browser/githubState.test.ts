@@ -5,11 +5,11 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('github browser component', () => {
 	const browserTests = useBrowserTests();
 	for (const [state, reason, icon, color, label] of [
-		['open', '', 'issue-opened', 'charts-green', 'Open'],
-		['closed', 'completed', 'issue-closed', 'charts-purple', 'Closed'],
-		['closed', 'not_planned', 'issue-closed', 'description-foreground', 'Closed as not planned'],
-		['closed', 'duplicate', 'issue-closed', 'description-foreground', 'Closed as duplicate'],
-		['closed', '', 'issue-closed', 'charts-purple', 'Closed'],
+		['open', '', 'issues', 'charts-green', 'Open'],
+		['closed', 'completed', 'issues', 'charts-purple', 'Closed'],
+		['closed', 'not_planned', 'issues', 'description-foreground', 'Closed as not planned'],
+		['closed', 'duplicate', 'issues', 'description-foreground', 'Closed as duplicate'],
+		['closed', '', 'issues', 'charts-purple', 'Closed'],
 	] as const) {
 		test(`Issue ${state} ${reason || 'without reason'} renders a decorative themed status through the GitHub protocol`, async function () {
 			const { page } = browserTests;
