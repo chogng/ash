@@ -28,6 +28,7 @@ import { noFileIconTheme } from '../../../../../platform/theme/common/themeServi
 import assert from 'node:assert/strict';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryProvider } from '../../common/history.js';
 import { DialogResult, type IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -1509,6 +1510,8 @@ type ResourceGroupMenuFixture = DisposableStore & {
 	readonly layoutMenu: () => void;
 	readonly refresh: () => void;
 	readonly removeGroup: (label: string) => void;
+	readonly resourceCalls: Array<{ path: string; options?: IEditorOptions; sideBySide?: boolean; }>;
+	readonly setBusy: (value: boolean) => void;
 };
 
 async function createResourceGroupMenuFixture(renderContextMenu = false, groupLabels: readonly string[] = ['Staged Changes', 'Changes']): Promise<ResourceGroupMenuFixture> {
@@ -1531,10 +1534,14 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 		const scm = resources.add(new SCMService());
 		const views = resources.add(new SCMViewService(scm));
 		const changes = resources.add(new Emitter<void>());
+		const resourceCalls: ResourceGroupMenuFixture['resourceCalls'] = [];
+		let isBusy = false;
 		const resource = (path: string) => ({
 			sourceUri: URI.file(`/workspace/${path}`), path,
 			decorations: { badge: 'M', tooltip: 'Modified', kind: 'modified' },
-			openLabel: `Open ${path}`, actions: [], open: async () => { },
+			openLabel: `Open ${path}`,
+			actions: [{ id: `stage:${path}`, label: 'Stage Changes', tooltip: 'Stage Changes', enabled: true, run: () => { resourceCalls.push({ path }); } }],
+			open: async (options: IEditorOptions, sideBySide: boolean) => { resourceCalls.push({ path, options, sideBySide }); },
 		});
 		let groups: readonly ISCMResourceGroup[] = groupLabels.map((label, index) => ({
 			id: String(index), label,
@@ -1544,6 +1551,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 		resources.add(scm.registerSCMProvider({
 			...testSCMProvider('first', 'first'), rootUri: URI.file('/workspace'),
 			get groups() { return groups; }, onDidChangeResources: changes.event,
+			get isBusy() { return isBusy; },
 		}));
 		resources.add(scm.registerSCMProvider({
 			...testSCMProvider('second', 'second'), rootUri: URI.file('/workspace'),
@@ -1614,6 +1622,8 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 			layoutMenu: () => contextView?.layout(),
 			refresh: () => { groups = groups.map(group => ({ ...group, resources: [...group.resources, resource('src/added.ts')] })); changes.fire(); },
 			removeGroup: (label: string) => { groups = groups.filter(group => group.label !== label); changes.fire(); },
+			resourceCalls,
+			setBusy: (value: boolean) => { isBusy = value; },
 		});
 	} catch (error) {
 		resources.dispose();
@@ -1779,6 +1789,7 @@ test('SCM resource group navigation help preserves welcome content and Chinese i
 		fixture.tree.focus();
 		using provider = help.getProvider(fixture.services)!;
 		assert.match(provider.provideContent(), /上一个资源分组/);
+		assert.match(provider.provideContent(), /右键点击文件或按 Shift\+F10/);
 		assert.match(provider.provideContent(), /<keybinding:workbench.scm.action.focusNextResourceGroup>/);
 		fixture.scm.getRepository('first')!.dispose();
 		fixture.scm.getRepository('second')!.dispose();
@@ -1788,6 +1799,81 @@ test('SCM resource group navigation help preserves welcome content and Chinese i
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('SCM file context menus navigate changes, run provider actions and pass the clicked URI to file commands in both layouts', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const commands: Array<{ id: string; uri: unknown; }> = [];
+	for (const id of ['copyFilePath', 'copyRelativeFilePath', 'revealInExplorer']) {
+		fixture.add(CommandsRegistry.register(id, (_accessor, uri) => { commands.push({ id, uri }); }));
+	}
+	for (const mode of ['list', 'tree'] as const) {
+		fixture.pane.viewMode = mode;
+		const file = fixture.tree.querySelector<HTMLElement>('[aria-label="Open root.ts"]')!;
+		file.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { button: 2, clientX: 31, clientY: 47, bubbles: true, cancelable: true }));
+		const menu = fixture.lastMenu();
+		assert.deepEqual(menu.getAnchor(), { x: 31, y: 47, targetWindow: fixture.browser.window });
+		const actions = menu.getActions().filter(action => action.id !== Separator.ID);
+		assert.deepEqual(actions.map(action => action.id), ['scm.openChange', 'scm.openChangeToSide', 'stage:root.ts', 'revealInExplorer', 'copyFilePath', 'copyRelativeFilePath']);
+		for (const action of actions) await action.run();
+	}
+	assert.deepEqual(fixture.resourceCalls, Array.from({ length: 2 }, () => [
+		{ path: 'root.ts', options: { pinned: true, preserveFocus: false }, sideBySide: false },
+		{ path: 'root.ts', options: { pinned: true, preserveFocus: false }, sideBySide: true },
+		{ path: 'root.ts' },
+	]).flat());
+	assert.deepEqual(commands.map(call => ({ id: call.id, path: (call.uri as URI).fsPath })), Array.from({ length: 2 }, () => [
+		{ id: 'revealInExplorer', path: URI.file('/workspace/root.ts').fsPath },
+		{ id: 'copyFilePath', path: URI.file('/workspace/root.ts').fsPath },
+		{ id: 'copyRelativeFilePath', path: URI.file('/workspace/root.ts').fsPath },
+	]).flat());
+});
+
+test('SCM file menus work from tree and button keyboard focus and restore focus on Escape', async () => {
+	using fixture = await createResourceGroupMenuFixture(true);
+	fixture.tree.querySelector<HTMLButtonElement>('[aria-label="Open root.ts"]')!.click();
+	fixture.tree.focus();
+	fixture.resourceCalls.length = 0;
+	const focused = fixture.tree.getAttribute('aria-activedescendant');
+	fixture.key('F10', true);
+	assert.equal(fixture.browser.window.document.activeElement?.getAttribute('role'), 'menu');
+	fixture.browser.window.document.querySelector<HTMLElement>('[role="menu"]')!.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(fixture.browser.window.document.activeElement, fixture.tree);
+	assert.equal(fixture.tree.getAttribute('aria-activedescendant'), focused);
+	assert.deepEqual(fixture.resourceCalls, []);
+	const button = fixture.tree.querySelector<HTMLButtonElement>('[aria-label="Open root.ts"]')!;
+	button.focus();
+	button.dispatchEvent(new fixture.browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+	assert.equal(fixture.menuCount(), 2);
+	fixture.hideMenu();
+	assert.equal(fixture.browser.window.document.activeElement, button);
+});
+
+test('SCM file menus reject busy, replaced, switched and disposed resource contexts', async () => {
+	using fixture = await createResourceGroupMenuFixture();
+	const openMenu = (): readonly IAction[] => {
+		fixture.tree.querySelector('[aria-label="Open root.ts"]')!.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+		return fixture.lastMenu().getActions().filter(action => action.id !== Separator.ID);
+	};
+	const busyActions = openMenu();
+	fixture.setBusy(true);
+	assert.ok(busyActions.every(action => !action.enabled));
+	for (const action of busyActions) await action.run();
+	fixture.setBusy(false);
+	fixture.refresh();
+	for (const action of busyActions) await action.run();
+	const switchedActions = openMenu();
+	fixture.views.selectRepository('second');
+	for (const action of switchedActions) await action.run();
+	fixture.views.selectRepository('first');
+	const disposedActions = openMenu();
+	const oldRow = fixture.tree.querySelector('[aria-label="Open root.ts"]')!;
+	const count = fixture.menuCount();
+	fixture.pane.dispose();
+	oldRow.dispatchEvent(new fixture.browser.window.MouseEvent('contextmenu', { bubbles: true }));
+	assert.equal(fixture.menuCount(), count);
+	for (const action of disposedActions) await action.run();
+	assert.deepEqual(fixture.resourceCalls, []);
 });
 
 test('SCM group right-click collapses only its directories recursively and retains tree state on refresh', async () => {

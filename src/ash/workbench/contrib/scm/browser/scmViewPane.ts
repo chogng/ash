@@ -8,11 +8,13 @@ import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { stripIcons } from '../../../../base/common/iconLabels.js';
 import type { Command } from '../../../../editor/common/languages.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
+import { Schemas } from '../../../../base/common/network.js';
+import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
@@ -142,7 +144,7 @@ export class ScmViewPane extends ViewPane {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline group and file actions. The View All action on a group opens its files together in a multi-file diff editor. The inline Open File action opens the editable working file, including from staged changes. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.'));
+		this.tree.element.setAttribute('aria-description', localize('scm.changesTreeHelp', 'Use the title toolbar and More Actions to run provider actions or change list, tree and sorting. Files are grouped by directory. Use Up and Down to navigate and preview files, Left to collapse, and Right to expand a group or directory. Press Enter or Space on a directory to toggle it. Press Shift+F10 on a group in tree view, then choose Collapse All to fold its directories. Right-click a file or press Shift+F10 to open its menu with change navigation, provider actions, file location and path copying. Escape closes the menu and returns focus. Press Enter on a file to open and pin it, or Space to preview while keeping focus here. Hold Ctrl, Command, or Alt when clicking or pressing Enter to open in a side group. Double-click pins the file and focuses its editor. Use Tab to reach the inline group and file actions. The View All action on a group opens its files together in a multi-file diff editor. The inline Open File action opens the editable working file, including from staged changes. Press F1 to find commands contributed by the provider. Previous resource group: workbench.scm.action.focusPreviousResourceGroup. Next resource group: workbench.scm.action.focusNextResourceGroup. Assign shortcuts in Keyboard Shortcuts to cycle through this repository’s groups without changing their expansion.'));
 		this.welcomeController = this._register(instantiationService.createInstance(ViewWelcomeController, this.contentElement, this, ViewsRegistry));
 		this.trackBodyMinimum(changesContainer, options.minimumBodySize ?? 120, () => !this.welcomeController.enabled);
 		this._register(this.onDidFocus(() => {
@@ -164,11 +166,12 @@ export class ScmViewPane extends ViewPane {
 				return;
 			}
 			const focused = this.tree.focus;
-			if (focused && 'group' in focused && this.viewMode === 'tree') {
+			if (focused && ('resource' in focused || ('group' in focused && this.viewMode === 'tree'))) {
 				keyboardEvent.preventDefault();
 				keyboardEvent.stopPropagation();
 				const anchor = this.tree.element.ownerDocument.getElementById(this.tree.element.getAttribute('aria-activedescendant') ?? '') ?? this.tree.element;
-				this.showGroupMenu(focused.group, anchor);
+				if ('resource' in focused) this.showResourceMenu(focused.resource, anchor);
+				else this.showGroupMenu(focused.group, anchor);
 			}
 		}));
 		this._register(addDisposableListener(commitForm, 'submit', event => { event.preventDefault(); void this.commit(); }));
@@ -271,6 +274,53 @@ export class ScmViewPane extends ViewPane {
 			// Snapshots replace group objects, so both repository and group must still match when the menu runs.
 			menuActionOptions: { args: [group, repository] },
 			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: anchor.ownerDocument.defaultView ?? undefined } : anchor,
+		});
+	}
+
+	private showResourceMenu(resource: ISCMResource, anchor: HTMLElement, event?: MouseEvent): void {
+		const repository = this.scmViewService.activeRepository;
+		const group = repository?.provider.groups.find(group => group.resources.includes(resource));
+		if (!repository || !group || this.isDisposed) return;
+		// Menus capture the original snapshot, just like the provider's inline actions.
+		const isCurrent = (): boolean => !this.isDisposed && this.isBodyVisible()
+			&& this.scmService.getRepository(repository.id) === repository
+			&& this.scmViewService.activeRepository === repository
+			&& repository.provider.groups.includes(group) && group.resources.includes(resource);
+		const guard = (action: IAction): IAction => ({
+			...action,
+			get enabled() { return action.enabled && isCurrent() && !repository.provider.isBusy; },
+			run: async () => {
+				if (!action.enabled || !isCurrent() || repository.provider.isBusy) return;
+				try {
+					await action.run();
+				} catch (error) {
+					this.notificationService.error(error instanceof Error ? error : String(error));
+				}
+			},
+		});
+		const navigation: IAction[] = [
+			{ id: 'scm.openChange', label: localize('scm.history.openChanges', 'Open Changes'), tooltip: '', enabled: true, run: () => resource.open({ pinned: true, preserveFocus: false }, false) },
+			{ id: 'scm.openChangeToSide', label: localize({ bundle: 'ash', key: 'files.openToSide' }, 'Open to the Side'), tooltip: '', enabled: true, run: () => resource.open({ pinned: true, preserveFocus: false }, true) },
+		];
+		const fileActions: IAction[] = [];
+		const addCommand = (id: string, label: string): void => {
+			fileActions.push({ id, label, tooltip: label, enabled: true, run: () => this.commandService.executeCommand(id, resource.sourceUri) });
+		};
+		if (resource.sourceUri.scheme === Schemas.file || isRemoteResource(resource.sourceUri)) {
+			if (resource.sourceUri.scheme === Schemas.file && CommandsRegistry.getCommand('revealFileInOS')) {
+				let label = localize({ bundle: 'ash', key: 'files.revealInLinux' }, 'Open Containing Folder');
+				if (isMacintosh) label = localize({ bundle: 'ash', key: 'files.revealInMac' }, 'Reveal in Finder');
+				else if (isWindows) label = localize({ bundle: 'ash', key: 'files.revealInWindows' }, 'Reveal in File Explorer');
+				addCommand('revealFileInOS', label);
+			}
+			addCommand('revealInExplorer', localize({ bundle: 'ash', key: 'files.revealInExplorer' }, 'Reveal in Explorer View'));
+			addCommand('copyFilePath', localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path'));
+			addCommand('copyRelativeFilePath', localize({ bundle: 'ash', key: 'workbench.copyRelativePath' }, 'Copy Relative Path'));
+		}
+		const actions = Separator.join(navigation.map(guard), resource.actions.map(guard), fileActions.map(guard));
+		this.contextMenuProvider.showContextMenu({
+			getAnchor: () => event ? { x: event.clientX, y: event.clientY, targetWindow: anchor.ownerDocument.defaultView ?? undefined } : anchor,
+			getActions: () => actions,
 		});
 	}
 
@@ -494,6 +544,11 @@ export class ScmViewPane extends ViewPane {
 		const item = h(document, 'div');
 		item.className = 'ash-scm-change';
 		const resources = this.renderedRows.set(item, new DisposableStore());
+		resources.add(addDisposableListener(item, 'contextmenu', event => {
+			event.preventDefault();
+			event.stopPropagation();
+			this.showResourceMenu(resource, item, event as MouseEvent);
+		}));
 		const open = h(document, 'button');
 		open.type = 'button';
 		open.className = 'ash-scm-change-open';
@@ -509,7 +564,13 @@ export class ScmViewPane extends ViewPane {
 		open.setAttribute('aria-label', resource.openLabel);
 		open.append(fileLabel.element);
 		resources.add(addDisposableListener(open, 'mousedown', event => event.stopPropagation()));
-		resources.add(addDisposableListener(open, 'keydown', event => event.stopPropagation()));
+		resources.add(addDisposableListener(open, 'keydown', event => {
+			event.stopPropagation();
+			if ((!isMacintosh && event.key === 'ContextMenu') || (event.shiftKey && event.key === 'F10')) {
+				event.preventDefault();
+				this.showResourceMenu(resource, open);
+			}
+		}));
 		resources.add(addDisposableListener(open, 'keydown', event => {
 			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey || event.altKey)) {
 				event.preventDefault();
