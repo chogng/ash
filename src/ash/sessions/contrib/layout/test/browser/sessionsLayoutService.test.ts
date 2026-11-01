@@ -212,13 +212,13 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.openEntry(documentEntry);
 		assert.equal(fixture.visible.get('editor'), false);
 		assert.equal(fixture.visible.get('auxiliarybar'), false);
-		assert.equal(fixture.filesVisible, false);
+		assert.equal(fixture.filesDetailsOpen, false);
 		assert.equal(fixture.focused, 'conversation');
 		assert.deepEqual(fixture.documentInputs, []);
 		await fixture.service.openEntry(chatEntry);
 		await fixture.service.openEntry(documentEntry);
 		assert.equal(fixture.visible.get('editor'), false);
-		assert.equal(fixture.filesVisible, false);
+		assert.equal(fixture.filesDetailsOpen, false);
 	});
 
 	test('Code restores explicitly opened Files inside the shared EditorPart', async () => {
@@ -226,7 +226,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
 		await fixture.service.openEntry(documentEntry);
 		assert.equal(fixture.visible.get('editor'), true);
-		assert.equal(fixture.filesVisible, true);
+		assert.equal(fixture.filesDetailsOpen, true);
 		assert.equal(fixture.focused, 'files');
 	});
 
@@ -234,12 +234,12 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		test(`Code keeps the closed side pane hidden with ${retained ? 'retained' : 'persisted'} Files`, async () => {
 			using fixture = new EntryFixture({ code: { details: true, documents: false } });
 			fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
-			fixture.filesVisible = retained;
+			fixture.filesDetailsOpen = retained;
 			const input = new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/retained'));
 			fixture.documentInputs.push(input);
 			await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
 			assert.equal(fixture.visible.get('editor'), false);
-			assert.equal(fixture.filesVisible, retained);
+			assert.equal(fixture.filesDetailsOpen, retained);
 			assert.equal(fixture.focused, 'conversation');
 			assert.deepEqual(fixture.documentInputs, [input]);
 		});
@@ -251,7 +251,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		fixture.documentInputs.push(input);
 		await fixture.service.openEntry(documentEntry);
 		assert.equal(fixture.visible.get('editor'), true);
-		assert.equal(fixture.filesVisible, false);
+		assert.equal(fixture.filesDetailsOpen, false);
 		assert.equal(fixture.focused, 'editor');
 		assert.deepEqual(fixture.documentInputs, [input]);
 	});
@@ -438,7 +438,7 @@ class EntryFixture extends Disposable {
 	public readonly groupChanges: string[] = [];
 	public readonly documentInputs: IResourceEditorInput[] = [];
 	public pageTitleVisible = true;
-	public filesVisible = false;
+	public filesDetailsOpen = false;
 	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
 	private sidebarId: string | undefined;
 	public defaultSidebarId = SESSIONS_NAVIGATION_CONTAINER_ID;
@@ -481,12 +481,12 @@ class EntryFixture extends Disposable {
 			setGroupScope: () => Disposable.None,
 			saveWorkingSet: () => ({}),
 			restoreLayout() { },
-			get filesVisible() { return fixture.filesVisible; },
-			get filesNavigationVisible() { return fixture.filesVisible && fixture.visible.get('editor') === true; },
+			get filesDetailsOpen() { return fixture.filesDetailsOpen; },
+			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
 			get fileEditorsVisible() { return true; },
-			openFiles: async () => { fixture.filesVisible = true; fixture.focused = 'files'; },
+			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
 			isGroupVisible: () => true,
-			fileNavigation: { editorVisible: false, layout() { }, hide() { fixture.filesVisible = false; }, focus() { fixture.focused = 'files'; } },
+			filesDetails: { isEditorVisible: false, setEditorVisible() { }, hide() { fixture.filesDetailsOpen = false; }, focus() { fixture.focused = 'files'; } },
 			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,

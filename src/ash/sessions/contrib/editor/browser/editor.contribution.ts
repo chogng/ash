@@ -48,21 +48,21 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		updateEditorMenu();
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
-		const filesVisible = filesVisibleContext.bindTo(contextKeys);
+		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
-					(!(editor as DesktopMainEditorPart).filesNavigationVisible || (editor as DesktopMainEditorPart).fileNavigation.editorVisible));
-				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).filesNavigationVisible);
-				filesVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).fileEditorsVisible);
+					(!(editor as DesktopMainEditorPart).filesDetailsVisible || (editor as DesktopMainEditorPart).filesDetails.isEditorVisible));
+				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).filesDetailsVisible);
+				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).fileEditorsVisible);
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, filesVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -87,7 +87,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					if ((editor as DesktopMainEditorPart).filesVisible) { await controller.toggleDetails(); }
+					if ((editor as DesktopMainEditorPart).filesDetailsOpen) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],

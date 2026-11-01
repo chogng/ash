@@ -227,10 +227,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
 				if (documents && !this.customViews.activeCustomView.get()) {
-					const filesVisible = (this.editor as DesktopMainEditorPart).filesVisible
+					const filesDetailsOpen = (this.editor as DesktopMainEditorPart).filesDetailsOpen
 						|| this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, false);
 					// A retained Files preference must not open a side pane that is closed.
-					await this.controller.activate(state.documents && filesVisible);
+					await this.controller.activate(state.documents && filesDetailsOpen);
 				}
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
@@ -264,7 +264,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const files = this.isDocumentContent ? (this.editor as DesktopMainEditorPart) : undefined;
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
-			details: files?.filesVisible ?? this.layout.isPartVisible('auxiliarybar'),
+			details: files?.filesDetailsOpen ?? this.layout.isPartVisible('auxiliarybar'),
 			documents: this.isDocumentContent && (this.layout.isPartVisible('editor')),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);

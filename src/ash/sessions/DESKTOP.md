@@ -8,13 +8,13 @@ The Agents window uses retained Workbench Parts. Session state and working-set r
 
 The window composes Sidebar, Conversation and one EditorPart. Files navigation belongs to an Editor Group beside its documents. Changes, Browser and Terminal are editor inputs in the same EditorPart. Groups own tab combinations, splits, dragging, resizing and maximization. Agent Window does not host Workbench Panel views, including Output and the legacy terminal panel. Product pages keep their independent Auxiliary Bar properties.
 
-| Surface                   | Owner                                                | Visibility behavior                                                                                            |
-| ------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Document tabs and content | EditorPart / Editor Group                            | Opening a document reveals its group. Closing a tab uses the existing working-copy lifecycle.                  |
-| Terminal                  | TerminalEditor / terminal service                    | Hiding its group retains the process. Closing the terminal tab keeps the terminal service's process semantics. |
-| Files navigation          | DesktopMainEditorPart / DockedAuxiliaryBarController | A retained Explorer View follows its group. Hiding navigation retains open documents and tree state.           |
-| Changes and Browser       | Existing EditorInput / EditorPane                    | Tool toggles retain their panes and browser pages. They share the document group Grid and working sets.        |
-| Environment / Context     | SessionInfoRail                                      | Reads the active Code chat and workspace services. Its conversation owns the retained rail.                    |
+| Surface                   | Owner                                     | Visibility behavior                                                                                            |
+| ------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Document tabs and content | EditorPart / Editor Group                 | Opening a document reveals its group. Closing a tab uses the existing working-copy lifecycle.                  |
+| Terminal                  | TerminalEditor / terminal service         | Hiding its group retains the process. Closing the terminal tab keeps the terminal service's process semantics. |
+| Files group Details       | DesktopMainEditorPart / FilesGroupDetails | A retained Explorer View follows its group. Hiding Details retains open documents and tree state.              |
+| Changes and Browser       | Existing EditorInput / EditorPane         | Tool toggles retain their panes and browser pages. They share the document group Grid and working sets.        |
+| Environment / Context     | SessionInfoRail                           | Reads the active Code chat and workspace services. Its conversation owns the retained rail.                    |
 
 ## Controls and transitions
 

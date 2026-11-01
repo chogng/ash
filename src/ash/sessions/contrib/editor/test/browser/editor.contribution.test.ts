@@ -30,7 +30,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	using editorChanged = new Emitter<void>();
 	const documentContent = observableValue('document content', true);
 	const parts = { editor: false, auxiliarybar: true };
-	const fileNavigation = { editorVisible: false };
+	const filesDetails = { isEditorVisible: false };
 	const effects: string[] = [];
 	const pending = new DeferredPromise<void>();
 	const started = new DeferredPromise<void>();
@@ -54,8 +54,8 @@ test('editor contributions follow layout state, serialize open commands without 
 			effects.push('files');
 		},
 		async openChanges() { effects.push('changes'); },
-		async hideEditor() { fileNavigation.editorVisible = false; parts.auxiliarybar = true; },
-		async showEditor() { parts.editor = true; fileNavigation.editorVisible = true; },
+		async hideEditor() { filesDetails.isEditorVisible = false; parts.auxiliarybar = true; },
+		async showEditor() { parts.editor = true; filesDetails.isEditorVisible = true; },
 		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
 		async toggleSidePane() { parts.editor = false; parts.auxiliarybar = false; },
 	} as unknown as DesktopLayoutController;
@@ -64,9 +64,9 @@ test('editor contributions follow layout state, serialize open commands without 
 		onDidLayoutMainContainer: layoutChanged.event,
 	} as unknown as IAgentWorkbenchLayoutService);
 	services.registerInstance(IEditorPart, {
-		onDidChangeEditors: editorChanged.event, fileNavigation,
-		get filesVisible() { return parts.auxiliarybar; },
-		get filesNavigationVisible() { return parts.editor && parts.auxiliarybar; },
+		onDidChangeEditors: editorChanged.event, filesDetails,
+		get filesDetailsOpen() { return parts.auxiliarybar; },
+		get filesDetailsVisible() { return parts.editor && parts.auxiliarybar; },
 		get fileEditorsVisible() { return true; },
 	} as unknown as IEditorPart);
 	services.registerInstance(IContextKeyService, contextKeys);

@@ -9,7 +9,7 @@ import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keyb
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -21,6 +21,28 @@ import { FileDownload } from '../../../../workbench/contrib/files/browser/fileIm
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { SESSIONS_FILES_VIEW_ID, SessionsExplorerView } from './filesView.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { IEditorPartsService } from '../../../../workbench/browser/parts/editor/editorParts.js';
+import { DesktopMainEditorPart } from '../../../browser/parts/desktopEditorPart.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { FilesGroupDetails } from './filesGroupDetails.js';
+
+/** Installs Files on the document host while window commands keep the multi-window coordinator. */
+class FilesGroupDetailsContribution extends Disposable {
+	constructor(
+		@IEditorPartsService parts: IEditorPartsService,
+		@IInstantiationService services: IInstantiationService,
+	) {
+		super();
+		const editor = parts.mainPart;
+		if (editor instanceof DesktopMainEditorPart) {
+			this._register(editor.registerFilesDetails(() => services.createInstance(FilesGroupDetails, editor)));
+		}
+	}
+}
+
+registerWorkbenchContribution('sessions.contrib.filesGroupDetails', WorkbenchPhase.BlockStartup,
+	services => services.get(IInstantiationService).createInstance(FilesGroupDetailsContribution));
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 

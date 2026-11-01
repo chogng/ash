@@ -1,22 +1,22 @@
-import { h, type IDimension } from '../../base/browser/dom.js';
-import { Sash, SashState, Orientation } from '../../base/browser/ui/sash/sash.js';
-import { Disposable, MutableDisposable } from '../../base/common/lifecycle.js';
-import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
-import { localize } from '../../nls.js';
-import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
-import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
-import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
-import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
-import { ILayoutService } from '../../platform/layout/browser/layoutService.js';
-import type { IAgentWorkbenchLayoutService } from './workbench.js';
-import type { EditorGroupView } from '../../workbench/browser/parts/editor/editorGroupView.js';
-import { EditorHeaderControl } from '../../workbench/browser/parts/editor/editorHeaderControl.js';
-import { SessionsExplorerView, SESSIONS_FILES_VIEW_ID } from '../contrib/files/browser/filesView.js';
+import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { Sash, SashState, Orientation } from '../../../../base/browser/ui/sash/sash.js';
+import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { localize } from '../../../../nls.js';
+import type { DesktopMainEditorPart, IFilesGroupDetails } from '../../../browser/parts/desktopEditorPart.js';
+import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { EditorGroupView } from '../../../../workbench/browser/parts/editor/editorGroupView.js';
+import { EditorHeaderControl } from '../../../../workbench/browser/parts/editor/editorHeaderControl.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
+import { SessionsExplorerView, SESSIONS_FILES_VIEW_ID } from './filesView.js';
 
-/** Owns one retained Explorer View attached to a document group, never an outer Workbench Part. */
-export class DockedAuxiliaryBarController extends Disposable {
+/** Owns the retained Files tree, its group attachment and the Details-only presentation. */
+export class FilesGroupDetails extends Disposable implements IFilesGroupDetails {
 	private group: EditorGroupView | undefined;
 	private retainedGroupId: number | undefined;
 	private readonly sash = this._register(new MutableDisposable<Sash>());
@@ -27,8 +27,8 @@ export class DockedAuxiliaryBarController extends Disposable {
 	private width = 0;
 	private dimension: IDimension = { width: 0, height: 0 };
 	private hostVisible = true;
-	public visible = false;
-	public editorVisible = true;
+	private open = false;
+	private editorVisible = true;
 
 	constructor(
 		private readonly editor: DesktopMainEditorPart,
@@ -37,7 +37,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IViewsService views: IViewsService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@ILayoutService private readonly workbenchLayout: IAgentWorkbenchLayoutService,
+		@ICommandService commands: ICommandService,
 	) {
 		super();
 		this.element = h(editor.domNode.ownerDocument, 'aside', { className: 'ash-editor-group-files' });
@@ -49,7 +49,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		}));
 		this._register(views.registerView(this.tree, {
 			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
-		}, () => editor.openFiles(), () => this.hide()));
+		}, () => commands.executeCommand<void>(NEW_FILE_TAB_COMMAND_ID), () => this.hide()));
 		this.empty = h(editor.domNode.ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-files-empty-message';
 		this.empty.tabIndex = 0;
@@ -63,28 +63,30 @@ export class DockedAuxiliaryBarController extends Disposable {
 		this._register(editor.onDidChangeEditors(event => {
 			if (event.kind === 'groupChanged' && event.groupId === this.group?.id && event.event.kind === 'activeEditorChanged') this.editorVisible = !!this.group.activeInput;
 			if (this.group && !editor.groups.includes(this.group)) {
-				const replacement = editor.groups.find(group => group.id !== editor.pageGroupId && editor.isGroupVisible(group.id));
-				if (replacement) this.attach(replacement as EditorGroupView);
-				else this.hide();
+				// Session restoration chooses the next owning group. Never attach Files to
+				// an unrelated visible tool when its previous group leaves the working set.
+				this.releaseGroup();
+				this.element.remove();
+				this.tree.setVisible(false);
 			}
 			this.layout();
 		}));
 		this._register(workspace.onDidChangeWorkspaceFolders(() => this.layout()));
 	}
 
-	public get view(): SessionsExplorerView { return this.tree; }
+	public get isOpen(): boolean { return this.open; }
+	public get isEditorVisible(): boolean { return this.editorVisible; }
 	public get groupId(): number | undefined { return this.group?.id ?? this.retainedGroupId; }
 	public get isVisible(): boolean {
-		return this.visible && this.hostVisible && !!this.group && this.editor.groups.includes(this.group) && this.editor.isGroupVisible(this.group.id)
+		return this.open && this.hostVisible && !!this.group && this.editor.groups.includes(this.group) && this.editor.isGroupVisible(this.group.id)
 			&& (!this.group.activeInput || this.editor.isFileEditor(this.group.activeInput));
 	}
 
 	public show(group: EditorGroupView): void {
 		this.attach(group);
-		this.visible = true;
+		this.open = true;
 		this.editorVisible = !!group.activeInput;
 		this.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
-		this.workbenchLayout.showPart('editor');
 		this.layout();
 	}
 
@@ -112,7 +114,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 	}
 
 	public hide(): void {
-		this.visible = false;
+		this.open = false;
 		this.storage.store('sessions.code.filesVisible', false, StorageScope.PROFILE, StorageTarget.MACHINE);
 		this.releaseGroup();
 		this.element.remove();
@@ -130,21 +132,22 @@ export class DockedAuxiliaryBarController extends Disposable {
 		this.group = undefined;
 	}
 
-	public setVisible(visible: boolean): void { this.hostVisible = visible; this.layout(); }
+	public setHostVisible(visible: boolean): void { this.hostVisible = visible; this.layout(); }
+	public setEditorVisible(visible: boolean): void { this.editorVisible = visible; this.layout(); }
 	public focus(): void {
 		if (this.workspace.getWorkspace().folders.length) this.tree.focus();
 		else this.empty.focus();
 	}
 
-	public layout(): void {
+	private layout(): void {
 		const group = this.group;
 		if (!group || !this.editor.groups.includes(group)) return;
 		this.dimension = this.editor.getSize(group);
 		const fileContent = !group.activeInput || this.editor.isFileEditor(group.activeInput);
 		const contentVisible = !!group.activeInput && (!fileContent || this.editorVisible);
-		// Explorer owns the empty group's title; tabs exist only for real editor inputs.
-		group.setTitleVisible(contentVisible);
-		this.tree.setHeaderVisible(!contentVisible);
+		// Files-only groups retain their shared group controls without creating an editor tab.
+		group.setTitleVisible(true);
+		this.tree.setHeaderVisible(false);
 		this.width = contentVisible ? Math.min(Math.max(160, this.preferredWidth), Math.max(0, this.dimension.width - 160)) : this.dimension.width;
 		const top = group.titleHeight.offset;
 		const height = Math.max(0, this.dimension.height - top);
@@ -153,7 +156,7 @@ export class DockedAuxiliaryBarController extends Disposable {
 		this.element.hidden = !visible;
 		const hasFolders = this.workspace.getWorkspace().folders.length > 0;
 		this.empty.hidden = hasFolders;
-		this.empty.style.top = `${contentVisible ? 0 : EditorHeaderControl.HEIGHT}px`;
+		this.empty.style.top = '0px';
 		this.element.classList.toggle('ash-editor-group-files-empty', !hasFolders);
 		this.tree.setVisible(visible);
 		this.tree.layout(height, 0, this.width);

@@ -12,24 +12,11 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../../workbenc
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 
-/** Hosts independently selected Code tools and Design properties. */
+/** Hosts independently contributed product properties; Files Details belong to an editor group. */
 export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly fallbackTitle: HTMLElement;
-	private embedded = false;
 	override get minimumWidth(): number {
-		return this.embedded ? 180 : 270;
-	}
-
-	/** Docked Files actions are rendered by the editor header; product pages retain this Part title. */
-	public setDocked(docked: boolean): void {
-		if (this.embedded === docked) { return; }
-		this.embedded = docked;
-		this.titleDomNode.hidden = docked;
-		this.notifyConstraintsChanged();
-	}
-
-	override get minimumHeight(): number {
-		return this.embedded ? 120 : super.minimumHeight;
+		return 270;
 	}
 
 	override get maximumWidth(): number {

@@ -7,13 +7,11 @@ export class DesktopExistingSessionStrategy {
 
 	public toggleDetails(): boolean {
 		const editor = this.editor as DesktopMainEditorPart;
-		if (editor.filesVisible) { editor.fileNavigation.hide(); return false; }
+		if (editor.filesDetailsOpen) { editor.filesDetails.hide(); return false; }
 		return true;
 	}
 
 	public hideEditor(): void {
-		const navigation = (this.editor as DesktopMainEditorPart).fileNavigation;
-		navigation.editorVisible = false;
-		navigation.layout();
+		(this.editor as DesktopMainEditorPart).filesDetails.setEditorVisible(false);
 	}
 }

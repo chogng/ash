@@ -98,12 +98,23 @@ test('opening Files retains an empty group without creating an editor input or p
 	using registry = new EditorPaneRegistry();
 	const shown: number[] = [];
 	let focused = false;
-	class FilesEditorPart extends DesktopMainEditorPart {
-		public override get fileNavigation(): import('../../browser/dockedAuxiliaryBarController.js').DockedAuxiliaryBarController {
-			return { show: (group: import('../../../workbench/browser/parts/editor/editorGroupView.js').EditorGroupView) => shown.push(group.id), focus: () => { focused = true; } } as unknown as import('../../browser/dockedAuxiliaryBarController.js').DockedAuxiliaryBarController;
-		}
-	}
-	using editor = services.createInstance(FilesEditorPart, browserEnvironment.window.document.body, { registry });
+	let created = 0;
+	let disposed = 0;
+	let groupId: number | undefined;
+	let open = false;
+	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry });
+	assert.throws(() => editor.filesDetails, /have not been registered/);
+	using registration = editor.registerFilesDetails(() => {
+		created++;
+		return {
+			get groupId() { return groupId; }, get isOpen() { return open; }, isVisible: true, isEditorVisible: false,
+			show(group) { groupId = group.id; open = true; shown.push(group.id); },
+			hide() { open = false; }, setHostVisible() { }, setEditorVisible() { }, focus() { focused = true; }, dispose() { disposed++; },
+			[Symbol.dispose]() { this.dispose(); },
+		};
+	});
+	assert.equal(created, 0, 'Registering Files does not create its tree until requested');
+	assert.throws(() => editor.registerFilesDetails(() => editor.filesDetails), /already registered/);
 	const group = editor.activeGroup;
 	await editor.openFiles();
 	assert.deepEqual(group.inputs, []);
@@ -111,6 +122,9 @@ test('opening Files retains an empty group without creating an editor input or p
 	assert.equal(group.domNode.querySelector('[role="tab"]'), null);
 	assert.deepEqual(shown, [group.id]);
 	assert.equal(focused, true);
+	assert.equal(editor.filesDetailsOpen, true);
+	await editor.openFiles();
+	assert.equal(created, 1, 'Repeated Files opens retain one Details instance');
 	const saved = editor.saveWorkingSet('legacy-files', [editor.pageGroupId]);
 	await editor.applyWorkingSet({
 		...saved,
@@ -120,6 +134,9 @@ test('opening Files retains an empty group without creating an editor input or p
 		})),
 	});
 	assert.deepEqual(editor.activeGroup.inputs, [], 'Retired Files placeholders are skipped when restoring old working sets');
+	registration.dispose();
+	assert.equal(disposed, 1);
+	assert.equal(editor.filesDetailsOpen, false);
 });
 
 test('Desktop editor retains one tab-and-actions row above editor-only breadcrumbs', async () => {
