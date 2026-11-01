@@ -1197,7 +1197,11 @@
     "agentsGraphic.none": "无",
     "agentsGraphic.comparison": "窗口对比",
     "agentsGraphic.many": "多个窗口汇聚",
-    "agentsGraphic.auto": "自动"
+    "agentsGraphic.auto": "自动",
+    "multiDiff.preview.label": "只读差异审阅。使用方向键选择行，按住 Shift 扩展选择，按 Enter 打开完整编辑器。",
+    "multiDiff.preview.hidden": "显示 {0} 行未修改代码",
+    "multiDiff.preview.open": "打开完整编辑器",
+    "multiDiff.preview.hint": "按 Alt+F1 获取审阅帮助，或按 Alt+F2 阅读差异。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

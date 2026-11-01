@@ -109,6 +109,7 @@ async function createGitMultiDiffEditorInput(_fixture: typeof titleGit, scope: s
 }
 function wireReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown { return this[key] instanceof URI ? this[key].toString() : value; }
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
+import { TextResourceEditor, CODE_EDITOR_ID } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
 import { SessionChangesEditorInput } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditorInput.js';
 import { EditorInputSerializers } from '../../../src/ash/workbench/services/editor/common/editorInputSerializer.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -379,7 +380,7 @@ resources.add(registerAction2(ChangeEOLAction));
 resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' | 'paths' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' | 'paths' | 'review' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -390,6 +391,7 @@ const harness = {
 		document.body.prepend(host);
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
+		if (kind === 'review') await titleConfiguration.updateValue(CodeEditorConfiguration.diffReviewPreview, true);
 		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
 		if (kind === 'paths' || kind === 'git') {
 			(parentServices.get(IWorkspaceContextService) as TestWorkspaceService).updateWorkspace({ id: 'paths', uri: URI.file('/workspace') });
@@ -548,6 +550,11 @@ const harness = {
 		} as IViewsService);
 		const registry = new EditorPaneRegistry();
 		resources.add(registry.registerEditorPane({
+			id: CODE_EDITOR_ID, name: 'Text editor',
+			canOpen: input => isDiffEditorInput(input) || isMultiDiffEditorInput(input) ? EditorPaneMatch.None : EditorPaneMatch.Default,
+			create: () => services.createInstance(TextResourceEditor, store, {}),
+		}));
+		resources.add(registry.registerEditorPane({
 			id: DIFF_EDITOR_ID,
 			name: 'Diff editor',
 			canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
@@ -606,6 +613,18 @@ const harness = {
 					modified: { resource: URI.parse('snapshot:/new?revision=2'), preferredResource: URI.file('/workspace/src/renamed folder/包含空格的目录/second.ts') },
 				},
 			], 'Path review'), { pinned: true });
+			return;
+		}
+		if (kind === 'review') {
+			const before = Array.from({ length: 400 }, (_, line) => `const line${line} = "中文 😀 ${line}";`);
+			const after = [...before];
+			after[100] = 'const changed = "审阅 🤖";';
+			after[200] = 'const longLine = "' + 'long source '.repeat(100) + '";';
+			writableTitleInput = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/review'), ['first', 'second'].map(name => ({
+				label: `${name}.ts`, original: { resource: URI.parse(`snapshot:/${name}.ts`), initialText: before.join('\n'), readOnly: true },
+				modified: { resource: URI.file(`/workspace/${name}.ts`), initialText: after.join('\n') },
+			})), 'Native review');
+			await titleEditor.openEditor(writableTitleInput, { pinned: true });
 			return;
 		}
 		if (kind === 'writable' || kind === 'binary') {
@@ -695,6 +714,20 @@ const harness = {
 	async updateTitleEditorConfiguration(key: string, value: unknown, languageId?: string): Promise<void> {
 		await titleConfiguration!.updateValue(key, value, { overrideIdentifier: languageId });
 	},
+	readReviewState() {
+		const pane = titleEditor!.activePane;
+		const model = titleServices!.get(IFileTextModelService).getModel(URI.file('/workspace/first.ts'));
+		const control = pane instanceof TextResourceEditor ? pane.getControl() : undefined;
+		return { shared: !!control && control.getModel() === model, text: model?.getValue(), canUndo: model?.canUndo(),
+			preview: pane instanceof MultiDiffEditor && pane.preview, selection: control?.getSelections(),
+			fullEditors: titleServices!.get(ICodeEditorService).listCodeEditors().filter(editor => editor.getModel() !== null).length };
+	},
+	async returnToReview(): Promise<void> { await titleEditor!.openEditor(writableTitleInput!, { pinned: true }); },
+	editReviewInFullEditor(text: string): void {
+		const control = (titleEditor!.activePane as TextResourceEditor).getControl()!;
+		control.executeEdits('review-fixture', [{ range: new Range(101, 1, 101, control.getModel()!.getLineMaxColumn(101)), text }]);
+	},
+	undoReviewInFullEditor(): void { (titleEditor!.activePane as TextResourceEditor).getControl()!.getModel()!.undo(); },
 	updateTitleGit(paths: string[], revision: number, delay = 0, repositoryId = 'repo'): void {
 		titleGitDelay = delay;
 		titleGitStatus = makeTitleGitStatus(paths, revision, repositoryId);

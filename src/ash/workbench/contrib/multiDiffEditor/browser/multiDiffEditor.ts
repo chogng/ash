@@ -52,10 +52,12 @@ import {
 } from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IResourceLabelService } from '../../../browser/labels.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
 export const MultiDiffEditorHideUnchangedRegions = new RawContextKey<boolean>('multiDiffEditorHideUnchangedRegions', true);
+export const MultiDiffEditorPreview = new RawContextKey<boolean>('multiDiffEditorPreview', false);
 
 export interface MultiDiffEditorOptions {
 	/** A composed editor retains its own menu identity while reusing this comparison widget. */
@@ -82,6 +84,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	private readonly workingCopiesListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly collapseStateListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly hideUnchangedRegionsListener = this._register(new MutableDisposable<IDisposable>());
+	private previewEnabled = false;
 	public readonly onDidChangeWorkingCopies = this.workingCopiesEmitter.event;
 
 	public getWorkingCopies(): readonly IWorkingCopy[] {
@@ -102,8 +105,16 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super(MULTI_DIFF_EDITOR_ID, themeService, storageService);
+		this.previewEnabled = configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (!event.affectsConfiguration(CodeEditorConfiguration.diffReviewPreview)) return;
+			this.previewEnabled = configuration.getValue(CodeEditorConfiguration.diffReviewPreview);
+			this.session.value?.editor?.setPreview(this.previewEnabled);
+			this.updateCollapseContext();
+		}));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -165,6 +176,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
+		this.session.value?.setVisible(visibility);
 		if (visibility) this.session.value?.layout(this.dimension);
 		if (visibility) this.updateCollapseContext();
 	}
@@ -176,6 +188,13 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 	public override getControl(): DiffEditorWidget | undefined {
 		return this.session.value?.editor?.getActiveControl();
 	}
+
+	public get preview(): boolean { return this.previewEnabled; }
+	public async togglePreview(): Promise<void> {
+		await this.configuration.updateValue(CodeEditorConfiguration.diffReviewPreview, !this.previewEnabled);
+	}
+	public getReviewLocation(): ReturnType<MultiDiffEditorWidget['getReviewLocation']> { return this.session.value?.editor?.getReviewLocation(); }
+	public getAccessibleContent(): string | undefined { return this.session.value?.editor?.getAccessibleContent(); }
 
 	public getActiveDiffItem(): MultiDiffEditorInputItem | undefined {
 		return this.session.value?.getActiveDiffItem();
@@ -234,6 +253,7 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		if (this.isVisible()) {
 			this.contextKeyService.setContext(MultiDiffEditorAllCollapsed.key, this.session.value?.editor?.allCollapsed ?? false);
 			this.contextKeyService.setContext(MultiDiffEditorHideUnchangedRegions.key, this.session.value?.editor?.collapseUnchangedRegions ?? true);
+			this.contextKeyService.setContext(MultiDiffEditorPreview.key, this.previewEnabled);
 		}
 	}
 
@@ -265,6 +285,8 @@ class MultiDiffEditorSession extends Disposable {
 	private readonly domNode: HTMLDivElement;
 	private readonly editorDomNode: HTMLDivElement;
 	private readonly toolbar = this._register(new MutableDisposable<MultiDiffEditorToolbar>());
+	private visible = false;
+	private hasBeenVisible = false;
 
 	constructor(
 		container: HTMLElement,
@@ -284,6 +306,7 @@ class MultiDiffEditorSession extends Disposable {
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
 		try {
@@ -332,6 +355,18 @@ class MultiDiffEditorSession extends Disposable {
 			this.editor = this._register(instantiationService.createInstance(MultiDiffEditorWidget, {
 				container: this.editorDomNode,
 				model: this.model,
+				preview: configuration.getValue(CodeEditorConfiguration.diffReviewPreview),
+				onOpenEditor: (item: IDocumentDiffItem, side: 'original' | 'modified', range: Range) => {
+					const input = this.inputsById.get(item.id);
+					if (!input) return;
+					// Writable comparisons share their TextModel, unsaved text and undo history.
+					// Snapshot sources may explicitly supply a live-file destination instead.
+					const retention = item.retain?.();
+					const target = side === 'modified' ? input.goToFile ?? input.modified : input.original;
+					void this.editorService.openEditor(target, { pinned: true, revealIfOpened: true, selection: range })
+						.catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); })
+						.finally(() => retention?.dispose());
+				},
 				wordWrap: getDiffWordWrap(configuration),
 				...this.getEditorOptions(),
 				workbenchUIElementFactory: {
@@ -386,6 +421,18 @@ class MultiDiffEditorSession extends Disposable {
 
 	public show(): void {
 		this.domNode.classList.remove('pending');
+	}
+
+	public setVisible(visible: boolean): void {
+		const resumed = visible && this.hasBeenVisible && !this.visible;
+		this.visible = visible;
+		if (visible) this.hasBeenVisible = true;
+		this.editor?.setVisible(visible);
+		// A reviewed snapshot can stay unchanged while its live file is edited in
+		// another tab. Reconcile through the source owner when returning to review.
+		if (resumed && this.editor?.preview) {
+			void this.refreshSource().catch(error => { if (!this.isDisposed) void this.dialogs.error(String(error)); });
+		}
 	}
 
 	private async loadItem(input: MultiDiffEditorInputItem, resources: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {

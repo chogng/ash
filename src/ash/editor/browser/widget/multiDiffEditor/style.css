@@ -42,6 +42,15 @@
 }
 
 .stanza-multi-diff-editor-header {
+	height: calc(34px - var(--ash-strokeThickness, 0px));
+	border-radius: 0;
+}
+
+.stanza-multi-diff-editor.flat .stanza-multi-diff-editor-item-editor {
+	top: calc(34px - var(--ash-strokeThickness, 0px));
+}
+
+.stanza-multi-diff-editor-header {
 	position: sticky;
 	top: 0;
 	z-index: 2;
@@ -283,6 +292,175 @@
 	clip: rect(0 0 0 0);
 	clip-path: inset(50%);
 	white-space: nowrap;
+}
+
+.ash-diff-review-preview {
+	--ash-review-font-family: var(
+		--ash-font-family-monospace,
+		ui-monospace,
+		monospace
+	);
+	--ash-review-font-size: var(--ash-fontSize-body1);
+	--ash-review-line-height: 20px;
+	--ash-review-token-color: var(--ash-editor-foreground);
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	height: 100%;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+	font-family: var(--ash-review-font-family);
+	font-size: var(--ash-review-font-size);
+	line-height: var(--ash-review-line-height);
+	font-variant-ligatures: none;
+}
+
+.ash-diff-review-preview.ligatures {
+	font-variant-ligatures: contextual;
+}
+
+.ash-diff-review-preview:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-diff-review-column {
+	position: relative;
+	min-width: 0;
+	overflow: auto hidden;
+}
+
+.ash-diff-review-column + .ash-diff-review-column {
+	border-inline-start: var(--ash-strokeThickness) solid
+		var(--ash-multiDiffEditor-border);
+}
+
+.ash-diff-review-row {
+	position: absolute;
+	display: flex;
+	box-sizing: border-box;
+	width: max-content;
+	min-width: 100%;
+	height: var(--ash-review-line-height);
+	white-space: pre;
+}
+
+.ash-diff-review-number {
+	position: sticky;
+	left: 0;
+	/* Paint gutters above source text so overlapping sticky rows do not force
+	 * the compositor to repeatedly split the text into interleaved layers. */
+	z-index: 1;
+	flex: 0 0 52px;
+	box-sizing: border-box;
+	padding-inline: var(--ash-spacing-size80);
+	color: var(--ash-editorLineNumber-foreground);
+	background: var(--ash-editor-background);
+	text-align: end;
+	user-select: none;
+}
+
+.hide-line-numbers .ash-diff-review-number {
+	display: none;
+}
+
+.ash-diff-review-text {
+	padding-inline: var(--ash-spacing-size80);
+	unicode-bidi: plaintext;
+}
+
+.ash-diff-review-column.original .modified,
+.ash-diff-review-column.original .removed {
+	background: var(--ash-diffEditor-removedLineBackground);
+}
+
+.ash-diff-review-column.modified .modified,
+.ash-diff-review-column.modified .added {
+	background: var(--ash-diffEditor-insertedLineBackground);
+}
+
+.ash-diff-review-column.original .changed-text {
+	background: var(--ash-diffEditor-removedTextBackground);
+}
+
+.ash-diff-review-column.modified .changed-text {
+	background: var(--ash-diffEditor-insertedTextBackground);
+}
+
+.ash-diff-review-row.selected {
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness) var(--ash-focusBorder);
+}
+
+.ash-diff-review-row.hidden-region,
+.ash-diff-review-open {
+	padding: 0 var(--ash-spacing-size80);
+	color: var(--ash-textLink-activeForeground);
+	background: var(--ash-multiDiffEditor-headerBackground);
+	font: inherit;
+	border: 0;
+	cursor: pointer;
+}
+
+.ash-diff-review-row.hidden-region {
+	align-items: center;
+	justify-content: center;
+	font-family: var(--ash-font-family);
+}
+
+.ash-diff-review-open:focus-visible,
+.ash-diff-review-row.hidden-region:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-diff-review-text .token-keyword {
+	--ash-review-token-color: var(--ash-editor-token-keywordForeground);
+}
+.ash-diff-review-text .token-comment {
+	--ash-review-token-color: var(--ash-editor-token-commentForeground);
+}
+.ash-diff-review-text .token-string {
+	--ash-review-token-color: var(--ash-editor-token-stringForeground);
+}
+.ash-diff-review-text .token-number {
+	--ash-review-token-color: var(--ash-editor-token-numberForeground);
+}
+.ash-diff-review-text .token-type {
+	--ash-review-token-color: var(--ash-editor-token-typeForeground);
+}
+.ash-diff-review-text .token-function {
+	--ash-review-token-color: var(--ash-editor-token-functionForeground);
+}
+.ash-diff-review-text .token-variable {
+	--ash-review-token-color: var(--ash-editor-token-variableForeground);
+}
+.ash-diff-review-text .token-regexp {
+	--ash-review-token-color: var(--ash-editor-token-regexpForeground);
+}
+.ash-diff-review-text .token-operator {
+	--ash-review-token-color: var(--ash-editor-token-operatorForeground);
+}
+.ash-diff-review-text > span {
+	color: var(--ash-review-token-color, inherit);
+}
+.ash-diff-review-text .bold {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-diff-review-text .italic {
+	font-style: italic;
+}
+.ash-diff-review-text .underline {
+	text-decoration: underline;
+}
+.ash-diff-review-text .strikethrough {
+	text-decoration: line-through;
+}
+
+.hc-black .ash-diff-review-row.selected,
+.hc-light .ash-diff-review-row.selected {
+	box-shadow: none;
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
 }
 
 .stanza-multi-diff-editor-item-editor.binary {

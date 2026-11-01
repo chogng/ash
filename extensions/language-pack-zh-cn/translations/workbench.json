@@ -2852,7 +2852,11 @@
     "agentHost.tunnelAuthorization": "隧道授权已过期或已撤销。请打开新的认证链接。",
     "agentHost.tunnelWorkspaceChanged": "隧道工作区已更改。请使用新的认证链接重新连接。",
     "agentHost.wslUnavailable": "所选的 WSL 2 分发版不可用。",
-    "agentHost.rootChanged": "宿主返回了不同的工作区目录。"
+    "agentHost.rootChanged": "宿主返回了不同的工作区目录。",
+    "multiDiff.preview.toggle": "切换审阅预览（原型）",
+    "multiDiff.preview.settingTitle": "审阅预览（原型）",
+    "multiDiff.preview.settingDescription": "使用轻量只读多文件差异预览。编辑或搜索时打开完整编辑器。换行内容使用完整差异编辑器。",
+    "multiDiff.preview.help": "审阅预览为只读。使用上下方向键选择行，左右方向键选择一侧，Shift 配合上下方向键选择多行，并复制所选源文本。全选包含视口外的行。按 Enter 或选择“打开完整编辑器”，可编辑或搜索同一文档。<keybinding:multiDiffEditor.goToNextChange> 和 <keybinding:multiDiffEditor.goToPreviousChange> 在更改之间导航。文件标题通过 Enter 或空格展开或折叠，方向键在标题之间移动。隐藏行按钮展开未修改代码。<keybinding:editor.action.accessibleView> 阅读差异。Escape 关闭此视图并恢复焦点。“切换审阅预览”返回完整多文件编辑器。自动换行使用完整编辑器。帮助提示遵循差异编辑器的无障碍详细程度设置。"
   },
   "ash.menu": {
     "file": "文件",

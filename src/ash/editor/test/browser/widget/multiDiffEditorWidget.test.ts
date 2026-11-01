@@ -1,4 +1,5 @@
-import { computeDiffRowLayout } from '../../../browser/widget/multiDiffEditor/compressedVirtualizedScrollLayout.js';
+import { StandaloneLayoutService } from '../../../standalone/browser/standaloneLayoutService.js';
+import { computeDiffRowLayout, computeDiffPreviewLayout } from '../../../browser/widget/multiDiffEditor/compressedVirtualizedScrollLayout.js';
 import { TEST_FONT_INFO } from '../config/testConfiguration.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
@@ -9,13 +10,15 @@ import { h } from '../../../../base/browser/dom.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Event } from '../../../../base/common/event.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
 import { DefaultLinesDiffComputer } from '../../../common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
+import { Range } from '../../../common/core/range.js';
+import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -33,7 +36,7 @@ class TestResizeObserver {
 }
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent',
-], { ResizeObserver: TestResizeObserver });
+], { ResizeObserver: TestResizeObserver, WheelEvent: browserEnvironment.window.WheelEvent });
 
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
@@ -47,6 +50,180 @@ const diffOptions: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false,
 
 suite('MultiDiff comparison retention', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('review projection keeps source rows stable when hidden regions expand', async () => {
+		using resources = new DisposableStore();
+		const text = Array.from({ length: 1600 }, (_, line) => `line ${line}`);
+		const after = [...text];
+		after[100] = 'changed';
+		const original = resources.add(new TextModel(text.join('\n')));
+		const modified = resources.add(new TextModel(after.join('\n')));
+		const model = resources.add(new DiffModel({ original, modified, diffProvider: new MultiDiffTestComputationService(), diffOptions }));
+		await waitForReady(model);
+		const options = { enabled: true, contextLineCount: 3, minimumLineCount: 3, revealLineCount: 10 };
+		const compact = computeDiffPreviewLayout(model, 20, options, new Set());
+		assert.equal(compact.height, 220);
+		assert.equal(compact.getOffset(100), 100);
+		assert.deepEqual(compact.getVisibleRows(80, 60), [
+			{ rowIndex: 99, top: 80, height: 20, hiddenCount: 0 }, { rowIndex: 100, top: 100, height: 20, hiddenCount: 0 }, { rowIndex: 101, top: 120, height: 20, hiddenCount: 0 },
+		]);
+		const expanded = computeDiffPreviewLayout(model, 20, options, new Set([0]));
+		assert.equal(expanded.getOffset(100), 2000);
+		assert.equal(expanded.height, 2120);
+		assert.equal(expanded.getVisibleRows(1800, 100).length, 5);
+	});
+
+	test('header navigation retains a loading destination and restores its resolved position', async () => {
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		const container = h(browserEnvironment.window.document, 'main');
+		browserEnvironment.window.document.body.append(container);
+		resources.add(toDisposable(() => container.remove()));
+		const provider = new MultiDiffTestComputationService();
+		const comparison = (count: number) => resources.add(new DiffModel({
+			original: resources.add(new TextModel(lines('before', count))), modified: resources.add(new TextModel(lines('after', count))), diffProvider: provider, diffOptions,
+		}));
+		const first = comparison(500);
+		const last = comparison(20);
+		await Promise.all([waitForReady(first), waitForReady(last)]);
+		const loading = new DeferredPromise<InstanceType<typeof DiffModel>>();
+		const destination = resources.add(new DocumentDiffItem({ id: 'last', label: 'last.ts' }, () => loading.p));
+		const model = resources.add(new MultiDiffEditorModel([resources.add(new DocumentDiffItem({ id: 'first', label: 'first.ts' }, first)), destination]));
+		const editor = resources.add(services.createInstance(MultiDiffEditorWidget, { container, model, preview: true, onOpenEditor: () => { }, lineHeight: 20 }));
+		editor.layout({ width: 700, height: 240 });
+		let nativeScrollTop = 0;
+		Object.defineProperties(editor.domNode, {
+			scrollTop: { get: () => nativeScrollTop, set: (value: number) => { nativeScrollTop = Math.max(0, Math.min(value, editor.domNode.scrollHeight - 240)); } },
+			clientHeight: { get: () => 240 }, clientWidth: { get: () => 700 }, scrollWidth: { get: () => 700 },
+			scrollHeight: { get: () => parseFloat(requiredElement<HTMLElement>(container, '.stanza-multi-diff-editor-content').style.height) },
+		});
+		const header = requiredElement<HTMLButtonElement>(container, '.stanza-multi-diff-editor-header-toggle');
+		header.focus();
+		header.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		assert.equal(destination.isInUse, true);
+		// A native clamp or another loading file can temporarily move the viewport.
+		editor.domNode.scrollTop = 0;
+		editor.domNode.dispatchEvent(new browserEnvironment.window.Event('scroll'));
+		await loading.complete(last);
+		await waitForText(container, 'after 19');
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		assert.equal(browserEnvironment.window.document.activeElement?.closest('section')?.getAttribute('aria-label'), 'last.ts');
+		assert.ok(editor.domNode.scrollTop > 9000);
+		const cancelled = new DeferredPromise<InstanceType<typeof DiffModel>>();
+		model.setItems([
+			resources.add(new DocumentDiffItem({ id: 'first', label: 'first.ts' }, first)),
+			resources.add(new DocumentDiffItem({ id: 'pending', label: 'pending.ts' }, () => cancelled.p)),
+		]);
+		editor.domNode.scrollTop = 0;
+		editor.domNode.dispatchEvent(new browserEnvironment.window.Event('scroll'));
+		const restart = requiredElement<HTMLButtonElement>(container, '.stanza-multi-diff-editor-header-toggle');
+		restart.focus();
+		restart.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		editor.domNode.dispatchEvent(new browserEnvironment.window.WheelEvent('wheel', { deltaY: -100000, bubbles: true }));
+		await cancelled.complete(last);
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		assert.equal(editor.domNode.scrollTop, 0, 'A wheel gesture cancels the pending header reveal');
+
+	});
+
+	for (const preview of [true, false]) test(`a short final header stays visible after neighboring loads and ${preview ? 'preview' : 'editor'} layout`, async () => {
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		resources.add(services.createInstance(StandaloneLayoutService));
+		const container = h(browserEnvironment.window.document, 'main');
+		browserEnvironment.window.document.body.append(container);
+		resources.add(toDisposable(() => container.remove()));
+		const comparison = (count: number, compact = false) => resources.add(new DiffModel({
+			original: resources.add(new TextModel(lines('before', count))), modified: resources.add(new TextModel(compact ? ['after 0', ...lines('before', count).split('\n').slice(1)].join('\n') : lines('after', count))), diffProvider: new MultiDiffTestComputationService(), diffOptions,
+		}));
+		const first = comparison(500), middle = comparison(200), last = comparison(400, true);
+		await Promise.all([waitForReady(first), waitForReady(middle), waitForReady(last)]);
+		const loading = new DeferredPromise<InstanceType<typeof DiffModel>>();
+		const model = resources.add(new MultiDiffEditorModel([
+			resources.add(new DocumentDiffItem({ id: 'first', label: 'first.ts' }, first)),
+			resources.add(new DocumentDiffItem({ id: 'middle', label: 'middle.ts' }, () => loading.p)),
+			resources.add(new DocumentDiffItem({ id: 'last', label: 'last.ts' }, last)),
+		]));
+		const editor = resources.add(services.createInstance(MultiDiffEditorWidget, { container, model, preview, onOpenEditor: () => { }, lineHeight: 20 }));
+		editor.layout({ width: 700, height: 240 });
+		let scrollTop = 0;
+		const scrollHeight = () => parseFloat(requiredElement<HTMLElement>(container, '.stanza-multi-diff-editor-content').style.height);
+		Object.defineProperties(editor.domNode, {
+			clientHeight: { get: () => 240 }, clientWidth: { get: () => 700 }, scrollWidth: { get: () => 700 }, scrollHeight: { get: scrollHeight },
+			scrollTop: { get: () => scrollTop, set: (value: number) => { scrollTop = Math.max(0, Math.min(value, scrollHeight() - 240)); } },
+		});
+		const header = requiredElement<HTMLButtonElement>(container, '.stanza-multi-diff-editor-header-toggle');
+		header.focus();
+		header.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		await loading.complete(middle);
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		const final = container.querySelector<HTMLElement>('section[aria-label="last.ts"]');
+		assert.ok(final, 'The requested tail file remains mounted after its neighbor resolves');
+		assert.ok(editor.domNode.scrollTop > 13000);
+		assert.ok(parseFloat(final.style.top) < editor.domNode.scrollTop + 240);
+		// A later wheel gesture owns the viewport again.
+		const beforeWheel = editor.domNode.scrollTop;
+		editor.domNode.dispatchEvent(new browserEnvironment.window.WheelEvent('wheel', { deltaY: -1000, bubbles: true }));
+		assert.equal(Math.round(beforeWheel - editor.domNode.scrollTop), 1000);
+	});
+
+	test('review uses shared models without full editors and preserves selection through virtualization and mode changes', async () => {
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		resources.add(services.createInstance(StandaloneLayoutService));
+		const container = h(browserEnvironment.window.document, 'main');
+		browserEnvironment.window.document.body.append(container);
+		resources.add(toDisposable(() => container.remove()));
+		const original = resources.add(new TextModel(lines('before', 200)));
+		const providers = resources.add(new SyntaxProviderRegistry());
+		resources.add(providers.register({
+			id: 'review-syntax', languageIds: ['review-syntax'], provideTokens: () => ({
+				tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'keyword', modifiers: [] }],
+			})
+		}));
+		const modified = resources.add(new TextModel(lines('after 中文 😀', 200), { languageId: 'review-syntax', tokenization: { syntaxProviderRegistry: providers } }));
+		await modified.tokenization.whenReady(new AbortController().signal);
+		const model = resources.add(new DiffModel({ original, modified, diffProvider: new MultiDiffTestComputationService(), diffOptions }));
+		await waitForReady(model);
+		const item = resources.add(new DocumentDiffItem({ id: 'review', label: 'review.ts', originalUri: original.uri, modifiedUri: modified.uri }, model));
+		let opened: { item: IDocumentDiffItem; side: string; range: Range; } | undefined;
+		const editor = resources.add(services.createInstance(MultiDiffEditorWidget, {
+			container, model: resources.add(new MultiDiffEditorModel([item])), preview: true, lineHeight: 20,
+			onOpenEditor: (item: IDocumentDiffItem, side: 'original' | 'modified', range: Range) => { opened = { item, side, range }; },
+		}));
+		editor.layout({ width: 700, height: 240 });
+		await editor.resolveVisible();
+		assert.equal(container.querySelectorAll('.stanza-editor').length, 0);
+		assert.ok(container.querySelectorAll('.ash-diff-review-row').length < 60);
+		assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0);
+		assert.equal(container.querySelector('.token-keyword')?.textContent, 'after');
+		for (const top of [1000, 400, 0]) {
+			editor.domNode.scrollTop = top;
+			editor.domNode.dispatchEvent(new browserEnvironment.window.Event('scroll'));
+			for (const column of container.querySelectorAll('.ash-diff-review-column')) {
+				const rows = [...column.querySelectorAll<HTMLElement>('[data-review-row]')].map(node => Number(node.dataset.reviewRow));
+				assert.deepEqual(rows, [...rows].sort((a, b) => a - b));
+			}
+		}
+		const preview = requiredElement<HTMLElement>(container, '.ash-diff-review-preview');
+		preview.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+		preview.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
+		preview.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		assert.equal(opened?.item.model?.modified, modified);
+		assert.equal(opened?.side, 'modified');
+		assert.deepEqual(opened?.range, new Range(2, 1, 3, modified.getLineMaxColumn(3)));
+		const saved = editor.saveViewState();
+		editor.restoreViewState(JSON.parse(JSON.stringify(saved)));
+		editor.setPreview(false);
+		assert.equal(editor.getActiveControl()?.modifiedEditor.getModel(), modified);
+		assert.equal(editor.getActiveControl()?.modifiedEditor.getSelection()?.toString(), opened?.range.toString());
+		editor.setPreview(true);
+		modified.applyEdits([{ range: new Range(1, 1, 1, modified.getLineMaxColumn(1)), text: '<b>shared update</b>' }]);
+		await waitForReady(model);
+		await waitForText(container, '<b>shared update</b>');
+		assert.equal(container.querySelector('b'), null, 'Source text must not become markup');
+		assert.equal(container.querySelectorAll('.stanza-editor').length, 0);
+		assert.match(editor.getAccessibleContent()!, /shared update/);
+	});
 	test('row height estimates preserve paired wraps across bounded computation batches', async () => {
 		using resources = new DisposableStore();
 		const before = Array.from({ length: 300 }, () => 'x');

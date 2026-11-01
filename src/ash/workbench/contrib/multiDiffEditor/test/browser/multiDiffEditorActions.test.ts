@@ -1,5 +1,7 @@
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from 'node:assert/strict';
@@ -51,8 +53,9 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 				@IThemeService themes: IThemeService,
 				@IStorageService storage: IStorageService,
 				@IContextKeyService contexts: IContextKeyService,
+				@IConfigurationService configuration: IConfigurationService,
 			) {
-				super({}, instantiationService, themes, storage, contexts);
+				super({}, instantiationService, themes, storage, contexts, configuration);
 			}
 
 			public override nextChange(): undefined {
@@ -91,6 +94,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
 		registrations.add(registerAction2(MultiDiffToggleCollapseUnchangedRegionsAction));
 		const services = registrations.add(createTestComponentServices(undefined, undefined, browser.window.document));
+		services.registerInstance(IConfigurationService, registrations.add(new InMemoryConfigurationService()));
 		using contexts = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contexts);
 		const pane = services.createInstance(TrackingMultiDiffEditor);

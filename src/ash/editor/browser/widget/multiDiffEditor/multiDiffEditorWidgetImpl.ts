@@ -1,6 +1,6 @@
 import './style.css';
 import './colors.js';
-import { addDisposableListener, getClientArea, getWindow, h, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getClientArea, getWindow, h, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -19,10 +19,13 @@ import { FontMeasurements } from '../../config/fontMeasurements.js';
 import type { CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import { type DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
-import { computeDiffRowLayout, type DiffRowLayout } from './compressedVirtualizedScrollLayout.js';
+import { computeDiffRowLayout, computeDiffPreviewLayout, type DiffRowLayout, type DiffPreviewLayout } from './compressedVirtualizedScrollLayout.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { CompressedVirtualizedScrollView } from './compressedVirtualizedScrollView.js';
 import {
 	DiffEditorItemTemplate,
+	type DiffEditorItemViewState,
 	MULTI_DIFF_HEADER_HEIGHT,
 	MULTI_DIFF_HORIZONTAL_INSET,
 } from './diffEditorItemTemplate.js';
@@ -91,16 +94,24 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly workbenchUIElementFactory: IMultiDiffEditorWidgetOptions['workbenchUIElementFactory'];
 	private readonly logger: MultiDiffEditorLogger;
 	private navigationAbortController = new AbortController();
+	private previewEnabled: boolean;
+	private readonly onOpenEditor: IMultiDiffEditorWidgetOptions['onOpenEditor'];
+	private readonly expandedPreviewRegions = new WeakMap<DiffModel, Set<number>>();
+	private visible = true;
+	private restoredScrollAnchor: MultiDiffEditorViewState['scrollAnchor'];
 
 	constructor(
 		options: IMultiDiffEditorWidgetOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ILogService logService: ILogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IThemeService private readonly themeService: IThemeService,
 	) {
 		super();
 		this.logger = new MultiDiffEditorLogger(logService);
 		validateMultiDiffEditorOptions(options);
+		this.previewEnabled = options.preview ?? false;
+		this.onOpenEditor = options.onOpenEditor;
 		this.items = options.model.items;
 		this.hideUnchangedRegionsEnabled = hideUnchangedRegions(configuration);
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
@@ -135,15 +146,16 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			options.container,
 			(contentDomNode, index) => {
 				const item = this.items[index]!;
-				const section = new DiffEditorItemTemplate(
+				const section = this.instantiationService.createInstance(DiffEditorItemTemplate,
 					contentDomNode, item, () => this.toggleItem(item.id),
 					() => this.activateItem(item.id), this.workbenchUIElementFactory, () => this.scheduleLayoutRefresh(),
-					source => this.handleEditorScroll(index, source),
+					(source: CodeEditorWidget) => this.handleEditorScroll(index, source),
+					this.previewEnabled && this.onOpenEditor ? (side: 'original' | 'modified', range: Range) => this.onOpenEditor!(item, side, range) : undefined,
 				);
 				section.setCollapsed(this.viewModel.isCollapsed(item.id));
 				section.domNode.classList.toggle('active', this.viewModel.activeItemId === item.id);
 				const state = this.viewModel.getItemViewState(item.id);
-				if (state) section.restoreViewState(state.original, state.modified);
+				if (state) section.restoreViewState(state.original, state.modified, state.preview);
 				return section;
 			},
 			(index, section) => {
@@ -154,6 +166,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			},
 		));
 		this.domNode = this.scrollView.domNode;
+		this.domNode.classList.toggle('review-preview', this.previewEnabled);
 		this.sections = this.scrollView.sections;
 		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
 		this.domNode.classList.toggle('hide-line-numbers', !this.showLineNumbers);
@@ -169,6 +182,18 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			if (event.target === this.domNode) this.project();
 		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
+		// Explicit scrolling supersedes a header whose short last file could not
+		// yet reach the viewport top while neighboring comparisons were loading.
+		const releaseAnchor = () => { if (this.restoredScrollAnchor) this.cancelPendingNavigation(); };
+		this._register(addDisposableListener(this.domNode, 'wheel', releaseAnchor, { capture: true, passive: true }));
+		this._register(addDisposableListener(this.domNode.parentElement!, 'pointerdown', releaseAnchor, true));
+		this._register(themeService.onDidColorThemeChange(() => this.project()));
+		this._register(addDisposableListener<FocusEvent>(this.domNode, 'focusin', event => {
+			if (this.previewEnabled && (!isNode(event.relatedTarget) || !this.domNode.contains(event.relatedTarget))
+				&& configuration.getValue<boolean>(AccessibilityVerbositySettingId.DiffEditor)) {
+				this.accessibilityStatusDomNode.textContent = localize('multiDiff.preview.hint', 'Press Alt+F1 for review help or Alt+F2 to read differences.');
+			}
+		}));
 		this.bindItems();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
@@ -183,15 +208,25 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			// never arrive, so release waits before binding the new item generation.
 			this.cancelPendingNavigation();
 			this.logger.itemsChanged(items);
-			this.scrollView.resetItems();
-			this.itemListeners.clear();
-			this.items = items;
-			this.viewModel.setItems(items);
-			this.measuredHeights.clear();
-			this.rowLayouts = new WeakMap();
-			this.layouts.length = 0;
-			this.bindItems();
-			if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: items.length }));
+			// Unmounting can synchronously scroll or release a model. Complete the
+			// generation change before those callbacks may project another section.
+			const wasProjecting = this.projecting;
+			this.projecting = true;
+			try {
+				// Releasing the last visible lease emits item changes. Stop observing the
+				// old generation before unmounting it so it cannot remount retired rows.
+				this.itemListeners.clear();
+				this.scrollView.resetItems();
+				this.items = items;
+				this.viewModel.setItems(items);
+				this.measuredHeights.clear();
+				this.rowLayouts = new WeakMap();
+				this.layouts.length = 0;
+				this.bindItems();
+				if (!options.ariaLabel) this.domNode.setAttribute('aria-label', formatNlsMessage(localize('multiDiffEditor.ariaLabel', 'Multi-file diff editor with {0} files'), { 0: items.length }));
+			} finally {
+				this.projecting = wasProjecting;
+			}
 			this.refreshLayout();
 		}));
 		this._register(observeResize(this.domNode, ([entry]) => {
@@ -212,7 +247,39 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		const itemId = this.viewModel.activeItemId ?? this.items[0]?.id;
 		const section = this.sections.get(this.items.findIndex(item => item.id === itemId));
 		if (section?.editor) section.editor.focus();
+		else if (this.usePreview && section) section.focusPreview();
 		else this.domNode.focus({ preventScroll: true });
+	}
+
+	public get preview(): boolean { return this.previewEnabled; }
+	private get usePreview(): boolean { return this.previewEnabled && !this.wordWrap; }
+
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
+		if (visible) this.refreshLayout();
+	}
+
+	public setPreview(enabled: boolean): void {
+		if (this.previewEnabled === enabled) return;
+		if (enabled && !this.onOpenEditor) throw new Error('Review preview requires a full-editor entry point');
+		for (const section of this.sections.values()) this.viewModel.saveItemViewState(section.item.id, section.saveViewState());
+		this.scrollView.resetItems();
+		this.previewEnabled = enabled;
+		this.domNode.classList.toggle('review-preview', enabled);
+		this.rowLayouts = new WeakMap();
+		this.measuredHeights.clear();
+		this.refreshLayout();
+	}
+
+	public getReviewLocation(): DiffEditorItemViewState['preview'] {
+		const item = this.getActiveItem();
+		if (!item) return undefined;
+		return this.sections.get(this.items.indexOf(item))?.saveViewState().preview ?? this.viewModel.getItemViewState(item.id)?.preview;
+	}
+
+	public getAccessibleContent(): string | undefined {
+		const item = this.getActiveItem();
+		return item ? this.sections.get(this.items.indexOf(item))?.getAccessibleContent() : undefined;
 	}
 
 	/** The current file keeps its identity when focus moves to its header or a Workbench action. */
@@ -255,6 +322,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			section.editor?.setHideUnchangedRegionsOptions(options);
 		}
 		this.measuredHeights.clear();
+		this.rowLayouts = new WeakMap();
 		this.refreshLayout();
 		this.hideUnchangedRegionsEmitter.fire();
 	}
@@ -263,7 +331,14 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		for (const section of this.sections.values()) {
 			this.viewModel.saveItemViewState(section.item.id, section.saveViewState());
 		}
-		return this.viewModel.saveViewState(this.scrollView.getLogicalScrollTop());
+		const scrollTop = this.scrollView.getLogicalScrollTop();
+		let index = 0;
+		while (index + 1 < this.layouts.length && this.layouts[index + 1]!.top <= scrollTop) index++;
+		const layout = this.layouts[index];
+		return {
+			...this.viewModel.saveViewState(scrollTop),
+			...(this.restoredScrollAnchor ? { scrollAnchor: this.restoredScrollAnchor } : layout && layout.top <= scrollTop ? { scrollAnchor: { itemId: this.items[index]!.id, offset: scrollTop - layout.top } } : {}),
+		};
 	}
 
 	public restoreViewState(state: unknown): void {
@@ -274,10 +349,13 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			section.setCollapsed(this.viewModel.isCollapsed(section.item.id));
 			section.domNode.classList.toggle('active', section.item.id === this.viewModel.activeItemId);
 			const itemState = this.viewModel.getItemViewState(section.item.id);
-			section.restoreViewState(itemState?.original ?? null, itemState?.modified ?? null);
+			section.restoreViewState(itemState?.original ?? null, itemState?.modified ?? null, itemState?.preview);
 		}
+		// Keep the file anchor until its resolved geometry can actually contain it.
+		// Short loading estimates can otherwise clamp the saved position into a preceding file.
+		this.restoredScrollAnchor = (state as MultiDiffEditorViewState).scrollAnchor;
 		this.refreshLayout();
-		this.scrollView.setLogicalScrollTop(scrollTop);
+		if (!this.restoredScrollAnchor && !(state as MultiDiffEditorViewState).scrollAnchor) this.scrollView.setLogicalScrollTop(scrollTop);
 		this.project();
 	}
 
@@ -423,6 +501,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private updateWordWrap(): void {
+		// The prototype delegates wrapped rendering to the existing complete editor.
+		for (const section of this.sections.values()) this.viewModel.saveItemViewState(section.item.id, section.saveViewState());
+		if (this.previewEnabled) this.scrollView.resetItems();
 		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
 		for (const section of this.sections.values()) section.editor?.setConfiguredWordWrap(this.temporaryWordWrap ?? this.configuredWordWrap);
 		this.rowLayouts = new WeakMap();
@@ -443,7 +524,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const model = item.model;
 				listener.value = model?.onDidChange(() => {
 					this.logger.itemStateChanged(item.id, model.state.kind);
+					if (this.usePreview && model.state.kind === 'loading') {
+						this.sections.get(index)?.updateStatus();
+						return;
+					}
 					this.rowLayouts.delete(model);
+					if (model.state.kind === 'ready') this.expandedPreviewRegions.delete(model);
 					// Pending computation must not unmount an editor receiving input.
 					if (model.state.kind === 'ready') this.measuredHeights.delete(item.id);
 					this.sections.get(index)?.updateStatus();
@@ -461,6 +547,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private refreshLayout(): void {
+		if (!this.visible) return;
 		if (this.projecting) {
 			this.scheduleLayoutRefresh();
 			return;
@@ -486,7 +573,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const model = item.model;
 			let rows = model ? this.rowLayouts.get(model) : undefined;
 			if (!rows && model && !collapsed) {
-				rows = computeDiffRowLayout(model, this.lineHeight, wrapping);
+				rows = this.usePreview
+					? computeDiffPreviewLayout(model, this.lineHeight, this.getHideUnchangedRegionsOptions(), this.expandedPreviewRegions.get(model) ?? new Set())
+					: computeDiffRowLayout(model, this.lineHeight, wrapping);
 				this.rowLayouts.set(model, rows);
 			}
 			rows ??= { height: 0, getOffset: () => 0 };
@@ -498,12 +587,22 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			top += height + SECTION_GAP;
 		}
 		this.scrollView.setLayout(this.layouts, top, this.viewportHeight);
+		const anchor = this.restoredScrollAnchor;
+		const index = anchor ? this.items.findIndex(item => item.id === anchor.itemId) : -1;
+		const restored = this.layouts[index];
+		if (restored && anchor) {
+			const target = restored.top + Math.min(anchor.offset, Math.max(0, restored.height - 1));
+			this.scrollView.setLogicalScrollTop(target);
+			// Complete editor folding and neighbor loads can settle after the diff.
+			// Keep this file target until an explicit input supersedes restoration.
+		} else if (anchor) this.restoredScrollAnchor = undefined;
 		this.logger.layoutChanged(previousLayouts, this.layouts, previousScrollTop, this.scrollView.getLogicalScrollTop());
 		this.project();
 	}
 
 	/** Mount editors only around the viewport; file models remain owned by the caller. */
 	private project(): void {
+		if (!this.visible) return;
 		if (this.projecting) {
 			this.scheduleLayoutRefresh();
 			return;
@@ -529,6 +628,23 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				section.retainModel();
 				if (!item.model) {
 					if (item.state === 'unresolved') void item.resolve().catch(() => undefined);
+					continue;
+				}
+				if (this.usePreview) {
+					if (item.model.state.kind !== 'ready') continue;
+					section.renderPreview(item.model, layout.rows as DiffPreviewLayout, Math.max(0, viewportTop - layout.top), this.lineHeight, overscan, {
+						family: this.fontInfoSettings.fontFamily, size: this.fontInfoSettings.fontSize, ligatures: this.editorOptions.fontLigatures ?? false,
+					}, this.themeService.getColorTheme(), this.editorOptions.showInlineChanges ?? true,
+						(side, range) => this.onOpenEditor?.(item, side, range), row => {
+							this.scrollView.setLogicalScrollTop(layout.top + layout.rows.getOffset(row));
+							this.project();
+						}, row => {
+							const expanded = this.expandedPreviewRegions.get(item.model!) ?? new Set<number>();
+							expanded.add(row);
+							this.expandedPreviewRegions.set(item.model!, expanded);
+							this.rowLayouts.delete(item.model!);
+							this.refreshLayout();
+						});
 					continue;
 				}
 				if (!section.editor) {
@@ -633,6 +749,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	}
 
 	private cancelPendingNavigation(): void {
+		this.restoredScrollAnchor = undefined;
 		this.navigationGeneration++;
 		this.navigationAbortController.abort();
 		this.navigationAbortController = new AbortController();
@@ -706,6 +823,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		else if (rowBottom > scrollTop + editorViewportHeight) this.scrollView.setLogicalScrollTop(Math.max(0, rowBottom - editorViewportHeight));
 		this.project();
 		const editor = this.sections.get(itemIndex)?.editor;
+		if (this.usePreview) this.sections.get(itemIndex)?.revealPreviewRow(location.rowIndex, focus);
 		if (editor) {
 			editor.revealChangeRow(location.rowIndex, false);
 			const row = model.diff.rows.get(location.rowIndex)!;
@@ -728,7 +846,37 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (Math.abs(this.scrollView.getLogicalScrollTop() - desiredScroll) > 1) this.scrollView.setLogicalScrollTop(desiredScroll);
 	}
 
+	private async revealHeader(index: number): Promise<void> {
+		this.cancelPendingNavigation();
+		const generation = this.navigationGeneration;
+		const signal = this.navigationAbortController.signal;
+		const item = this.items[index]!;
+		this.restoredScrollAnchor = { itemId: item.id, offset: 0 };
+		const retention = item.retain?.();
+		const reveal = () => {
+			this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
+			this.project();
+			this.sections.get(index)?.focusHeader();
+		};
+		try {
+			reveal();
+			if (item.binary || item.model?.state.kind === 'ready') return;
+			const model = await item.resolve();
+			if (model) await this.waitForReady(model, signal);
+			if (this.isDisposed || generation !== this.navigationGeneration) return;
+			// Estimated file heights can change while loading. Keep the requested
+			// file retained and restore its header after its real rows are known.
+			this.refreshLayout();
+			reveal();
+		} catch {
+			if (!this.isDisposed && generation === this.navigationGeneration) {
+				this.accessibilityStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.loadError', 'Could not load {0}'), { 0: item.label });
+			}
+		} finally { retention?.dispose(); }
+	}
+
 	private handleKeydown(event: KeyboardEvent): void {
+		if (this.restoredScrollAnchor && event.isComposing) this.cancelPendingNavigation();
 		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
 		if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 			const current = [...this.sections.entries()].find(([_, section]) => section.isHeaderTarget(event.target))?.[0];
@@ -737,14 +885,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				const target = event.key === 'Home' ? 0
 					: event.key === 'End' ? this.items.length - 1
 						: Math.max(0, Math.min(this.items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
-				if (target !== current) {
-					this.scrollView.setLogicalScrollTop(this.layouts[target]!.top);
-					this.project();
-					this.sections.get(target)?.focusHeader();
-				}
+				if (target !== current) void this.revealHeader(target);
 				return;
 			}
 		}
+		if (this.restoredScrollAnchor) this.cancelPendingNavigation();
 		if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'z') {
 			stopEvent(event);
 			this.toggleWordWrap();

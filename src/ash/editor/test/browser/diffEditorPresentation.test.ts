@@ -2,6 +2,127 @@ import { expect, type Locator } from '@playwright/test';
 import { suite, test, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 
+suite('native multi-file review preview', () => {
+	const browserTests = useBrowserTests();
+	teardown(async () => { await browserTests.page.evaluate(() => window.ashDiffIntegration?.dispose()); });
+
+	test('preview copies unmounted source lines and opens the same editable model with undo intact', async () => {
+		const { page } = browserTests;
+		await page.goto('/diff.html?locale=zh-CN');
+		await page.waitForFunction(() => !!window.ashDiffIntegration);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('review'));
+		const host = page.locator('#title-comparison');
+		const preview = host.locator('.ash-diff-review-preview').first();
+		await expect(preview).toBeVisible();
+		await expect(host.locator('.stanza-editor')).toHaveCount(0);
+		expect(await host.locator('.ash-diff-review-row').count()).toBeLessThan(100);
+		await preview.focus();
+		await preview.press('ControlOrMeta+a');
+		const copied = await preview.evaluate(node => {
+			const data = new DataTransfer();
+			node.dispatchEvent(new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }));
+			return data.getData('text/plain');
+		});
+		expect(copied.split('\n')).toHaveLength(400);
+		expect(copied).toContain('const changed = "审阅 🤖";');
+		expect(copied).toContain('const line399');
+		await preview.locator('.modified [data-review-row="100"] .ash-diff-review-number').click();
+		await preview.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readReviewState().shared)).toBe(true);
+		expect((await page.evaluate(() => window.ashDiffIntegration.readReviewState())).selection?.[0].startLineNumber).toBe(101);
+		await page.evaluate(() => window.ashDiffIntegration.editReviewInFullEditor('const edited = "<b>unsaved 中文 🤖</b>";'));
+		expect((await page.evaluate(() => window.ashDiffIntegration.readReviewState())).canUndo).toBe(true);
+		await page.evaluate(() => window.ashDiffIntegration.returnToReview());
+		await expect(host.locator('.ash-diff-review-text').filter({ hasText: 'unsaved 中文' }).first()).toBeVisible();
+		await expect(host.locator('b')).toHaveCount(0);
+		await host.getByRole('button', { name: '打开完整编辑器', exact: true }).first().click();
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readReviewState().shared)).toBe(true);
+		await page.evaluate(() => window.ashDiffIntegration.undoReviewInFullEditor());
+		expect((await page.evaluate(() => window.ashDiffIntegration.readReviewState())).text).toContain('const changed = "审阅 🤖";');
+		await page.evaluate(() => window.ashDiffIntegration.returnToReview());
+		await expect(host.locator('.modified .ash-diff-review-text').filter({ hasText: '审阅 🤖' }).first()).toBeVisible();
+		await page.screenshot({ path: browserTests.info.outputPath('native-review-zh.png') });
+	});
+
+	test('preview keeps the remaining file content visible while its sticky viewport leaves the screen', async () => {
+		const { page } = browserTests;
+		await page.goto('/diff.html');
+		await page.waitForFunction(() => !!window.ashDiffIntegration);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('review'));
+		const host = page.locator('#title-comparison .stanza-multi-diff-editor');
+		await expect(host.locator('.ash-diff-review-preview').first()).toBeVisible();
+		const section = host.locator('.stanza-multi-diff-editor-section').first();
+		const bottom = await section.evaluate(node => (node as HTMLElement).offsetTop + (node as HTMLElement).offsetHeight);
+		const column = section.locator('.ash-diff-review-column.modified');
+		const gutter = column.locator('.ash-diff-review-number').first();
+		const gutterLeft = (await gutter.boundingBox())!.x;
+		await column.evaluate(node => { node.scrollLeft = 120; });
+		await expect.poll(async () => (await gutter.boundingBox())!.x).toBeCloseTo(gutterLeft, 1);
+		expect(await column.evaluate(node => node.scrollLeft)).toBe(120);
+		await column.evaluate(node => { node.scrollLeft = 0; });
+		// Exercise both directions through the last viewport and the next file's header.
+		for (const top of [bottom - 250, bottom - 150, bottom - 50, bottom + 20, bottom - 100, bottom - 220]) {
+			await host.evaluate((node, top) => { node.scrollTop = top; }, top);
+			await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+			const missing = await host.evaluate(node => {
+				const viewport = node.getBoundingClientRect();
+				return [...node.querySelectorAll('.stanza-multi-diff-editor-section')].map(section => {
+					const body = section.querySelector('.stanza-multi-diff-editor-body')!.getBoundingClientRect();
+					const header = section.querySelector('.stanza-multi-diff-editor-header')!.getBoundingClientRect();
+					const start = Math.max(viewport.top, body.top, header.bottom);
+					const end = Math.min(viewport.bottom, body.bottom);
+					if (end <= start) return 0;
+					const column = section.querySelector('.ash-diff-review-column.modified')!;
+					const clip = column.getBoundingClientRect();
+					const intervals = [...column.querySelectorAll('.ash-diff-review-row')].map(row => {
+						const bounds = row.getBoundingClientRect();
+						return [Math.max(start, clip.top, bounds.top), Math.min(end, clip.bottom, bounds.bottom)] as const;
+					}).filter(([from, to]) => to > from).sort((a, b) => a[0] - b[0]);
+					let cursor = start;
+					let covered = 0;
+					for (const [from, to] of intervals) {
+						if (to > cursor) { covered += to - Math.max(from, cursor); cursor = to; }
+					}
+					return end - start - covered;
+				});
+			});
+			expect(Math.max(...missing), `unpainted content at scroll ${top}`).toBeLessThanOrEqual(2);
+		}
+	});
+
+	test('preview preserves fold geometry, themes and navigation while wrapping delegates to the full editor', async () => {
+		const { page } = browserTests;
+		await page.goto('/diff.html');
+		await page.waitForFunction(() => !!window.ashDiffIntegration);
+		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('review'));
+		const host = page.locator('#title-comparison');
+		const viewport = host.locator('.stanza-multi-diff-editor');
+		await expect(host.locator('.ash-diff-review-preview').first()).toBeVisible();
+		const disclosure = host.locator('.ash-diff-review-column.original .hidden-region').first();
+		await disclosure.click();
+		await expect(host.locator('.ash-diff-review-text').filter({ hasText: 'const line0 ' }).first()).toBeVisible();
+		for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light']) {
+			await page.evaluate(theme => window.ashDiffIntegration.setTheme(theme), theme);
+			const geometry = await host.locator('.ash-diff-review-preview').first().evaluate(node => {
+				const style = getComputedStyle(node);
+				const row = node.querySelector('.ash-diff-review-row')!.getBoundingClientRect();
+				return { foreground: style.color, background: style.backgroundColor, lineHeight: parseFloat(style.lineHeight), height: row.height };
+			});
+			expect(geometry.height).toBe(geometry.lineHeight);
+			expect(geometry.foreground).not.toBe(geometry.background);
+		}
+		await viewport.evaluate(node => { node.scrollTop = 2000; });
+		await expect(host.locator('.ash-diff-review-row')).not.toHaveCount(0);
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.wordWrap', 'on'));
+		await expect(host.locator('.ash-diff-review-preview')).toHaveCount(0);
+		await expect(host.locator('.stanza-diff-editor').first()).toBeVisible();
+		await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.wordWrap', 'off'));
+		await expect(host.locator('.stanza-editor')).toHaveCount(0);
+		await expect(host.locator('.ash-diff-review-preview').first()).toBeVisible();
+		await expect(host.getByRole('button', { name: 'Open Full Editor', exact: true }).first()).toHaveAttribute('type', 'button');
+	});
+});
+
 suite('diff character backgrounds', () => {
 	const browserTests = useBrowserTests();
 	teardown(async () => {
