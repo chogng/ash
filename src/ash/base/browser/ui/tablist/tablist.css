@@ -40,7 +40,7 @@
 	cursor: pointer;
 }
 
-.ash-tab.ash-dnd-draggable:active {
+.ash-tab.ash-dnd-draggable.ash-dnd-dragging {
 	cursor: grabbing;
 }
 
