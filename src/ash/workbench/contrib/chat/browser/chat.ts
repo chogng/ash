@@ -53,7 +53,7 @@ export interface IChatPasteTargetService {
 
 export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetService>('chatPasteTargetService');
 
-/** Workbench Chat host operations; Session selection, drafts and conversation ownership stay with the host. */
+/** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
 export interface IChatViewPane extends IView {
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;
@@ -61,6 +61,8 @@ export interface IChatViewPane extends IView {
 	getSessionsViewerOrientation(): AgentSessionsViewerOrientation;
 	getLastDimensions(orientation: AgentSessionsViewerOrientation): { height: number; width: number; } | undefined;
 	toggleSessionsSidebar(options?: { readonly visible: boolean; }): boolean;
+	focusInput(): void;
+	focusSessions(): boolean;
 	moveToEditor(): Promise<void>;
 	openInNewWindow(): Promise<void>;
 }

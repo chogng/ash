@@ -3,6 +3,7 @@ import { registerCodeEditorServices } from '../../../editor/test/browser/testCod
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -62,7 +63,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ChatViewPane } = await import('../../browser/chatViewPane.js');
+const { SessionChatViewPane } = await import('../../browser/chatViewPane.js');
 await import('../../../workbench/contrib/chat/browser/chat.contribution.js');
 const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
 const { BrowserLayoutService } = await import('../../../platform/layout/browser/layoutService.js');
@@ -121,7 +122,7 @@ test('opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IContextMenuService, {} as IContextMenuService);
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
-	using view = new ChatViewPane(
+	using view = new SessionChatViewPane(
 		document.body,
 		{ id: 'workbench.chat', title: 'Chat' },
 		chat,
@@ -137,7 +138,7 @@ test('opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService),
+		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService), services.get(IContextKeyService),
 	);
 
 	assert.deepEqual(escaped, []);

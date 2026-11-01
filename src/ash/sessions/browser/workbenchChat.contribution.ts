@@ -1,3 +1,4 @@
+import { ChatViewPane } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
 import { Schemas } from '../../base/common/network.js';
@@ -16,7 +17,7 @@ import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from '../../workbench/contrib/ch
 import { IChatSessionNavigationService, type IChatSessionNavigationService as IChatSessionNavigationServiceContract } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { ChatViewPane } from './chatViewPane.js';
+import { SessionChatViewPane } from './chatViewPane.js';
 import './actions/chatActions.js';
 import { registerChatSessionsActions } from '../../workbench/contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
@@ -95,7 +96,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		order: 1,
 		canToggleVisibility: false,
 		when: ChatContextKeys.enabled.isEqualTo(true),
-		ctorDescriptor: new SyncDescriptor(ChatViewPane),
+		ctorDescriptor: new SyncDescriptor(SessionChatViewPane),
 	}]);
 }
 

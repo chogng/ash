@@ -16,6 +16,7 @@ import type { IChatViewPane } from '../chat.js';
 import { AgentSessionsViewerOrientation } from './agentSessions.js';
 
 export function registerAgentSessionsLayoutActions(): void {
+	registerAction2(FocusAgentSessionsAction);
 	for (const [orientation, id, title] of [
 		['stacked', 'agentSessions.hideAgentSessionsSidebar', localize2('chat.sessions.orientation.stackCommand', 'Stack Agent Sessions Above Chat')],
 		['sideBySide', 'agentSessions.showAgentSessionsSidebar', localize2('chat.sessions.orientation.sidebarCommand', 'Show Agent Sessions Sidebar')],
@@ -87,6 +88,28 @@ export function registerAgentSessionsLayoutActions(): void {
 		}
 	});
 
+}
+
+export class FocusAgentSessionsAction extends Action2 {
+	public static readonly id = 'workbench.action.chat.focusAgentSessionsViewer';
+
+	constructor() {
+		super({
+			id: FocusAgentSessionsAction.id,
+			title: localize2('chat.focusAgentSessionsViewer.label', 'Focus Agent Sessions'),
+			precondition: ChatContextKeys.enabled.isEqualTo(true),
+			f1: true,
+		});
+	}
+
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = await accessor.get(IViewsService).openView<IChatViewPane>(CHAT_VIEW_ID, true);
+		if (!view || view.focusSessions()) {
+			return;
+		}
+		view.toggleSessionsSidebar({ visible: true });
+		view.focusSessions();
+	}
 }
 
 /** Capture invocation-scoped services before opening the view or saving configuration. */

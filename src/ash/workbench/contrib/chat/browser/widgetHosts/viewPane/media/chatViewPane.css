@@ -1,0 +1,126 @@
+.ash-chat-view-pane,
+.ash-chat-view {
+	min-height: 0;
+	height: 100%;
+}
+
+.ash-chat-view {
+	display: flex;
+	flex-direction: column;
+	background: var(--ash-auxiliaryBar-background);
+}
+
+.ash-chat-body {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.ash-chat-pane-host {
+	display: flex;
+	min-height: 0;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.ash-chat-sessions-sidebar {
+	box-sizing: border-box;
+	display: flex;
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-chat-sessions-sidebar[hidden] {
+	display: none;
+}
+
+.ash-chat-sessions-sidebar header {
+	display: flex;
+	min-width: 0;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-sessions-sidebar h2 {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-chat-sessions-new {
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-foreground);
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-chat-sessions-new:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-chat-sessions-new:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-chat-body.sessions-side-by-side {
+	flex-direction: row-reverse;
+}
+
+.ash-chat-body.sessions-side-by-side > .ash-chat-sessions-sidebar {
+	flex: 0 0 auto;
+	min-width: 200px;
+	border-bottom: 0;
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
+	> .ash-chat-pane-host {
+	/* Let the composer grow with its input and attachments before allocating list space. */
+	flex: 0 0 auto;
+	min-height: 116px;
+}
+
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
+	> .ash-chat-pane-host
+	> .ash-chat {
+	height: auto;
+}
+
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
+	> .ash-chat-pane-host
+	> .ash-chat
+	> .ash-chat-list-widget {
+	/* The Sessions list takes the transcript's space; the retained Chat keeps its input. */
+	flex: 0 0 0;
+	height: 0;
+	overflow: hidden;
+}
+
+.ash-chat-pane-host[hidden] {
+	display: none;
+}
+
+.ash-chat-view-empty {
+	align-self: center;
+	width: 100%;
+}
