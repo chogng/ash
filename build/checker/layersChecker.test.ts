@@ -62,6 +62,86 @@ test('native IPC checks identify inferred receivers without a native type name i
 	assert.match(violations[0]!.message, /Inferred IMainProcessService/);
 });
 
+test('native IPC names retain default, namespace and qualified aliases across re-exports', t => {
+	const project = fixture(t);
+	project.write('platform/ipc/electron-browser/public.ts', "export { IMainProcessService as DesktopIPC, IMainProcessService as default } from '../common/mainProcessService.js';");
+	project.write('workbench/browser/default.ts', "import Host from '../../platform/ipc/electron-browser/public.js'; export type Leak = Host;");
+	project.write('workbench/browser/namespace.ts', "import * as IPC from '../../platform/ipc/electron-browser/public.js'; export type Leak = IPC.DesktopIPC;");
+	project.write('workbench/browser/qualified.ts', "import IPC = require('../../platform/ipc/electron-browser/public.js'); import Host = IPC.DesktopIPC; export type Leak = Host;");
+	project.write('workbench/browser/escaped.ts', String.raw`import type { DesktopIPC as \u0048ost } from '../../platform/ipc/electron-browser/public.js'; export type Leak = Host;`);
+	project.write('workbench/browser/local.ts', 'interface Host { value: number; } export const local: Host = { value: 1 };');
+	const violations = project.check();
+	assert.deepEqual([...new Set(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')))].sort(), [
+		'workbench/browser/default.ts', 'workbench/browser/escaped.ts', 'workbench/browser/namespace.ts', 'workbench/browser/qualified.ts',
+	]);
+	assert.ok(violations.every(item => item.message.includes('IMainProcessService')));
+});
+
+test('inferred service handles retain inherited, union, intersection and generic container checks', t => {
+	const project = fixture(t);
+	project.write('platform/ipc/common/remoteService.ts', 'export interface RemoteService { getChannel(name: string): unknown; }');
+	project.write('platform/ipc/common/mainProcessService.ts', "import type { RemoteService } from './remoteService.js'; export interface IMainProcessService extends RemoteService {} export const IMainProcessService = {};");
+	project.write('platform/ipc/electron-browser/factory.ts', `
+import type { IMainProcessService } from '../common/mainProcessService.js';
+interface Derived extends IMainProcessService { value: number; }
+interface Box<T> { value: T; touch(): void; }
+type Tuple<T> = [T];
+export declare function inherited(): Derived;
+export declare function intersection(): IMainProcessService & { value: number };
+export declare function union(): IMainProcessService | { getChannel(name: string): unknown };
+export declare function generic(): Box<IMainProcessService>;
+export declare function tupleUnion(): IMainProcessService | [string];
+export declare function instantiatedTuple(): Tuple<IMainProcessService> | number;
+`);
+	const cases = [
+		['inherited', "inherited()['getChannel']('logger');"],
+		['intersection', "intersection().getChannel('logger');"],
+		['union', "union()?.getChannel('logger');"],
+		['generic', 'generic().touch();'],
+		['tupleUnion', 'tupleUnion().toString();'],
+		['instantiatedTuple', 'instantiatedTuple().toString();'],
+	] as const;
+	for (const [name, expression] of cases) project.write(`workbench/browser/${name}.ts`, `import { ${name} } from '../../platform/ipc/electron-browser/factory.js'; ${expression}`);
+	const violations = project.check();
+	assert.deepEqual(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')).sort(), cases.map(([name]) => `workbench/browser/${name}.ts`).sort());
+	assert.ok(violations.every(item => item.message.includes('Inferred IMainProcessService')));
+});
+
+test('ambient global service handles are checked even when consumers have no imports', t => {
+	const project = fixture(t);
+	project.write('platform/ipc/electron-browser/globals.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; declare global { function nativeHost(): IMainProcessService; }");
+	project.write('workbench/browser/global.ts', "nativeHost().getChannel('logger');");
+	const violations = project.check();
+	assert.equal(violations.length, 1);
+	assert.equal(relative(project.sourceRoot, violations[0]!.fileName).replaceAll('\\', '/'), 'workbench/browser/global.ts');
+	assert.match(violations[0]!.message, /Inferred IMainProcessService/);
+});
+
+test('module augmentations and UMD namespaces retain implicit service dependencies', t => {
+	const project = fixture(t);
+	project.write('platform/ipc/electron-browser/public.ts', 'export {};');
+	project.write('platform/ipc/electron-browser/augment.ts', `
+import './public.js';
+declare module './public.js' { export function getHost(): import('../common/mainProcessService.js').IMainProcessService; }
+`);
+	project.write('platform/ipc/electron-browser/umd.d.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; export as namespace nativeAPI; export declare function getHost(): IMainProcessService;");
+	project.write('workbench/browser/augmented.ts', "import { getHost } from '../../platform/ipc/electron-browser/public.js'; getHost().getChannel('logger');");
+	project.write('workbench/browser/umd.ts', "nativeAPI.getHost().getChannel('logger');");
+	const violations = project.check();
+	assert.deepEqual(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')).sort(), ['workbench/browser/augmented.ts', 'workbench/browser/umd.ts']);
+	assert.ok(violations.every(item => item.message.includes('Inferred IMainProcessService')));
+});
+
+test('dynamic imports retain inferred service dependencies', t => {
+	const project = fixture(t);
+	writeFileSync(join(project.directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', lib: ['ES2022'], types: [] } }));
+	project.write('platform/ipc/electron-browser/factory.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; export declare function getHost(): IMainProcessService;");
+	project.write('workbench/browser/dynamic.ts', "async function use() { const factory = await import('../../platform/ipc/electron-browser/factory.js'); factory.getHost().getChannel('logger'); }");
+	const violations = project.check();
+	assert.equal(violations.length, 1);
+	assert.match(violations[0]!.message, /Inferred IMainProcessService/);
+});
+
 test('unrelated same-name types, host adapters and excluded test fixtures remain valid', t => {
 	const project = fixture(t);
 	project.write('workbench/browser/local.ts', 'interface IMainProcessService { getChannel(): void; } declare const local: IMainProcessService; local.getChannel(); export {};');
@@ -78,8 +158,8 @@ test('sandbox preload exceptions permit Electron but do not permit Node modules'
 	project.write(path, "declare const require: (name: string) => unknown; require('electron');");
 	assert.deepEqual(project.check(), []);
 	project.write(path, "declare const require: (name: string) => unknown; require('node:fs');");
-	assert.equal(project.check().length, 1);
-	assert.match(project.check()[0]!.message, /node:fs/);
+	assert.equal((project.check()).length, 1);
+	assert.match((project.check())[0]!.message, /node:fs/);
 });
 
 test('configuration and missing-contract errors fail instead of silently checking nothing', t => {
@@ -87,7 +167,7 @@ test('configuration and missing-contract errors fail instead of silently checkin
 	assert.throws(() => checkLayers(join(project.directory, 'missing.json'), project.sourceRoot), /read|Cannot/i);
 	project.write('platform/ipc/common/mainProcessService.ts', 'export {};');
 	assert.throws(() => project.check(), /Missing IMainProcessService contract/);
-	const result = spawnSync(process.execPath, [join(import.meta.dirname, 'layersChecker.ts'), '--unknown'], { cwd: repositoryRoot, encoding: 'utf8' });
+	const result = spawnSync(compiler, [join(import.meta.dirname, 'layersChecker.ts'), '--unknown'], { cwd: repositoryRoot, encoding: 'utf8' });
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /Usage:/);
 });
@@ -151,4 +231,14 @@ test('Web code cannot obtain host capabilities by importing an internal Node ada
 	const violations = project.check();
 	assert.equal(violations.length, 1);
 	assert.match(violations[0]!.message, /Host module/);
+});
+
+test('configured module aliases cannot hide internal Node adapters', t => {
+	const project = fixture(t);
+	project.write('base/node/host.ts', 'export const host = {};');
+	project.write('base/browser/host.ts', "export { host } from '@host';");
+	writeFileSync(join(project.directory, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, module: 'NodeNext', moduleResolution: 'NodeNext', noLib: true, types: [], paths: { '@host': ['./src/ash/base/node/host.ts'] } } }));
+	const violations = project.check();
+	assert.equal(violations.length, 1);
+	assert.match(violations[0]!.message, /Host module '@host'/);
 });

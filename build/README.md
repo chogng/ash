@@ -43,10 +43,12 @@ and native Main-process service references in shared or Web code, and checks eac
 runtime against its own API declarations. It includes Common, Browser, Worker,
 Node, Electron renderer/Main/utility, and the separately compiled sandbox preloads.
 Frontend contracts CI runs it before the product checks. Compiler checks use the
-pinned Bun with no output; `build/checker/layersChecker.ts` uses the existing
-TypeScript Compiler API to follow renamed imports, re-exports and inferred native
-service receivers. Host-only globals are also checked by symbol origin, so a
-dependency's ambient Node declarations cannot grant those APIs to Web code.
+pinned Bun with no output; `build/checker/layersChecker.ts` also runs on Bun and
+uses the TypeScript Compiler API to follow renamed imports, re-exports and inferred
+native service receivers. It reuses module resolution to limit inference to the
+contract's import closure, retaining full inference when ambient declarations or
+module augmentations expose the service. Host-only globals are also checked by
+symbol origin, so a dependency's ambient Node declarations cannot grant those APIs to Web code.
 
 `pnpm build:prepared` requires current generated inputs and successful common,
 Renderer and automation checks; it retains TS7 Host compilation and preload
