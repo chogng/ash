@@ -22,7 +22,7 @@ import { emptyEditorServiceState } from '../../../src/ash/workbench/test/common/
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import '../../../src/ash/workbench/common/theme.js';
 import '../../../src/ash/workbench/browser/media/style.css';
-import '../../../src/ash/sessions/browser/media/chatViewPane.css';
+import '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/viewPane/media/chatViewPane.css';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -281,6 +281,7 @@ services.registerInstance(IInstructionService, {
 	},
 });
 services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
 	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],

@@ -1,3 +1,5 @@
+import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -26,6 +28,11 @@ import { registerTestDictationOnboarding, installTestDictationAudio } from '../.
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IDevContainerAgentHostService } from '../../../src/ash/sessions/common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
+import { IAgentSessionActionsService, IAgentSessionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, ILoggerService, LogLevel, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -601,9 +608,10 @@ declare global {
 			isCodeChatActive(): boolean;
 			finishHistoryRecovery(): void;
 			historyRecoveries(): number;
+			openChatAuxiliaryWindow(): Promise<void>;
 			prepareSessionLifecycle(wording: 'archive' | 'done'): Promise<void>;
-			runSessionAction(command: string): Promise<unknown>;
-			sessionLifecycleState(): { readonly requests: readonly unknown[]; readonly opened: readonly string[]; readonly sessions: readonly { readonly id: string; readonly status: string; readonly threads: readonly string[]; }[]; readonly drafts: readonly string[]; };
+			runSessionAction(command: string, target?: string): Promise<unknown>;
+			sessionLifecycleState(): { readonly activeThreadId: string | undefined; readonly requests: readonly unknown[]; readonly opened: readonly string[]; readonly sessions: readonly { readonly id: string; readonly status: string; readonly threads: readonly string[]; }[]; readonly drafts: readonly string[]; };
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
@@ -1052,6 +1060,7 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
 		chatServices.registerInstance(IChatSessionNavigationService, {
+			createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 			revision: 0,
 			getActiveConversation: () => ({ sessionId: 'app-session', threadId: 'app-thread' }),
 			openConversation: async () => { if (!requestEditMode) throw new Error('Unexpected conversation navigation'); },
@@ -1176,11 +1185,40 @@ window.ashChatTranscriptIntegration = {
 	isCodeChatActive: () => chatViews.getViewContainerModel(CHAT_VIEW_CONTAINER_ID).activeViewDescriptors.some(view => view.id === CHAT_VIEW_ID),
 	finishHistoryRecovery: () => { finishHistory?.(); finishHistory = undefined; },
 	historyRecoveries: () => historyRecoveries,
+	openChatAuxiliaryWindow: async () => {
+		const scope = resources.add(services.createChild());
+		scope.registerInstance(IAccessibleViewService, accessibleView);
+		const windows = resources.add(scope.createInstance(BrowserAuxiliaryWindowService, window, document.body));
+		const auxiliary = await windows.open({ title: 'Borrowed conversation', width: 640, height: 480 });
+		await auxiliary.whenStylesHaveLoaded;
+		const shell = resources.add(scope.createInstance(ChatAuxiliaryWindow, auxiliary, 'Borrowed conversation'));
+		const content = document.createElement('section');
+		content.className = 'ash-chat';
+		content.dataset.testChatWindow = 'true';
+		const input = document.createElement('textarea');
+		input.setAttribute('aria-label', 'Borrowed draft');
+		input.value = 'Preserved draft';
+		content.append(input);
+		shell.mount(content);
+		resources.add(auxiliary.onDidClose(() => {
+			document.body.append(content);
+			shell.dispose();
+			auxiliary.dispose();
+			input.focus();
+		}));
+		auxiliary.layout();
+	},
 	prepareSessionLifecycle: async wording => {
 		await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
 		await services.get(IConfigurationService).updateValue(ChatSessionArchiveActionWordingSettingId, wording);
 		const lifecycleServices = resources.add(services.createChild());
 		lifecycleCommands = resources.add(new CommandService(lifecycleServices));
+		lifecycleServices.registerInstance(ICommandService, lifecycleCommands);
+		lifecycleServices.registerInstance(IViewsService, { focusView: async () => { file.focus(); return true; } } as unknown as IViewsService);
+		const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+		lifecycleServices.registerSingleton(IAgentSessionsService, () => lifecycleServices.createInstance(historyDescriptor));
+		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IRendererHostService, disconnected);
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
@@ -1205,10 +1243,12 @@ window.ashChatTranscriptIntegration = {
 				return read();
 			},
 		});
+		lifecycleServices.registerSingleton(IDevContainerAgentHostService, () => lifecycleServices.createInstance(DevContainerAgentHostService));
 		lifecycleSessions = resources.add(lifecycleServices.createInstance(SessionsManagementService, lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
 		await lifecycleSessions.initialize();
 		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
 		lifecycleServices.registerInstance(IChatSessionNavigationService, {
+			createNewConversation: () => { lifecycleSessions!.createUntitledSession(); },
 			revision: 0,
 			getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
 			startVoiceConversation: async () => { throw new Error('Voice is unavailable in the session lifecycle fixture'); },
@@ -1216,11 +1256,11 @@ window.ashChatTranscriptIntegration = {
 			openConversation: async (sessionId, threadId) => { lifecycleOpened.push(`${sessionId}/${threadId}`); await lifecycleSessions!.openThread(sessionId, threadId); },
 		});
 	},
-	runSessionAction: async command => {
-		await lifecycleCommands!.executeCommand(command);
+	runSessionAction: async (command, target) => {
+		await lifecycleCommands!.executeCommand(command, target);
 		if (command === 'agentSession.archive') lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
 	},
-	sessionLifecycleState: () => ({ requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
+	sessionLifecycleState: () => ({ activeThreadId: lifecycleSessions!.active?.threadId, requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
 	showReadAloudMessage: async (text, cowork = false) => {
 		await import('../../../src/ash/workbench/contrib/chat/electron-browser/actions/voiceChatActions.js');
 		readBridge ??= resources.add(new MainThreadSpeech(1000, readApi, services.get(ISpeechService)));

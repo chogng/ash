@@ -40,6 +40,7 @@ const scmPreview = sample === 'scm';
 const chatUnavailable = () =>
 	new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
 serviceCollection.set(IChatSessionNavigationService, {
+	createNewConversation: () => { throw chatUnavailable(); },
 	revision: 0,
 	getConversations: () => [],
 	getActiveConversation: () => undefined,

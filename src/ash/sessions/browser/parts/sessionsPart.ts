@@ -23,7 +23,8 @@ import type { IChatService } from '../../../workbench/services/chat/common/chatS
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
-import { SessionView, SessionAuxiliaryWindow, type ISessionsConversationPane } from './sessionView.js';
+import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
+import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
@@ -87,7 +88,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private switching = Promise.resolve();
 	private readonly popouts = new Map<
 		SessionView,
-		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow; }
+		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: ChatAuxiliaryWindow; }
 	>();
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
@@ -211,9 +212,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		}
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(this.services.createInstance(SessionAuxiliaryWindow, window, title));
+			const shell = resources.add(this.services.createInstance(ChatAuxiliaryWindow, window, title));
 			const { header } = shell;
-			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
+			const placeholder = h(this.content.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
 			resources.add(
 				new Button(placeholder, {
 					...defaultButtonStyles,
@@ -263,7 +264,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				),
 			);
 			this.reconcileGrid();
-			window.container.append(view.element);
+			window.container.classList.add('ash-sessions-window');
+			shell.mount(view.element);
 			view.setVisible(true);
 			window.window.document.title = title;
 			window.layout();

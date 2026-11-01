@@ -19,6 +19,8 @@ export interface IChatSessionNavigationService {
 	prepareConversationLink?(sessionId: string, threadId: string): Promise<OpenSessionLink>;
 	/** Resolves an opaque authority without interpreting it in shared Workbench code. */
 	openConversationLink?(address: OpenSessionLink): Promise<void>;
+	/** Creates and selects an unsent draft through the window’s Session owner. */
+	createNewConversation(): void | Promise<void>;
 	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;

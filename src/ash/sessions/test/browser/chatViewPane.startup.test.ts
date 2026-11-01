@@ -107,6 +107,7 @@ test('opens a local Chat conversation before the backend session request settles
 	registerTestDictationOnboarding(services);
 	const chat = unavailableChatService();
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getConversations: () => [], getActiveConversation: () => undefined,
 		captureActiveDraft: async () => undefined, appendToActiveDraft: () => { },

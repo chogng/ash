@@ -80,6 +80,7 @@ const voice: AgentVoiceService = {
 services.registerInstance(IAgentVoiceService, voice);
 const navigations: string[] = [];
 services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getConversations: () => [{ sessionId: 'session', threadId: 'thread', title: 'Original Chat' }, { sessionId: 'second', threadId: 'second-thread', title: 'Other Chat' }],
 	getActiveConversation: () => ({ sessionId: 'session', threadId: 'thread' }),

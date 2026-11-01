@@ -4,15 +4,45 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID } from '../../common/chat.js';
+import {
+	AGENT_SESSIONS_PRESENTATION_SETTING,
+	AgentSessionsPresentation,
+	AgentSessionsPresentationContext,
+	OPEN_CHAT_BROWSER_COMMAND_ID,
+	OPEN_CHAT_SETTINGS_COMMAND_ID,
+	SHOW_CHAT_HISTORY_COMMAND_ID,
+} from '../../common/chat.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IMessageHistoryService } from '../../../../../platform/messageHistory/common/messageHistory.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { AgentSessionsPicker } from '../agentSessions/agentSessionsPicker.js';
+import { isHTMLElement } from '../../../../../base/browser/dom.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { ChatAIDisabledSettingId } from '../../../../../platform/chat/common/chatSettings.js';
 import { IChatService, type RewriteChatRequestOptions } from '../../../../services/chat/common/chatService.js';
 
 export function registerChatActions(): void {
+	registerAction2(class ShowChatHistoryAction extends Action2 {
+		constructor() {
+			super({
+				id: SHOW_CHAT_HISTORY_COMMAND_ID,
+				precondition: ChatContextKeys.enabled.isEqualTo(true),
+				title: localize2({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, 'Show Chat History'),
+				tooltip: localize({ bundle: 'ash.sessions', key: 'command.ShowChatHistoryAction' }, 'Show Chat History'),
+				icon: Lxicon.history,
+				f1: true,
+				menu: { id: MenuId.ChatTitle, group: 'navigation', order: 2 },
+			});
+		}
+
+		override run(accessor: ServicesAccessor, anchor?: unknown): Promise<void> {
+			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return Promise.resolve();
+			return accessor.get(IInstantiationService).createInstance(AgentSessionsPicker, isHTMLElement(anchor) ? anchor : undefined, undefined).pickAgentSession();
+		}
+	});
+
 	registerAction2(class ResendRequestAction extends Action2 {
 		constructor() {
 			super({ id: 'workbench.action.chat.resendRequest', title: localize2('chat.edit.command', 'Send Edited Request') });

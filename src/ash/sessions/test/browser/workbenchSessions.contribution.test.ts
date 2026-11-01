@@ -1,3 +1,6 @@
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from '../../browser/sessionActionsService.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -28,7 +31,8 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { createThreadMultiDiffEditorInput, createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createTurnMultiDiffEditorInput } from '../../browser/turnMultiDiffSource.js';
+import { createThreadMultiDiffEditorInput, registerChatChangesActions } from '../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -44,7 +48,7 @@ for (const [name, value] of Object.entries({
 }
 await import('../../contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 await import('../../browser/workbenchChat.contribution.js');
-await import('../../browser/turnMultiDiffSource.contribution.js');
+registerChatChangesActions();
 await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
 const { SESSIONS_FILES_CONTAINER_ID } = await import('../../contrib/files/browser/files.contribution.js');
 
@@ -203,6 +207,9 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 		sessions: [session],
 		initialize: async () => { },
 	} as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 	using contributions = WorkbenchContributionsRegistry.createHost(services);
@@ -289,6 +296,9 @@ test('Chat opens the current checkpoint when composer counts arrive before its f
 	const session = { sessionId: 'session', chats: [{ threadId: 'B' }] };
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	const opened: MultiDiffEditorInput[] = [];
 	services.registerInstance(IEditorService, {
@@ -317,6 +327,9 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 	} as unknown as IChatService;
 	using services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, sessions as unknown as ISessionsManagementService);
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	let opened = false;
 	services.registerInstance(IEditorService, { openEditor: async () => { opened = true; } } as unknown as IEditorService);

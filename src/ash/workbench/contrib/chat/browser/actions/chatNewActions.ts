@@ -1,0 +1,48 @@
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { localize2 } from '../../../../../nls.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { ChatAIDisabledSettingId } from '../../../../../platform/chat/common/chatSettings.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID } from '../../common/chat.js';
+
+export class NewChatAction extends Action2 {
+	constructor() {
+		super({
+			id: NEW_CHAT_COMMAND_ID,
+			precondition: ChatContextKeys.enabled.isEqualTo(true),
+			title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),
+			icon: Lxicon.add,
+			f1: true,
+			menu: {
+				id: MenuId.ChatNewMenu,
+				group: '1_open',
+				order: 1,
+				when: ChatContextKeys.enabled.isEqualTo(true),
+			},
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<boolean> {
+		if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return false;
+		const navigation = accessor.get(IChatSessionNavigationService);
+		const viewsService = accessor.get(IViewsService);
+		await navigation.createNewConversation();
+		return viewsService.focusView(CHAT_VIEW_ID);
+	}
+}
+
+export function registerNewChatActions(): void {
+	registerAction2(NewChatAction);
+	MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
+		submenu: MenuId.ChatNewMenu,
+		title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),
+		isSplitButton: true,
+		when: ChatContextKeys.enabled.isEqualTo(true),
+		group: 'navigation',
+		order: 1,
+	});
+}

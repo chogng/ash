@@ -1,3 +1,5 @@
+import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from './sessionActionsService.js';
 import { Menus } from './menus.js';
 import type { ICodeCardLayout } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
@@ -515,6 +517,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITeamsManagementService, teams);
 		const storage = this._register(storageService);
 		services.registerInstance(ISessionsManagementService, sessions);
+		services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
 		const chat = this._register(primaryHostServices.createInstance(ChatService));
 		services.registerInstance(ISessionsService, view);
@@ -846,6 +849,7 @@ export abstract class Workbench extends Disposable {
 		updateSessionsPart();
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		services.registerInstance(IChatSessionNavigationService, {
+			createNewConversation: async () => { await view.openNewSession(localize('chat.sessions.new', 'New Session')); },
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => {
 				const scope = providerScopes.getScope(sessionId);

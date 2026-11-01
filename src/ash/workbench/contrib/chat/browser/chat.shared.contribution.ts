@@ -1,3 +1,5 @@
+import { registerChatChangesActions } from './chatEditing/chatEditingActions.js';
+import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
@@ -366,3 +368,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 		return target === undefined ? [[DICTATION_MODEL_SETTING, { value: model }], ['dictation.localModel', { value: undefined }]] : { value: undefined };
 	},
 }]);
+
+registerAgentSessionActions();
+
+registerChatChangesActions();

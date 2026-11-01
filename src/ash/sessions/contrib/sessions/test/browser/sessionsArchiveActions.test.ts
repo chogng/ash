@@ -16,6 +16,8 @@ import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/ac
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IDialogService, type IConfirmationDialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IAgentSessionActionsService, IAgentSessionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -28,7 +30,8 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../browser/views/sessionsViewActions.js';
-import '../../../../browser/actions/chatActions.js';
+import '../../../../browser/workbenchChat.contribution.js';
+import '../../../../../workbench/contrib/chat/browser/chat.contribution.js';
 import { TestSessionsManagementService as SessionsManagementService } from '../../../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { IActiveSessionThread, ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
@@ -93,6 +96,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	services.registerInstance(ISessionsManagementService, sessions);
 	const opened: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getConversations: () => [], appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined,
 		startVoiceConversation: async () => { throw new Error('Voice is outside this archive fixture'); },
@@ -102,11 +106,15 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	const quickInput = resources.add(new TestQuickInputService({ container: dom.window.document.body, instantiationService: services }));
 	services.registerInstance(IQuickInputService, quickInput);
 	const commands = resources.add(new CommandService(services));
+	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(actionsDescriptor));
 	return Object.assign(resources, { provider, sessions, services, commands, quickInput, opened, configuration, storage });
 }
 
 async function historyFixture(wording: 'archive' | 'done', archived = true) {
 	const current = await fixture(wording, archived);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	current.services.registerSingleton(IAgentSessionsService, () => current.services.createInstance(descriptor));
 	const errors: string[] = [];
 	current.services.registerInstance(ICommandService, current.commands);
 	current.services.registerInstance(IViewsService, { focusView: async () => true } as unknown as IViewsService);
@@ -116,8 +124,12 @@ async function historyFixture(wording: 'archive' | 'done', archived = true) {
 
 test('the existing New Chat action creates a draft without adding a peer to the selected Session', async () => {
 	using current = await historyFixture('archive', false);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	using services = current.services.createChild();
+	services.registerInstance(IChatSessionNavigationService, services.createInstance(descriptor));
+	using commands = new CommandService(services);
 	const before = current.sessions.sessions.map(session => ({ id: session.sessionId, threads: session.chats.map(chat => chat.threadId) }));
-	assert.equal(await current.commands.executeCommand(NEW_CHAT_COMMAND_ID), true);
+	assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), true);
 	assert.equal(current.sessions.untitledSessions.length, 1);
 	assert.equal(current.sessions.activeUntitledSession, current.sessions.untitledSessions[0]);
 	assert.deepEqual(current.provider.created, []);

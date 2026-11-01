@@ -1230,6 +1230,7 @@ function createChatInputServices(
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor, focusActiveEditor() { } });
 	services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: AshEvent.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getConversations: () => [],
 		getActiveConversation: () => undefined,

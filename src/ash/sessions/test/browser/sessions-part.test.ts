@@ -1,3 +1,5 @@
+import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
+import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
@@ -72,6 +74,7 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
+Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
@@ -313,6 +316,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerSingleton(ISCMService, () => paneServices.createInstance(SCMService));
 	paneServices.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],

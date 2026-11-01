@@ -79,7 +79,7 @@ const locale = parameters.get('locale') ?? 'en';
 const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 setNlsMessages(locale, catalog.bundles);
 await import('../../../../browser/chatEditing/chatEditingEditorActions.js');
-await import('../../../../browser/chatEditing/chatEditingActions.js');
+(await import('../../../../browser/chatEditing/chatEditingActions.js')).registerChatEditingActions();
 
 const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
@@ -121,6 +121,7 @@ let canRedo = false;
 const opened: string[] = [];
 const restoring = (parameters.has('restoreSlow') || parameters.has('historySlow')) ? new DeferredPromise<void>() : undefined;
 services.registerInstance(IChatSessionNavigationService, {
+	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => activeChat,
 	getConversations: () => [], startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft() { }, captureActiveDraft: async () => undefined,

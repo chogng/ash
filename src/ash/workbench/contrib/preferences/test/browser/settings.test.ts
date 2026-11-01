@@ -3202,6 +3202,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	});
 	const prompts: string[] = [];
 	services.registerInstance(IChatSessionNavigationService, {
+		createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 		revision: 0,
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
 		getConversations: () => [],

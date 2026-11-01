@@ -1,8 +1,0 @@
-.ash-chat-pane-host > .ash-chat {
-	height: 100%;
-	background: var(--ash-auxiliaryBar-background);
-}
-
-.ash-chat-pane-host > .ash-chat[hidden] {
-	display: none;
-}

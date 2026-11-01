@@ -85,6 +85,8 @@ import { IContextViewService } from '../../../platform/contextview/browser/conte
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
+import { IAgentSessionActionsService, IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -601,12 +603,16 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ISessionsManagementService, sessions);
+	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(IContextKeyService, contextKeys);
+	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -1646,6 +1652,8 @@ test('the New Chat slash command opens an untitled session', async () => {
 		},
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
+	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
@@ -1884,6 +1892,8 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	});
 	let focusedView: string | undefined;
 	services.registerInstance(ISessionsManagementService, sessions);
+	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
@@ -1955,6 +1965,8 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			let menu: IContextMenuDelegate | undefined;
 			const calls: { id: string; target: unknown; }[] = [];
 			services.registerInstance(ISessionsManagementService, sessions);
+			const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+			services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 			services.registerInstance(IConfigurationService, configuration);
 			services.registerInstance(IStorageService, storage);
 			services.registerInstance(IViewsService, {} as IViewsService);
@@ -6341,6 +6353,10 @@ test('IDE item organization retains the background composer and never submits it
 	const originalDraft = (await f.pane.captureActiveDraft())!.draft;
 	f.sessions.selectThread('session-1', 'thread-1');
 	await nextTask();
+	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	f.commandServices.registerSingleton(IAgentSessionActionsService, () => f.commandServices.createInstance(actionsDescriptor));
+	const navDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	f.commandServices.registerSingleton(IChatSessionNavigationService, () => f.commandServices.createInstance(navDescriptor));
 	await f.commands.executeCommand('sessions.list.togglePin', { untitledSessionId: draft.untitledSessionId });
 	await nextTask();
 	assert.equal(f.sessions.active?.session.sessionId, 'session-1');
@@ -6390,13 +6406,13 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	await ready.complete(); await Promise.all([opening, duplicate]);
 	assert.equal(f.auxiliaryWindows.openCount, 1);
 	const popup = f.auxiliaryWindows.windows[0]!;
-	assert.ok(popup.container.classList.contains('ash-sessions-auxiliary-window'));
+	assert.ok(popup.container.classList.contains('ash-chat-auxiliary-window'));
 	assert.equal(popup.container.querySelector('.ash-chat'), draftPane);
 	assert.equal(popup.container.querySelector('textarea'), draftInput);
 	assert.equal(draftInput.value, originalDraft.text);
 	assert.equal(f.sessions.active?.session.sessionId, 'session-1');
 	assert.equal(draftPane.hidden, false);
-	assert.equal(f.pane.element.querySelector<HTMLElement>('.ash-sessions-detached-chat')!.hidden, true);
+	assert.equal(f.pane.element.querySelector<HTMLElement>('.ash-chat-detached-chat')!.hidden, true);
 	const focusCount = popup.focusCount;
 	await f.pane.openInNewWindow({ kind: 'untitled', session: draft });
 	assert.equal(f.auxiliaryWindows.openCount, 1);
@@ -6410,7 +6426,7 @@ test('IDE background item retains its composer in one light Agent auxiliary wind
 	assert.equal(f.pane.element.querySelector('.ash-chat-pane-host > .ash-chat:not([hidden])'), draftPane);
 	assert.equal(draftInput.value, originalDraft.text + ' Edited in popup');
 	assert.deepEqual((await f.pane.captureActiveDraft())!.draft.contexts, originalDraft.contexts);
-	assert.equal(f.pane.element.querySelector('.ash-sessions-detached-chat'), null);
+	assert.equal(f.pane.element.querySelector('.ash-chat-detached-chat'), null);
 	assert.equal(f.input.value, 'Foreground stays');
 	assert.equal(f.fake.createSessionRequests.length, 0);
 	assert.equal(f.fake.turnStartRequests.length, 0);

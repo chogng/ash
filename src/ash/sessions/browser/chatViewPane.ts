@@ -5,12 +5,11 @@ import type { IQuickChatSession } from '../../workbench/contrib/chat/browser/cha
 import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
-import { SessionAuxiliaryWindow } from './parts/sessionView.js';
+import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
 import { isUntitledSession } from '../services/sessions/browser/sessionsService.js';
-import './media/chatViewPane.css';
 import { setDisposableOwner, toDisposable } from '../../base/common/lifecycle.js';
 import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
@@ -57,7 +56,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private viewDisposed = false;
 	private restoringViewState = true;
 	private failedSelectionRevision: number | undefined;
-	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: SessionAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
+	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: ChatAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
 	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
 	private quickChat: { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; } | undefined;
 
@@ -235,8 +234,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		if (this.viewDisposed || ![...this.panes.values()].includes(pane)) { window.dispose(); return; }
 		const resources = new DisposableStore();
 		try {
-			const shell = resources.add(this.instantiationService.createInstance(SessionAuxiliaryWindow, window, title));
-			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-sessions-detached-chat' });
+			const shell = resources.add(this.instantiationService.createInstance(ChatAuxiliaryWindow, window, title));
+			const placeholder = h(this.paneHost.ownerDocument, 'div', { className: 'ash-chat-detached-chat' });
 			placeholder.id = `${pane.element.id}-detached`;
 			resources.add(new Button(placeholder, {
 				...defaultButtonStyles, presentation: 'quiet', label: localize('sessions.window.focus', 'Chat is open in another window'),
@@ -260,7 +259,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			}));
 			resources.add(window.onDidClose(() => resources.dispose()));
 			this.syncSessions();
-			window.container.append(pane.element);
+			shell.mount(pane.element);
 			pane.setVisible(true);
 			window.layout();
 			window.window.focus();

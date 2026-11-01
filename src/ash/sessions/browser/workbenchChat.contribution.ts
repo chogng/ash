@@ -1,3 +1,5 @@
+import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from './sessionActionsService.js';
 import { ChatViewPane } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
@@ -18,7 +20,8 @@ import { IChatSessionNavigationService, type IChatSessionNavigationService as IC
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { SessionChatViewPane } from './chatViewPane.js';
-import './actions/chatActions.js';
+import { IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { ChatHistoryModel } from './chatHistoryModel.js';
 import { registerChatSessionsActions } from '../../workbench/contrib/chat/browser/chatSessions/chatSessions.contribution.js';
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
@@ -30,6 +33,10 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
 	) { }
+
+	createNewConversation(): void {
+		this.sessions.createUntitledSession();
+	}
 
 	get revision(): number { return this.sessions.navigationRevision; }
 
@@ -102,6 +109,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 
 registerSingleton(ISessionGroupsService, SessionGroupsService, InstantiationType.Delayed);
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
+registerSingleton(IAgentSessionsService, ChatHistoryModel, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
 registerChatSessionsActions();
 registerChatViews();
@@ -113,3 +121,5 @@ registerEditorPane({
 	canOpen: input => input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(ChatEditor),
 });
+
+registerSingleton(IAgentSessionActionsService, SessionActionsService, InstantiationType.Delayed);
