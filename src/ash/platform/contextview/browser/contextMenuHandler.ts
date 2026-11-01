@@ -108,10 +108,9 @@ export class ContextMenuHandler extends Disposable {
 		if (didHide) { return false; }
 		const anchor = toContextViewAnchor(delegate.getAnchor());
 		if (didHide) { return false; }
-		const menu = new Menu(this.contextViewService.container, {
+		const menu = new Menu(this.contextViewService.container, actions, {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
-			actions,
 			openSubmenusImmediatelyOnHover: delegate.openSubmenusImmediatelyOnHover,
 			contextViewContainer: this.contextViewService.container,
 			layer: delegate.layer ?? 10,
@@ -119,13 +118,15 @@ export class ContextMenuHandler extends Disposable {
 			actionViewItemProvider: delegate.getActionViewItem,
 			getCheckedActionsRepresentation: delegate.getCheckedActionsRepresentation,
 			actionRunner,
-			actionContext,
-			getKeybinding: delegate.getKeyBinding ?? ((action) =>
-				this.keybindingService.lookupKeybinding(action.id)),
-			onDidRequestClose: () => request.hide(),
+			context: actionContext,
+			enableMnemonics: true,
+			getKeyBinding: delegate.getKeyBinding ?? ((action) =>
+				this.keybindingService.lookupKeybinding(action.id))
 		}, defaultMenuStyles);
 		if (didHide) { menu.dispose(); return false; }
 		disposables.add(menu);
+		disposables.add(menu.onDidCancel(() => request.hide()));
+		disposables.add(menu.onDidBlur(() => request.hide()));
 		// Replacement callbacks can cancel this request or open a successor before it mounts.
 		this.contextViewService.hide();
 		if (didHide) { return false; }
@@ -135,7 +136,7 @@ export class ContextMenuHandler extends Disposable {
 		try {
 			shown = this.contextViewService.show({
 				anchor,
-				content: menu.element,
+				content: menu.getContainer(),
 				anchorAxisAlignment: delegate.anchorAxisAlignment,
 				anchorAlignment: delegate.anchorAlignment,
 				anchorPosition: delegate.anchorPosition ?? AnchorPosition.Below,

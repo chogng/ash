@@ -132,7 +132,7 @@ export class Dialog extends Disposable {
 					...actionOptions, label: '', ariaLabel: action.label,
 				}),
 			}));
-			close.element.classList.add('ash-dialog-close');
+			close.domNode.classList.add('ash-dialog-close');
 		}
 		const body = h(ownerDocument, 'div', { className: 'ash-dialog-body' });
 		this.bodyDomNode = body;

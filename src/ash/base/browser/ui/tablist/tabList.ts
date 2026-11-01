@@ -154,21 +154,21 @@ export class TabList<T> extends Disposable {
 		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
 			// Refreshes must keep a manually focused tab visible even when it is not selected.
 			const focusedTab = getActiveElement(this.element.ownerDocument)?.closest<HTMLElement>('.ash-tab');
-			const revealTab = focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
+			const revealTab = focusedTab && this.actionBar.domNode.contains(focusedTab) ? focusedTab : this.selectedTab;
 			if (revealTab?.isConnected) {
 				this.scrollable.reveal(revealTab);
 			} else {
 				this.scrollable.layout();
 			}
 		}));
-		if (this.select) this.actionBar.element.setAttribute('aria-multiselectable', 'true');
+		if (this.select) this.actionBar.domNode.setAttribute('aria-multiselectable', 'true');
 		// Keyboard focus may move without changing the selected tab. Reveal the
 		// focused item through the shared scrollbar so both states stay accessible.
 		let pointerActivation = false;
-		this._register(addDisposableListener(this.actionBar.element, 'pointerdown', () => { pointerActivation = true; }, true));
-		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointerup', () => { pointerActivation = false; }));
-		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointercancel', () => { pointerActivation = false; }));
-		this._register(addDisposableListener(this.actionBar.element, 'focusin', event => {
+		this._register(addDisposableListener(this.actionBar.domNode, 'pointerdown', () => { pointerActivation = true; }, true));
+		this._register(addDisposableListener(this.actionBar.domNode.ownerDocument, 'pointerup', () => { pointerActivation = false; }));
+		this._register(addDisposableListener(this.actionBar.domNode.ownerDocument, 'pointercancel', () => { pointerActivation = false; }));
+		this._register(addDisposableListener(this.actionBar.domNode, 'focusin', event => {
 			const target = event.target as HTMLElement;
 			// Moving the pressed tab before pointerup prevents its click from completing.
 			if (pointerActivation || target.getAttribute('role') !== 'tab') return;
@@ -227,7 +227,7 @@ export class TabList<T> extends Disposable {
 			throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
 		}
 		const document = this.element.ownerDocument;
-		const hadFocus = this.actionBar.element.contains(getActiveElement(document));
+		const hadFocus = this.actionBar.domNode.contains(getActiveElement(document));
 		const actions = tabs.map(tab => {
 			let action = this.actions.get(tab.id);
 			const checked = tab.id === selectedId;
@@ -252,7 +252,7 @@ export class TabList<T> extends Disposable {
 			}
 		}
 		const activeElement = getActiveElement(document);
-		if (!this.actionBar.element.contains(activeElement)) {
+		if (!this.actionBar.domNode.contains(activeElement)) {
 			if (selectedId !== undefined) {
 				this.actionBar.setTabStop(selectedId);
 			}

@@ -30,7 +30,7 @@ export interface IStatusbarEntry {
 	readonly showProgress?: boolean;
 	readonly kind?: StatusbarEntryKind;
 	readonly ariaLabel?: string;
-	readonly ariaHasPopup?: 'dialog';
+	readonly ariaHasPopup?: 'dialog' | 'menu';
 	readonly ariaExpanded?: boolean;
 	readonly tooltip?: string;
 	/** UI activation supplies a borrowed button for anchoring overlays; consumers must not mutate it. */

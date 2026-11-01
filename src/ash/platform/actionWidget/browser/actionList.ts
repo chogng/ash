@@ -1,3 +1,4 @@
+import { getTabbableElements } from '../../../base/browser/focus.js';
 import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultMenuStyles, defaultKeybindingLabelStyles, defaultCheckboxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { ActionViewItem, ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -246,6 +247,15 @@ export class ActionList<T> extends Disposable {
 			if (event.isComposing) {
 				return;
 			}
+			if (event.key === 'Tab') {
+				// This host owns the filter/footer traversal; standalone Menu traps Tab.
+				const controls = getTabbableElements(this.domNode);
+				const current = controls.indexOf(getActiveElement(this.domNode.ownerDocument) as HTMLElement);
+				const next = (current + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+				controls[next]?.focus();
+				stopEvent(event);
+				return;
+			}
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && this.filter) {
 				stopEvent(event);
 				this.focusFilter();
@@ -324,27 +334,26 @@ export class ActionList<T> extends Disposable {
 		});
 		this.menuResources.clear();
 		this.visibleItems = visible;
-		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, {
+		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, actions, {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
-			actions,
 			className: 'ash-action-widget-menu',
 			getCheckedActionsRepresentation: () => 'radio',
-			getKeybinding: action => entries.get(action.id)?.keybinding,
+			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
 			actionViewItemProvider: action => {
 				const entry = entries.get(action.id);
 				if (!entry) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
 				return this.options.presentation === 'details' ? new ActionListAction(action, entry) : undefined;
-			},
+			}
 		}, defaultMenuStyles));
-		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
+		menu.getContainer().setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
 		const hint = this.domNode.getAttribute('aria-description');
 		if (hint) {
-			menu.element.setAttribute('aria-description', hint);
+			menu.getContainer().setAttribute('aria-description', hint);
 		}
-		this.menuResources.add(addDisposableListener(menu.element, 'focusin', event => {
+		this.menuResources.add(addDisposableListener(menu.getContainer(), 'focusin', event => {
 			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
 			this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
 			if (this.focusedEntry && row) {
@@ -352,7 +361,7 @@ export class ActionList<T> extends Disposable {
 			}
 			this.updatePreview();
 		}));
-		this.menuResources.add(addDisposableListener(menu.element, 'mousemove', event => {
+		this.menuResources.add(addDisposableListener(menu.getContainer(), 'mousemove', event => {
 			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
 			const entry = row ? entries.get(row.dataset.actionId!) : undefined;
 			if (entry?.kind === ActionListItemKind.Action && !entry.disabled && row) {
@@ -366,7 +375,7 @@ export class ActionList<T> extends Disposable {
 			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
 		this.updatePreview();
 		if (this.focusedEntry && previous) {
-			const row = menu.element.children[visible.indexOf(this.focusedEntry)] as HTMLElement;
+			const row = menu.getContainer().children[visible.indexOf(this.focusedEntry)] as HTMLElement;
 			this.delegate.onFocus?.(this.focusedEntry.item!, row);
 		}
 		const count = visible.filter(entry => entry.kind === ActionListItemKind.Action).length;
@@ -454,7 +463,7 @@ function createHelpProvider(source: Element | null): AccessibleContentProvider {
 	return new AccessibleContentProvider(
 		AccessibleViewProviderId.ActionWidget,
 		{ type: AccessibleViewType.Help },
-		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
+		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Tab and Shift+Tab move between the filter, actions and footer controls. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
 		() => {
 			if (isHTMLElement(source) && source.isConnected) {
 				source.focus({ preventScroll: true });

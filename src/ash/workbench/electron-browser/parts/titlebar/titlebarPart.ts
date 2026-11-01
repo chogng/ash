@@ -49,7 +49,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		super(
 			container,
 			options,
-			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, menus, contextMenus, localization, contextKeys, instantiationService),
+			scope => new ElectronMenubarControl(container, scope),
 			instantiationService,
 			menuService,
 			contextMenuService,
@@ -141,21 +141,11 @@ class ElectronMenubarControl extends Disposable
 
 	constructor(
 		container: HTMLElement,
-		menuService: IMenuService,
-		contextMenuService: IContextMenuService,
-		localizationService: ILocalizationService,
-		contextKeyService: IContextKeyService,
 		instantiationService: IInstantiationService,
 	) {
 		super();
-		const browserMenubar = this._register(new BrowserMenubarControl(
-			container,
-			menuService,
-			contextMenuService,
-			localizationService,
-			{ presentation: isMacintosh ? 'actions-only' : 'application-menu' },
-			contextKeyService,
-		));
+		const browserMenubar = this._register(instantiationService.createInstance(BrowserMenubarControl, container,
+			{ presentation: isMacintosh ? 'actions-only' : 'application-menu' }));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
 			this._register(instantiationService.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu));

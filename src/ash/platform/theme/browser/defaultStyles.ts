@@ -109,6 +109,11 @@ export const defaultMenuStyles: IMenuStyles = Object.freeze({
 	borderColor: colorVariable('border'),
 	separatorColor: colorVariable('border'),
 	shadowColor: colorVariable('widget.shadow'),
+	selectionBorderColor: colorVariable('menu.selectionBorder'),
+	scrollbarShadow: colorVariable('scrollbar.shadow'),
+	scrollbarSliderBackground: colorVariable('scrollbarSlider.background'),
+	scrollbarSliderHoverBackground: colorVariable('scrollbarSlider.hoverBackground'),
+	scrollbarSliderActiveBackground: colorVariable('scrollbarSlider.activeBackground'),
 });
 
 export const defaultListStyles: IListStyles = Object.freeze({

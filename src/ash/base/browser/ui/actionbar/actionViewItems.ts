@@ -145,7 +145,7 @@ export class ButtonActionViewItem extends ActionViewItem {
 			ariaLabel: this.action.label,
 			enabled: this.action.enabled,
 			checked: this.action.checked,
-			onClick: () => this.runAction(),
+			onClick: event => this.runAction(event),
 		});
 		this.setupTooltip();
 	}
@@ -167,7 +167,7 @@ export class ButtonActionViewItem extends ActionViewItem {
 		this.button.setTitle(this.action.tooltip);
 	}
 
-	protected runAction(): unknown {
+	protected runAction(_event?: MouseEvent | KeyboardEvent): unknown {
 		return this.runActionWithContext();
 	}
 }

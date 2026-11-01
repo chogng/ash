@@ -185,13 +185,11 @@ window.mountDefaultStyleProbes = (withDisabledSelectOption = false) => {
 	}, { ...defaultSelectBoxStyles, selectBackground: 'var(--ash-selection-background)', selectListBackground: 'var(--ash-error-foreground)' }));
 	resources.add(new CountBadge(host, { count: 7 }, defaultCountBadgeStyles));
 	resources.add(new ProgressBar(host, defaultProgressBarStyles)).value = 0.5;
-	resources.add(new Menu(host, {
-		buttonStyles: defaultButtonStyles,
-		keybindingLabelStyles: defaultKeybindingLabelStyles,
-		actions: [new SubmenuAction('styled.more', 'Styled submenu', [{
+	resources.add(new Menu(host, [new SubmenuAction('styled.more', 'Styled submenu', [{
 			id: 'styled.leaf', label: 'Styled leaf', tooltip: '', enabled: true, run() { },
-		}])],
-	}, { ...defaultMenuStyles, backgroundColor: 'var(--ash-error-foreground)' }));
+		}])], {
+		buttonStyles: defaultButtonStyles,
+		keybindingLabelStyles: defaultKeybindingLabelStyles}, { ...defaultMenuStyles, backgroundColor: 'var(--ash-error-foreground)' }));
 	const list = resources.add(new List<string>(host, {
 		ariaLabel: 'Styled list', domFocusable: true,
 		styles: {

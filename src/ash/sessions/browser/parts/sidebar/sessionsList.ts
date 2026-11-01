@@ -400,12 +400,12 @@ class SessionListItem extends AbstractDisposable {
 			actions: [{
 				id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
 				tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
-				run: () => this.contextMenu?.(this.actions.element),
+				run: () => this.contextMenu?.(this.actions.domNode),
 			}],
 		});
-		this.actions.element.classList.add('ash-sessions-list-actions');
-		this.actions.element.hidden = true;
-		this.actions.element.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
+		this.actions.domNode.classList.add('ash-sessions-list-actions');
+		this.actions.domNode.hidden = true;
+		this.actions.domNode.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.management = h(ownerDocument, 'span');
@@ -438,12 +438,12 @@ class SessionListItem extends AbstractDisposable {
 
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
 		this.contextMenu = menu;
-		this.actions.element.hidden = false;
+		this.actions.domNode.hidden = false;
 	}
 
 	setMenuVisible(visible: boolean): void {
 		this.domNode.classList.toggle('menu-visible', visible);
-		this.actions.element.querySelector('button')?.setAttribute('aria-expanded', String(visible));
+		this.actions.domNode.querySelector('button')?.setAttribute('aria-expanded', String(visible));
 	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {

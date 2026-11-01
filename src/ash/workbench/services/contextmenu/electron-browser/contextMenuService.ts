@@ -1,7 +1,7 @@
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { isNode } from '../../../../base/browser/dom.js';
+import { isNode, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../../../../base/common/lifecycle.js';
 import {
 	type IAction,
+	getActionForAltMode,
 	Separator,
 	SubmenuAction,
 } from '../../../../base/common/actions.js';
@@ -90,8 +91,11 @@ export class NativeContextMenuService extends Disposable
 			this.menuService,
 			this.contextKeyService,
 		);
+		const anchor = resolved.getAnchor();
+		const targetWindow = (isNode(anchor) ? anchor.ownerDocument?.defaultView : anchor.targetWindow) ?? globalThis.window;
+		const modifiers = targetWindow ? ModifierKeyEmitter.getInstance(targetWindow).keyStatus : {};
 		const actions = resolved.getActions();
-		const serialized = serializeActions(actions, resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)));
+		const serialized = serializeActions(actions, modifiers, resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)));
 		if (serialized.items.length === 0 || this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
 			resolved.onHide?.(true);
 			return;
@@ -195,6 +199,7 @@ interface ISerializedActions {
 
 function serializeActions(
 	actions: readonly IAction[],
+	modifiers: { readonly altKey?: boolean; readonly shiftKey?: boolean; },
 	getKeybinding: NonNullable<IContextMenuDelegate['getKeyBinding']>,
 ): ISerializedActions {
 	const actionMap = new Map<string, IAction>();
@@ -204,7 +209,8 @@ function serializeActions(
 		source: readonly IAction[],
 	): readonly NativeContextMenuItem[] => {
 		const items: NativeContextMenuItem[] = [];
-		for (const action of source) {
+		for (const original of source) {
+			const action = getActionForAltMode(original, modifiers);
 			if (action instanceof Separator) {
 				items.push({ type: 'separator' });
 				continue;

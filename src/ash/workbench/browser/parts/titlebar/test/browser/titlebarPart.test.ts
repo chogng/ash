@@ -1,3 +1,7 @@
+import { createLabelKeybindingService } from '../../../../../../platform/keybinding/test/common/keybindingTestUtils.js';
+import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
 import { IFileService } from '../../../../../../platform/files/common/files.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
@@ -179,7 +183,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ILabelService, resources.add(createTestLabelService(workspace)));
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IContextKeyService, contextKeys);
-	const titleService = resources.add(registerTestComponentServices(services).createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
+	const titleService = resources.add(registerTitlebarMenuServices(services).createInstance(BrowserTitleService, ownerDocument.body, 'Ash Code', createBrowserTitlebarPart, groups));
 	services.registerInstance(ITitleService, titleService);
 	const shared = services.get(ITitleService);
 	const part = titleService.getPart(ownerDocument.body);
@@ -345,7 +349,7 @@ test('titlebar owns a menu-driven actions container', async () => {
 		},
 	};
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
-	const titlebar = disposables.add(registerTestComponentServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
+	const titlebar = disposables.add(registerTitlebarMenuServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 		menuService,
 		contextMenuService,
@@ -449,11 +453,12 @@ test('titlebar renders its product icon, command center, and application menu', 
 		group: 'navigation',
 		order: 2,
 	}));
-	const menubar = new BrowserMenubarControl(ownerDocument.body, menuService, contextMenuService);
+	services.registerInstance(LocalizationServiceId, localizationService);
+	const menubar = registerTitlebarMenuServices(services).createInstance(BrowserMenubarControl, ownerDocument.body, {});
 	const titleChanged = disposables.add(new Emitter<void>());
 	const windowTitle = { value: '研究项目 — Ash Code', onDidChange: titleChanged.event };
-	services.registerInstance(LocalizationServiceId, localizationService);
-	const titlebar = disposables.add(registerTestComponentServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
+
+	const titlebar = disposables.add(registerTitlebarMenuServices(services).createInstance(BrowserTitlebarPart, ownerDocument.body, {
 		windowTitle,
 	}, () => menubar));
 
@@ -505,9 +510,8 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
-	const commandService = disposables.add(
-		new CommandService(new InstantiationService()),
-	);
+	const services = disposables.add(new InstantiationService());
+	const commandService = disposables.add(new CommandService(services));
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
 	const fileMenu = new MenuId('test.titlebar.file');
@@ -536,16 +540,11 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 		group: 'navigation',
 	}));
 
-	let menuLabels: readonly string[] = [];
-	let openSubmenusImmediatelyOnHover: boolean | undefined;
 	const menuContextService: IContextMenuService = {
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu(options) {
-			menuLabels = options.getActions?.().map((action) => action.label) ?? [];
-			openSubmenusImmediatelyOnHover = options.openSubmenusImmediatelyOnHover;
-		},
+		showContextMenu() { },
 		hideContextMenu() { },
 	};
 	const applicationMenuLabel = 'Application menu';
@@ -553,12 +552,11 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 		whenReady: Promise.resolve(),
 		translate: (_bundle, key, fallback) => key === 'applicationMenu' ? applicationMenuLabel : fallback,
 	};
-	const menubar = disposables.add(new BrowserMenubarControl(
-		ownerDocument.body,
-		menuService,
-		menuContextService,
-		localizationService,
-	));
+	services.registerInstance(IMenuService, menuService);
+	services.registerInstance(ContextMenuServiceId, menuContextService);
+	services.registerInstance(LocalizationServiceId, localizationService);
+	services.registerInstance(IContextKeyService, contextKeyService);
+	const menubar = disposables.add(registerTitlebarMenuServices(services).createInstance(BrowserMenubarControl, ownerDocument.body, {}));
 
 	const button = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
 	const sidebarButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="test.titlebar.toggleSidebar"] button');
@@ -572,7 +570,7 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 	assert.equal(button.closest('.ash-action-view-item')?.parentElement, menubar.domNode);
 	assert.equal(sidebarButton.closest('.ash-action-view-item')?.parentElement, menubar.domNode);
 	assert.equal(button.tabIndex, 0);
-	assert.equal(button.title, 'Application menu');
+	assert.equal(button.getAttribute('aria-label'), 'Application menu');
 	assert.ok(button.querySelector('.ash-icon'));
 	assert.equal(sidebarButton.getAttribute('aria-label'), 'Toggle sidebar');
 	assert.ok(sidebarButton.querySelector('.ash-icon'));
@@ -608,8 +606,7 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 		bubbles: true,
 		cancelable: true,
 	}));
-	assert.deepEqual(menuLabels, ['File']);
-	assert.equal(openSubmenusImmediatelyOnHover, true);
+	assert.deepEqual([...ownerDocument.querySelectorAll('.ash-context-view-menu:not([hidden]) > .ash-menu > .ash-action-view-item > button')].map(button => button.textContent), ['File']);
 	assert.equal(updatedButton.getAttribute('aria-expanded'), 'true');
 	extraAction.dispose();
 	menubar.setTrailingActions([{ id: 'test.titlebar.back', label: 'Back', tooltip: 'Back', icon: Lxicon.arrowLeft, enabled: true, run() { } }]);
@@ -623,4 +620,11 @@ function createTestLabelService(workspace: ConstructorParameters<typeof LabelSer
 	const api = createDisconnectedRendererApi();
 	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
 	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+}
+
+
+function registerTitlebarMenuServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	if (!services.has(IKeybindingService)) services.registerInstance(IKeybindingService, createLabelKeybindingService());
+	if (!services.has(INotificationService)) services.registerSingleton(INotificationService, () => new TestNotificationService());
+	return registerTestComponentServices(services);
 }

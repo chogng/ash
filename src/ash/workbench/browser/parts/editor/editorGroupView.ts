@@ -376,7 +376,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		});
 		actions.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext), undefined, tab.ownerDocument.defaultView ?? undefined),
+			getActions: () => getFlatContextMenuActions(actions.menuService.getMenuActions(MenuId.EditorTitleContext, { arg: context }, menuContext)),
 			getActionsContext: () => context,
 			onHide: didCancel => {
 				menuContext?.dispose();

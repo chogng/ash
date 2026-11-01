@@ -59,7 +59,7 @@ export class TunnelPanel extends ViewPane {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, 'Ports actions'),
 		}));
-		this.titleActions.element.classList.add('ash-toolbar');
+		this.titleActions.domNode.classList.add('ash-toolbar');
 		this.forwardButton = h(container.ownerDocument, 'button');
 		this.forwardButton.className = 'ash-remote-ports-forward';
 		this.forwardButton.type = 'submit';
@@ -90,7 +90,7 @@ export class TunnelPanel extends ViewPane {
 	}
 
 	override get partTitleProjection(): PartTitleProjection {
-		return { actions: this.titleActions.element };
+		return { actions: this.titleActions.domNode };
 	}
 
 	private forward(event: Event): void {

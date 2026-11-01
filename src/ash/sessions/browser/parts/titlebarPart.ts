@@ -1,3 +1,4 @@
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import './media/titlebarpart.css';
@@ -62,11 +63,12 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		left.className = 'ash-sessions-titlebar-left';
 		this.contentDomNode.append(left);
 		const titlebarContext = this._register(contextKeys.createScoped(left));
-		const menubar = this._register(new BrowserMenubarControl(left, menuService, contextMenus, undefined, {
+		const menuScope = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, titlebarContext])));
+		const menubar = this._register(menuScope.createInstance(BrowserMenubarControl, left, {
 			presentation,
 			applicationMenuId: Menus.MenubarMainMenu,
 			titlebarMenuId: Menus.TitleBarLeftLayout,
-		}, titlebarContext));
+		}));
 		menubar.domNode.classList.add('ash-sessions-titlebar-actions', 'ash-titlebar-interactive-region');
 		const modeKeys = new Set([SessionsWorkspaceModeContext.key]);
 		const modeChanged: Event<unknown> = listener => contextKeys.onDidChangeContext(event => {

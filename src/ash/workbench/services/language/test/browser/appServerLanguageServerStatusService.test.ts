@@ -1,7 +1,5 @@
-import { Event } from '../../../../../base/common/event.js';
-import { SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
-import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
-import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ILanguageServerService, type LanguageServerControl, type LanguageServerSnapshot } from '../../../../../platform/language/common/languageServerService.js';
@@ -275,7 +273,7 @@ test('language-server errors use localized notifications and reveal their output
 	} finally { resetNlsResolver(); }
 });
 
-function createService(services: ReturnType<typeof workbenchInstantiationService>, events: IServerEventApi, options: { workspace?: TestWorkspaceService; read?: (dirId?: string) => Promise<LanguageServerSnapshot>; controls?: LanguageServerControl[]; menu?: (delegate: IContextMenuDelegate) => void; } = {}): AppServerLanguageServerStatusService {
+function createService(services: ReturnType<typeof workbenchInstantiationService>, events: IServerEventApi, options: { workspace?: TestWorkspaceService; read?: (dirId?: string) => Promise<LanguageServerSnapshot>; controls?: LanguageServerControl[]; } = {}): AppServerLanguageServerStatusService {
 	registerTestWorkbenchInteractionServices(services.resources, services);
 	const scope = services.createChild();
 	scope.registerInstance(IServerEventApi, events);
@@ -287,11 +285,7 @@ function createService(services: ReturnType<typeof workbenchInstantiationService
 		configure: async () => { throw new Error('Configuration is outside this management fixture'); },
 		removeConfiguration: async () => { throw new Error('Configuration is outside this management fixture'); },
 	});
-	scope.registerInstance(IContextViewService, { container: browserEnvironment.window.document.body } as IContextViewService);
-	scope.registerInstance(IContextMenuService, {
-		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-		showContextMenu: delegate => options.menu?.(delegate as IContextMenuDelegate), hideContextMenu: () => { },
-	});
+	scope.registerInstance(IContextViewService, services.resources.add(new BrowserContextViewService(browserEnvironment.window.document.body)));
 	scope.registerInstance(IAccessibleViewService, { ...Disposable.None, show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { } });
 	return scope.createInstance(AppServerLanguageServerStatusService);
 }
@@ -305,31 +299,66 @@ function workspace(): TestWorkspaceService {
 	});
 }
 
-test('management groups identical server and folder names by directory identity and controls their exact scope', async () => {
+test('management groups identical server and folder names and keeps controls scoped while the widget stays open', async () => {
 	using resources = new DisposableStore();
 	const services = workbenchInstantiationService(resources);
 	const events = new FakeServerEvents();
 	const controls: LanguageServerControl[] = [];
-	let actions: readonly IAction[] = [];
 	using folders = workspace();
-	using service = createService(services, events, { workspace: folders, controls, read: async () => ({ revision: 0, configurations: {}, servers: [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }] }), menu: delegate => { actions = delegate.getActions(); } });
-	assert.equal(services.get(IStatusbarService).getEntries(StatusbarAlignment.Left)[0]?.entry.text, '');
+	using service = createService(services, events, {
+		workspace: folders, controls,
+		read: async () => ({ revision: 0, configurations: {}, servers: [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }] }),
+	});
 	await service.open();
-	const rows = actions.filter((action): action is SubmenuAction => action instanceof SubmenuAction);
-	assert.equal(rows.length, 2);
-	assert.notEqual(rows[0].id, rows[1].id);
-	await rows[0].actions.find(action => action.id.endsWith('.stop'))!.run();
-	await rows[1].actions.find(action => action.id.endsWith('.restart'))!.run();
-	await actions.find(action => action.id.endsWith('.stopAll'))!.run();
+	const document = browserEnvironment.window.document;
+	const widget = document.querySelector<HTMLElement>('.ash-language-server-status-widget')!;
+	const folder = (id: string): HTMLElement => widget.querySelector(`[data-folder-id="${id}"]`)!;
+	const row = (id: string): HTMLElement => widget.querySelector(`[data-folder-id="${id}"][data-server-id="fixture"]`)!;
+	const button = (container: HTMLElement, label: string): HTMLButtonElement => [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => (button.getAttribute('aria-label') ?? button.textContent) === label)!;
+	assert.ok(widget);
+	assert.equal(widget.querySelector(':scope > .ash-menu')?.getAttribute('role'), 'menu');
+	assert.equal(widget.querySelectorAll('[data-server-id="fixture"]').length, 2);
+	assert.match(folder('one').textContent!, /\/one/);
+	assert.match(folder('two').textContent!, /\/two/);
+	const serverAction = (id: string, label: string): HTMLButtonElement => {
+		button(row(id), 'Actions for fixture').click();
+		return button(widget, label);
+	};
+	const workspaceAction = (id: string, label: string): HTMLButtonElement => {
+		button(folder(id), 'Workspace actions for same').click();
+		return button(widget, label);
+	};
+	const allAction = (label: string): HTMLButtonElement => {
+		button(widget, 'All server actions').click();
+		return button(widget, label);
+	};
+	serverAction('one', 'Stop Server').click();
+	await Promise.resolve();
+	serverAction('two', 'Restart Server').click();
+	await Promise.resolve();
+	allAction('Stop All Servers').click();
+	await Promise.resolve();
 	assert.deepEqual(controls, [{ action: 'stop', dirId: 'one', serverId: 'fixture' }, { action: 'restart', dirId: 'two', serverId: 'fixture' }, { action: 'stop', dirId: 'one' }, { action: 'stop', dirId: 'two' }]);
+	assert.equal(document.querySelector('.ash-language-server-status-widget'), widget);
+	for (const [index, dirId] of ['one', 'two'].entries()) {
+		events.fire({ method: 'language/serverState', params: { server: 'fixture', dirId, state: { type: 'stopped' } } });
+		assert.equal(serverAction(dirId, 'Stop Server').disabled, true);
+		assert.equal(workspaceAction(dirId, 'Stop Servers in same').disabled, true);
+		assert.equal(allAction('Stop All Servers').disabled, index === 1);
+		assert.equal(allAction('Restart All Servers').disabled, false);
+	}
+	events.fire({ method: 'language/serverState', params: { server: 'fixture', dirId: 'one', state: { type: 'ready' } } });
+	assert.equal(allAction('Stop All Servers').disabled, false);
+	assert.equal(serverAction('one', 'Stop Server').disabled, false);
 	for (const dirId of ['one', 'two']) events.fire({ method: 'language/serverMessage', params: { server: 'fixture', dirId, severity: 'warning', source: 'stderr', show: false, message: dirId } });
 	const channels = services.get(IOutputService).channels;
 	assert.equal(channels.length, 2);
 	assert.notEqual(channels[0].id, channels[1].id);
 	assert.equal(channels[0].label, channels[1].label);
-	assert.equal(services.get(IContextKeyService).getValue('languageServerMenuFocused'), true);
+	assert.equal(services.get(IContextKeyService).getValue('languageServerStatusFocused'), true);
 	service.dispose();
-	assert.equal(services.get(IContextKeyService).getValue('languageServerMenuFocused'), false);
+	assert.equal(services.get(IContextKeyService).getValue('languageServerStatusFocused'), false);
+	assert.equal(widget.isConnected, false);
 });
 
 test('a lifecycle event wins over an older in-flight catalog snapshot and stopping finishes progress', async () => {
@@ -341,10 +370,15 @@ test('a lifecycle event wins over an older in-flight catalog snapshot and stoppi
 	const pending = new Promise<LanguageServerSnapshot>(done => { resolve = done; });
 	using service = createService(services, events, { workspace: folders, read: () => pending });
 	const opening = service.open();
+	const widget = browserEnvironment.window.document.querySelector<HTMLElement>('.ash-language-server-status-widget')!;
+	assert.ok(widget);
+	assert.match(widget.textContent!, /Loading language servers/);
 	events.fire({ method: 'language/serverProgress', params: { server: 'fixture', dirId: 'one', token: 'index', title: 'Indexing', message: null, percentage: null, done: false } });
 	events.fire({ method: 'language/serverState', params: { server: 'fixture', dirId: 'one', state: { type: 'stopped' } } });
+	assert.match(widget.querySelector('[data-server-id="fixture"]')!.textContent!, /Stopped/);
 	resolve({ revision: 0, configurations: {}, servers: [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }] });
 	await opening;
+	assert.equal(browserEnvironment.window.document.querySelector('.ash-language-server-status-widget'), widget);
 	await Promise.resolve();
 	assert.match(service.getAccessibleContent(), /fixture: Stopped/);
 	assert.equal(services.get(IStatusbarService).getEntries(StatusbarAlignment.Left).some(entry => entry.id === 'status.progress'), false);
@@ -381,15 +415,32 @@ test('catalog refresh removes disabled or uninstalled servers without deleting t
 	const events = new FakeServerEvents();
 	using folders = workspace();
 	let servers: LanguageServerSnapshot['servers'] = [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }];
-	let actions: readonly IAction[] = [];
-	using service = createService(services, events, { workspace: folders, read: async () => ({ revision: 0, configurations: {}, servers }), menu: delegate => { actions = delegate.getActions(); } });
+	using service = createService(services, events, { workspace: folders, read: async () => ({ revision: 0, configurations: {}, servers }) });
 	events.fire({ method: 'language/serverState', params: { server: 'fixture', dirId: 'one', state: { type: 'ready' } } });
 	await service.open();
-	assert.equal(actions.filter(action => action instanceof SubmenuAction).length, 2);
+	assert.equal(browserEnvironment.window.document.querySelectorAll('[data-server-id="fixture"]').length, 2);
 	servers = [];
 	events.fire({ method: 'language/serverState', params: { server: 'fixture', dirId: 'one', state: { type: 'stopped' } } });
 	await service.open();
-	assert.equal(actions.filter(action => action instanceof SubmenuAction).length, 0);
+	assert.equal(browserEnvironment.window.document.querySelectorAll('[data-server-id="fixture"]').length, 0);
 	assert.equal(services.get(IOutputService).channels.length, 1);
 	assert.match(services.get(IOutputService).channels[0].getText(), /Language server stopped/);
+});
+
+
+test('closing during discovery does not reopen the widget when its snapshot arrives', async () => {
+	using resources = new DisposableStore();
+	const services = workbenchInstantiationService(resources);
+	using folders = workspace();
+	let resolve!: (snapshot: LanguageServerSnapshot) => void;
+	const pending = new Promise<LanguageServerSnapshot>(done => { resolve = done; });
+	using service = createService(services, new FakeServerEvents(), { workspace: folders, read: () => pending });
+	const opening = service.open();
+	const document = browserEnvironment.window.document;
+	const widget = document.querySelector<HTMLElement>('.ash-language-server-status-widget')!;
+	widget.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(widget.isConnected, false);
+	resolve({ revision: 0, configurations: {}, servers: [] });
+	await opening;
+	assert.equal(document.querySelector('.ash-language-server-status-widget'), null);
 });

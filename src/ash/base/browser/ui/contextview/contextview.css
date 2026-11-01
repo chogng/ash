@@ -1,5 +1,7 @@
 .ash-context-view {
 	position: fixed;
+	inset: auto;
+	margin: 0;
 	box-sizing: border-box;
 	z-index: calc(
 		var(--ash-z-index-context-view, 2500) + var(--ash-context-view-layer, 0)

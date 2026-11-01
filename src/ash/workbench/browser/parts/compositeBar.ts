@@ -183,7 +183,7 @@ export class CompositeBar extends Disposable {
 
 	setAriaLabel(label: string): void {
 		this.domNode.setAttribute('aria-label', label);
-		this.actionBar.element.setAttribute('aria-label', label);
+		this.actionBar.domNode.setAttribute('aria-label', label);
 	}
 
 	private getBadge(containerId: string): { readonly count: number; readonly description: string; } | undefined {
@@ -305,11 +305,11 @@ export class CompositeBar extends Disposable {
 	private layoutVertical(): void {
 		const availableHeight = this.domNode.clientHeight;
 		if (availableHeight <= 0 || this.displayedContainers.length === 0) return;
-		const firstItem = this.actionBar.element.querySelector<HTMLElement>(':scope > .ash-composite-bar-item');
+		const firstItem = this.actionBar.domNode.querySelector<HTMLElement>(':scope > .ash-composite-bar-item');
 		if (!firstItem) return;
 		const itemHeight = firstItem.getBoundingClientRect().height;
 		if (itemHeight <= 0) return;
-		const gap = Number.parseFloat(getComputedStyle(this.actionBar.element).rowGap) || 0;
+		const gap = Number.parseFloat(getComputedStyle(this.actionBar.domNode).rowGap) || 0;
 		const fit = Math.floor((availableHeight + gap) / (itemHeight + gap));
 		const visibleCount = fit >= this.displayedContainers.length ? this.displayedContainers.length : Math.max(0, fit - 1);
 		const visible = this.displayedContainers.slice(0, visibleCount);
@@ -405,7 +405,7 @@ export class CompositeBar extends Disposable {
 	}
 
 	private measureTabWidths(): boolean {
-		const actionBar = this.actionBar.element;
+		const actionBar = this.actionBar.domNode;
 		const tabs = [...actionBar.querySelectorAll<HTMLElement>(':scope > .ash-composite-bar-destination')];
 		const tabBounds: DOMRect[] = [];
 		let totalTabWidth = 0;

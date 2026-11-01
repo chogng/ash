@@ -9,6 +9,6 @@ export interface ILanguageServerStatusService {
 
 export const ILanguageServerStatusService = createServiceIdentifier<ILanguageServerStatusService>('languageServerStatusService');
 export const MANAGE_LANGUAGE_SERVERS_COMMAND_ID = 'ash.languageServers.manage';
-export const LanguageServerMenuFocused = new RawContextKey<boolean>('languageServerMenuFocused', false);
+export const LanguageServerStatusFocused = new RawContextKey<boolean>('languageServerStatusFocused', false);
 
 export const LANGUAGE_SERVER_STATUS_ENTRY_ID = 'ash.status.languageServers';

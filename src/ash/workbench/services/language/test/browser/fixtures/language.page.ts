@@ -1,9 +1,12 @@
+import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
+import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
+import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TestWorkspaceTrustManagementService } from '../../../../../test/common/workbenchTestServices.js';
 import { ILanguageServerLifecycleService } from '../../../common/languageServerLifecycleService.js';
 import { IPaneCompositePartService } from '../../../../panecomposite/browser/panecomposite.js';
 import { IViewDescriptorService } from '../../../../../common/views.js';
 import { IViewsService } from '../../../../views/common/viewsService.js';
-import { ILanguageServerService } from '../../../../../../platform/language/common/languageServerService.js';
+import { ILanguageServerService, type LanguageServerState, type LanguageServerControl } from '../../../../../../platform/language/common/languageServerService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
@@ -46,13 +49,21 @@ import { StatusbarPart } from '../../../../../browser/parts/statusbar/statusbarP
 import { createTestEditorServices, createTestFileService } from '../../../../../test/common/testEditorServices.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
+import { setNlsMessages } from '../../../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../../localization/common/localizationCatalogs.js';
 
+if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+}
 const store = new DisposableStore();
 const changes = store.add(new Emitter<ServerNotification>());
 const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: stanza.URI.file('/project') }));
-const statusServices = store.add(createTestEditorServices());
+const editorServices = store.add(createTestEditorServices());
+const statusServices = store.add(editorServices.createChild());
+if (new URLSearchParams(location.search).has('widget')) {
+	statusServices.registerInstance(IWorkspaceContextService, workspace);
+}
 statusServices.registerInstance(IContextMenuService, StandaloneServices.get(IContextMenuService));
-statusServices.registerInstance(IContextViewService, StandaloneServices.get(IContextViewService));
 statusServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 statusServices.registerSingleton(ICommandService, () => new CommandService(statusServices));
 statusServices.registerSingleton(INotificationService, () => new TestNotificationService());
@@ -66,6 +77,9 @@ statusServices.registerInstance(IPaneCompositePartService, { getProgressIndicato
 statusServices.registerSingleton(IProgressService, () => statusServices.createInstance(ProgressService));
 const statusHost = document.createElement('section');
 document.body.append(statusHost);
+statusServices.registerInstance(IContextViewService, store.add(new BrowserContextViewService(statusHost)));
+const statusTheme = store.add(new TestThemeService(lightColorTheme));
+statusServices.registerInstance(IThemeService, statusTheme);
 store.add(toDisposable(() => statusHost.remove()));
 statusServices.registerInstance(ILayoutService, store.add(new BrowserLayoutService({ root: statusHost })));
 // Status Bar traversal dispatches through the owning window's keybinding service.
@@ -88,9 +102,29 @@ statusServices.registerInstance(IKeybindingService, keybindings);
 store.add(bindTestColorTheme(statusServices.get(IThemeService), statusHost));
 store.add(statusServices.createInstance(StatusbarPart, statusHost));
 statusServices.registerInstance(IServerEventApi, { subscribe: listener => changes.event(listener) });
+let serverState: LanguageServerState | undefined;
+const controls: LanguageServerControl[] = [];
+let finishControl: ((error?: string) => void) | undefined;
+function updateServerState(state: LanguageServerState): void {
+	serverState = state;
+	changes.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state } });
+}
 statusServices.registerInstance(ILanguageServerService, {
-	read: async () => ({ revision: 0, configurations: {}, servers: [] }),
-	control: async () => { throw new Error('Unexpected language-server process control'); },
+	read: async () => ({ revision: 0, configurations: {}, servers: [{ id: 'rust-analyzer', languageIds: ['rust'], state: serverState }, ...(new URLSearchParams(location.search).has('preview') ? ['css-language-server', 'typescript-language-server', 'demo-tools'].map(id => ({ id, languageIds: ['fixture'] })) : []), ...(new URLSearchParams(location.search).has('many') ? Array.from({ length: 24 }, (_, index) => ({ id: `synthetic-server-${index}`, languageIds: ['fixture'] })) : [])] }),
+	control: async request => {
+		controls.push(request);
+		updateServerState({ type: request.action === 'stop' ? 'stopped' : 'starting' });
+		await new Promise<void>((resolve, reject) => {
+			finishControl = error => {
+				finishControl = undefined;
+				if (error) reject(new Error(error));
+				else {
+					if (request.action === 'restart') updateServerState({ type: 'ready' });
+					resolve();
+				}
+			};
+		});
+	},
 	configure: async () => { throw new Error('Unexpected language-server configuration'); },
 	removeConfiguration: async () => { throw new Error('Unexpected language-server configuration removal'); },
 });
@@ -153,7 +187,7 @@ for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 
 declare global {
 	interface Window {
-		languageIntegration: { registered(): boolean; requests(): number; focus(): void; progress(percentage: number, done?: boolean): void; updatePeer(percentage: number): void; revealedChannel(): string | undefined; disposeProgress(): void; dispose(): void; };
+		languageIntegration: { registered(): boolean; requests(): number; focus(): void; progress(percentage: number, done?: boolean): void; state(state: LanguageServerState): void; warning(message: string): void; error(message: string): void; controls(): readonly LanguageServerControl[]; theme(index: number): void; finishControl(error?: string): void; updatePeer(percentage: number): void; revealedChannel(): string | undefined; disposeProgress(): void; dispose(): void; };
 	}
 }
 window.languageIntegration = {
@@ -161,6 +195,12 @@ window.languageIntegration = {
 	requests: () => requests,
 	focus: () => { editor.setPosition(new stanza.Position(1, 4)); editor.focus(); },
 	progress: (percentage, done = false) => changes.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'index', title: 'Indexing', message: 'Reading workspace', percentage, done } }),
+	state: updateServerState,
+	controls: () => controls,
+	theme: index => statusTheme.setColorTheme([lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme][index]),
+	finishControl: error => finishControl?.(error),
+	warning: message => changes.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', severity: 'warning', source: 'protocol', show: false, message } }),
+	error: message => changes.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', severity: 'error', source: 'protocol', show: false, message } }),
 	updatePeer(percentage) {
 		const statusbar = statusServices.get(IStatusbarService);
 		const entry = { icon: Lxicon.sync, text: `Sync ${percentage}%`, showProgress: true, run() { } };

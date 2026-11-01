@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../common/actions.js';
-import { Separator } from '../../common/actions.js';
+import { ActionRunner, Separator } from '../../common/actions.js';
 import { Lxicon } from '../../common/lxicons.js';
 import { ActionBar } from '../../browser/ui/actionbar/actionbar.js';
 import { ButtonActionViewItem, LabelActionViewItem } from '../../browser/ui/actionbar/actionViewItems.js';
@@ -27,7 +27,7 @@ suite('ActionBar open dropdown updates', () => {
 						showContextMenu(options) { menu = options; },
 					}) : undefined,
 				});
-				const trigger = bar.element.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
+				const trigger = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
 				trigger.focus();
 				trigger.click();
 				assert.ok(menu);
@@ -37,12 +37,12 @@ suite('ActionBar open dropdown updates', () => {
 				assert.equal(trigger.isConnected, true);
 				assert.equal(opened.cancellationToken?.isCancellationRequested, false);
 				assert.equal(trigger.getAttribute('aria-expanded'), 'true');
-				assert.equal(bar.element.textContent, 'menubefore');
+				assert.equal(bar.domNode.textContent, 'menubefore');
 				opened.onHide?.(true);
 				await Promise.resolve();
-				const updatedTrigger = bar.element.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
+				const updatedTrigger = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="menu"] button')!;
 				assert.notEqual(updatedTrigger, trigger);
-				assert.equal(bar.element.textContent, 'Updated menulatest');
+				assert.equal(bar.domNode.textContent, 'Updated menulatest');
 				assert.equal(updatedTrigger.getAttribute('aria-expanded'), 'false');
 				assert.equal(dom.window.document.activeElement, updatedTrigger);
 
@@ -53,8 +53,8 @@ suite('ActionBar open dropdown updates', () => {
 				assert.equal(finalMenu.cancellationToken?.isCancellationRequested, true);
 				finalMenu.onHide?.(true);
 				await Promise.resolve();
-				assert.equal(bar.element.isConnected, false);
-				assert.equal(bar.element.textContent, '');
+				assert.equal(bar.domNode.isConnected, false);
+				assert.equal(bar.domNode.textContent, '');
 			} finally {
 				dom.window.close();
 			}
@@ -71,7 +71,7 @@ suite('ActionBar open dropdown updates', () => {
 					showContextMenu(options) { menu = options; },
 				}),
 			});
-			const trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
+			const trigger = bar.domNode.querySelector<HTMLButtonElement>('button')!;
 			trigger.click();
 			bar.setActions([{ ...action('menu'), label: 'Updated menu' }]);
 			menu!.onHide?.(true);
@@ -81,7 +81,7 @@ suite('ActionBar open dropdown updates', () => {
 			assert.equal(menu!.cancellationToken?.isCancellationRequested, false);
 			menu!.onHide?.(true);
 			await Promise.resolve();
-			assert.equal(bar.element.textContent, 'Updated menu');
+			assert.equal(bar.domNode.textContent, 'Updated menu');
 		} finally {
 			dom.window.close();
 		}
@@ -101,11 +101,11 @@ suite('ActionBar open dropdown updates', () => {
 					},
 				}),
 			});
-			trigger = bar.element.querySelector<HTMLButtonElement>('button')!;
+			trigger = bar.domNode.querySelector<HTMLButtonElement>('button')!;
 			trigger.click();
 			await Promise.resolve();
 			assert.equal(trigger.isConnected, false);
-			assert.equal(bar.element.textContent, 'Updated menu');
+			assert.equal(bar.domNode.textContent, 'Updated menu');
 		} finally {
 			dom.window.close();
 		}
@@ -121,7 +121,7 @@ suite('ActionBar open dropdown updates', () => {
 					showContextMenu(options) { menu = options; },
 				}),
 			});
-			const [first, second] = [...bar.element.querySelectorAll('button')];
+			const [first, second] = [...bar.domNode.querySelectorAll('button')];
 			const icon = dom.window.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 			second!.append(icon);
 			first!.click();
@@ -141,7 +141,7 @@ suite('ActionBar open dropdown updates', () => {
 			assert.equal(second!.getAttribute('aria-expanded'), 'true');
 			menu!.onHide?.(true);
 			await Promise.resolve();
-			assert.equal(bar.element.textContent, 'Updated firstsecond');
+			assert.equal(bar.domNode.textContent, 'Updated firstsecond');
 		} finally {
 			dom.window.close();
 		}
@@ -152,7 +152,7 @@ suite('ActionBar open dropdown updates', () => {
 			const dom = new JSDOM('<!doctype html><body></body>');
 			try {
 				using bar = new ActionBar(dom.window.document.body, { actions: [action('first')] });
-				const trigger = bar.element.querySelector('button')!;
+				const trigger = bar.domNode.querySelector('button')!;
 				trigger.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
 				bar.setActions([{ ...action('first'), label: 'Updated first' }]);
 				await Promise.resolve();
@@ -160,7 +160,7 @@ suite('ActionBar open dropdown updates', () => {
 				if (end === 'window blur') dom.window.dispatchEvent(new dom.window.Event('blur'));
 				else dom.window.document.body.dispatchEvent(pointerEvent(dom.window, end === 'pointercancel' ? 'pointercancel' : 'pointerup'));
 				await Promise.resolve();
-				assert.equal(bar.element.textContent, 'Updated first');
+				assert.equal(bar.domNode.textContent, 'Updated first');
 			} finally {
 				dom.window.close();
 			}
@@ -174,7 +174,7 @@ suite('ActionBar open dropdown updates', () => {
 			dom.window.setTimeout = ((callback: () => void) => { timeout = callback; return 1; }) as typeof dom.window.setTimeout;
 			dom.window.clearTimeout = () => { timeout = undefined; };
 			using bar = new ActionBar(dom.window.document.body, { actions: [action('first')] });
-			const trigger = bar.element.querySelector('button')!;
+			const trigger = bar.domNode.querySelector('button')!;
 			using consumed = addDisposableListener(trigger, 'click', event => event.stopImmediatePropagation(), true);
 			trigger.dispatchEvent(pointerEvent(dom.window, 'pointerdown'));
 			bar.setActions([{ ...action('first'), label: 'Updated first' }]);
@@ -185,7 +185,7 @@ suite('ActionBar open dropdown updates', () => {
 			assert.ok(timeout);
 			timeout();
 			await Promise.resolve();
-			assert.equal(bar.element.textContent, 'Updated first');
+			assert.equal(bar.domNode.textContent, 'Updated first');
 			assert.equal(timeout, undefined);
 		} finally {
 			dom.window.close();
@@ -207,17 +207,17 @@ suite('ActionBar updated focus availability', () => {
 		try {
 			const first = action('first');
 			using bar = new ActionBar(dom.window.document.body, { actions: [first, action('second')] });
-			bar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.focus();
+			bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.focus();
 			bar.updateActions([first, action('second', false)]);
-			const firstButton = bar.element.querySelector<HTMLButtonElement>('[data-action-id="first"] button')!;
+			const firstButton = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="first"] button')!;
 			assert.equal(firstButton.tabIndex, 0);
 			assert.equal(dom.window.document.activeElement, firstButton);
 			bar.updateActions([action('first', false), action('second', false)]);
-			assert.ok([...bar.element.querySelectorAll('button')].every(button => button.tabIndex === -1));
+			assert.ok([...bar.domNode.querySelectorAll('button')].every(button => button.tabIndex === -1));
 			const input = dom.window.document.querySelector('input')!;
 			input.focus();
 			bar.updateActions([action('first', false), action('second')]);
-			assert.equal(bar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.tabIndex, 0);
+			assert.equal(bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="second"] button')!.tabIndex, 0);
 			assert.equal(dom.window.document.activeElement, input);
 		} finally {
 			dom.window.close();
@@ -240,9 +240,9 @@ test('ActionViewItem shares hover delay within its ActionBar and isolates other 
 		actions: [action('open')],
 		actionViewItemOptions: { hoverAnchorPosition: AnchorPosition.Below },
 	});
-	dom.window.document.body.append(actionBar.element);
+	dom.window.document.body.append(actionBar.domNode);
 
-	const button = actionBar.element.querySelector('button');
+	const button = actionBar.domNode.querySelector('button');
 	assert.ok(button);
 	assert.equal(setups.length, 1);
 	assert.equal(setups[0]?.target, button);
@@ -250,7 +250,7 @@ test('ActionViewItem shares hover delay within its ActionBar and isolates other 
 	assert.ok(setups[0]?.groupId);
 	assert.equal(setups[0]?.anchorPosition, AnchorPosition.Below);
 	assert.equal(button.hasAttribute('title'), false);
-	actionBar.add(action('close'));
+	actionBar.push(action('close'));
 	assert.equal(setups[1]?.groupId, setups[0]?.groupId);
 	using otherBar = new ActionBar(dom.window.document.body, { actions: [action('chat')] });
 	assert.notEqual(setups[2]?.groupId, setups[0]?.groupId);
@@ -284,9 +284,9 @@ test('LabelActionViewItem owns compact icon-and-text action markup', () => {
 			tooltip: 'Active terminal: cmd',
 		}),
 	});
-	dom.window.document.body.append(actionBar.element);
+	dom.window.document.body.append(actionBar.domNode);
 
-	const label = actionBar.element.querySelector<HTMLButtonElement>('.ash-action-label');
+	const label = actionBar.domNode.querySelector<HTMLButtonElement>('.ash-action-label');
 	assert.ok(label);
 	assert.equal(label.classList.contains('ash-button'), false);
 	assert.equal(label.querySelector('.ash-action-label-text')?.textContent, 'cmd');
@@ -307,9 +307,9 @@ test('ActionBar enables native drag sources only when its view item opts in', ()
 			draggable: item.id === 'drag-source',
 		}),
 	});
-	dom.window.document.body.append(actionBar.element);
+	dom.window.document.body.append(actionBar.domNode);
 
-	const [source, ordinary] = actionBar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+	const [source, ordinary] = actionBar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 	assert.ok(source);
 	assert.ok(ordinary);
 	assert.equal(source.draggable, true);
@@ -338,9 +338,9 @@ test('ActionBar reports drop targets without enabling ordinary toolbars', () => 
 			},
 		},
 	});
-	dom.window.document.body.append(actionBar.element);
-	assert.equal(actionBar.element.classList.contains('ash-action-bar-dnd'), true);
-	const [first, second] = actionBar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+	dom.window.document.body.append(actionBar.domNode);
+	assert.equal(actionBar.domNode.classList.contains('ash-action-bar-dnd'), true);
+	const [first, second] = actionBar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 	assert.ok(first);
 	assert.ok(second);
 	Object.defineProperty(second, 'getBoundingClientRect', {
@@ -375,8 +375,8 @@ test('ActionBar shows insertion feedback on entry and across gaps, including no-
 			},
 		},
 	});
-	dom.window.document.body.append(actionBar.element);
-	const [first, second, third] = actionBar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+	dom.window.document.body.append(actionBar.domNode);
+	const [first, second, third] = actionBar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 	assert.ok(first);
 	assert.ok(second);
 	assert.ok(third);
@@ -385,9 +385,9 @@ test('ActionBar shows insertion feedback on entry and across gaps, including no-
 	third.getBoundingClientRect = () => ({ left: 208, width: 100 } as DOMRect);
 
 	third.dispatchEvent(dragEvent(dom.window, 'dragstart'));
-	actionBar.element.dispatchEvent(dragEvent(dom.window, 'dragover', 102));
+	actionBar.domNode.dispatchEvent(dragEvent(dom.window, 'dragover', 102));
 	assert.equal(second.classList.contains('ash-dnd-drop-before'), true);
-	actionBar.element.dispatchEvent(dragEvent(dom.window, 'drop', 102));
+	actionBar.domNode.dispatchEvent(dragEvent(dom.window, 'drop', 102));
 	assert.deepEqual(dropped, ['second:before']);
 
 	first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
@@ -431,15 +431,15 @@ suite('ActionBar drag feedback lifecycle', () => {
 					onDragEnd: () => { },
 				},
 			});
-			const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			const [first, second] = bar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 			assert.ok(first);
 			assert.ok(second);
 			first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
 			second.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
-			bar.element.dispatchEvent(dragEvent(dom.window, 'dragover', 250));
+			bar.domNode.dispatchEvent(dragEvent(dom.window, 'dragover', 250));
 			assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
 			assert.deepEqual(hovered, [undefined]);
-			bar.element.dispatchEvent(dragEvent(dom.window, 'drop', 250));
+			bar.domNode.dispatchEvent(dragEvent(dom.window, 'drop', 250));
 			assert.deepEqual(drops, ['second:after']);
 		} finally {
 			dom.window.close();
@@ -458,7 +458,7 @@ suite('ActionBar drag feedback lifecycle', () => {
 					onDragEnd: () => { },
 				},
 			});
-			const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			const [first, second] = bar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 			assert.ok(first);
 			assert.ok(second);
 			first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
@@ -494,13 +494,13 @@ suite('ActionBar drag feedback lifecycle', () => {
 							onDragEnd: () => { ended++; },
 						},
 					});
-					const [first, second] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+					const [first, second] = bar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 					assert.ok(first);
 					assert.ok(second);
 					first.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect);
 					second.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
 					if (origin === 'internal') first.dispatchEvent(dragEvent(dom.window, 'dragstart'));
-					const target = destination === 'item' ? second : bar.element;
+					const target = destination === 'item' ? second : bar.domNode;
 					const coordinate = destination === 'item' ? 175 : 225;
 					target.dispatchEvent(dragEvent(dom.window, 'dragover', coordinate));
 					assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
@@ -514,7 +514,7 @@ suite('ActionBar drag feedback lifecycle', () => {
 						assert.equal(transfer.dropEffect, 'none', `Rejected ${type} must not retain an allowed cursor`);
 						assert.equal(second.classList.contains('ash-dnd-drop-after'), false);
 					}
-					assert.equal(bar.element.querySelector('.ash-dnd-drop-after, .ash-dnd-dragging'), null);
+					assert.equal(bar.domNode.querySelector('.ash-dnd-drop-after, .ash-dnd-dragging'), null);
 					assert.equal(dropped, 0);
 					assert.equal(ended, origin === 'internal' ? 1 : 0);
 				} finally {
@@ -540,7 +540,7 @@ suite('ActionBar drag feedback lifecycle', () => {
 						onDragEnd: () => { ended++; },
 					},
 				});
-				const [source, target] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+				const [source, target] = bar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 				assert.ok(source);
 				assert.ok(target);
 				target.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
@@ -552,7 +552,7 @@ suite('ActionBar drag feedback lifecycle', () => {
 				assert.equal(source.classList.contains('ash-dnd-dragging'), false);
 				assert.equal(target.classList.contains('ash-dnd-drop-after'), false);
 				assert.equal(ended, 1);
-				bar.element.dispatchEvent(dragEvent(dom.window, 'dragend'));
+				bar.domNode.dispatchEvent(dragEvent(dom.window, 'dragend'));
 				assert.equal(ended, 1);
 			} finally {
 				dom.window.close();
@@ -576,7 +576,7 @@ suite('ActionBar drag feedback lifecycle', () => {
 					onDragEnd: () => { ended++; },
 				},
 			});
-			const [source, target] = bar.element.querySelectorAll<HTMLElement>('.ash-action-view-item');
+			const [source, target] = bar.domNode.querySelectorAll<HTMLElement>('.ash-action-view-item');
 			assert.ok(source);
 			assert.ok(target);
 			target.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
@@ -604,16 +604,16 @@ test('ActionBar owns horizontal keyboard navigation', () => {
 			action('last'),
 		],
 	});
-	dom.window.document.body.append(actionBar.element);
-	const buttons = actionBar.element.querySelectorAll('button');
+	dom.window.document.body.append(actionBar.domNode);
+	const buttons = actionBar.domNode.querySelectorAll('button');
 	const first = buttons[0];
 	const disabled = buttons[1];
 	const last = buttons[2];
 	assert.ok(first);
 	assert.ok(disabled);
 	assert.ok(last);
-	assert.equal(actionBar.element.getAttribute('role'), 'toolbar');
-	assert.equal(actionBar.element.getAttribute('aria-orientation'), 'horizontal');
+	assert.equal(actionBar.domNode.getAttribute('role'), 'toolbar');
+	assert.equal(actionBar.domNode.getAttribute('aria-orientation'), 'horizontal');
 	assert.deepEqual(
 		[...buttons].map((button) => button.tabIndex),
 		[0, -1, -1],
@@ -645,14 +645,14 @@ test('ActionBar maps vertical navigation to up and down', () => {
 		actions: [action('first'), action('second')],
 		orientation: 'vertical',
 	});
-	dom.window.document.body.append(actionBar.element);
-	const buttons = actionBar.element.querySelectorAll('button');
+	dom.window.document.body.append(actionBar.domNode);
+	const buttons = actionBar.domNode.querySelectorAll('button');
 	const first = buttons[0];
 	const second = buttons[1];
 	assert.ok(first);
 	assert.ok(second);
-	assert.equal(actionBar.element.getAttribute('role'), 'toolbar');
-	assert.equal(actionBar.element.getAttribute('aria-orientation'), 'vertical');
+	assert.equal(actionBar.domNode.getAttribute('role'), 'toolbar');
+	assert.equal(actionBar.domNode.getAttribute('aria-orientation'), 'vertical');
 
 	first.focus();
 	first.dispatchEvent(keyboardEvent(dom.window, 'ArrowDown'));
@@ -662,8 +662,8 @@ test('ActionBar maps vertical navigation to up and down', () => {
 	first.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	assert.equal(dom.window.document.activeElement, first);
 	actionBar.setOrientation('horizontal');
-	assert.equal(actionBar.element.getAttribute('aria-orientation'), 'horizontal');
-	assert.equal(actionBar.element.classList.contains('horizontal'), true);
+	assert.equal(actionBar.domNode.getAttribute('aria-orientation'), 'horizontal');
+	assert.equal(actionBar.domNode.classList.contains('horizontal'), true);
 	first.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
 	assert.equal(dom.window.document.activeElement, second);
 
@@ -676,20 +676,94 @@ test('ActionBar retains focus when an action view item is updated', () => {
 	const actionBar = new ActionBar(dom.window.document.body, {
 		actions: [action('first'), action('second')],
 	});
-	const second = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	const second = actionBar.domNode.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
 	assert.ok(second);
 	second.focus();
 	actionBar.updateActions([action('first'), action('second')]);
-	const replacement = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	const replacement = actionBar.domNode.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
 	assert.ok(replacement);
 	assert.notEqual(replacement, second);
 	assert.equal(dom.window.document.activeElement, replacement);
 	actionBar.setActions([action('first'), action('second'), action('third')]);
-	const afterStructuralChange = actionBar.element.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
+	const afterStructuralChange = actionBar.domNode.querySelector<HTMLButtonElement>('[data-action-id="second"] button');
 	assert.ok(afterStructuralChange);
 	assert.equal(dom.window.document.activeElement, afterStructuralChange);
 	actionBar.dispose();
 	dom.window.close();
+});
+
+suite('ActionBar collection and runner contracts', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('retains separate slots for repeated action identities and releases removed slots', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using bar = new ActionBar(dom.window.document.body);
+			const shared = action('shared');
+			bar.push([shared, shared]);
+			const [first, second] = bar.viewItems;
+			const removed = bar.getItemElement(1)!;
+			bar.push(action('middle'), { index: 1 });
+			assert.equal(bar.viewItems[0], first);
+			assert.equal(bar.viewItems[2], second);
+			assert.equal(bar.getAction(removed), shared);
+			bar.pull(2);
+			assert.equal(removed.isConnected, false);
+			assert.equal(bar.hasAction(shared), true);
+			assert.equal(bar.length(), 2);
+			bar.clear();
+			assert.equal(bar.isEmpty(), true);
+			assert.equal(bar.hasAction(shared), false);
+		} finally { dom.window.close(); }
+	});
+
+	test('restores collection focus after replacement without reporting a transient blur', async () => {
+		const dom = new JSDOM('<!doctype html><body><input id="outside"></body>');
+		try {
+			using bar = new ActionBar(dom.window.document.body, { actions: [action('first'), action('second')] });
+			let blurred = 0;
+			using listener = bar.onDidBlur(() => blurred++);
+			bar.focus(1);
+			bar.updateActions([action('first'), action('second')]);
+			await Promise.resolve();
+			assert.equal(bar.isFocused(1), true);
+			assert.equal(blurred, 0);
+			bar.focus(false);
+			assert.equal(dom.window.document.activeElement, bar.getContainer());
+			bar.focus(true);
+			assert.equal(bar.isFocused(0), true);
+			dom.window.document.getElementById('outside')!.focus();
+			await Promise.resolve();
+			assert.equal(blurred, 1);
+		} finally { dom.window.close(); }
+	});
+
+	test('switches borrowed runners and forwards context, execution and cancellation once', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using first = new ActionRunner();
+			using second = new ActionRunner();
+			const contexts: unknown[] = [];
+			const command = { ...action('run'), run: (context: unknown) => { contexts.push(context); } };
+			const bar = new ActionBar(dom.window.document.body, { actions: [command], actionRunner: first });
+			let wills = 0, runs = 0, cancelled = 0;
+			using will = bar.onWillRun(() => wills++);
+			using did = bar.onDidRun(() => runs++);
+			using cancel = bar.onDidCancel(() => cancelled++);
+			bar.actionRunner = second;
+			bar.context = { version: 2 };
+			bar.focus();
+			bar.domNode.querySelector('button')!.click();
+			await Promise.resolve();
+			await Promise.resolve();
+			bar.domNode.dispatchEvent(keyboardEvent(dom.window, 'Escape'));
+			assert.deepEqual(contexts, [{ version: 2 }]);
+			assert.deepEqual([wills, runs, cancelled], [1, 1, 1]);
+			bar.dispose();
+			await second.run(command, 'still borrowed');
+			assert.equal(contexts.at(-1), 'still borrowed');
+		} finally { dom.window.close(); }
+	});
 });
 
 function action(

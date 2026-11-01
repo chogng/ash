@@ -250,10 +250,12 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { VSBuffer } from 'ash:editor/base/common/buffer.js';
 import './ignored.css';
+import inlineStyles from './ignored.css?inline';
 test('loads through the synchronous hooks', async () => {
  assert.equal(VSBuffer.fromString('loader').toString(), 'loader');
  assert.equal((await import('ash:editor/base/common/buffer.js')).VSBuffer, VSBuffer);
  assert.deepEqual(Object.keys(await import('./ignored.css')), []);
+ assert.equal(inlineStyles, '.invalid-javascript { color: red; }');
 });
 `);
 	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\\\', '/')]);

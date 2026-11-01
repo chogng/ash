@@ -375,25 +375,24 @@ test('ContextView restores focus held by a shadow descendant', () => {
 });
 
 test('ContextView restores the menu owner before a related submenu action runs', async () => {
-	const { Menu } = await import('../../browser/ui/menu/menu.js');
+	const { Menu, unthemedMenuStyles } = await import('../../browser/ui/menu/menu.js');
 	using fixture = createFocusFixture();
 	using runner = new ActionRunner();
 	let actionFocus: Element | null = null;
-	using menu = new Menu(fixture.host, {
-		actions: [new SubmenuAction('test.more', 'More', [{
-			id: 'test.child', label: 'Child', tooltip: 'Child', enabled: true,
-			run: () => { actionFocus = environment.window.document.activeElement; fixture.outside.focus(); },
-		}])],
+	using menu = new Menu(fixture.host, [new SubmenuAction('test.more', 'More', [{
+		id: 'test.child', label: 'Child', tooltip: 'Child', enabled: true,
+		run: () => { actionFocus = environment.window.document.activeElement; fixture.outside.focus(); },
+	}])], {
 		actionRunner: runner,
-		contextViewContainer: fixture.host,
-	});
+		contextViewContainer: fixture.host
+	}, unthemedMenuStyles);
 	fixture.anchor.focus();
-	fixture.contextView.show({ anchor: fixture.anchor, content: menu.element, focusRestore: ContextViewFocusRestore.Previous, isTargetWithin: target => menu.contains(target) });
+	fixture.contextView.show({ anchor: fixture.anchor, content: menu.getContainer(), focusRestore: ContextViewFocusRestore.Previous, isTargetWithin: target => menu.contains(target) });
 	menu.focus(true);
 	const attempts = fixture.focusAttempts();
 	using close = runner.onWillRun(() => { fixture.contextView.hide(); menu.dispose(); });
 	const completion = new Promise<void>(resolve => fixture.add(runner.onDidRun(() => resolve())));
-	const trigger = menu.element.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+	const trigger = menu.getContainer().querySelector<HTMLButtonElement>('[role="menuitem"]')!;
 	trigger.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
 	const child = fixture.host.querySelector<HTMLButtonElement>('.ash-context-view-menu [role="menuitem"]')!;
 	assert.ok(child);

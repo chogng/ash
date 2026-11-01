@@ -1,7 +1,7 @@
 import './actionbar.css';
-import { addDisposableListener, h, isElement, isHTMLElement } from '../../dom.js';
+import { addDisposableListener, h, isElement, isHTMLElement, isNode, getActiveElement } from '../../dom.js';
 import { DataTransfers, DragAndDropObserver } from '../../dnd.js';
-import { ActionRunner, type IAction, type IActionRunner } from '../../../common/actions.js';
+import { ActionRunner, type IAction, type IActionRunner, type IRunEvent } from '../../../common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { rot } from '../../../common/numbers.js';
 import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from './actionViewItems.js';
@@ -36,7 +36,7 @@ export interface ActionBarOptions {
 	readonly actionRunner?: IActionRunner;
 	readonly actions?: readonly IAction[];
 	readonly ariaLabel?: string;
-	readonly ariaRole?: 'toolbar' | 'tablist';
+	readonly ariaRole?: 'toolbar' | 'tablist' | 'menu';
 	readonly orientation?: ActionBarOrientation;
 	readonly actionViewItemProvider?: ActionViewItemProvider;
 	readonly actionViewItemOptions?: ActionViewItemOptions;
@@ -63,15 +63,23 @@ interface DropdownActionViewItem extends ActionViewItem {
  * The optional ARIA role describes the rendered collection. Item providers
  * remain responsible for role-specific item state such as `aria-selected`.
  */
-export class ActionBar extends Disposable {
-	readonly element: HTMLDivElement;
-	private readonly defaultActionRunner = this._register(new ActionRunner());
-	private _actionRunner: IActionRunner = this.defaultActionRunner;
+export class ActionBar extends Disposable implements IActionRunner {
+	readonly domNode: HTMLDivElement;
+	private _actionRunner!: IActionRunner;
+	private readonly runnerListeners = this._register(new MutableDisposable<DisposableStore>());
+	private readonly didBlur = this._register(new Emitter<void>());
+	private readonly didCancel = this._register(new Emitter<void>());
+	private readonly willRun = this._register(new Emitter<IRunEvent>());
+	private readonly didRun = this._register(new Emitter<IRunEvent>());
+	readonly onDidBlur = this.didBlur.event;
+	readonly onDidCancel = this.didCancel.event;
+	readonly onWillRun = this.willRun.event;
+	readonly onDidRun = this.didRun.event;
 	private actionContext: unknown;
 	private focusable = true;
 	private readonly dropdownVisibilityEmitter = this._register(new Emitter<boolean>());
 	readonly onDidChangeDropdownVisibility = this.dropdownVisibilityEmitter.event;
-	private readonly entries: ActionBarEntry[] = [];
+	protected readonly entries: ActionBarEntry[] = [];
 	private readonly visibleDropdowns = new Set<ActionViewItem>();
 	private readonly pointerActivation = this._register(new MutableDisposable<DisposableStore>());
 	private pendingActions: { readonly actions: readonly IAction[]; readonly update: boolean; } | undefined;
@@ -89,7 +97,7 @@ export class ActionBar extends Disposable {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
-		this.element = element;
+		this.domNode = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = 'ash-action-bar';
 		container.append(element);
@@ -102,7 +110,7 @@ export class ActionBar extends Disposable {
 			element.setAttribute('aria-label', options.ariaLabel);
 		}
 		this.actionViewItemProvider = options.actionViewItemProvider;
-		this._actionRunner = options.actionRunner ?? this.defaultActionRunner;
+		this.actionRunner = options.actionRunner ?? this._register(new ActionRunner());
 		this.actionViewItemOptions = {
 			...options.actionViewItemOptions,
 			hoverGroupId: options.actionViewItemOptions?.hoverGroupId ?? createUuid(),
@@ -112,8 +120,17 @@ export class ActionBar extends Disposable {
 		this._register(addDisposableListener(element, 'keydown', (event) => {
 			this.handleNavigation(event);
 		}));
+		this._register(addDisposableListener(element, 'focusout', event => {
+			if (isNode(event.relatedTarget) && this.containsFocus(event.relatedTarget)) return;
+			// A retained collection can restore focus after replacing a control in this task.
+			queueMicrotask(() => {
+				if (this.isDisposed) return;
+				const active = getActiveElement(element.ownerDocument);
+				if (!active || !this.containsFocus(active)) this.didBlur.fire();
+			});
+		}));
 		this._register(addDisposableListener(element, 'focusin', () => {
-			const activeElement = this.element.ownerDocument.activeElement;
+			const activeElement = getActiveElement(this.domNode.ownerDocument);
 			const entry = this.entries.find(
 				({ container }) => container.contains(activeElement),
 			);
@@ -140,45 +157,64 @@ export class ActionBar extends Disposable {
 
 	setOrientation(orientation: ActionBarOrientation): void {
 		if (this.orientation === orientation) return;
-		this.element.classList.replace(this.orientation, orientation);
+		this.domNode.classList.replace(this.orientation, orientation);
 		this.orientation = orientation;
-		this.element.setAttribute('aria-orientation', orientation);
+		this.domNode.setAttribute('aria-orientation', orientation);
 	}
 
-	add(action: IAction): ActionViewItem {
-		const container = h(this.element.ownerDocument, 'div');
-		container.className = 'ash-action-view-item';
-		container.classList.toggle('icon', action.icon !== undefined);
-		container.dataset.actionId = action.id;
-		container.setAttribute('role', 'presentation');
-		const entry = this.createEntry(action, container);
-		this.element.append(container);
-		this.entries.push(entry);
-		if (action.enabled && !this.tabStop) {
-			this._setTabStop(entry.item);
-		} else {
-			entry.item.setTabbable(false);
-		}
-		return entry.item;
+	get viewItems(): readonly ActionViewItem[] {
+		return this.entries.map(entry => entry.item);
 	}
+
+	getContainer(): HTMLElement { return this.domNode; }
+
+	setAriaLabel(label: string): void { this.domNode.setAttribute('aria-label', label); }
+
+	push(actions: IAction | readonly IAction[], options: { readonly index?: number; } = {}): void {
+		const index = options.index ?? this.entries.length;
+		this.setActions([
+			...this.entries.slice(0, index).map(entry => entry.action),
+			...Array.isArray(actions) ? actions : [actions as IAction],
+			...this.entries.slice(index).map(entry => entry.action),
+		]);
+	}
+
+	pull(index: number): void {
+		const entry = this.entries[index];
+		if (!entry) return;
+		if (this.draggingEntry === entry) this.endDrag();
+		if (this.dropTarget === entry.container) this.clearDropTarget();
+		this.entries.splice(index, 1);
+		if (entry.item === this.tabStop) this.tabStop = undefined;
+		entry.store.dispose();
+		entry.container.remove();
+	}
+
+	clear(): void { this.setActions([]); }
 
 	setActions(actions: readonly IAction[]): void {
 		if (this.isDisposed || this.deferActions(actions, false)) return;
 		if (this.draggingEntry && !actions.includes(this.draggingEntry.action)) this.endDrag();
-		const activeElement = this.element.ownerDocument.activeElement;
+		const activeElement = getActiveElement(this.domNode.ownerDocument);
 		const focusedEntry = this.entries.find(({ container }) => container.contains(activeElement));
 		const focusedActionId = focusedEntry?.action.id;
 		const focusedControl = focusedEntry ? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!) : -1;
 		// Retained action identities keep their view and DOM through selection and reordering.
-		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
+		const retained = new Map<IAction, ActionBarEntry[]>();
+		for (const entry of this.entries) {
+			const slots = retained.get(entry.action) ?? [];
+			slots.push(entry);
+			retained.set(entry.action, slots);
+		}
 		const created = new Set<ActionBarEntry>();
 		const next = actions.map(action => {
-			const entry = retained.get(action);
+			const slots = retained.get(action);
+			const entry = slots?.shift();
 			if (entry) {
-				retained.delete(action);
+				if (slots!.length === 0) retained.delete(action);
 				return entry;
 			}
-			const container = h(this.element.ownerDocument, 'div');
+			const container = h(this.domNode.ownerDocument, 'div');
 			container.className = 'ash-action-view-item';
 			container.classList.toggle('icon', action.icon !== undefined);
 			container.dataset.actionId = action.id;
@@ -187,16 +223,14 @@ export class ActionBar extends Disposable {
 			created.add(createdEntry);
 			return createdEntry;
 		});
-		for (const entry of retained.values()) {
-			if (this.dropTarget === entry.container) this.clearDropTarget();
-			entry.store.dispose();
-			entry.container.remove();
+		for (const slots of retained.values()) {
+			for (const entry of slots) this.pull(this.entries.indexOf(entry));
 		}
 		this.entries.splice(0, this.entries.length, ...next);
 		for (let index = 0; index < next.length; index += 1) {
 			const container = next[index]!.container;
-			if (this.element.children[index] !== container) {
-				this.element.insertBefore(container, this.element.children[index] ?? null);
+			if (this.domNode.children[index] !== container) {
+				this.domNode.insertBefore(container, this.domNode.children[index] ?? null);
 			}
 		}
 		const tabStop = next.find(entry => entry.action.enabled && entry.item === this.tabStop)
@@ -206,7 +240,7 @@ export class ActionBar extends Disposable {
 			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(this.focusable && entry === tabStop);
 		}
 		this.tabStop = tabStop?.item;
-		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
+		if (focusedActionId && getActiveElement(this.domNode.ownerDocument) !== activeElement) {
 			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled)
 				?? next.find(({ action }) => action.enabled);
 			if (entry) {
@@ -228,8 +262,8 @@ export class ActionBar extends Disposable {
 			this.setActions(actions);
 			return;
 		}
-		const document = this.element.ownerDocument;
-		const hadFocus = this.element.contains(document.activeElement);
+		const document = this.domNode.ownerDocument;
+		const hadFocus = this.domNode.contains(getActiveElement(document));
 		let replaced = false;
 		for (let index = 0; index < actions.length; index += 1) {
 			if (this.entries[index]!.action !== actions[index]) {
@@ -249,7 +283,7 @@ export class ActionBar extends Disposable {
 			this.tabStop?.setTabbable(false);
 			this.tabStop = undefined;
 		}
-		if (hadFocus && document.activeElement === document.body) {
+		if (hadFocus && getActiveElement(document) === document.body) {
 			tabStop?.item.focus();
 		}
 	}
@@ -266,7 +300,7 @@ export class ActionBar extends Disposable {
 	}
 
 	/** Returns the rendered width of an action slot, excluding the bar's gap. */
-	getItemWidth(index: number): number {
+	getWidth(index: number): number {
 		return this.entries[index]?.container.getBoundingClientRect().width ?? 0;
 	}
 
@@ -276,13 +310,24 @@ export class ActionBar extends Disposable {
 
 	set actionRunner(runner: IActionRunner) {
 		this._actionRunner = runner;
+		const listeners = this.runnerListeners.value = new DisposableStore();
+		listeners.add(runner.onWillRun(event => this.willRun.fire(event)));
+		listeners.add(runner.onDidRun(event => this.didRun.fire(event)));
 		for (const entry of this.entries) entry.item.actionRunner = runner;
 	}
+
+	get context(): unknown { return this.actionContext; }
 
 	set context(context: unknown) {
 		this.actionContext = context;
 		for (const entry of this.entries) entry.item.setActionContext(context);
 	}
+
+	hasAction(action: IAction): boolean { return this.entries.some(entry => entry.action === action); }
+
+	isEmpty(): boolean { return this.entries.length === 0; }
+
+	getHeight(index: number): number { return this.entries[index]?.container.getBoundingClientRect().height ?? 0; }
 
 	getAction(indexOrElement: number | HTMLElement): IAction | undefined {
 		return typeof indexOrElement === 'number' ? this.entries[indexOrElement]?.action
@@ -302,8 +347,16 @@ export class ActionBar extends Disposable {
 		this.tabStop?.setTabbable(focusable);
 	}
 
-	focus(index?: number): void {
-		const entry = (index === undefined ? undefined : this.entries[index])
+	focus(index?: number): void;
+	focus(selectFirst?: boolean): void;
+	focus(target?: number | boolean): void {
+		if (target === false) {
+			this.domNode.tabIndex = -1;
+			this.domNode.focus();
+			return;
+		}
+		const index = typeof target === 'number' ? target : undefined;
+		const entry = (target === true ? this.entries.find(entry => entry.action.enabled) : index === undefined ? undefined : this.entries[index])
 			?? this.entries.find(({ item, action }) => item === this.tabStop && action.enabled)
 			?? this.entries.find(({ action }) => action.enabled);
 		if (!entry?.action.enabled) return;
@@ -311,7 +364,7 @@ export class ActionBar extends Disposable {
 		entry.item.focus();
 	}
 
-	private handleNavigation(event: KeyboardEvent): void {
+	protected handleNavigation(event: KeyboardEvent): void {
 		if (
 			event.defaultPrevented ||
 			event.altKey ||
@@ -321,11 +374,17 @@ export class ActionBar extends Disposable {
 		) {
 			return;
 		}
+		if (event.key === 'Escape') {
+			this.cancel();
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
 		const direction = this.navigationDirection(event.key);
 		if (direction === undefined) return;
 		const entries = this.entries.filter(({ action }) => action.enabled);
 		if (entries.length === 0) return;
-		const activeElement = this.element.ownerDocument.activeElement;
+		const activeElement = getActiveElement(this.domNode.ownerDocument);
 		const currentIndex = entries.findIndex(
 			({ container }) => container.contains(activeElement),
 		);
@@ -357,8 +416,7 @@ export class ActionBar extends Disposable {
 	private clearActions(): void {
 		this.endDrag();
 		this.pendingActions = undefined;
-		for (const entry of this.entries) entry.store.dispose();
-		this.entries.length = 0;
+		while (this.entries.length) this.pull(this.entries.length - 1);
 		this.visibleDropdowns.clear();
 	}
 
@@ -399,9 +457,9 @@ export class ActionBar extends Disposable {
 	}
 
 	private beginPointerActivation(event: PointerEvent): void {
-		if (event.button !== 0 || !event.isPrimary || !isElement(event.target) || !this.element.contains(event.target)) return;
+		if (event.button !== 0 || !event.isPrimary || !isElement(event.target) || !this.domNode.contains(event.target)) return;
 		const control = event.target.closest('button, input, select, textarea, [role="button"], [tabindex]');
-		if (!control || !this.element.contains(control) || control.matches(':disabled') || control.getAttribute('aria-disabled') === 'true') return;
+		if (!control || !this.domNode.contains(control) || control.matches(':disabled') || control.getAttribute('aria-disabled') === 'true') return;
 		const listeners = new DisposableStore();
 		this.pointerActivation.value = listeners;
 		const finish = (): void => {
@@ -409,7 +467,7 @@ export class ActionBar extends Disposable {
 			this.pointerActivation.clear();
 			this.schedulePendingActions();
 		};
-		const document = this.element.ownerDocument;
+		const document = this.domNode.ownerDocument;
 		// Outside-pointer dismissal runs before the next button's click. Preserve
 		// that button through activation so switching menus does not lose the click.
 		listeners.add(addDisposableListener(document, 'click', finish));
@@ -429,13 +487,30 @@ export class ActionBar extends Disposable {
 		if (document.defaultView) listeners.add(addDisposableListener(document.defaultView, 'blur', finish));
 	}
 
+	protected createActionViewItem(action: IAction, options: ActionViewItemOptions): ActionViewItem {
+		return createActionViewItem(action, options);
+	}
+
+	protected containsFocus(target: Node): boolean { return this.domNode.contains(target); }
+
+	protected cancel(): void { this.didCancel.fire(); }
+
+	isFocused(index?: number): boolean {
+		const active = getActiveElement(this.domNode.ownerDocument);
+		return index === undefined ? this.domNode.contains(active) : this.entries[index]?.container.contains(active) === true;
+	}
+
+	async run(action: IAction, context?: unknown): Promise<void> {
+		await this.actionRunner.run(action, context);
+	}
+
 	private createEntry(action: IAction, container: HTMLElement): ActionBarEntry {
 		const store = new DisposableStore();
 		container.draggable = false;
 		container.classList.remove(DndCssClasses.Draggable);
 		const item: DropdownActionViewItem = store.add(
 			this.actionViewItemProvider?.(action, this.actionViewItemOptions) ??
-			createActionViewItem(action, this.actionViewItemOptions),
+			this.createActionViewItem(action, this.actionViewItemOptions),
 		);
 		const visibility = item instanceof DropdownMenuActionViewItem ? item.onDidChangeVisibility : item.onDidChangeDropdownVisibility;
 		if (visibility) {
@@ -551,7 +626,7 @@ export class ActionBar extends Disposable {
 	private entryFromEvent(event: DragEvent): ActionBarEntry | undefined {
 		const target = event.target as Element | null;
 		let container = target?.closest<HTMLElement>('.ash-action-view-item');
-		while (container && this.element.contains(container)) {
+		while (container && this.domNode.contains(container)) {
 			const entry = this.entries.find((candidate) => candidate.container === container);
 			if (entry) return entry;
 			container = container.parentElement?.closest<HTMLElement>('.ash-action-view-item') ?? null;
@@ -613,7 +688,7 @@ export class ActionBar extends Disposable {
 		if (this.draggingEntry === entry) this.endDrag();
 		if (this.dropTarget === entry.container) this.clearDropTarget();
 		const wasTabStop = entry.item === this.tabStop;
-		const activeElement = entry.container.ownerDocument.activeElement;
+		const activeElement = getActiveElement(entry.container.ownerDocument);
 		const hadFocus = entry.container.contains(activeElement);
 		const focusedControl = [...entry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!);
 		entry.store.dispose();

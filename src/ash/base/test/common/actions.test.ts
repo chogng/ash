@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ActionRunner, type IAction, type IRunEvent } from '../../common/actions.js';
+import { Action, ActionRunner, getActionForAltMode, type IAction, type IRunEvent } from '../../common/actions.js';
 import { CancellationError } from '../../common/errors.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test('ActionRunner forwards context and reports action failures', async () => {
 	using runner = new ActionRunner();
 	const context = { resource: 'test.txt' };
 	const failure = new Error('failed');
 	const events: IRunEvent[] = [];
-	runner.onWillRun((event) => events.push(event));
-	runner.onDidRun((event) => events.push(event));
+	using willRunListener = runner.onWillRun((event) => events.push(event));
+	using didRunListener = runner.onDidRun((event) => events.push(event));
 
 	await runner.run({
 		id: 'test.action',
@@ -37,8 +40,8 @@ test('ActionRunner delegates execution to its protected hook inside the existing
 	}
 	using runner = new CustomRunner();
 	const action: IAction = { id: 'custom', label: 'Custom', tooltip: '', enabled: true, run() { throw new Error('The hook owns execution'); } };
-	runner.onWillRun(event => calls.push(['will', event]));
-	runner.onDidRun(event => calls.push(['did', event]));
+	using willRunListener = runner.onWillRun(event => calls.push(['will', event]));
+	using didRunListener = runner.onDidRun(event => calls.push(['did', event]));
 	await runner.run(action, context);
 	assert.deepEqual(calls, [
 		['will', { action, context }], [action, context], ['did', { action, context, error: undefined }],
@@ -66,8 +69,8 @@ test('ActionRunner waits for asynchronous completion and preserves the action re
 			order.push('complete');
 		},
 	};
-	runner.onWillRun(() => order.push('will'));
-	runner.onDidRun(event => { assert.equal(event.error, undefined); order.push('did'); });
+	using willRunListener = runner.onWillRun(() => order.push('will'));
+	using didRunListener = runner.onDidRun(event => { assert.equal(event.error, undefined); order.push('did'); });
 	const pending = runner.run(action, context);
 	await started;
 	assert.deepEqual(order, ['will', 'run']);
@@ -81,7 +84,7 @@ for (const failure of [new Error('sync failure'), 'primitive failure', undefined
 		test(`ActionRunner fulfills and preserves ${String(failure)} from ${asynchronous ? 'rejected' : 'throwing'} actions`, async () => {
 			using runner = new ActionRunner();
 			const events: IRunEvent[] = [];
-			runner.onDidRun(event => events.push(event));
+			using didRunListener = runner.onDidRun(event => events.push(event));
 			const action: IAction = {
 				id: 'failure', label: 'Failure', tooltip: '', enabled: true,
 				run() { if (asynchronous) return Promise.reject(failure); throw failure; },
@@ -96,7 +99,7 @@ test('ActionRunner retains existing disabled-action and disposed-run behavior', 
 	const runner = new ActionRunner();
 	let calls = 0;
 	let events = 0;
-	runner.onDidRun(() => events++);
+	using didRunListener = runner.onDidRun(() => events++);
 	const action: IAction = { id: 'disabled', label: 'Disabled', tooltip: '', enabled: false, run() { calls++; return 42; } };
 	try {
 		await runner.run(action);
@@ -104,4 +107,28 @@ test('ActionRunner retains existing disabled-action and disposed-run behavior', 
 		await runner.run(action);
 		assert.deepEqual({ calls, events }, { calls: 2, events: 1 });
 	} finally { runner.dispose(); }
+});
+
+
+test('Action notifies retained views synchronously and ignores unchanged assignments', () => {
+	using action = new Action('mutable', 'Before');
+	const changes: unknown[] = [];
+	using changeListener = action.onDidChange(change => changes.push(change));
+	action.label = 'After';
+	action.label = 'After';
+	action.checked = true;
+	action.enabled = false;
+	assert.deepEqual(changes, [{ label: 'After' }, { checked: true }, { enabled: false }]);
+	assert.equal(action.label, 'After');
+});
+
+test('alternative selection respects both action enablement boundaries', () => {
+	const alternate = { id: 'alt', label: 'Alt', tooltip: '', enabled: true, run() { } };
+	const primary = { id: 'primary', label: 'Primary', tooltip: '', enabled: true, alt: alternate, run() { } };
+	assert.equal(getActionForAltMode(primary, { altKey: true }), alternate);
+	alternate.enabled = false;
+	assert.equal(getActionForAltMode(primary, { altKey: true }), primary);
+	alternate.enabled = true;
+	primary.enabled = false;
+	assert.equal(getActionForAltMode(primary, { altKey: true }), primary);
 });

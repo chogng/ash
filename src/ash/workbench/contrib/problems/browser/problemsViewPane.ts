@@ -90,12 +90,12 @@ export class ProblemsViewPane extends ViewPane {
 			actionViewItemProvider: (action, options) => new DropdownMenuActionViewItem(
 				action, () => this.severityActions(), contextMenuService, options),
 		}));
-		filterActions.element.classList.add('ash-toolbar');
+		filterActions.domNode.classList.add('ash-toolbar');
 		this.titleActions = this._register(new ActionBar(controls, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('problems.actions', 'Problems actions'),
 		}));
-		this.titleActions.element.classList.add('ash-toolbar');
+		this.titleActions.domNode.classList.add('ash-toolbar');
 		this.headerActionsElement.append(controls);
 		this.statusElement = h(document, 'div');
 		this.statusElement.className = 'ash-problems-status';

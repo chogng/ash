@@ -32,6 +32,7 @@ import { parseKeybinding } from '../../../../../base/common/keybindingParser.js'
 import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.js';
 import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
 import { toElectronAccelerator } from '../../../../../platform/keybinding/common/electronAccelerator.js';
+import { ModifierKeyEmitter } from '../../../../../base/browser/dom.js';
 
 test('system menus retain scoped shortcut hints, chord labels and delegate overrides', async () => {
 	const environment = new JSDOM('<!doctype html><body></body>');
@@ -310,6 +311,36 @@ test('Electron context menus reject missing window services without retaining re
 	assert.throws(() => services.createInstance(ElectronContextMenuService, api), /contextViewService/);
 	tracker.assertNoLeaks();
 });
+
+for (const anchor of ['point', 'element'] as const) {
+	test(`native ${anchor} anchors select and execute the current window's alternative`, async () => {
+		using fixture = new SystemMenuFixture();
+		const targetWindow = fixture.document.defaultView!;
+		const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+		Object.defineProperty(globalThis, 'window', { configurable: true, value: targetWindow });
+		using restore = toDisposable(() => {
+			ModifierKeyEmitter.disposeInstance(targetWindow);
+			if (previous) Object.defineProperty(globalThis, 'window', previous);
+			else Reflect.deleteProperty(globalThis, 'window');
+		});
+		ModifierKeyEmitter.getInstance(targetWindow);
+		targetWindow.dispatchEvent(new targetWindow.KeyboardEvent('keydown', { key: 'Alt', altKey: true }));
+		const calls: string[] = [];
+		const alternate = { ...menuAction('Alternate'), run() { calls.push('alternate'); } };
+		const primary = { ...menuAction('Primary'), alt: alternate, run() { calls.push('primary'); } };
+		const hidden = promiseWithResolvers<void>();
+		fixture.menus.showContextMenu({
+			getAnchor: () => anchor === 'point' ? { x: 10, y: 20 } : fixture.document.getElementById('origin')!,
+			getActions: () => [primary], onHide: () => hidden.resolve(),
+		});
+		const item = fixture.popups[0]!.request.items[0]!;
+		assert.ok(item.type === 'action');
+		assert.equal(item.label, 'Alternate');
+		fixture.popups[0]!.finish({ selectedId: 'action-1' });
+		await hidden.promise;
+		assert.deepEqual(calls, ['alternate']);
+	});
+}
 
 class SystemMenuFixture extends Disposable {
 	readonly document: Document;

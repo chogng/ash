@@ -301,8 +301,8 @@ export class ChatGPTNavigationView extends ViewPane {
 			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 		}));
-		bar.element.classList.add('ash-chatgpt-conversation-actions');
-		const trigger = bar.element.querySelector('button')!;
+		bar.domNode.classList.add('ash-chatgpt-conversation-actions');
+		const trigger = bar.domNode.querySelector('button')!;
 		trigger.setAttribute('aria-haspopup', 'menu');
 		trigger.setAttribute('aria-expanded', 'false');
 		return row;
