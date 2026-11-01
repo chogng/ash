@@ -14,6 +14,29 @@ export class AppServerLocalGitService implements ILocalGitService {
 
 	constructor(private readonly connection: AppServerProtocolClient) { }
 
+	public async listWorktrees(token: CancellationToken): ReturnType<ILocalGitService['listWorktrees']> {
+		const generation = this.connection.generation;
+		using cancellation = new CancellationTokenSource(token);
+		using subscription = this.connection.onStateChange(state => { if (state !== 'ready') cancellation.cancel(); });
+		const checkCurrent = (): void => {
+			if (cancellation.token.isCancellationRequested || generation !== this.connection.generation || this.connection.state !== 'ready') {
+				throw canceled();
+			}
+		};
+		checkCurrent();
+		const repositories = await raceCancellationError(appServerRequest(this.connection, 'git/repositories', {}), cancellation.token);
+		checkCurrent();
+		const checkouts = await Promise.all(repositories.repositories.map(async repository => {
+			const result = await raceCancellationError(appServerRequest(this.connection, 'git/worktree/list', { repositoryId: repository.id }), cancellation.token);
+			checkCurrent();
+			const sourcePath = result.worktrees.find(worktree => worktree.current)?.path;
+			return sourcePath ? result.worktrees.filter(worktree => worktree.state === 'ready').map(worktree => ({
+				label: worktree.branch || repository.label, path: worktree.path, sourcePath,
+			})) : [];
+		}));
+		return checkouts.flat();
+	}
+
 	async readRepositoryContexts(directory: { readonly sessionId: string; readonly path: string; }, token?: CancellationToken): Promise<readonly GitRepositoryContext[]> {
 		const generation = this.connection.generation;
 		using cancellation = new CancellationTokenSource(token);
@@ -50,6 +73,7 @@ export class AppServerLocalGitService implements ILocalGitService {
 export function createDisconnectedLocalGitService(unavailable: UnavailableOperation): ILocalGitService {
 	return {
 		_serviceBrand: undefined,
+		listWorktrees: () => unavailable('git/worktree/list'),
 		readRepositoryContexts: () => unavailable('git/repositoryContexts'),
 		clone: () => unavailable('git/cloneTo'),
 		cancel: () => unavailable('git/cloneTo/cancel'),

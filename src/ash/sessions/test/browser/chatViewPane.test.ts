@@ -10,6 +10,7 @@ import { LocalSelectionTransfer } from '../../../platform/dnd/browser/dnd.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
@@ -156,6 +157,9 @@ const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleSer
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
+	services.registerInstance(IFileDialogService, {
+		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
+	} as unknown as IFileDialogService);
 	services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });

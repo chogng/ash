@@ -11,7 +11,8 @@ import { localize, localize2 } from '../../../nls.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { SessionsCategories } from '../../common/categories.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { WorkspaceSelection, selectionFromWorkspace } from '../workspaceSelection.js';
+import { selectionFromWorkspace } from '../../common/agentHostSessionWorkspace.js';
+import { WorkspacePicker } from '../../contrib/chat/browser/sessionWorkspacePicker.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { CHAT_VIEW_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../common/agentHostSessionsProvider.js';
@@ -29,7 +30,7 @@ registerAction2(class NewDevContainerSession extends Action2 {
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace());
-		using selection = accessor.get(IInstantiationService).createInstance(WorkspaceSelection);
+		using selection = accessor.get(IInstantiationService).createInstance(WorkspacePicker);
 		const source = workspace.type === 'local' ? workspace
 			: workspace.type === 'provider' && workspace.providerId === 'ash.dev-containers' ? { type: 'local' as const, root: workspace.workspace }
 				: await selection.pick(workspace.type === 'multiple' ? workspace.folders : [], target => target.type === 'local');

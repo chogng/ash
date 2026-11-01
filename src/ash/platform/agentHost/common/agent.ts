@@ -96,6 +96,8 @@ export interface SessionReadParams {
 export interface SessionCreateParams {
 	readonly commandId: string;
 	readonly title: string;
+	/** A new branch for this conversation's managed worktree; omitted keeps the default target. */
+	readonly branchName?: string;
 	readonly executionTarget:
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }

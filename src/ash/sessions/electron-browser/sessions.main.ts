@@ -55,7 +55,7 @@ import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-brows
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
-import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';

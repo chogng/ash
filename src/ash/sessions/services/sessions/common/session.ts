@@ -189,6 +189,8 @@ export interface IUntitledChatSession {
 	readonly workspace: SessionWorkspaceSelection;
 	/** Prepare the source workspace's container before creating the first durable Session. */
 	readonly devContainer?: boolean;
+	/** Created with the conversation on first send, never while selecting its workspace. */
+	readonly branchName?: string;
 }
 
 /** Repository-backed resources remain independent of Session execution directories. */

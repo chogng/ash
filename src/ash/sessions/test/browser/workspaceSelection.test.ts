@@ -3,7 +3,8 @@ import { test } from 'mocha';
 import { URI } from '../../../base/common/uri.js';
 import { createSshRemoteWorkspaceUri } from '../../../platform/remote/common/remote.js';
 import type { IWorkspace } from '../../../platform/workspace/common/workspace.js';
-import { WorkspaceSelection, selectionFromWorkspace } from '../../browser/workspaceSelection.js';
+import { selectionFromWorkspace } from '../../common/agentHostSessionWorkspace.js';
+import { WorkspacePicker } from '../../contrib/chat/browser/sessionWorkspacePicker.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter } from '../../../base/common/event.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickDidAcceptEvent, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
@@ -45,7 +46,7 @@ test('workspace history merges choices, rejects unrelated authorities and cannot
 	const picker = { items: [] as readonly Item[], selectedItems: [] as readonly Item[], busy: false, onDidAccept: accepted.event, onDidHide: hidden.event, show() { }, dispose() { disposed++; }, [Symbol.dispose]() { disposed++; } } as unknown as IQuickPick<Item>;
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	services.registerInstance(IWorkspacesService, { getRecentlyOpened: () => history.p } as IWorkspacesService);
-	using selection = services.createInstance(WorkspaceSelection);
+	using selection = services.createInstance(WorkspacePicker);
 	const current = URI.file('/current');
 	const result = selection.pick([{ label: 'Current', target: { type: 'local', root: current.fsPath } }]);
 	await history.complete({ workspaces: [{ folderUri: current }, { folderUri: URI.file('/recent') }, { folderUri: URI.parse('ash-remote://unknown/work') }] });
@@ -60,7 +61,7 @@ test('workspace history merges choices, rejects unrelated authorities and cannot
 	using laterServices = new InstantiationService();
 	laterServices.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	laterServices.registerInstance(IWorkspacesService, { getRecentlyOpened: () => late.p } as IWorkspacesService);
-	using closed = laterServices.createInstance(WorkspaceSelection);
+	using closed = laterServices.createInstance(WorkspacePicker);
 	const pending = closed.pick([]);
 	hidden.fire();
 	assert.equal(await pending, undefined);
@@ -76,7 +77,7 @@ test('container source selection filters both window folders and recent remote t
 	const picker = { items: [] as readonly IQuickPickItem[], onDidAccept: accepted.event, onDidHide: hidden.event, show() { }, dispose() { }, [Symbol.dispose]() { } } as unknown as IQuickPick<IQuickPickItem>;
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	services.registerInstance(IWorkspacesService, { getRecentlyOpened: () => history.p } as IWorkspacesService);
-	using selection = services.createInstance(WorkspaceSelection);
+	using selection = services.createInstance(WorkspacePicker);
 	const pending = selection.pick([{ label: 'SSH', target: { type: 'ssh', host: 'build', root: '/work' } }], target => target.type === 'local');
 	await history.complete({ workspaces: [{ folderUri: URI.file('/source') }, { folderUri: createSshRemoteWorkspaceUri('build', '/work') }, { folderUri: createProviderRemoteWorkspaceUri('ash.dev-containers', 'C:\\source', '/work') }] });
 	assert.equal(picker.items.length, 1);

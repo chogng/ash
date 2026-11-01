@@ -16,12 +16,14 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '.
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { getSessionApplication } from '../../../../common/sessionApplication.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { ISessionCreateOptions } from '../../../../services/sessions/common/sessionsProvider.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { devContainerSourcePath } from '../../remoteAgentHost/browser/devContainerSource.js';
+import { extUri } from '../../../../../base/common/resources.js';
 
 export interface AppServerSessionsProviderHost {
 	readonly id?: string;
@@ -230,6 +232,20 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
+	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]> {
+		const source = buildAgentHostSessionWorkspace(workspace)!;
+		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const worktrees = await this.rendererHost.localGit.listWorktrees(token);
+		this.assertCurrentConnection(generation, epoch);
+		if (token.isCancellationRequested) { throw canceled(); }
+		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
+		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
+		return worktrees.filter(worktree => projectSources.has(worktree.sourcePath))
+			.map(worktree => ({ label: worktree.label, target: { ...workspace, root: worktree.path } }));
+	}
+
 	private ownsSourceAuthority(authority: string): boolean {
 		const own = this.host.workspace();
 		if (own.type === 'current') return authority === 'local';
@@ -262,7 +278,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (!this.connectionReady) await this.initialConnectionState;
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) throw canceled();
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });

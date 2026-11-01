@@ -32,7 +32,7 @@ import { TitlebarPart } from './parts/titlebarPart.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
-import { selectionFromWorkspace } from './workspaceSelection.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { BrowserHostService } from '../../workbench/services/host/browser/browserHostService.js';
 import { ILanguagePackStore } from '../../platform/languagePacks/common/languagePackStore.js';

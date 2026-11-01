@@ -258,7 +258,7 @@ import { ViewDescriptorService } from '../../workbench/services/views/browser/vi
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ViewsService } from '../../workbench/services/views/browser/viewsService.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
-import { WorkspaceSelection } from './workspaceSelection.js';
+import { WorkspacePicker } from '../contrib/chat/browser/sessionWorkspacePicker.js';
 import { IDevContainerAgentHostService } from '../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { logSessionsInteraction } from '../common/sessionsTelemetry.js';
@@ -516,7 +516,7 @@ export abstract class Workbench extends Disposable {
 		const provider = primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: async folders => {
-				using selection = services.createInstance(WorkspaceSelection);
+				using selection = services.createInstance(WorkspacePicker);
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);

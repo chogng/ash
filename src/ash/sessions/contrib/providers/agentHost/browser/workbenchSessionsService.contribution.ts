@@ -8,7 +8,8 @@ import { SessionsManagementService } from '../../../../services/sessions/browser
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from './appServerSessionsProvider.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { WorkspaceSelection, selectionFromWorkspace } from '../../../../browser/workspaceSelection.js';
+import { selectionFromWorkspace } from '../../../../common/agentHostSessionWorkspace.js';
+import { WorkspacePicker } from '../../../chat/browser/sessionWorkspacePicker.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
 
@@ -17,7 +18,7 @@ class WorkbenchSessionsManagementService extends SessionsManagementService {
 		const provider = instantiationService.createInstance(AppServerSessionsProvider, {
 			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
 			selectWorkspace: async folders => {
-				using selection = instantiationService.createInstance(WorkspaceSelection);
+				using selection = instantiationService.createInstance(WorkspacePicker);
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);

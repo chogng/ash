@@ -23,6 +23,7 @@ import '../../../common/theme.js';
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	declare readonly input: NewChatInputWidget;
 	private readonly tips: ChatInputTipPresenter;
+	private readonly workspacePicker: SessionWorkspacePicker;
 	private submittedInput = false;
 	private composerThreadId: string | undefined;
 
@@ -85,7 +86,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			focusInput: () => this.input.focus(),
 		}));
 		footer.classList.add('ash-sessions-chat-input-footer');
-		this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
+		this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
 		parent.append(footer);
 		this.composerThreadId = model.threadId;
 		this._register(model.onDidChange(() => {
@@ -102,5 +103,10 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this.input.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.input.element.classList.toggle('has-conversation', this.submittedInput || this.model.items.length > 0);
 		this.tips.update();
+	}
+
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.workspacePicker.setVisible(visible);
 	}
 }

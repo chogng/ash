@@ -10,7 +10,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { selectionFromWorkspace } from '../workspaceSelection.js';
+import { selectionFromWorkspace } from '../../common/agentHostSessionWorkspace.js';
 
 interface Item extends IQuickPickItem { readonly id: string; }
 

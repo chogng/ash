@@ -4,6 +4,33 @@ import type { AppServerProtocolClient } from '../../../agentHost/browser/appServ
 import { AppServerLocalGitService } from '../../browser/appServerLocalGitService.js';
 import { decodeAppServerRequestParams } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { Event } from '../../../../base/common/event.js';
+
+test('worktree choices use the captured workspace repositories and exclude unavailable or owned checkouts', async () => {
+	const calls: unknown[] = [];
+	const service = new AppServerLocalGitService({
+		generation: 1, state: 'ready', onStateChange: Event.None,
+		request: async (definition: { method: 'git/repositories' | 'git/worktree/list'; }, params: unknown) => {
+			decodeAppServerRequestParams(definition.method, params);
+			calls.push([definition.method, params]);
+			if (definition.method === 'git/repositories') { return { repositories: [{ id: 'repo', label: 'Project', path: '.' }] }; }
+			return {
+				worktrees: [
+					{ path: '/source', branch: 'main', current: true, state: 'ready' },
+					{ path: '/review', branch: null, current: false, state: 'ready' },
+					{ path: '/locked', branch: null, current: false, state: 'locked' },
+					{ path: '/owned', branch: null, current: false, state: 'threadOwned' },
+				]
+			};
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.listWorktrees(CancellationToken.None), [
+		{ label: 'main', path: '/source', sourcePath: '/source' },
+		{ label: 'Project', path: '/review', sourcePath: '/source' },
+	]);
+	assert.deepEqual(calls, [['git/repositories', {}], ['git/worktree/list', { repositoryId: 'repo' }]]);
+});
 
 test('App local Git sends typed clone and cancellation requests with the same operation identity', async () => {
 	const requests: unknown[] = [];
