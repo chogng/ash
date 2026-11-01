@@ -4,10 +4,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { checkLayers } from './layersChecker.ts';
-import { PROJECTS } from './layersTypeCheck.ts';
+import { checkLayers } from '../../checker/layersChecker.ts';
+import { PROJECTS } from '../../checker/layersTypeCheck.ts';
 
-const repositoryRoot = resolve(import.meta.dirname, '../..');
+const repositoryRoot = resolve(import.meta.dirname, '../../..');
 const compiler = join(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
 
 function fixture(t: test.TestContext) {
@@ -167,7 +167,7 @@ test('configuration and missing-contract errors fail instead of silently checkin
 	assert.throws(() => checkLayers(join(project.directory, 'missing.json'), project.sourceRoot), /read|Cannot/i);
 	project.write('platform/ipc/common/mainProcessService.ts', 'export {};');
 	assert.throws(() => project.check(), /Missing IMainProcessService contract/);
-	const result = spawnSync(compiler, [join(import.meta.dirname, 'layersChecker.ts'), '--unknown'], { cwd: repositoryRoot, encoding: 'utf8' });
+	const result = spawnSync(compiler, [join(repositoryRoot, 'build/checker/layersChecker.ts'), '--unknown'], { cwd: repositoryRoot, encoding: 'utf8' });
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /Usage:/);
 });
