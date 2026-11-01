@@ -528,6 +528,8 @@ test('Sessions entry changes preserve navigation width when replacing the only v
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
 		layout.layout(new Dimension(1600, 1000));
 		layout.resizePart('sidebar', new Dimension(300, 1000));
+		const titlebar = parts.get('titlebar')!.domNode;
+		const titlebarHost = titlebar.parentElement;
 		for (const sidebarAvailable of [true, false]) {
 			layout.updateParts(() => {
 				layout.setPartAvailable('sessions', false);
@@ -537,6 +539,7 @@ test('Sessions entry changes preserve navigation width when replacing the only v
 				if (!sidebarAvailable) { layout.hidePart('sidebar'); }
 			});
 			assert.equal(layout.state.sidebar.width, 300, 'Opening a product page retains the navigation width');
+			assert.equal(titlebar.parentElement, titlebarHost, 'Mode changes retain the titlebar host and its animation state');
 			layout.updateParts(() => {
 				layout.setPrimaryPart('sessions');
 				layout.setPartAvailable('sessions', true);
@@ -545,6 +548,7 @@ test('Sessions entry changes preserve navigation width when replacing the only v
 				layout.showPart('sidebar');
 			});
 			assert.equal(layout.getPartSize('sidebar').width, 300, 'Returning to Chat retains the navigation width');
+			assert.equal(titlebar.parentElement, titlebarHost, 'Returning to Chat retains the titlebar host');
 		}
 	} finally {
 		for (const part of parts.values()) part.dispose();

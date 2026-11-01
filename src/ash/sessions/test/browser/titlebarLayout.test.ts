@@ -6,6 +6,29 @@ suite('Sessions native titlebar layout', () => {
 	const browser = useBrowserTests();
 
 	for (const os of ['windows', 'mac']) {
+		test(`${os} sidebar minimum contains navigation and mode controls as native insets change`, async () => {
+			const { page } = browser;
+			await page.goto(`/sessionsTitlebar.html?os=${os}`);
+			await page.waitForFunction(() => !!window.ashSessionsTitlebarFixture);
+			await page.setViewportSize({ width: 640, height: 720 });
+			for (const leftInset of os === 'mac' ? [90, 110, 0, 90] : [0]) {
+				await page.evaluate(() => window.ashSessionsTitlebarFixture.setSidebarWidth(0));
+				await page.evaluate(left => window.ashSessionsTitlebarFixture.setInsets(left, 0), leftInset);
+				await expect.poll(() =>
+					page.locator('.ash-sessions-titlebar-left').evaluate(element => {
+						const mode = element.querySelector('.ash-sessions-workspace-mode')!.getBoundingClientRect();
+						const inset = Number.parseFloat(getComputedStyle(element).paddingRight);
+						return Math.ceil(mode.right + inset) - window.ashSessionsTitlebarFixture.minimumSidebarWidth;
+					}),
+				).toBe(0);
+				await page.evaluate(() => window.ashSessionsTitlebarFixture.setSidebarWidth(window.ashSessionsTitlebarFixture.minimumSidebarWidth));
+				const navigation = (await page.locator('.ash-menubar.ash-sessions-titlebar-actions').boundingBox())!;
+				const mode = (await page.locator('.ash-sessions-workspace-mode').boundingBox())!;
+				expect(navigation.x).toBeGreaterThanOrEqual(leftInset);
+				expect(mode.x).toBeGreaterThanOrEqual(navigation.x + navigation.width);
+			}
+		});
+
 		test(`${os} keeps actions inside the native control area through resize and fullscreen`, async () => {
 			const { page } = browser;
 			await page.goto(`/sessionsTitlebar.html?os=${os}`);

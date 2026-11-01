@@ -441,7 +441,7 @@ suite('Chat message copy ownership', () => {
 			public override async writeText(text: string): Promise<void> { writes++; await entered.complete(text); await completed.p; }
 		}());
 		parent.registerInstance(IClipboardService, clipboard);
-		const services = createCodeEditorServices(resources, parent);
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources, parent)));
 		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
 		document.body.append(widget.element); widget.setVisible(true);
 		widget.render([{ id: 'response', type: 'agentMessage', text: '**first**', transient: true }]);

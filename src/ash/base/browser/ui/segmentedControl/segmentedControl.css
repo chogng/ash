@@ -137,6 +137,11 @@
 
 @media (prefers-reduced-motion: no-preference) {
 	.ash-segmented-control::before {
-		transition: translate var(--ash-animation-durationFast) ease-out;
+		transition: translate
+			var(
+				--ash-segmented-control-transition-duration,
+				var(--ash-animation-durationFast)
+			)
+			ease-out;
 	}
 }

@@ -1,4 +1,4 @@
-import { Orientation } from '../../base/browser/ui/sash/sash.js';
+import { Orientation, type IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
 import type { IPositionedRectangle } from '../../base/browser/geometry.js';
@@ -286,6 +286,7 @@ export interface SessionsWorkbenchLayoutOptions {
 
 /** Adapts retained Workbench Parts to the window Grid. */
 class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
+	private boundarySashes: IBoundarySashes = {};
 	constructor(
 		partId: SessionsPartId,
 		part: Part,
@@ -324,6 +325,20 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 	public override layout(bounds: IPositionedRectangle): void {
 		// Page changes resize the Grid several times; sash drags still lay out Parts immediately.
 		if (!this.isLayoutDeferred()) super.layout(bounds);
+		this.updateFeedbackOffsets();
+	}
+
+	public override setBoundarySashes(sashes: IBoundarySashes): void {
+		super.setBoundarySashes(sashes);
+		this.boundarySashes = sashes;
+		this.updateFeedbackOffsets();
+	}
+
+	private updateFeedbackOffsets(): void {
+		// Outer boundaries continue through the titlebar, above the body Grid's drag area.
+		const offset = -this.titlebar.minimumHeight / 2;
+		this.boundarySashes.left?.setFeedbackOffset(offset);
+		this.boundarySashes.right?.setFeedbackOffset(offset);
 	}
 }
 
@@ -616,7 +631,9 @@ export class DesktopWorkbenchLayout
 		this.primaryPart = partId;
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.compositionChanged.fire();
-		this.rebuildGrid(state, dimension);
+		// View priorities already follow the composition. Retain the Grid so titlebar
+		// transitions and focus survive switching between Chat and Code.
+		this.restorePartVisibility();
 		if (partId === 'sessions' && this.isViewVisible(this.view('auxiliarybar')))
 			this.resizeView(
 				this.view('auxiliarybar'),

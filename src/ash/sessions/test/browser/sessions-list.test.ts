@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { SessionsList } from '../../browser/parts/sidebar/sessionsList.js';
@@ -230,6 +231,55 @@ test('SessionsList updates passive status without changing row identity or selec
 	dom.window.close();
 });
 
+
+for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const) test(`archive click feedback follows the completed operation (${outcome})`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using changes = new Emitter<void>();
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'feedback', flushInterval: 0 });
+	const pending = new DeferredPromise<unknown>();
+	const animations: Array<{ cancelled: boolean; }> = [];
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'animate', {
+		value: () => {
+			const animation = { cancelled: false, finished: new Promise(() => { }), cancel() { this.cancelled = true; } };
+			animations.push(animation);
+			return animation;
+		}
+	});
+	let drafts = [{ untitledSessionId: 'feedback', title: 'Synthetic feedback' }];
+	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback');
+	const sessions = { sessions: [], get untitledSessions() { return drafts; }, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
+	const views = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
+	let menu: IContextMenuDelegate | undefined;
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', sessions, views,
+		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } },
+		emptyGroups, storage, emptyProjects, { executeCommand: () => pending.p } as unknown as ICommandService,
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications);
+	const row = list.domNode.querySelector<HTMLElement>('.ash-sessions-list-row')!;
+	Object.defineProperty(row, 'getBoundingClientRect', { value: () => new dom.window.DOMRect(10, 48, 240, 28) });
+	row.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
+	const run = Promise.resolve(menu!.getActions().find(action => action.id === 'agentSession.archive')!.run());
+	assert.equal(dom.window.document.querySelector('.ash-click-confetti'), null, 'Pending confirmation produces no celebration');
+	if (outcome === 'confirmed') {
+		drafts = [];
+		changes.fire();
+		assert.equal(row.isConnected, false);
+	}
+	if (outcome === 'disposed') list.dispose();
+	if (outcome === 'failed') {
+		await pending.error(new Error('Synthetic archive failure'));
+		await assert.rejects(run, /Synthetic archive failure/);
+	} else {
+		await pending.complete(outcome !== 'cancelled');
+		await run;
+	}
+	const overlay = dom.window.document.querySelector<HTMLElement>('.ash-click-confetti');
+	assert.equal(!!overlay, outcome === 'confirmed');
+	if (overlay) assert.deepEqual([overlay.style.left, overlay.style.top], ['10px', '48px']);
+	list.dispose();
+	assert.equal(dom.window.document.querySelector('.ash-click-confetti'), null);
+	assert.ok(animations.every(animation => animation.cancelled));
+});
 
 test('passive management labels use the installed Chinese catalog and retain unknown states', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;

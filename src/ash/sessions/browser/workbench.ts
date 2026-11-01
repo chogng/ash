@@ -1,3 +1,4 @@
+import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
 import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
 import { Menus } from './menus.js';
@@ -649,6 +650,7 @@ export abstract class Workbench extends Disposable {
 		options.container.replaceChildren();
 		this.domNode = h(ownerDocument, 'main');
 		this.domNode.className = 'ash-sessions-window ash-code-sessions-window';
+		this._register(bindSashFeedbackPresentation(this.domNode, 'handle'));
 		this.domNode.setAttribute('aria-busy', 'true');
 		options.container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));

@@ -1,5 +1,9 @@
-.ash-workbench-sidebar {
+.ash-sessions-window .ash-workbench-sidebar {
 	background: var(--ash-sideBar-background);
+	border-right-color: var(
+		--ash-sideBar-border,
+		var(--ash-contrastBorder, var(--ash-border))
+	);
 }
 
 .ash-sessions-navigation-view {

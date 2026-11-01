@@ -4,19 +4,26 @@
 	background: linear-gradient(
 		to right,
 		var(--ash-sideBar-background) 0
-			calc(
-				var(--ash-sessions-titlebar-sidebar-width, 0px) -
-					var(--ash-strokeThickness)
-			),
-		var(--ash-border)
-			calc(
-				var(--ash-sessions-titlebar-sidebar-width, 0px) -
-					var(--ash-strokeThickness)
-			)
 			var(--ash-sessions-titlebar-sidebar-width, 0px),
 		var(--ash-titleBar-background)
 			var(--ash-sessions-titlebar-sidebar-width, 0px)
 	);
+}
+
+.ash-sessions-titlebar::after {
+	/* Continue the sidebar's border paint at the same Grid edge. */
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(
+		var(--ash-sessions-titlebar-sidebar-width, 0px) -
+			var(--ash-strokeThickness)
+	);
+	width: var(--ash-strokeThickness);
+	border-right: var(--ash-strokeThickness) solid
+		var(--ash-sideBar-border, var(--ash-contrastBorder, var(--ash-border)));
+	pointer-events: none;
 }
 
 .ash-sessions-titlebar > .ash-workbench-part-content {

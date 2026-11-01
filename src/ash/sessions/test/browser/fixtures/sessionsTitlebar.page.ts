@@ -52,6 +52,15 @@ resources.add(CommandsRegistry.register('test.sessionInformation', () => { runs+
 resources.add(MenusRegistry.appendMenuItem(Menus.TitleBarRightLayout, {
 	command: { id: 'test.sessionInformation', title: 'Session information', icon: Lxicon.info }, group: 'navigation',
 }));
+for (const [id, title, icon] of [
+	['test.sidebar', 'Toggle sidebar', Lxicon.layoutSidebarLeftSession],
+	['test.back', 'Back', Lxicon.chevronLeft],
+	['test.forward', 'Forward', Lxicon.chevronRight],
+] as const) {
+	resources.add(MenusRegistry.appendMenuItem(Menus.TitleBarLeftLayout, {
+		command: { id, title, icon }, group: 'navigation',
+	}));
+}
 const titlebar = resources.add(services.createInstance(TitlebarPart, root, document.body.dataset.os === 'mac' ? 'actions-only' : 'application-menu'));
 titlebar.domNode.classList.add('ash-electron-titlebar');
 titlebar.domNode.style.cssText = 'height: 36px; flex: 0 0 auto; --ash-sessions-titlebar-sidebar-width: 260px;';
@@ -59,6 +68,8 @@ const nativeGeometry = document.createElement('style');
 document.head.append(nativeGeometry);
 
 window.ashSessionsTitlebarFixture = {
+	get minimumSidebarWidth() { return titlebar.minimumSidebarWidth; },
+	setSidebarWidth(width: number) { titlebar.domNode.style.setProperty('--ash-sessions-titlebar-sidebar-width', `${width}px`); },
 	setInsets(left: number, right: number) {
 		nativeGeometry.textContent = `.ash-electron-titlebar { --ash-titlebar-controls-leftInset: ${left}px; --ash-titlebar-controls-rightInset: ${right}px; }`;
 	},
@@ -70,6 +81,8 @@ window.ashSessionsTitlebarFixture = {
 declare global {
 	interface Window {
 		ashSessionsTitlebarFixture: {
+			readonly minimumSidebarWidth: number;
+			setSidebarWidth(width: number): void;
 			setInsets(left: number, right: number): void;
 			setFullscreen(fullscreen: boolean): void;
 			setTheme(index: number): void;

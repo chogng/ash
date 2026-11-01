@@ -24,6 +24,11 @@
 	inset: 0;
 }
 
+.ash-sessions-workbench-layout .ash-primary-sidebar-sash {
+	/* The sidebar paints its border inside the trailing edge. */
+	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
+}
+
 .ash-sessions-content-frame {
 	display: none;
 	position: absolute;

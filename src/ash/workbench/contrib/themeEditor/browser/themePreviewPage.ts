@@ -15,6 +15,7 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import { startWorkbench } from '../../../browser/workbench.js';
 import { BrowserTitleService, createBrowserTitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { InMemoryWorkingCopyBackupService } from '../../../services/workingCopy/common/workingCopyBackupService.js';
 import { BrowserURLService } from '../../../services/url/browser/urlService.js';
@@ -95,13 +96,14 @@ class ChatPreviewPane extends ChatViewPane {
 		@INotificationService notifications: INotificationService,
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IEditorGroupsService editorGroups: IEditorGroupsService,
 		@IEditorService editorService: IEditorService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IContextViewService private readonly contextViewService: IContextViewService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
-		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorService);
+		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
 	}
 
 	public initialize(): void {
@@ -165,6 +167,11 @@ class ChatPreviewPane extends ChatViewPane {
 	protected override get selectionRevision(): number { return this.revision; }
 	protected override saveViewState(): void { }
 	protected override ensureConversationForVisibleChat(): void { }
+	protected override async restoreEditorPane(id: string): Promise<void> {
+		if (!this.entries.some(entry => entry.id === id)) throw chatUnavailable();
+		if (!this.openedPaneIds.includes(id)) this.openedPaneIds.push(id);
+		this.syncSessions();
+	}
 	protected override updateSessions() {
 		return { entries: this.entries.filter(entry => this.openedPaneIds.includes(entry.id)), activePaneId: this.selected };
 	}

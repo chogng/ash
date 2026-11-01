@@ -125,6 +125,11 @@
 	display: none;
 }
 
+.ash-chat-response-helpful.checked {
+	border-color: var(--ash-widget-border);
+	background: var(--ash-button-activeBackground);
+}
+
 .ash-chat-request-editor {
 	margin-top: var(--ash-spacing-size120);
 }

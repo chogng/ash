@@ -19,7 +19,7 @@ export class WindowModeControl extends Disposable {
 	) {
 		super();
 		const modes = [
-			{ id: 'agents', label: localize({ bundle: 'ash', key: 'windowMode.agents' }, 'Chat / Agents'), icon: Lxicon.chat },
+			{ id: 'agents', label: localize({ bundle: 'ash', key: 'windowMode.agents' }, 'Chat / Agents'), icon: Lxicon.chatMode },
 			{ id: 'code', label: localize({ bundle: 'ash', key: 'windowMode.code' }, 'Code'), icon: Lxicon.code },
 		] as const;
 		const control = this._register(new SegmentedControl(container, {

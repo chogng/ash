@@ -1398,7 +1398,21 @@
     "chat.usage.loading": "正在加载用量…",
     "chat.usage.loadFailed": "无法加载用量：{0}",
     "chat.usage.verbosityTitle": "聊天用量无障碍帮助",
-    "chat.usage.verbosityDescription": "当用量设置获得焦点时，播报如何打开无障碍帮助。"
+    "chat.usage.verbosityDescription": "当用量设置获得焦点时，播报如何打开无障碍帮助。",
+    "chat.upvoteAnimation.invalid": "请选择支持的有用回复动画。",
+    "chat.upvoteAnimation.title": "有用回复动画",
+    "chat.upvoteAnimation.description": "在 Ash 中将 IDE 聊天回复标记为有用后显示的动画。",
+    "chat.upvoteAnimation.off": "关闭",
+    "chat.upvoteAnimation.confetti": "彩纸",
+    "chat.upvoteAnimation.floatingThumbs": "浮动点赞图标",
+    "chat.upvoteAnimation.pulseWave": "波纹",
+    "chat.upvoteAnimation.radiantLines": "放射线",
+    "chat.response.helpful": "有用",
+    "chat.response.feedbackInvalid": "需要一条已完成的聊天回复。",
+    "chat.response.helpfulTooltip": "在 Ash 中将此回复标记为有用",
+    "chat.response.helpfulSaved": "已在 Ash 中标记为有用。",
+    "chat.response.helpfulFailed": "无法在 Ash 中保存评价：{0}",
+    "chat.response.feedbackHelp": "已完成的 IDE 聊天回复提供“有用”按钮。按 Enter 或空格将该回复保存为个人有用标记，重开聊天后仍然保留。评价只保存在 Ash 当前配置文件中，不会发送给模型厂商或更改回复。可在设置中的“有用回复动画”选择效果或关闭动画；减少动态效果设置也会关闭动画。"
   },
   "ash.workbench": {
     "command.OpenCalls": "打开通话",

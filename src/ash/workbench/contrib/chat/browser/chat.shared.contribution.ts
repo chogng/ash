@@ -71,6 +71,7 @@ import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContrib
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
 // Both renderer hosts use these primitives; each host registers its own New and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
@@ -193,6 +194,7 @@ registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
+configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,

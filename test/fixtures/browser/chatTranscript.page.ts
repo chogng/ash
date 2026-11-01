@@ -147,6 +147,10 @@ if (locale) {
 	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
 	setNlsMessages(locale, catalog.bundles);
 }
+if (new URLSearchParams(location.search).has('workbench')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	document.body.classList.add('ash-workbench');
+}
 const resources = new DisposableStore();
 const appLogs: LogEntry[] = [];
 const parentServices = resources.add(new InstantiationService());
@@ -617,6 +621,7 @@ declare global {
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
+			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
 			prepareRequestEditing(cowork: boolean): void;
@@ -801,6 +806,7 @@ window.ashChatTranscriptIntegration = {
 		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
+	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
 	prepareRequestEditing: cowork => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
@@ -1274,8 +1280,9 @@ window.ashChatTranscriptIntegration = {
 		});
 	},
 	runSessionAction: async (command, target) => {
-		await lifecycleCommands!.executeCommand(command, target);
-		if (command === 'agentSession.archive') lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
+		const result = await lifecycleCommands!.executeCommand(command, target);
+		if (command === 'agentSession.archive' && result === true) lifecycleSessions!.createUntitledSession('Preserved synthetic draft');
+		return result;
 	},
 	sessionLifecycleState: () => ({ activeThreadId: lifecycleSessions!.active?.threadId, requests: lifecycleRequests, opened: lifecycleOpened, sessions: lifecycleSessions!.sessions.map(session => ({ id: session.sessionId, status: session.status, threads: session.chats.map(chat => `${chat.threadId}/${chat.status}`) })), drafts: lifecycleSessions!.untitledSessions.map(session => session.title) }),
 	showReadAloudMessage: async (text, cowork = false) => {

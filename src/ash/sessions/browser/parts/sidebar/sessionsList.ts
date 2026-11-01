@@ -6,7 +6,8 @@ import { addDisposableListener, getWindow, h } from '../../../../base/browser/do
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { AbstractDisposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { captureAnimationTarget, triggerConfettiAnimation } from '../../../../base/browser/ui/animations/animations.js';
 import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -37,6 +38,7 @@ import { readNewChatDraftState } from '../../../contrib/chat/common/newChatDraft
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
+	private readonly archiveFeedback = this._register(new MutableDisposable());
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly list: HTMLDivElement;
@@ -192,7 +194,15 @@ export class SessionsList extends DomWidget {
 			getAnchor: () => anchor,
 			getActions: () => createSessionItemActions(selection, this.commands, this.storage, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })),
+				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
+					...action,
+					run: async () => {
+						const target = captureAnimationTarget(item.domNode);
+						const archived = await action.run();
+						if (archived === true && !this._store.isDisposed) this.archiveFeedback.value = triggerConfettiAnimation(target);
+						return archived;
+					},
+				}),
 			onHide: () => { item.setMenuVisible(false); },
 		});
 	}

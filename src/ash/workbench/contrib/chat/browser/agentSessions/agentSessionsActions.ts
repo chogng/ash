@@ -187,7 +187,7 @@ export function registerAgentSessionActions(): void {
 	registerAction2(class ArchiveAgentSessionAction extends Action2 {
 		constructor() { super({ id: archiveId, title: localize2('chatSession.archive', 'Archive') }); }
 
-		override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		override async run(accessor: ServicesAccessor, argument?: unknown): Promise<boolean> {
 			const sessions = accessor.get(IAgentSessionActionsService);
 			const configuration = accessor.get(IConfigurationService);
 			const dialogs = accessor.get(IDialogService);
@@ -199,7 +199,9 @@ export function registerAgentSessionActions(): void {
 				detail: localize('chatSession.archive.detail', 'Running work in this session will be interrupted. You can restore its root conversation later.'),
 				primaryButton: action.title.value,
 			});
-			if (result.confirmed) await sessions.archiveSession((await target.resolve()).sessionId);
+			if (!result.confirmed) return false;
+			await sessions.archiveSession((await target.resolve()).sessionId);
+			return true;
 		}
 	});
 

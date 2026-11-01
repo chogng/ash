@@ -1,4 +1,8 @@
 .ash-window-mode-control.ash-segmented-control {
+	--ash-segmented-control-transition-duration: var(
+		--ash-animation-durationNormal
+	);
+
 	color: var(--ash-titleBar-foreground);
 	-webkit-app-region: no-drag;
 }
