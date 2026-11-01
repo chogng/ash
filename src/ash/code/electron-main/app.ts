@@ -1,3 +1,4 @@
+import { BrowserNetworkProxy } from '../../platform/browserView/electron-main/browserNetworkProxy.js';
 import { WSLRemoteAgentHostService } from '../../platform/agentHost/node/wslRemoteAgentHostService.js';
 import { TunnelAgentHostService } from '../../platform/agentHost/node/tunnelAgentHostService.js';
 import { isSSHAgentHost, remoteAgentHostRoot, canonicalAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
@@ -1863,7 +1864,14 @@ export class AshApplication extends Disposable {
 		return channel;
 	}
 
-	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay, contextMenu: ElectronContextMenu): InstantiationService {
+	private createBrowserServices(
+		window: BrowserWindow,
+		workspaceContext: WorkspaceContextMainService,
+		remotePortForwardingService: SshPortForwardingService,
+		windowDisposables: DisposableStore,
+		supervisor: AppServerConnectionRelay,
+		contextMenu: ElectronContextMenu,
+	): InstantiationService {
 		const context = `window:${window.id}`;
 		const secrets = windowDisposables.add(new BaseSecretStorageService());
 		const windowSessionId = this.workbenchWindowData.get(window.id)?.windowSessionId;
@@ -1883,10 +1891,14 @@ export class AshApplication extends Disposable {
 			contextMenu,
 			getNlsMessages: () => this.activeLanguagePack.bundles['ash.workbench'] ?? {},
 			getWorkspaceId: () => workspaceContext.getWorkspace().id,
-			getRemoteNetwork: () => {
+			getWindowNetwork: () => {
 				const authority = getWorkspaceRemoteAuthority(workspaceContext.getWorkspace());
-				return authority ? { authority, tunnels: remotePortForwardingService } : undefined;
+				return authority ? { authority } : undefined;
 			},
+			getRemoteNetwork: (network: import('../../platform/browserView/common/browserView.js').IBrowserViewNetwork) => ({
+				authority: network.authority,
+				tunnels: new BrowserNetworkProxy(this.mainProcessIpcServer.getChannel('browserNetwork', client => client.ctx === context), network),
+			}),
 			createSession: (partition: string) => {
 				const session = electronSession.fromPartition(partition);
 				return session;

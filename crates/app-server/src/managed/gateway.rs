@@ -630,6 +630,16 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             continue;
                         }
                     };
+                if request
+                    .get("method")
+                    .and_then(Value::as_str)
+                    .is_some_and(|method| method.starts_with("browser/tcp/"))
+                {
+                    if let Some(params) = request.get_mut("params").and_then(Value::as_object_mut) {
+                        params.remove("executionTarget");
+                    }
+                    raw = request.to_string().into();
+                }
                 let target = match execution_target {
                     Some(SessionExecutionTarget::Local { root }) => {
                         // The durable root is only a routing tag here. The registry resolves
@@ -1294,6 +1304,15 @@ fn selected_execution_target(
     let terminal_session =
         terminal_directory.map(|(session, _)| Value::String(session.to_string()));
     let params = request.get("params");
+    if method.is_some_and(|method| method.starts_with("browser/tcp/")) {
+        return serde_json::from_value(
+            params
+                .and_then(|params| params.get("executionTarget"))
+                .cloned()
+                .unwrap_or(Value::Null),
+        )
+        .map_err(|error| error.to_string());
+    }
     if method == Some("session/create") {
         let selected: Option<SessionExecutionTarget> = serde_json::from_value(
             params

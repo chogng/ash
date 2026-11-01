@@ -5,10 +5,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { createServiceIdentifier, IInstantiationService } from '../../instantiation/common/instantiation.js';
-import { BrowserViewStorageScope, type IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, normalizeBrowserViewUrl } from '../common/browserView.js';
+import {
+	BrowserViewStorageScope, getBrowserViewSessionNetwork, normalizeBrowserViewUrl,
+	type IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds,
+	type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewNetwork,
+} from '../common/browserView.js';
 import { BrowserView } from './browserView.js';
 import { BrowserSession } from './browserSession.js';
-import type { SshPortForwardingService } from '../../remote/electron-main/sshPortForwardingService.js';
+import type { IBrowserViewNetworkProxyProvider } from '../common/browserView.js';
 import type { ISerializedBrowserHistoryEntriesSnapshot } from '../common/browserHistory.js';
 import { BrowserSessionHistory } from './browserSessionHistory.js';
 import type { IBrowserViewWindowConfiguration, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions, IBrowserViewFindInPageOptions } from '../common/browserView.js';
@@ -23,7 +27,7 @@ import { browserZoomFactors, browserZoomDefaultIndex } from '../common/browserVi
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
 	tryGetBrowserView(id: string): BrowserView | undefined;
-	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView>;
+	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas'], network?: IBrowserViewNetwork | null): Promise<BrowserView>;
 	createBrowserContext(threadId: string): string;
 	disposeBrowserContext(contextId: string, threadId: string): Promise<void>;
 	validateAgentAccess(id: string, sessionId: string): BrowserView;
@@ -31,12 +35,18 @@ export interface IBrowserViewMainService extends IBrowserViewService {
 	revokeSharing(): void;
 	cancelPermissionRequests(): void;
 }
+interface BrowserViewRemoteNetwork {
+	readonly authority: string;
+	readonly tunnels: IBrowserViewNetworkProxyProvider;
+}
+
 export interface BrowserViewMainServiceOptions {
 	readonly window: BrowserWindow;
 	readonly getWorkspaceId: () => string;
 	readonly createSession: (partition: string) => Session;
 	readonly createView: (session: Session) => WebContentsView;
-	readonly getRemoteNetwork: () => { readonly authority: string; readonly tunnels: SshPortForwardingService; } | undefined;
+	readonly getWindowNetwork: () => IBrowserViewNetwork | undefined;
+	readonly getRemoteNetwork: (network: IBrowserViewNetwork) => BrowserViewRemoteNetwork | undefined | Promise<BrowserViewRemoteNetwork | undefined>;
 	readonly contextMenu: ElectronContextMenu;
 	readonly getNlsMessages: () => Readonly<Record<string, string>>;
 }
@@ -72,7 +82,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	private readonly audiences = new Map<string, readonly string[]>();
 	private readonly grants = new Map<string, Map<string, AbortController>>();
 	private readonly histories = new Map<BrowserSession, BrowserSessionHistory>();
-	private readonly contexts = new Map<string, { readonly threadId: string; readonly affinity: string; readonly session: BrowserSession; }>();
+	private readonly contexts = new Map<string, { readonly threadId: string; readonly affinity: string; readonly session: BrowserSession; readonly network: IBrowserViewNetwork | undefined; }>();
 	private contextMenuOwner: BrowserView | undefined;
 	constructor(private readonly options: BrowserViewMainServiceOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -176,9 +186,11 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		this.assertNotDisposed();
 		if (this.contexts.size >= 128) { throw new Error('BrowserContextCapacityExceeded'); }
 		const affinity = JSON.stringify([threadId, randomUUID()]);
-		const identity = this.sessionIdentity({ scope: BrowserViewStorageScope.Agent, affinity });
+		const owned = [...this.targets].map(([, view]) => view.getInfo()).find(info => info.owner.type === 'agent' && info.owner.sessionId === threadId);
+		const network = owned ? getBrowserViewSessionNetwork(owned.session) : this.options.getWindowNetwork();
+		const identity = this.sessionIdentity({ scope: BrowserViewStorageScope.Agent, affinity, network });
 		const session = BrowserSession.getOrCreate(identity, BrowserViewStorageScope.Agent, this.options.createSession('ash-browser-' + identity));
-		this.contexts.set(identity, { threadId, affinity, session });
+		this.contexts.set(identity, { threadId, affinity, session, network });
 		return identity;
 	}
 	public async disposeBrowserContext(contextId: string, threadId: string): Promise<void> {
@@ -192,7 +204,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		await context.session.electronSession.clearStorageData();
 		await context.session.electronSession.clearCache();
 	}
-	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView> {
+	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas'], network?: IBrowserViewNetwork | null): Promise<BrowserView> {
 		const pages = [...this.targets].map(([, view]) => view);
 		const owned = pages.filter(view => { const owner = view.getInfo().owner; return owner.type === 'agent' && owner.sessionId === sessionId; }).length;
 		if (owned + this.creations.size >= 256) { throw new Error('BrowserTargetCapacityExceeded'); }
@@ -203,10 +215,17 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		})?.getInfo().session;
 		const affinity = context?.threadId === sessionId ? context.affinity : existing?.scope === BrowserViewStorageScope.Agent ? existing.affinity : undefined;
 		if (browserContextId !== undefined && affinity === undefined) { throw new Error('BrowserContextAccessDenied'); }
+		const threadPage = network === undefined ? pages.find(view => {
+			const owner = view.getInfo().owner;
+			return owner.type === 'agent' && owner.sessionId === sessionId;
+		}) : undefined;
+		const requestedNetwork = context ? context.network : existing ? getBrowserViewSessionNetwork(existing)
+			: network === null ? undefined : network ?? (threadPage ? getBrowserViewSessionNetwork(threadPage.getInfo().session) : this.options.getWindowNetwork());
+		if (browserContextId !== undefined && network !== undefined && requestedNetwork?.authority !== network?.authority) { throw new Error('BrowserContextNetworkMismatch'); }
 		return this.getOrCreate('browser_target_' + randomUUID(), {
 			initialUrl: url,
 			owner: { type: 'agent', sessionId },
-			session: { scope: BrowserViewStorageScope.Agent, affinity: affinity ?? sessionId },
+			session: { scope: BrowserViewStorageScope.Agent, affinity: affinity ?? sessionId, ...(requestedNetwork ? { network: requestedNetwork } : {}) },
 			...(canvas ? { canvas } : {}),
 		}, signal);
 	}
@@ -214,11 +233,14 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		let identity: string;
 		switch (storage.scope) {
 			case BrowserViewStorageScope.Global: identity = 'global'; break;
-			case BrowserViewStorageScope.Workspace: identity = 'workspace:' + this.options.getWorkspaceId(); break;
+			case BrowserViewStorageScope.Workspace:
+				identity = storage.affinity === undefined ? 'workspace:' + this.options.getWorkspaceId()
+					: JSON.stringify(['workspace', this.options.getWorkspaceId(), storage.affinity]);
+				break;
 			case BrowserViewStorageScope.Ephemeral: identity = 'ephemeral:' + pageId; break;
 			case BrowserViewStorageScope.Agent: identity = JSON.stringify(['agent', this.options.window.id, storage.affinity]); break;
 		}
-		const remote = this.options.getRemoteNetwork();
+		const remote = getBrowserViewSessionNetwork(storage);
 		return createHash('sha256').update(remote ? JSON.stringify([identity, remote.authority]) : identity).digest('hex');
 	}
 	public validateAgentAccess(id: string, sessionId: string): BrowserView {
@@ -271,7 +293,12 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		signal.throwIfAborted();
 		const initialUrl = normalizeBrowserViewUrl(options.initialUrl);
 		if (options.owner.type === 'agent' && new URL(initialUrl).protocol === 'file:') { throw new Error('BrowserLocalFileAccessDenied'); }
-		const remoteNetwork = this.options.getRemoteNetwork();
+		const requestedNetwork = getBrowserViewSessionNetwork(options.session);
+		const remoteNetwork = requestedNetwork ? await this.options.getRemoteNetwork(requestedNetwork) : undefined;
+		signal.throwIfAborted();
+		if (requestedNetwork && (!remoteNetwork || remoteNetwork.authority !== requestedNetwork.authority)) {
+			throw new Error('BrowserRemoteNetworkUnavailable');
+		}
 		let network: IDisposable | undefined;
 		let view: BrowserView;
 		try {

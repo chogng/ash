@@ -349,3 +349,52 @@ pub struct BrowserListResult {
 #[cfg(test)]
 #[path = "browser_tests.rs"]
 mod tests;
+
+/// A stream is scoped to its renderer connection and routed to an admitted execution target.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserTcpParams {
+    #[schemars(length(min = 1, max = 128))]
+    pub stream_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    /// Repeat the same gateway selector on every operation; native endpoints accept only a consumed route.
+    pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserTcpOpenParams {
+    #[serde(flatten)]
+    pub stream: BrowserTcpParams,
+    #[schemars(length(min = 1, max = 253))]
+    pub host: String,
+    #[schemars(range(min = 1))]
+    pub port: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserTcpWriteParams {
+    #[serde(default)]
+    pub eof: bool,
+    #[serde(flatten)]
+    pub stream: BrowserTcpParams,
+    #[schemars(length(max = 87384))]
+    pub data_base64: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserTcpReadResult {
+    #[schemars(length(max = 87384))]
+    pub data_base64: String,
+    pub eof: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserTcpWriteResult {
+    #[schemars(range(max = 65536))]
+    pub written: usize,
+}

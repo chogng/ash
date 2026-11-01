@@ -2168,3 +2168,36 @@ fn ide_attachment_follows_one_gateway_connection_across_directory_routes() {
     client.close();
     served.join().unwrap();
 }
+
+#[test]
+fn browser_tcp_routes_every_chunk_to_its_selected_runtime() {
+    let profile = tempfile::tempdir().unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = ProfileAppServerRegistry::open(options, ash_app_server_diff::compute).unwrap();
+    let sessions: RemoteSessionIndex = Arc::new(Mutex::new(BTreeMap::new()));
+    for target in [
+        SessionExecutionTarget::Ssh {
+            host: "source-host".into(),
+            root: "/workspace".into(),
+        },
+        SessionExecutionTarget::Provider {
+            provider_id: "ash.dev-containers".into(),
+            workspace: "container-runtime".into(),
+            root: "/workspace".into(),
+        },
+    ] {
+        for method in [
+            "browser/tcp/open",
+            "browser/tcp/read",
+            "browser/tcp/write",
+            "browser/tcp/close",
+        ] {
+            assert_eq!(selected_execution_target(&registry, &sessions, &serde_json::json!({"method":method,"params":{"streamId":"stream","executionTarget":target}})).unwrap(), Some(target.clone()));
+        }
+    }
+}

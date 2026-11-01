@@ -433,6 +433,16 @@ use crate::protocol::browser::BrowserPerformResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserSharingSetParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpOpenParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserTcpWriteResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserTextInputTargetDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserUploadFile;
@@ -3773,6 +3783,10 @@ client_methods! {
         // Capability negotiation belongs to one connection; domain mutations must not gate it.
         serialization: ConnectionExclusive("initialize"),
     },
+    BrowserTcpOpen => "browser/tcp/open" { params: BrowserTcpOpenParams, response: (), serialization: None, },
+    BrowserTcpRead => "browser/tcp/read" { params: BrowserTcpParams, response: BrowserTcpReadResult, serialization: None, },
+    BrowserTcpWrite => "browser/tcp/write" { params: BrowserTcpWriteParams, response: BrowserTcpWriteResult, serialization: None, },
+    BrowserTcpClose => "browser/tcp/close" { params: BrowserTcpParams, response: (), serialization: None, },
     BrowserConfigure => "browser/configure" {
         params: BrowserConfigureParams,
         response: (),
@@ -6536,6 +6550,11 @@ typescript_bindings! {
     ClientInfo,
     AgentInteractionCapability,
     BrowserCapability,
+    BrowserTcpParams,
+    BrowserTcpOpenParams,
+    BrowserTcpWriteParams,
+    BrowserTcpReadResult,
+    BrowserTcpWriteResult,
     BrowserConfigureParams,
     BrowserCdpOperationDto,
     DirectoryGrantsHostCapability,

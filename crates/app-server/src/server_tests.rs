@@ -10087,3 +10087,84 @@ fn debug_session_graph_rpc_keeps_prepared_children_connection_owned_and_console_
     );
     assert!(gone["result"].is_null(), "{gone}");
 }
+
+#[test]
+fn browser_tcp_is_connection_owned_and_closes_native_sockets_on_disconnect() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let server = server();
+    let mut owner = server.product_host_connection();
+    initialize(&server, &mut owner);
+    let opened = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert!(opened.get("error").is_none(), "{opened}");
+    let (mut socket, _) = listener.accept().unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut stranger = server.product_host_connection();
+    initialize(&server, &mut stranger);
+    let denied = call(
+        &server,
+        &mut stranger,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
+    );
+    assert!(denied.get("error").is_some());
+    let mut untrusted = server.connection();
+    initialize(&server, &mut untrusted);
+    let denied = call(
+        &server,
+        &mut untrusted,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert_eq!(denied["error"]["message"], "ResourceNotOwner");
+    server.close_connection(owner);
+    let mut byte = [0];
+    assert_eq!(std::io::Read::read(&mut socket, &mut byte).unwrap(), 0);
+    server.close_connection(stranger);
+    server.close_connection(untrusted);
+}
+
+#[test]
+fn browser_tcp_half_close_keeps_the_response_readable() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let server = server();
+    let mut owner = server.product_host_connection();
+    initialize(&server, &mut owner);
+    let opened = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"browser/tcp/open","params":{"streamId":"stream","host":"127.0.0.1","port":listener.local_addr().unwrap().port()}}),
+    );
+    assert!(opened.get("error").is_none(), "{opened}");
+    let (mut socket, _) = listener.accept().unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let ended = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"browser/tcp/write","params":{"streamId":"stream","dataBase64":"","eof":true}}),
+    );
+    assert_eq!(ended["result"]["written"], 0, "{ended}");
+    assert_eq!(std::io::Read::read(&mut socket, &mut [0]).unwrap(), 0);
+    std::io::Write::write_all(&mut socket, b"reply").unwrap();
+    socket.shutdown(std::net::Shutdown::Write).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let response = call(
+            &server,
+            &mut owner,
+            serde_json::json!({"jsonrpc":"2.0","id":4,"method":"browser/tcp/read","params":{"streamId":"stream"}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        if response["result"]["dataBase64"] == "cmVwbHk=" {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{response}");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    server.close_connection(owner);
+}

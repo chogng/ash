@@ -1,3 +1,4 @@
+import { AppServerTcpService } from '../../platform/network/browser/appServerTcpService.js';
 import { AppServerProjectService } from '../../platform/projects/browser/appServerProjectService.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
@@ -113,6 +114,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 		return {
 			appServer,
+			tcp: new AppServerTcpService(connection),
 			contextResourceHost,
 			hasAppServer: true,
 			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,

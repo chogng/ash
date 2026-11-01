@@ -453,6 +453,7 @@ impl EnvStateMode {
 
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionState {
+    tcp_streams: Arc<network_proxy::TcpStreams>,
     pub(super) connection_id: u64,
     authority: ConnectionAuthority,
     pub(crate) ide_attachment: Arc<crate::client_host::IdeAttachment>,
@@ -1760,6 +1761,7 @@ impl AppServer {
     }
 
     pub(crate) fn cancel_connection_requests(&self, connection: &ConnectionState) {
+        connection.tcp_streams.close_all();
         self.request_cancellations
             .cancel_connection(connection.connection_id);
         self.cancel_connection_logins(connection.connection_id);
@@ -1789,6 +1791,7 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        connection.tcp_streams.close_all();
         self.cancel_connection_logins(connection.connection_id);
         self.memory_diagnostics_processor
             .connection_closed(connection.connection_id);
@@ -3222,6 +3225,16 @@ impl AppServer {
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()
                 .configure(connection, &request.params),
+            Some(
+                ClientMethod::BrowserTcpOpen
+                | ClientMethod::BrowserTcpRead
+                | ClientMethod::BrowserTcpWrite
+                | ClientMethod::BrowserTcpClose,
+            ) => self.browser_processor().tcp(
+                connection,
+                client_method(&request.method).unwrap(),
+                &request.params,
+            ),
             Some(ClientMethod::BrowserNetworkAuthorize) => self
                 .browser_processor()
                 .authorize_network(connection, &request.params, cancellation),

@@ -597,6 +597,65 @@ suite('Browser view ownership and operations', () => {
 		assert.deepEqual([f.manager.tryGetBrowserView(created.targetId), f.manager.tryGetBrowserView(id)?.id], [undefined, id]);
 	});
 
+	test('explicit page networks isolate storage by host and folder while local pages stay local in a remote window', async () => {
+		using f = fixture();
+		f.remote = true;
+		f.networks.add('ssh+one'); f.networks.add('ssh+two');
+		const create = async (authority?: string, affinity?: string) => {
+			const id = 'browser_target_' + crypto.randomUUID();
+			await f.manager.getOrCreateBrowserView(id, {
+				initialUrl: 'about:blank', owner: { type: 'user' },
+				session: { scope: BrowserViewStorageScope.Workspace, ...(authority ? { network: { authority } } : {}), ...(affinity ? { affinity } : {}) },
+			});
+			return f.manager.tryGetBrowserView(id)!;
+		};
+		const local = await create();
+		const first = await create('ssh+one', '/repo');
+		const sibling = await create('ssh+one', '/repo');
+		const folder = await create('ssh+one', '/other');
+		const host = await create('ssh+two', '/repo');
+		f.workspaceId = 'workspace-two';
+		const workspace = await create('ssh+one', '/repo');
+		assert.equal(local.getInfo().remoteAuthority, undefined);
+		assert.equal(first.session, sibling.session);
+		assert.notEqual(first.session, folder.session);
+		assert.notEqual(first.session, host.session);
+		assert.notEqual(first.session, local.session);
+		assert.notEqual(first.session, workspace.session);
+		assert.deepEqual(f.networkRequests, ['ssh+one', 'ssh+one', 'ssh+one', 'ssh+two', 'ssh+one']);
+	});
+
+	test('unknown or failed remote networks reject before creating Chromium and never use the local network', async () => {
+		using f = fixture();
+		const create = () => f.manager.getOrCreateBrowserView(id, { initialUrl: 'http://localhost:3000/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral, network: { authority: 'ssh+one' } } });
+		await assert.rejects(create(), /BrowserRemoteNetworkUnavailable/);
+		assert.equal(f.children.size, 0);
+		f.networks.add('ssh+one');
+		f.proxy = async () => { throw new Error('SSH unavailable'); };
+		await assert.rejects(create(), /SSH unavailable/);
+		assert.equal(f.children.size, 0);
+		assert.equal(f.manager.tryGetBrowserView(id), undefined);
+	});
+
+	test('native Agent creation validates its network metadata and CDP contexts keep the owning page network', async () => {
+		using f = fixture();
+		f.networks.add('ssh+one');
+		using host = f.createHost();
+		const channel = host.getChannel();
+		const params = { threadId: 'thread-one', url: 'about:blank' };
+		await assert.rejects(channel.call('renderer', 'create', { id: crypto.randomUUID(), params, network: { authority: 'ssh+one', endpoint: 'http://untrusted' } }), /browser network/);
+		const created = await channel.call<{ targetId: string; }>('renderer', 'create', { id: crypto.randomUUID(), params, network: { authority: 'ssh+one' } });
+		assert.equal(f.manager.tryGetBrowserView(created.targetId)!.getInfo().remoteAuthority, 'ssh+one');
+		const sibling = await f.manager.createTarget('about:blank', 'thread-one', signal());
+		assert.equal(sibling.getInfo().remoteAuthority, 'ssh+one');
+		const context = f.manager.createBrowserContext('thread-one');
+		const target = await f.manager.createTarget('about:blank', 'thread-one', signal(), context);
+		assert.equal(target.session.id, context);
+		assert.equal(target.getInfo().remoteAuthority, 'ssh+one');
+		assert.throws(() => f.manager.createTarget('about:blank', 'thread-one', signal(), context, undefined, null), /BrowserContextNetworkMismatch/);
+		await f.manager.disposeBrowserContext(context, 'thread-one');
+	});
+
 	test('retiring the manager releases a pending network owner without creating a page', async () => {
 		using f = fixture();
 		const started = promiseWithResolvers<void>();
@@ -683,7 +742,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	const partitions = new Map<string, Electron.Session>();
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, children, contents, partitions,
-		url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
+		workspaceId: 'workspace-one', url: '', title: 'Example', loading: false, attached: false, networkReleases: 0, workbenchFocused: 0,
 		workbenchInput: [] as Electron.KeyboardInputEvent[],
 		commands: [] as Array<{ method: string; params: unknown; sessionId?: string; }>,
 		debugSessions: [] as string[],
@@ -692,7 +751,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 		command: async (_method: string, _params?: unknown): Promise<unknown> => ({}),
 		load: async (url: string): Promise<void> => { f.url = url; },
 		capture: async () => ({ toPNG: () => Buffer.from('png') }),
-		remote: false, encryptionAvailable: true, authCacheClears: 0,
+		remote: false, networks: new Set<string>(), networkRequests: [] as string[], encryptionAvailable: true, authCacheClears: 0,
 		menuRequests: [] as INativeContextMenuRequest[],
 		popupMenu: async (_request: INativeContextMenuRequest): Promise<INativeContextMenuResult> => ({}),
 		menuCloses: 0,
@@ -749,13 +808,14 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	// Construct the vault only when encryption is registered, preserving the missing-registration test.
 	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage))); }
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
-		window, getWorkspaceId: () => 'workspace-one',
+		window, getWorkspaceId: () => f.workspaceId,
 		contextMenu: {
 			popup: (request: INativeContextMenuRequest) => { f.menuRequests.push(request); return f.popupMenu(request); },
 			close: () => { f.menuCloses++; },
 		} as unknown as ElectronContextMenu,
 		getNlsMessages: () => f.messages,
-		getRemoteNetwork() { return f.remote ? { authority: 'ssh-remote+test', tunnels: { openProxy: () => f.proxy() } as unknown as import('../../../remote/electron-main/sshPortForwardingService.js').SshPortForwardingService } : undefined; }, createSession: (partition: string) => {
+		getWindowNetwork: () => f.remote ? { authority: 'ssh-remote+test' } : undefined,
+		getRemoteNetwork(network: { authority: string; }) { const authority = network.authority; f.networkRequests.push(authority); return (f.remote && authority === 'ssh-remote+test') || f.networks.has(authority) ? { authority, tunnels: { openProxy: () => f.proxy() } } : undefined; }, createSession: (partition: string) => {
 			let session = partitions.get(partition);
 			if (!session) {
 				session = Object.assign(new EventEmitter(), { protocol: { handle: () => { }, unhandle: () => { } }, webRequest: { onBeforeRequest: () => { } }, setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { }, setProxy: async () => { }, closeAllConnections: async () => { }, clearAuthCache: async () => { f.authCacheClears++; }, clearStorageData: async () => { }, clearCache: async () => { } }) as unknown as Electron.Session;

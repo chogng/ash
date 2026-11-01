@@ -110,6 +110,9 @@ export interface IRendererAgentHostService {
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly tcp?: import('../../network/common/tcp.js').ITcpService;
+	/** Native local connection remains distinct when the window's primary host is remote. */
+	readonly localTcp?: import('../../network/common/tcp.js').ITcpService;
 	readonly workspaceConfigurationFiles?: IWorkspaceConfigurationFileApi;
 	/** Host support is stable for the window; connection state describes temporary availability. */
 	readonly hasAppServer: boolean;

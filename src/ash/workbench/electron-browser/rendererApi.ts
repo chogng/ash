@@ -1,3 +1,4 @@
+import { AppServerTcpService } from '../../platform/network/browser/appServerTcpService.js';
 import type { IFileSystemDirectory } from '../../platform/files/common/fileApi.js';
 import { canonicalAgentHostConnection, isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import { REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
@@ -202,7 +203,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			if (backend.contextResourceHost) { resources.add(backend.contextResourceHost); }
 			resources.add(registerAppServerWorkspaceHost(() => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, setWorkspaceFolders, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
-			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
+			backend = { ...backend, localTcp: new AppServerTcpService(localClient), backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			// Device ownership stays on this computer when the workspace connection is remote.

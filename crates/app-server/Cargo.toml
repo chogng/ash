@@ -69,7 +69,7 @@ analytics = { workspace = true }
 diagnostics = { workspace = true }
 feedback = { workspace = true }
 features = { workspace = true }
-network-proxy = { workspace = true }
+network-proxy = { workspace = true, features = ["server"] }
 ash-memory-diagnostics = { workspace = true }
 ash-automation = { workspace = true }
 ash-symphony.workspace = true

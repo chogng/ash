@@ -1,3 +1,4 @@
+import { validateBrowserViewNetwork, type IBrowserViewNetwork } from '../../browserView/common/browserView.js';
 import type { decodeAppServerServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { raceCancellationError } from '../../../base/common/async.js';
@@ -71,19 +72,19 @@ export class AppServerBrowserHost extends Disposable {
 		if (pages.length > 256) { throw new Error('Browser page list exceeds its limit'); }
 		return { pages };
 	}
-	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
+	async create(params: BrowserCreateParams, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; }) {
 		this.assertEnabled();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
-		if (!params.canvas) { return this.createPage(params, signal); }
+		if (!params.canvas) { return this.createPage(params, signal, context.network); }
 		const key = JSON.stringify([params.canvas.sessionId, params.threadId, params.canvas.instanceId]);
 		const pending = this.canvasOperations.get(key) ?? Promise.resolve();
-		const opening = pending.catch(() => undefined).then(() => this.createPage(params, signal));
+		const opening = pending.catch(() => undefined).then(() => this.createPage(params, signal, context.network));
 		this.canvasOperations.set(key, opening);
 		try { return await opening; }
 		finally { if (this.canvasOperations.get(key) === opening) { this.canvasOperations.delete(key); } }
 	}
 
-	private async createPage(params: BrowserCreateParams, signal: AbortSignal): Promise<{ targetId: string; }> {
+	private async createPage(params: BrowserCreateParams, signal: AbortSignal, network?: IBrowserViewNetwork | null): Promise<{ targetId: string; }> {
 		signal.throwIfAborted();
 		const canvas = params.canvas && {
 			sessionId: params.canvas.sessionId, instanceId: params.canvas.instanceId, title: params.canvas.title,
@@ -93,7 +94,7 @@ export class AppServerBrowserHost extends Disposable {
 			&& (info.owner.type === 'agent' ? info.owner.sessionId : info.canvas.threadId) === params.threadId);
 		if (existing && (existing.owner.type !== 'agent' || existing.canvas?.extensionId !== canvas?.extensionId || existing.canvas?.canvasId !== canvas?.canvasId)) { throw new Error('CanvasInstanceAlreadyOwned'); }
 		const retained = existing ? this.views.tryGetBrowserView(existing.id) : undefined;
-		const view = retained ?? await this.views.createTarget('about:blank', params.threadId, signal, undefined, canvas);
+		const view = retained ?? await this.views.createTarget('about:blank', params.threadId, signal, undefined, canvas, network);
 		if (signal.aborted) {
 			if (!retained) { view.dispose(); }
 			signal.throwIfAborted();
@@ -204,11 +205,11 @@ export class AppServerBrowserHost extends Disposable {
 	}
 
 	private routes(): readonly IpcRoute<unknown, unknown>[] {
-		const operation = (value: unknown): { id: string; params: unknown; } => {
+		const operation = (value: unknown): { id: string; params: unknown; network?: IBrowserViewNetwork | null; } => {
 			if (!isRecord(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/.test(value.id)) { throw new Error('Invalid browser operation'); }
-			return { id: value.id, params: value.params };
+			return { id: value.id, params: value.params, ...(value.network !== undefined ? { network: value.network === null ? null : validateBrowserViewNetwork(value.network) } : {}) };
 		};
-		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
+		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
 			if (this.operations.has(request.id) || this.operations.size >= 128) { throw new Error('Browser operation capacity exceeded'); }
@@ -223,7 +224,7 @@ export class AppServerBrowserHost extends Disposable {
 					const { decodeAppServerServerRequestParams: decode } = await import('../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js');
 					signal.throwIfAborted();
 					this.assertNotDisposed();
-					return execute(request.params, { signal }, decode);
+					return execute(request.params, { signal, network: request.network }, decode);
 				};
 				return await raceCancellationError(operation(), signal, 'BrowserRequestCancelled');
 			}

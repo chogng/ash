@@ -96,7 +96,11 @@ const scenario = globalThis.networkScenario = { remote: true, proxies: new Set()
 // Substitute only the SSH endpoint. Production page creation, session partitioning and Chromium proxy policy run unchanged.
 const create = BrowserViewMainService.prototype.getOrCreateBrowserView;
 BrowserViewMainService.prototype.getOrCreateBrowserView = function(...args) {
-  this.options.getRemoteNetwork = () => scenario.remote ? { authority: 'ssh+fixture', tunnels: {
+  const [id, options] = args;
+  if (scenario.remote && options.session.scope !== 'global') {
+    args[1] = { ...options, session: { ...options.session, network: { authority: 'ssh+fixture' } } };
+  }
+  this.options.getRemoteNetwork = network => scenario.remote && network.authority === 'ssh+fixture' ? { authority: 'ssh+fixture', tunnels: {
     async openProxy() {
       const controller = new AbortController(); scenario.proxies.add(controller);
       return Object.assign(toDisposable(() => { controller.abort(); scenario.proxies.delete(controller); scenario.released++; }), { localPort: ${proxyAddress.port}, signal: controller.signal });

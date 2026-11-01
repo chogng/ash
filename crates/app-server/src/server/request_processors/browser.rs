@@ -25,6 +25,103 @@ impl<'a> BrowserRequestProcessor<'a> {
             local_env_host,
         }
     }
+    pub(super) fn tcp(
+        &self,
+        connection: &ConnectionState,
+        method: ash_app_server_protocol::protocol::registry::ClientMethod,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::browser as wire;
+        use ash_app_server_protocol::protocol::registry::ClientMethod;
+        use base64::Engine;
+        if !matches!(
+            connection.authority,
+            super::ConnectionAuthority::ProductHost
+                | super::ConnectionAuthority::RemoteHost
+                | super::ConnectionAuthority::Browser
+        ) {
+            return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+        }
+        let failed = |_| RpcError::new(-32000, AppServerErrorName::CoreOperationFailed);
+        match method {
+            ClientMethod::BrowserTcpOpen => {
+                let params: wire::BrowserTcpOpenParams = decode(params)?;
+                if params.stream.execution_target.is_some() || params.host.len() > 253 {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let destination = network_proxy::NetworkRequest::new(
+                    network_proxy::NetworkProtocol::Socks5Tcp,
+                    &params.host,
+                    params.port,
+                )
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+                self.calls
+                    .network_policy()
+                    .check_url(&format!("https://{}/", destination.authority()))
+                    .map_err(|_| RpcError::new(-32000, AppServerErrorName::ResourceNotOwner))?;
+                super::request_dispatch::runtime()
+                    .map_err(failed)?
+                    .block_on(
+                        connection
+                            .tcp_streams
+                            .open(params.stream.stream_id, &destination),
+                    )
+                    .map_err(failed)?;
+                result(&())
+            }
+            ClientMethod::BrowserTcpRead => {
+                let params: wire::BrowserTcpParams = decode(params)?;
+                if params.execution_target.is_some() {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let (bytes, eof) = connection
+                    .tcp_streams
+                    .read(&params.stream_id)
+                    .map_err(failed)?;
+                result(&wire::BrowserTcpReadResult {
+                    data_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+                    eof,
+                })
+            }
+            ClientMethod::BrowserTcpWrite => {
+                let params: wire::BrowserTcpWriteParams = decode(params)?;
+                if params.stream.execution_target.is_some() {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                if params.data_base64.len() > network_proxy::TCP_CHUNK_BYTES.div_ceil(3) * 4 {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(params.data_base64)
+                    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+                let written = if params.eof {
+                    if !bytes.is_empty() {
+                        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                    }
+                    connection
+                        .tcp_streams
+                        .end(&params.stream.stream_id)
+                        .map_err(failed)?;
+                    0
+                } else {
+                    connection
+                        .tcp_streams
+                        .write(&params.stream.stream_id, &bytes)
+                        .map_err(failed)?
+                };
+                result(&wire::BrowserTcpWriteResult { written })
+            }
+            ClientMethod::BrowserTcpClose => {
+                let params: wire::BrowserTcpParams = decode(params)?;
+                if params.execution_target.is_some() {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                connection.tcp_streams.close(&params.stream_id);
+                result(&())
+            }
+            _ => Err(RpcError::new(-32601, AppServerErrorName::MethodNotFound)),
+        }
+    }
     pub(super) fn configure(
         &self,
         connection: &ConnectionState,
