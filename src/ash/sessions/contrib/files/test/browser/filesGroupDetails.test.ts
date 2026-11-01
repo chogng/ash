@@ -8,21 +8,25 @@ import { IEditorPartsService } from '../../../../../workbench/browser/parts/edit
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { DesktopMainEditorPart } from '../../../../browser/parts/desktopEditorPart.js';
 import '../../browser/files.contribution.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { registerDesktopDetailsTestServices } from '../../../../test/browser/desktopEditorTestServices.js';
 
-suite('Files group Details contribution', () => {
+suite('Files Part Details contribution', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('registers a lazy Files factory in its window and releases the registration with the contribution', () => {
+	test('registers Files as a normal view in the EditorPart-owned Auxiliary Bar', () => {
+		using resources = new DisposableStore();
 		using services = createTestEditorServices(undefined, undefined, browserEnvironment.window.document);
+		registerDesktopDetailsTestServices(resources, services);
 		using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, {});
 		services.registerInstance(IEditorPartsService, { mainPart: editor } as unknown as IEditorPartsService);
-		assert.throws(() => editor.filesDetails, /have not been registered/);
-		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.contrib.filesGroupDetails']);
+		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.contrib.filesView']);
 		host.advance(WorkbenchPhase.BlockStartup);
-		assert.equal(editor.filesDetailsOpen, false);
-		assert.throws(() => editor.registerFilesDetails(() => editor.filesDetails), /already registered/);
+		const auxiliary = editor.auxiliaryBar;
+		assert.equal(editor.detailsOpen, false);
+		assert.equal(auxiliary.getCompositeIdToRestore(), 'workbench.sessions.auxiliaryBar.filesContainer');
 		assert.deepEqual(editor.activeGroup.inputs, []);
 		host.dispose();
-		assert.throws(() => editor.filesDetails, /have not been registered/);
+		assert.equal(auxiliary.getCompositeIdToRestore(), undefined);
 	});
 });

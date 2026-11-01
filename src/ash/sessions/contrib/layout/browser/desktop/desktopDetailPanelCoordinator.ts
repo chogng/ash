@@ -1,5 +1,5 @@
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import type { DesktopMainEditorPart } from '../../../../browser/parts/desktopEditorPart.js';
+import type { DesktopEditorParts } from '../../../../browser/parts/desktopEditorParts.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 
@@ -15,11 +15,11 @@ export class DesktopDetailPanelCoordinator {
 	}
 
 	public async update(reveal: boolean): Promise<void> {
-		if (reveal && !(this.editor as DesktopMainEditorPart).filesDetailsOpen) await this.openFiles();
+		if (reveal && !(this.editor as DesktopEditorParts).filesDetailsOpen) await this.openFiles();
 	}
 
 	public async openFiles(): Promise<void> {
-		await (this.editor as DesktopMainEditorPart).openFiles();
+		await (this.editor as DesktopEditorParts).openFiles();
 		this.layout.showPart('editor');
 	}
 

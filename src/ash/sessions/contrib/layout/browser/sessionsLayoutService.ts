@@ -20,8 +20,7 @@ import type { IResourceEditorInput } from '../../../../workbench/common/editor.j
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
-import type { DesktopMainEditorPart } from '../../../browser/parts/desktopEditorPart.js';
-import type { EditorPart as SessionsEditorPart } from '../../../browser/parts/editorPart.js';
+import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
@@ -81,7 +80,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@ICustomViewService private readonly customViews: ICustomViewService,
 	) {
 		super();
-		this.pageGroupId = (editor as SessionsEditorPart).pageGroupId;
+		this.pageGroupId = (editor as DesktopEditorParts).pageGroupId;
 		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
@@ -128,7 +127,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				void this.runOperation(() => this.controller.showEditor()).catch(error => { if (!this.isDisposed) { notifications.error(String(error)); } });
 			}
 		};
-		this._register((editor as SessionsEditorPart).onDidRevealActiveEditor(() => revealActiveEditor(true)));
+		this._register((editor as DesktopEditorParts).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
 			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
 			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
@@ -227,7 +226,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
 				if (documents && !this.customViews.activeCustomView.get()) {
-					const filesDetailsOpen = (this.editor as DesktopMainEditorPart).filesDetailsOpen
+					const filesDetailsOpen = (this.editor as DesktopEditorParts).filesDetailsOpen
 						|| this.storage.getBoolean('sessions.code.filesVisible', StorageScope.PROFILE, false);
 					// A retained Files preference must not open a side pane that is closed.
 					await this.controller.activate(state.documents && filesDetailsOpen);
@@ -261,7 +260,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private saveVisibility(): void {
 		const entry = this.activeEntry.get();
 		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
-		const files = this.isDocumentContent ? (this.editor as DesktopMainEditorPart) : undefined;
+		const files = this.isDocumentContent ? (this.editor as DesktopEditorParts) : undefined;
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
 			details: files?.filesDetailsOpen ?? this.layout.isPartVisible('auxiliarybar'),

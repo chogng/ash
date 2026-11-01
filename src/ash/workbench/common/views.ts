@@ -247,6 +247,10 @@ export class WorkbenchViewRegistry extends Disposable {
 	private readonly viewActions = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly containerActions = this._register(new DisposableMap<string, IDisposable>());
 
+	constructor(private readonly options: { readonly registerActions?: boolean; } = {}) {
+		super();
+	}
+
 	readonly onDidRegisterViewContainer:
 		Event<IViewContainerDescriptor> =
 		this._onDidRegisterViewContainer.event;
@@ -298,19 +302,21 @@ export class WorkbenchViewRegistry extends Disposable {
 			descriptor: Object.freeze({ ...descriptor }),
 			registrationOrder: this.nextOrder++,
 		};
-		this.containerActions.set(descriptor.id, registerAction2(class extends Action2 {
-			constructor() {
-				super({
-					id: descriptor.id,
-					title: descriptor.localizationKey ? localize2(descriptor.localizationKey, descriptor.title) : descriptor.title,
-					f1: true,
-				});
-			}
+		if (this.options.registerActions !== false) {
+			this.containerActions.set(descriptor.id, registerAction2(class extends Action2 {
+				constructor() {
+					super({
+						id: descriptor.id,
+						title: descriptor.localizationKey ? localize2(descriptor.localizationKey, descriptor.title) : descriptor.title,
+						f1: true,
+					});
+				}
 
-			override run(accessor: ServicesAccessor): unknown {
-				return accessor.get(IViewsService).openViewContainer(descriptor.id, true);
-			}
-		}));
+				override run(accessor: ServicesAccessor): unknown {
+					return accessor.get(IViewsService).openViewContainer(descriptor.id, true);
+				}
+			}));
+		}
 		this.containers.set(descriptor.id, registered);
 		this._onDidRegisterViewContainer.fire(registered.descriptor);
 		return registered;
@@ -412,6 +418,7 @@ export class WorkbenchViewRegistry extends Disposable {
 	}
 
 	private registerViewActions(container: IViewContainerDescriptor): void {
+		if (this.options.registerActions === false) return;
 		const actions = new DisposableStore();
 		this.viewActions.set(container.id, actions);
 		const views = this.getViews(container.id);

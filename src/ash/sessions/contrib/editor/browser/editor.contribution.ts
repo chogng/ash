@@ -6,13 +6,14 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
-import type { DesktopMainEditorPart } from '../../../browser/parts/desktopEditorPart.js';
+import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
+import { isRecord } from '../../../../base/common/types.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
@@ -55,9 +56,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
-					(!(editor as DesktopMainEditorPart).filesDetailsVisible || (editor as DesktopMainEditorPart).filesDetails.isEditorVisible));
-				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).filesDetailsVisible);
-				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopMainEditorPart).fileEditorsVisible);
+					(!(editor as DesktopEditorParts).filesDetailsVisible || (editor as DesktopEditorParts).filesPart.isEditorVisible));
+				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).filesDetailsVisible);
+				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).fileEditorsVisible);
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
 			});
 		this._register(
@@ -81,13 +82,22 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				await operation();
 				updateContext();
 			});
+		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
+			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
+		this._register(CommandsRegistry.register('ash.sessions.hideTool', arg => run(async () => {
+			(editor as DesktopEditorParts).hideTool(toolGroup(arg));
+			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
+		})));
+		this._register(CommandsRegistry.register('ash.sessions.maximizeTool', arg => run(async () => {
+			(editor as DesktopEditorParts).toggleMaximizeTool(toolGroup(arg));
+		})));
 		for (const [id, operation] of [
 			['ash.sessions.toggleDetails', () => controller.toggleDetails()],
 			['ash.sessions.toggleFiles', () => controller.toggleFiles()],
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					if ((editor as DesktopMainEditorPart).filesDetailsOpen) { await controller.toggleDetails(); }
+					if ((editor as DesktopEditorParts).filesDetailsOpen) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
@@ -131,9 +141,23 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
-						when: codeWhen,
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files')),
 						group: 'navigation',
 						order: -1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { id: 'ash.sessions.maximizeTool', title: localize2('sessions.layout.maximizeTool', 'Toggle tool size'), icon: Lxicon.screenFull },
+						when: codeWhen, group: 'navigation', order: 1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { id: 'ash.sessions.hideTool', title: localize2('sessions.layout.hideTool', 'Hide tool'), icon: Lxicon.close },
+						when: codeWhen, group: 'navigation', order: 2,
 					},
 				},
 				{

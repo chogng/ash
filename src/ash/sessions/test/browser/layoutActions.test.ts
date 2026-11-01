@@ -1,4 +1,6 @@
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
+import { DesktopEditorParts } from '../../browser/parts/desktopEditorParts.js';
+import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
@@ -56,7 +58,8 @@ test('Sessions layout commands update menu state from their owners and release w
 	services.registerInstance(ICommandService, commands);
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
 	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
-	parts.set('editor', resources.add(editorServices.createInstance(DesktopMainEditorPart, browser.window.document.body, {})));
+	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
+	parts.set('editor', hosts.area);
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
@@ -77,7 +80,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		navigateBack() { historyIndex = 0; changed.fire(); },
 		navigateForward() { historyIndex = 1; changed.fire(); },
 	};
-	using actions = registerLayoutActions(layout, sessions, contextKeys, parts.get('editor') as DesktopMainEditorPart);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
@@ -137,8 +140,11 @@ for (const hidden of [false, true]) {
 		const destination = editor.activeGroup;
 		const document = { resource: URI.file('/fixture/notes.txt'), editorId: 'test.document' };
 		await editor.openEditor(document, { pinned: true, inactive: true }, { groupId: destination.id });
+		const documentGroup = editor.groups.find(group => group.inputs.includes(document))!;
+		editor.setGroupVisible(documentGroup.id, true);
 		const otherSession = new TerminalEditorInput(URI.parse('vscode-terminal:/other-session/1'));
-		await editor.openEditor(otherSession, { pinned: true });
+		const otherDestination = editor.addGroup(destination.id, (await import('../../../base/browser/ui/grid/grid.js')).Direction.Down);
+		await editor.openEditor(otherSession, { pinned: true }, { groupId: otherDestination.id });
 		const otherGroup = editor.activeGroup;
 		owner.add(editor.setGroupScope(id => id !== otherGroup.id));
 		editor.setGroupVisible(otherGroup.id, false);
@@ -154,13 +160,15 @@ for (const hidden of [false, true]) {
 		assert.equal(editor.activeGroup, destination);
 		assert.equal(editor.isGroupVisible(destination.id), true);
 		assert.equal(destination.inputs.includes(stale), false);
-		assert.equal(destination.inputs.includes(document), true);
+		assert.equal(documentGroup.inputs.includes(document), true);
+		assert.notEqual(documentGroup, destination);
 		assert.deepEqual(otherGroup.inputs, [otherSession]);
 		assert.equal(editor.isGroupVisible(otherGroup.id), false);
 		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[0]!.resource);
 
 		await commands.executeCommand('ash.sessions.togglePanel');
-		assert.equal(destination.activeInput, document);
+		assert.equal(editor.isGroupVisible(destination.id), false);
+		assert.equal(editor.isGroupVisible(documentGroup.id), true);
 		await commands.executeCommand('ash.sessions.togglePanel');
 		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[0]!.resource);
 		assert.equal(attempts.length, 1, 'Toggling a live terminal retains its original shell');
@@ -258,7 +266,7 @@ function terminalLayoutFixture(owner: DisposableStore, options: {
 	readonly onCreate?: () => void;
 	creationError?: Error;
 } = {}): {
-	editor: DesktopMainEditorPart;
+	editor: DesktopEditorParts;
 	commands: CommandService;
 	instances: ITerminalInstance[];
 	attempts: ICreateTerminalOptions[];
@@ -281,8 +289,9 @@ function terminalLayoutFixture(owner: DisposableStore, options: {
 			}(id, services.get(IThemeService), services.get(IStorageService)),
 		});
 	}
-	const editor = owner.add(services.createInstance(DesktopMainEditorPart, browser.window.document.body, { registry }));
-	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'editor' ? editor : owner.add(new TestPart(browser.window.document.body, id))]));
+	const hosts = owner.add(createDesktopEditorTestServices(services, { registry }, browser.window.document));
+	const editor = hosts.editor;
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'editor' ? hosts.area : owner.add(new TestPart(browser.window.document.body, id))]));
 	const layout = owner.add(createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1200, 800) }));
 	const contextKeys = owner.add(new ContextKeyService());
 	contextKeys.setContext('sessions.desktopCode', true);

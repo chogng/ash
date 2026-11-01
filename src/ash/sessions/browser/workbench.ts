@@ -242,8 +242,12 @@ import { DiffService } from '../../workbench/services/diff/browser/diffService.j
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import { DesktopEditorArea } from './parts/desktopEditorArea.js';
+import { DesktopEditorParts } from './parts/desktopEditorParts.js';
+import { DesktopToolEditorPart } from './parts/desktopToolEditorPart.js';
+import type { DesktopEditorTool } from './parts/desktopEditorArea.js';
 import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
-import { EditorParts, IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
+import { IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
 import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
@@ -922,7 +926,27 @@ export abstract class Workbench extends Disposable {
 			fileDialogService: services.get(IFileDialogService),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
 		};
-		const editor = this._register(services.createInstance(DesktopMainEditorPart, this.domNode, editorOptions));
+		const editorArea = this._register(services.createInstance(DesktopEditorArea, this.domNode));
+		const createToolScope = (tool: DesktopEditorTool): { container: HTMLElement; services: InstantiationService; context: IContextKeyService; } => {
+			const container = ownerDocument.createElement('div');
+			editorArea.domNode.append(container);
+			const context = this._register(contextKeys.createScoped(container));
+			context.createKey('sessions.editorTool', tool);
+			const scope = this._register(services.createChild());
+			scope.registerInstance(IContextKeyService, context);
+			return { container, services: scope, context };
+		};
+		const filesScope = createToolScope('files');
+		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, { ...editorOptions, contextKeyService: filesScope.context }));
+		filesScope.services.registerInstance(IEditorPart, filesEditor);
+		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
+		for (const tool of ['changes', 'browser', 'terminal'] as const) {
+			const scope = createToolScope(tool);
+			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, { ...editorOptions, contextKeyService: scope.context }));
+			scope.services.registerInstance(IEditorPart, part);
+			tools.set(tool, part);
+		}
+		const editor = this._register(services.createInstance(DesktopEditorParts, filesEditor, editorArea, tools));
 		const documentServices = this._register(services.createChild());
 		documentServices.registerInstance(IEditorPart, editor);
 		const documentEditors = this._register(new BrowserEditorService(editor));
@@ -931,8 +955,7 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(ISessionsLayoutService)) {
 			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
 		}
-		const editorParts = this._register(services.createInstance(EditorParts, editor,
-			services.get(IAuxiliaryWindowService), undefined, services.get(IAccessibilityService), storage));
+		const editorParts = editor;
 		services.registerInstance(IEditorPartsService, editorParts);
 		services.registerInstance(IEditorPart, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
@@ -950,7 +973,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
-		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
+		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode, { id: 'auxiliarybar' }));
 		services.registerInstance(ITerminalProcessService, options.api.terminal);
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
@@ -968,7 +991,7 @@ export abstract class Workbench extends Disposable {
 			['titlebar', titlebar],
 			['sidebar', sidebar],
 			['sessions', sessionsPart],
-			['editor', editor],
+			['editor', editorArea],
 			['auxiliarybar', auxiliarybar],
 			['customview', customViewPart],
 		]);

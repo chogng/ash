@@ -26,6 +26,22 @@ import {
 } from '../../../workbench/common/views.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 
+test('Part-local view catalogs do not register duplicate window commands', () => {
+	using command = CommandsRegistry.register('test.scopedDetails', () => undefined);
+	const handler = CommandsRegistry.getCommand('test.scopedDetails');
+	using first = new WorkbenchViewRegistry({ registerActions: false });
+	using second = new WorkbenchViewRegistry({ registerActions: false });
+	const container = { id: 'test.scopedDetails', title: 'Details', location: ViewContainerLocation.AuxiliaryBar };
+	using firstContainer = first.registerViewContainer(container);
+	using secondContainer = second.registerViewContainer(container);
+	using firstView = first.registerViews(container.id, [testView('test.scopedDetails.view', 'Files')]);
+	using secondView = second.registerViews(container.id, [testView('test.scopedDetails.view', 'Files')]);
+	assert.equal(first.getViews(container.id).length, 1);
+	assert.equal(second.getViews(container.id).length, 1);
+	assert.equal(CommandsRegistry.getCommand('test.scopedDetails'), handler);
+	assert.equal(CommandsRegistry.getCommand('test.scopedDetails.view.toggleVisibility'), undefined);
+});
+
 test('container commands open in the invoking window and expire with their declaration', async () => {
 	using registry = new WorkbenchViewRegistry();
 	using registration = registry.registerViewContainer({ id: 'test.openContainer', title: 'Open container', location: ViewContainerLocation.Sidebar });

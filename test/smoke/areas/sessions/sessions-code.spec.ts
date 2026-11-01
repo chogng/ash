@@ -188,7 +188,7 @@ focusTest('Code connects tool commands to the shared editor groups', async ({ ap
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
-	const files = editor.locator('.ash-editor-group-files');
+	const files = editor.locator('.ash-desktop-auxiliarybar');
 	const commands = new QuickAccess(page);
 	await expect(editor).toBeVisible();
 	await expect(files).toBeVisible();
@@ -221,9 +221,9 @@ test('Code retains group file navigation after closing the last document and reo
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = () => page.locator('[data-part="editor"]');
-	const files = () => editor().locator('.ash-editor-group-files');
+	const files = () => editor().locator('.ash-desktop-auxiliarybar');
 	await new QuickAccess(page).runCommand('workbench.action.agentSessions.newFileTab');
-	const header = () => files().locator('..').locator(':scope > .ash-editor-title-control .ash-editor-group-header');
+	const header = () => editor().locator('[data-editor-tool=files] .ash-editor-group-header:visible').first();
 	await expect(files()).toBeVisible();
 	await expect(header()).toBeVisible();
 	await expect(files().locator('.ash-pane-view-header')).toBeHidden();
@@ -257,7 +257,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		const failures: string[] = [];
 		page.on('pageerror', error => failures.push(error.message));
-		const auxiliary = page.locator('.ash-editor-group-files');
+		const auxiliary = page.locator('.ash-desktop-auxiliarybar');
 		const editors = page.locator('[data-part="editor"]');
 		const mode = page.locator('.ash-window-mode-control');
 		await expect(auxiliary).toBeHidden();
@@ -265,7 +265,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(auxiliary).toBeVisible();
 		await expect(editors).toBeVisible();
-		await expect(editors.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(1);
+		await expect(editors.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(0);
 		if (target.appServerMode === 'required' && target.kind === 'electron') {
 			const nested = auxiliary.getByRole('treeitem', { name: 'nested', exact: true });
 			await nested.click();
@@ -362,23 +362,23 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
 	await page.goto('/browser/sessions/sessions.html');
-	const auxiliary = page.locator('.ash-editor-group-files');
+	const auxiliary = page.locator('.ash-desktop-auxiliarybar');
 	const tabs = page.locator('[data-part="editor"] .ash-editor-title-control');
 	await expect(auxiliary).toBeHidden();
 	await expect(page.getByText('Session details', { exact: true })).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(page.locator('[data-part="editor"]')).toBeVisible();
-	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(1);
-	await expect(auxiliary.getByRole('status')).toHaveText('Folders and files will appear here.');
-	await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toBeHidden();
-	const emptyMessage = auxiliary.locator('.ash-sessions-files-empty-message');
+	await expect(tabs.getByRole('tab', { name: 'Files', exact: true })).toHaveCount(0);
+	await expect(auxiliary.getByRole('status')).toHaveText('Open a folder to browse files.');
+	await expect(auxiliary.locator('[data-view-id="ash.explorer"]')).toBeVisible();
+	const emptyMessage = auxiliary.getByRole('status');
 	expect(parseFloat(await emptyMessage.evaluate(element => getComputedStyle(element).fontSize))).toBeGreaterThan(0);
 	await page.keyboard.press('ControlOrMeta+Shift+E');
-	await expect(auxiliary.locator('.ash-sessions-files-empty-message')).toBeFocused();
+	await expect(auxiliary.getByRole('tree')).toBeFocused();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files, Changes, Browser and Terminal share one EditorPart/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files, Changes, Browser and Terminal have independent EditorParts/u);
 	await page.keyboard.press('Escape');
-	await expect(auxiliary.locator('.ash-sessions-files-empty-message')).toBeFocused();
+	await expect(auxiliary.getByRole('tree')).toBeFocused();
 	// This empty, disconnected embedder uses the host's bootstrap palette.
 	// Installed extension themes are covered by the connected theme scenarios.
 	for (const [scheme, colorScheme, forcedColors] of [
@@ -394,7 +394,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		const colors = await emptyMessage.evaluate(element => ({
 			text: getComputedStyle(element).color,
-			background: getComputedStyle(element.closest('.ash-editor-group-files')!).backgroundColor,
+			background: getComputedStyle(element.closest('.ash-desktop-auxiliarybar')!).backgroundColor,
 		}));
 		expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
 		expect(colors.text).not.toBe(colors.background);
@@ -420,11 +420,11 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	expect(failures).toEqual([]);
 });
 
-test('Files and Changes use retained editor groups and group maximization restores their layout', async ({ target, workbench }, testInfo) => {
+test('Files and Changes use independent editor Parts and tool maximization restores their layout', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = page.locator('[data-part="editor"]');
-	const files = editor.locator('.ash-editor-group-files');
+	const files = editor.locator('.ash-desktop-auxiliarybar');
 	await expect(files).toBeVisible();
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.agentSessions.action.viewChanges');
@@ -433,10 +433,10 @@ test('Files and Changes use retained editor groups and group maximization restor
 	const reviewGroup = editor.locator('.ash-editor-group').filter({ has: page.locator('.ash-sessions-changes-editor') });
 	const retained = await review.elementHandle();
 	await review.getByRole('tree', { name: 'Changes', exact: true }).focus();
-	await commands.runCommand('workbench.action.toggleMaximizeEditorGroup');
+	await commands.runCommand('ash.sessions.maximizeTool');
 	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(1);
 	await expect(reviewGroup).toBeVisible();
-	await commands.runCommand('workbench.action.toggleMaximizeEditorGroup');
+	await commands.runCommand('ash.sessions.maximizeTool');
 	await expect(files).toBeVisible();
 	await expect(editor.locator('.ash-editor-group:visible')).toHaveCount(2);
 	expect(await review.evaluate((node, original) => node === original, retained)).toBe(true);

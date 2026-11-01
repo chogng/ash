@@ -74,7 +74,7 @@ const workbench = resources.add(
 			return scope.createInstance(descriptor.ctor, ...descriptor.staticArguments);
 		},
 		returnToWorkbench: () => { },
-		contributionIds: ['sessions.contrib.filesGroupDetails', 'workbench.contrib.sessionsLayout'],
+		contributionIds: ['sessions.contrib.filesView', 'workbench.contrib.sessionsLayout'],
 	}),
 );
 await workbench.whenRestored;

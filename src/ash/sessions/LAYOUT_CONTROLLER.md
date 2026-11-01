@@ -95,7 +95,7 @@ Persisted state is validated by its owner before use. Legacy page resources are 
 
 Window navigation geometry and part visibility are restored before the layout controller starts. Applying a Session's tool geometry preserves that navigation and the window's desired tool visibility.
 
-Legacy version-1 `sessions.code.cardLayouts` trees are validated and converted once into the corresponding editor working-set group layouts. Successful migrations write the owning working set before retiring the consumed legacy entry; unvisited Session entries remain pending migration. The retired browser working set is attached to the same EditorPart before its legacy key is removed. Existing panel terminal instances move into TerminalEditor without creating new processes. The current writer persists only editor working sets and their group geometry; the Card decoder is migration-only.
+Legacy version-1 `sessions.code.cardLayouts` trees are validated and converted once into the corresponding editor working-set group layouts. Successful migrations write the owning working set before retiring the consumed legacy entry; unvisited Session entries remain pending migration. The retired browser working set is attached to the Browser EditorPart before its legacy key is removed. Existing panel terminal instances move into TerminalEditor without creating new processes. The current writer persists only editor working sets, Part membership, tool geometry and group geometry; the Card decoder is migration-only.
 
 ## 7. Key invariants
 

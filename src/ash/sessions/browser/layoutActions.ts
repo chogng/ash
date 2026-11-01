@@ -1,7 +1,7 @@
 import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorInput } from '../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { TerminalLocation } from '../../platform/terminal/common/terminal.js';
-import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import type { DesktopEditorParts } from './parts/desktopEditorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize2 } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -27,7 +27,7 @@ export function registerLayoutActions(
 	layout: IAgentWorkbenchLayoutService,
 	sessions: ISessionsService,
 	contextKeys: IContextKeyService,
-	editor: DesktopMainEditorPart,
+	editor: DesktopEditorParts,
 ): IDisposable {
 	const disposables = new DisposableStore();
 	const sidebarVisible = SideBarVisibleContext.bindTo(contextKeys);

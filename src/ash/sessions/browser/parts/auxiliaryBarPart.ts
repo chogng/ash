@@ -12,7 +12,7 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../../workbenc
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 
-/** Hosts independently contributed product properties; Files Details belong to an editor group. */
+/** Hosts retained view composites, either in the window or beside a tool's editor groups. */
 export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly fallbackTitle: HTMLElement;
 	override get minimumWidth(): number {
@@ -29,6 +29,7 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 
 	constructor(
 		container: HTMLElement,
+		options: { readonly id: string; },
 		@IViewDescriptorService descriptors: IViewDescriptorService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IStorageService storage: IStorageService,
@@ -41,7 +42,8 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		super(
 			container,
 			{
-				id: 'auxiliarybar',
+				id: options.id,
+				activeCompositeStorageKey: options.id === 'auxiliarybar' ? undefined : `${options.id}.activeViewContainer`,
 				location: ViewContainerLocation.AuxiliaryBar,
 				ariaLabel: 'Auxiliary sidebar',
 				ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },

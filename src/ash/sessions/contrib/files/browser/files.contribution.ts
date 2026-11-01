@@ -25,24 +25,29 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { IEditorPartsService } from '../../../../workbench/browser/parts/editor/editorParts.js';
 import { DesktopMainEditorPart } from '../../../browser/parts/desktopEditorPart.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { FilesGroupDetails } from './filesGroupDetails.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 
 /** Installs Files on the document host while window commands keep the multi-window coordinator. */
-class FilesGroupDetailsContribution extends Disposable {
+class FilesViewContribution extends Disposable {
 	constructor(
 		@IEditorPartsService parts: IEditorPartsService,
-		@IInstantiationService services: IInstantiationService,
 	) {
 		super();
 		const editor = parts.mainPart;
 		if (editor instanceof DesktopMainEditorPart) {
-			this._register(editor.registerFilesDetails(() => services.createInstance(FilesGroupDetails, editor)));
+			this._register(editor.auxiliaryBar.registerViewContainer({
+				id: SESSIONS_FILES_CONTAINER_ID, title: localize('sessions.files.title', 'Files'), location: ViewContainerLocation.AuxiliaryBar,
+			}, [{
+				id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), canMoveView: false,
+				ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
+			}]));
 		}
 	}
 }
 
-registerWorkbenchContribution('sessions.contrib.filesGroupDetails', WorkbenchPhase.BlockStartup,
-	services => services.get(IInstantiationService).createInstance(FilesGroupDetailsContribution));
+registerWorkbenchContribution('sessions.contrib.filesView', WorkbenchPhase.BlockStartup,
+	services => services.get(IInstantiationService).createInstance(FilesViewContribution));
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 
@@ -53,7 +58,7 @@ registerAction2(class extends Action2 {
 	}
 });
 
-// Keep the existing Files shortcut while its View is hosted by an editor group.
+// Keep the existing Files shortcut while its View is scoped to the Files Part.
 KeybindingsRegistry.registerKeybindingRule({
 	command: SESSIONS_FILES_CONTAINER_ID,
 	keybinding: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })),
@@ -125,7 +130,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.navigationHelp', 'Opening Files shows its title and file tree without creating an editor tab. Opening a file creates its tab. Closing the last file returns to Files. The title bar Files button hides or restores the file editors and their attached tree together. Browser, Changes and Terminal remain independent. Toggle details changes only the attached tree.') + '\n' + localize('sessions.files.help', "Files\nThe file tree belongs to an editor group beside its open documents. Files, Changes, Browser and Terminal share one EditorPart. Drag a tab to move its editor, or drag empty group title space to move the whole group. Drop at a group edge to split, or in its center to combine tabs. With a header action focused, Alt+Shift+Arrow moves the group beside its neighbor. Separators resize groups. Toggle details hides or shows the file tree without closing documents. Toggle Files retains the tree, selection and unsaved edits. Use Ctrl or Command+Shift+E to focus Files, arrow keys to navigate, Enter to open a file, and Shift+F10 for file actions. Ctrl or Command+F searches the tree; Escape clears Find and restores focus. Alt+F2 reads the visible files. Files follows the selected session directory. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read."),
+			() => localize('sessions.files.navigationHelp', 'Opening Files shows its title and file tree without creating an editor tab. Opening a file creates its tab. Closing the last file returns to Files. The title bar Files button hides or restores the file editors and their attached tree together. Browser, Changes and Terminal remain independent. Toggle details changes only the attached tree.') + '\n' + localize('sessions.files.help', "Files\nThe Files EditorPart owns the file tree beside its document groups. Files, Changes, Browser and Terminal have independent EditorParts. Drag a tab to move its editor, or drag empty group title space to move a group. Alt-drag a title to move the tool workspace. Drop at a group edge to split, or in its center to combine tabs. With a header action focused, Alt+Shift+Arrow moves the group beside its local neighbor, or moves the tool workspace at the group boundary. Separators resize tools and groups. Toggle details hides or shows the file tree without closing documents. Toggle Files retains the tree, selection and unsaved edits. Use Ctrl or Command+Shift+E to focus Files, arrow keys to navigate, Enter to open a file, and Shift+F10 for file actions. Ctrl or Command+F searches the tree; Escape clears Find and restores focus. Alt+F2 reads the visible files. Files follows the selected session directory. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read."),
 			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,
 		);

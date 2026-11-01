@@ -1,3 +1,4 @@
+import { createDesktopEditorTestServices, registerDesktopDetailsTestServices } from './desktopEditorTestServices.js';
 import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
 import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
@@ -92,51 +93,54 @@ class TestDesktopEditorPart extends DesktopMainEditorPart {
 	public retain(resource: import('../../../base/common/lifecycle.js').IDisposable): void { this._register(resource); }
 }
 
-test('opening Files retains an empty group without creating an editor input or pane', async () => {
+test('opening Files retains one owned AuxiliaryBarPart without creating an editor input', async () => {
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+	const { ViewPane } = await import('../../../workbench/browser/parts/views/viewPane.js');
+	const { ViewContainerLocation } = await import('../../../workbench/common/views.js');
+	const { SyncDescriptor } = await import('../../../platform/instantiation/common/descriptors.js');
+	using resources = new (await import('../../../base/common/lifecycle.js')).DisposableStore();
 	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
+	registerDesktopDetailsTestServices(resources, services);
 	using registry = new EditorPaneRegistry();
-	const shown: number[] = [];
-	let focused = false;
-	let created = 0;
-	let disposed = 0;
-	let groupId: number | undefined;
-	let open = false;
 	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry });
-	assert.throws(() => editor.filesDetails, /have not been registered/);
-	using registration = editor.registerFilesDetails(() => {
-		created++;
-		return {
-			get groupId() { return groupId; }, get isOpen() { return open; }, isVisible: true, isEditorVisible: false,
-			show(group) { groupId = group.id; open = true; shown.push(group.id); },
-			hide() { open = false; }, setHostVisible() { }, setEditorVisible() { }, focus() { focused = true; }, dispose() { disposed++; },
-			[Symbol.dispose]() { this.dispose(); },
-		};
-	});
-	assert.equal(created, 0, 'Registering Files does not create its tree until requested');
-	assert.throws(() => editor.registerFilesDetails(() => editor.filesDetails), /already registered/);
+	let created = 0;
+	class TestDetailsView extends ViewPane {
+		constructor(container: HTMLElement, options: import('../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) {
+			super(container, options);
+			created++;
+		}
+	}
+	const auxiliary = editor.auxiliaryBar;
+	const detailsStorage = services.get(IStorageService);
+	detailsStorage.store('workbench.auxiliarybar.activeViewContainer', 'window.properties', StorageScope.WORKSPACE,
+		(await import('../../../platform/storage/common/storage.js')).StorageTarget.MACHINE);
+	using registration = auxiliary.registerViewContainer({ id: 'test.details', title: 'Details', location: ViewContainerLocation.AuxiliaryBar }, [
+		{ id: 'test.details.view', title: 'Details', ctorDescriptor: new SyncDescriptor(TestDetailsView) },
+	]);
+	assert.equal(created, 0);
 	const group = editor.activeGroup;
 	await editor.openFiles();
 	assert.deepEqual(group.inputs, []);
 	assert.equal(group.activePane, undefined);
 	assert.equal(group.domNode.querySelector('[role="tab"]'), null);
-	assert.deepEqual(shown, [group.id]);
-	assert.equal(focused, true);
-	assert.equal(editor.filesDetailsOpen, true);
+	assert.equal(editor.detailsOpen, true);
+	assert.equal(editor.auxiliaryBar, auxiliary);
+	assert.equal(detailsStorage.get('workbench.auxiliarybar.activeViewContainer', StorageScope.WORKSPACE), 'window.properties');
+	assert.equal(created, 1);
 	await editor.openFiles();
-	assert.equal(created, 1, 'Repeated Files opens retain one Details instance');
+	assert.equal(created, 1);
+	assert.equal(auxiliary.domNode.closest('.ash-editor-group'), null);
 	const saved = editor.saveWorkingSet('legacy-files', [editor.pageGroupId]);
 	await editor.applyWorkingSet({
-		...saved,
-		groups: saved.groups.map(group => ({
+		...saved, groups: saved.groups.map(group => ({
 			...group, activeEditorIndex: 0,
 			editors: [{ input: { typeId: 'sessions.editorInput.files', value: {} }, paneId: 'ash.sessions.emptyFileEditor', preview: false }],
-		})),
-	});
-	assert.deepEqual(editor.activeGroup.inputs, [], 'Retired Files placeholders are skipped when restoring old working sets');
-	registration.dispose();
-	assert.equal(disposed, 1);
-	assert.equal(editor.filesDetailsOpen, false);
+		}))
+	}, { preserveGroups: [editor.pageGroupId] });
+	assert.deepEqual(editor.activeGroup.inputs, []);
+	editor.hideDetails();
+	assert.equal(editor.detailsOpen, false);
+	assert.equal(editor.auxiliaryBar, auxiliary);
 });
 
 test('Desktop editor retains one tab-and-actions row above editor-only breadcrumbs', async () => {
@@ -232,7 +236,7 @@ test('Sessions Grid follows viewport resize synchronously and retains fractional
 	}
 });
 
-test('Code tools share one EditorPart and group movement and hiding retain every pane', async () => {
+test('Code tools own independent EditorParts and tool movement and hiding retain every pane', async () => {
 	const { URI } = await import('../../../base/common/uri.js');
 	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
 	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
@@ -253,7 +257,8 @@ test('Code tools share one EditorPart and group movement and hiding retain every
 			}(id, services.get(IThemeService), services.get(IStorageService));
 		}
 	});
-	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry });
+	using hosts = createDesktopEditorTestServices(services, { registry });
+	const { editor, area } = hosts;
 	editor.layout(new Dimension(1200, 900));
 	const file = { resource: URI.file('/fixture/sample.txt') };
 	const terminal = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1'));
@@ -266,19 +271,19 @@ test('Code tools share one EditorPart and group movement and hiding retain every
 	await editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
 	assert.equal(editor.groups.filter(group => editor.isGroupVisible(group.id)).length, 4);
 	assert.equal(created, 4);
-	editor.moveGroup(terminalGroup, fileGroup, GroupDirection.RIGHT);
+	area.moveTool('terminal', 'files', Direction.Right);
 	assert.equal(terminalGroup.activePane, terminalPane);
-	assert.equal(terminalGroup.domNode.closest('[data-part="editor"]'), editor.domNode);
+	assert.equal(terminalGroup.domNode.closest('[data-editor-tool]')?.getAttribute('data-editor-tool'), 'terminal');
 	await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
 	assert.equal(editor.isGroupVisible(terminalGroup.id), false);
 	await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
 	assert.equal(editor.isGroupVisible(terminalGroup.id), true);
 	assert.equal(terminalGroup.activePane, terminalPane);
 	assert.equal(created, 4);
-	const before = editor.serializeLayout();
-	editor.toggleMaximizeGroup(terminalGroup);
-	editor.toggleMaximizeGroup(terminalGroup);
-	assert.deepEqual(editor.serializeLayout(), before);
+	const before = area.saveLayout();
+	editor.toggleMaximizeTool(terminalGroup.id);
+	editor.toggleMaximizeTool(terminalGroup.id);
+	assert.deepEqual(area.saveLayout(), before);
 	const filePane = fileGroup.activePane;
 	const otherGroups = editor.groups.filter(group => group !== fileGroup && group.id !== editor.pageGroupId);
 	await editor.toggleFileEditors();
@@ -295,8 +300,53 @@ test('Code tools share one EditorPart and group movement and hiding retain every
 	assert.equal(editor.isGroupVisible(fileGroup.id), false);
 	assert.equal(editor.isGroupVisible(terminalGroup.id), true);
 	assert.equal(terminalGroup.activeInput, terminal);
-	assert.ok(terminalGroup.inputs.includes(mixed));
+	assert.ok(fileGroup.inputs.includes(mixed));
+	assert.ok(!terminalGroup.inputs.includes(mixed));
 	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
+});
+
+test('opening a Code tool keeps the hidden active tool hidden', async () => {
+	const { URI } = await import('../../../base/common/uri.js');
+	const { BrowserViewUri } = await import('../../../platform/browserView/common/browserViewUri.js');
+	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { TerminalEditorInput } = await import('../../../workbench/contrib/terminal/browser/terminalEditorInput.js');
+	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
+	using registry = new EditorPaneRegistry();
+	let created = 0;
+	for (const id of ['test.independent-tools', TerminalEditorInput.ID]) registry.registerEditorPane({
+		id, name: 'Tool fixture', canOpen: () => 1, create: () => {
+			created++;
+			return new class extends EditorPane {
+				readonly id = id;
+				async setInput(): Promise<void> { }
+				clearInput(): void { }
+				layout(): void { }
+				focus(): void { }
+			}(id, services.get(IThemeService), services.get(IStorageService));
+		}
+	});
+	using hosts = createDesktopEditorTestServices(services, { registry });
+	const { editor, area } = hosts;
+	editor.layout(new Dimension(1200, 900));
+	const terminal = new TerminalEditorInput(URI.parse('vscode-terminal:/fixture/1'));
+	const browser = { resource: URI.from({ scheme: BrowserViewUri.scheme, path: '/fixture' }) };
+	await editor.openEditor(terminal, { pinned: true });
+	const terminalGroup = editor.activeGroup;
+	const terminalPane = terminalGroup.activePane;
+	await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
+	assert.equal(editor.isGroupVisible(terminalGroup.id), false);
+	await editor.openEditor(browser, { pinned: true });
+	const browserGroup = editor.activeGroup;
+	assert.deepEqual(editor.groups.filter(group => editor.isGroupVisible(group.id)).map(group => group.id), [browserGroup.id]);
+	assert.equal(editor.isGroupVisible(terminalGroup.id), false);
+	assert.equal(terminalGroup.activePane, terminalPane);
+	await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme);
+	await editor.openEditor(terminal, { pinned: true });
+	assert.equal(editor.isGroupVisible(browserGroup.id), false);
+	assert.equal(editor.isGroupVisible(terminalGroup.id), true);
+	assert.equal(terminalGroup.activePane, terminalPane);
+	assert.equal(created, 2);
 });
 
 test('Sessions sidebar clamps at its minimum, snaps closed and restores from the window edge', () => {
@@ -1011,7 +1061,8 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 			return new class extends EditorPane { readonly id = 'test.cached'; async setInput(): Promise<void> { } clearInput(): void { } layout(): void { } focus(): void { } }('test.cached', services.get(IThemeService), services.get(IStorageService));
 		}
 	});
-	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry });
+	using hosts = createDesktopEditorTestServices(services, { registry });
+	const { editor, area } = hosts;
 	editor.layout(new Dimension(1200, 900));
 	services.registerInstance(IEditorPart, editor);
 	services.registerInstance(IEditorService, {} as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
@@ -1040,15 +1091,15 @@ test('session working sets reuse live groups and preserve hidden entry geometry 
 	await controller.restore(savedB, 'session:b');
 	assert.equal(editor.groups.some(group => editor.isGroupVisible(group.id)), false);
 	const hiddenSnapshot = controller.capture('session:b');
-	assert.deepEqual(hiddenSnapshot.layout, savedB.layout);
+	assert.deepEqual((hiddenSnapshot as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts, (savedB as import('../../browser/parts/desktopEditorParts.js').DesktopEditorWorkingSet).toolParts);
 	controller.setDocumentGroupsVisible(true);
 	assert.equal(editor.activeGroup, second);
 	assert.equal(second.activePane, secondPane);
 	assert.equal(editor.isGroupVisible(first.id), false);
-	const before = editor.serializeLayout();
+	const before = area.saveLayout();
 	controller.setDocumentGroupsVisible(false);
 	controller.setDocumentGroupsVisible(true);
-	assert.deepEqual(editor.serializeLayout(), before);
+	assert.deepEqual(area.saveLayout(), before);
 	await editor.openEditor(file, { pinned: true });
 	assert.notEqual(editor.activeGroup, first, "opening a resource must not activate another session's cached group");
 	assert.notEqual(editor.activeGroup, second, 'Files uses its own group beside the retained Browser');

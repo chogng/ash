@@ -25,6 +25,7 @@ ensureNoDisposablesAreLeakedInTestSuite();
 test('editor contributions follow layout state, serialize open commands without Add tab UI and release window registrations', async () => {
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
+	contextKeys.setContext('sessions.editorTool', 'files');
 	using commands = new CommandService(services);
 	using layoutChanged = new Emitter<void>();
 	using editorChanged = new Emitter<void>();
@@ -64,7 +65,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		onDidLayoutMainContainer: layoutChanged.event,
 	} as unknown as IAgentWorkbenchLayoutService);
 	services.registerInstance(IEditorPart, {
-		onDidChangeEditors: editorChanged.event, filesDetails,
+		onDidChangeEditors: editorChanged.event, filesPart: filesDetails,
 		get filesDetailsOpen() { return parts.auxiliarybar; },
 		get filesDetailsVisible() { return parts.editor && parts.auxiliarybar; },
 		get fileEditorsVisible() { return true; },
@@ -81,7 +82,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
 	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails']);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -151,7 +152,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['切换详情']);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 	} finally {

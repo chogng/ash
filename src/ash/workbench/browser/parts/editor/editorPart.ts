@@ -10,13 +10,11 @@ import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
 import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorIdentifier, type IEditorPane } from '../../../common/editor.js';
 import './media/editorpart.css';
-import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { basename } from '../../../../base/common/resources.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { addDisposableListener, computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
@@ -59,9 +57,9 @@ import type { IWorkingCopyService } from '../../../services/workingCopy/common/w
 import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from '../../editor.js';
 import type { IBulkEditService } from '../../../../editor/browser/services/bulkEditService.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
-import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
+import { EditorInputSerializers, type EditorInputSerializerRegistry, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
-import { parseEditorWorkingSetLayout } from '../../../services/editor/common/editorWorkingSet.js';
+import { parseEditorWorkingSet, isEditorGroupId } from '../../../services/editor/common/editorWorkingSet.js';
 import { ModalEditorPart, type ModalEditorPartOptions } from './modalEditorPart.js';
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
@@ -331,11 +329,14 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	public getSize(group: IEditorGroupView | EditorGroupId): IDimension {
-		return this.editorGrid.getViewSize(this.groupHosts.get(typeof group === 'number' ? group : group.id)!.view);
+		const host = this.groupHosts.get(typeof group === 'number' ? group : group.id)!;
+		return host.view.contentSize(this.editorGrid.getViewSize(host.view));
 	}
 
 	public setSize(group: IEditorGroupView | EditorGroupId, size: IDimension): void {
-		this.editorGrid.resizeView(this.groupHosts.get(typeof group === 'number' ? group : group.id)!.view, size);
+		const host = this.groupHosts.get(typeof group === 'number' ? group : group.id)!;
+		const inset = this.getGroupInsets(host.group) * 2;
+		this.editorGrid.resizeView(host.view, new Dimension(size.width + inset, size.height + inset));
 	}
 
 	/** Ash extension: expose the same Grid state used by working sets without serializing editor inputs. */
@@ -350,7 +351,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const mapped = new Set(groupMapping.values());
 		if (mapped.size !== groupMapping.size || [...mapped].some(id => !this.groupHosts.has(id))) throw new TypeError('Invalid Editor Grid group mapping');
 		const missing = this._groups.filter(host => !mapped.has(host.group.id));
-		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: LayoutPriority.Normal }));
+		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: this.isGroupVisible(host.group.id), priority: LayoutPriority.Normal }));
 		const rebound = remapWorkingSetLayout(retained, groupMapping);
 		const combined: EditorWorkingSetLayout = extra.length ? {
 			type: 'branch', orientation: Orientation.HORIZONTAL, size: this.dimension.width, priority: LayoutPriority.Normal,
@@ -969,6 +970,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return {};
 	}
 
+	/** Space owned by the host around a group, outside its pane and title geometry. */
+	protected getGroupInsets(_group: IEditorGroupView): number {
+		return 0;
+	}
+
 	/** Expose renderer drop targets above native editor content for the drag's lifetime. */
 	private showDragOverlays(): void {
 		this.dragOverlays.clear();
@@ -1021,7 +1027,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));
 		}));
 		listeners.add(group.onDidChange(() => this.layoutEmitter.fire(this.dimension)));
-		const host = new EditorGroupHost(group, listeners);
+		const host = new EditorGroupHost(group, listeners, () => this.getGroupInsets(group));
 		if (this.groupHosts.has(group.id)) {
 			host.dispose();
 			throw new Error(`Duplicate editor group ID: ${group.id}`);
@@ -1221,7 +1227,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
-		const target = workingSet === 'empty' ? emptyWorkingSet() : validateWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
+		const target = workingSet === 'empty' ? emptyWorkingSet() : parseEditorWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
 		this.restoreMaximizedGroup();
 		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
@@ -1395,78 +1401,6 @@ function emptyWorkingSet(): EditorWorkingSet {
 	});
 }
 
-function validateWorkingSet(value: EditorWorkingSet, lastGroupId: number): EditorWorkingSet {
-	if (!value || typeof value !== 'object' || typeof value.id !== 'string' || !value.id.trim()) {
-		throw new TypeError('Invalid editor working set');
-	}
-	if (!isNonEmptyArray(value.groups) || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
-		throw new TypeError('Invalid editor working set groups');
-	}
-	value = migrateWorkingSetGroupIds(value, lastGroupId);
-	let sizeTotal = 0;
-	const groupIds = new Set<EditorGroupId>();
-	for (const group of value.groups) {
-		if (!group || typeof group !== 'object' || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || (group.locked !== undefined && typeof group.locked !== 'boolean') || !Number.isFinite(group.size) || group.size < 0) {
-			throw new TypeError('Invalid editor group working set');
-		}
-		if (group.id !== undefined) {
-			if (!isEditorGroupId(group.id) || groupIds.has(group.id)) throw new TypeError('Invalid editor working set group ID');
-			groupIds.add(group.id);
-		}
-		for (const editor of group.editors) {
-			if (!editor || typeof editor !== 'object' || typeof editor.preview !== 'boolean' || (editor.sticky !== undefined && typeof editor.sticky !== 'boolean') || (editor.sticky === true && editor.preview) || !isSerializedEditorInput(editor.input)) {
-				throw new TypeError('Invalid editor working set entry');
-			}
-			if (editor.paneId !== undefined && (typeof editor.paneId !== 'string' || !editor.paneId.trim() || editor.paneId.length > 256)) {
-				throw new TypeError('Invalid editor working set pane ID');
-			}
-			if (editor.viewState !== undefined) {
-				if (!editor.viewState || typeof editor.viewState !== 'object' || typeof editor.viewState.typeId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/u.test(editor.viewState.typeId) || !('value' in editor.viewState)) {
-					throw new TypeError('Invalid editor working set view state');
-				}
-				validateJsonValue(editor.viewState.value, { path: 'editor working set view state' });
-			}
-		}
-		sizeTotal += group.size;
-	}
-	if (sizeTotal <= 0) throw new TypeError('Invalid editor working set layout');
-	if (value.layout !== undefined) {
-		if (groupIds.size !== value.groups.length) throw new TypeError('Editor Grid layout requires an ID for every group');
-		parseEditorWorkingSetLayout(value.layout, groupIds);
-	}
-	return value;
-}
-
-/** Old snapshots name groups with strings. Resolve those names once before restoring live groups. */
-function migrateWorkingSetGroupIds(value: EditorWorkingSet, lastGroupId: number): EditorWorkingSet {
-	if (!value.groups.some(group => group && typeof group.id === 'string')) return value;
-	const ids = new Map<string, number>();
-	let nextId = Math.max(lastGroupId, ...value.groups.map(group => isEditorGroupId(group?.id) ? group.id : 0));
-	const groups = value.groups.map(group => {
-		const id: unknown = group?.id;
-		if (typeof id !== 'string') return group;
-		if (!id.length || id.length > 128 || ids.has(id) || !Number.isSafeInteger(nextId + 1)) throw new TypeError('Invalid legacy editor group ID');
-		ids.set(id, ++nextId);
-		return { ...group, id: nextId };
-	});
-	const migrateLayout = (node: EditorWorkingSetLayout, depth = 0): EditorWorkingSetLayout => {
-		if (!node || typeof node !== 'object' || depth > 64) throw new TypeError('Invalid Editor Grid layout node');
-		if (node.type === 'leaf') {
-			const id: unknown = node.data?.groupId;
-			const groupId = typeof id === 'string' ? ids.get(id) : id;
-			if (!isEditorGroupId(groupId)) throw new TypeError('Invalid Editor Grid group reference');
-			return { ...node, data: { groupId } };
-		}
-		if (node.type !== 'branch' || !Array.isArray(node.children)) throw new TypeError('Invalid Editor Grid branch');
-		return { ...node, children: node.children.map(child => migrateLayout(child, depth + 1)) };
-	};
-	return { ...value, groups, ...(value.layout ? { layout: migrateLayout(value.layout) } : {}) };
-}
-
-function isEditorGroupId(value: unknown): value is EditorGroupId {
-	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
 function editorGroupIdFromGridData(value: unknown): EditorGroupId {
 	if (!value || typeof value !== 'object' || Array.isArray(value) || !('groupId' in value) || !isEditorGroupId(value.groupId)) {
 		throw new TypeError('Invalid Editor Grid group data');
@@ -1500,28 +1434,40 @@ function editorInputLabel(input: Pick<IResourceEditorInput, 'resource' | 'label'
 class EditorGroupHost extends Disposable {
 	readonly view: EditorGroupGridView;
 
-	constructor(readonly group: EditorGroupView, listener: IDisposable) {
+	constructor(readonly group: EditorGroupView, listener: IDisposable, insets: () => number) {
 		super();
 		this._register(group);
 		this._register(listener);
-		this.view = new EditorGroupGridView(group);
+		this.view = new EditorGroupGridView(group, insets);
+		this._register(toDisposable(() => { if (this.view.element !== group.domNode) this.view.element.remove(); }));
 	}
 }
 
 class EditorGroupGridView implements ISerializableGridView {
-	readonly minimumWidth = 120;
+	get minimumWidth(): number { return 120 + this.insets() * 2; }
 	readonly maximumWidth = Infinity;
-	readonly minimumHeight = 119;
+	get minimumHeight(): number { return 119 + this.insets() * 2; }
 	readonly maximumHeight = Infinity;
+	readonly element: HTMLElement;
 
-	constructor(readonly group: EditorGroupView) { }
+	constructor(readonly group: EditorGroupView, private readonly insets: () => number) {
+		if (insets() === 0) {
+			this.element = group.domNode;
+		} else {
+			this.element = group.domNode.ownerDocument.createElement('div');
+			this.element.className = 'ash-editor-group-container';
+			this.element.append(group.domNode);
+		}
+	}
 
-	get element(): HTMLElement {
-		return this.group.domNode;
+	contentSize(size: IDimension): IDimension {
+		const inset = this.insets() * 2;
+		return new Dimension(Math.max(0, size.width - inset), Math.max(0, size.height - inset));
 	}
 
 	layout(bounds: IPositionedRectangle): void {
-		this.group.layout(bounds);
+		if (this.element !== this.group.domNode) this.element.style.padding = `${this.insets()}px`;
+		this.group.layout(this.contentSize(bounds));
 	}
 
 	toJSON(): unknown {

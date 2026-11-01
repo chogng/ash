@@ -1,0 +1,42 @@
+.ash-desktop-editor-area > .ash-workbench-part-content {
+	position: absolute;
+	inset: 0;
+}
+
+.ash-desktop-editor-area .ash-tool-editor-workspace {
+	box-sizing: border-box;
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	> .ash-workbench-part-frame {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	.ash-workbench-part-frame
+	> .ash-workbench-part {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-editor-background);
+	box-shadow: 0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border);
+}
+
+.ash-desktop-editor-area
+	.ash-code-editor-groups
+	.ash-editor-group:not(.ash-code-page-group) {
+	border-radius: 0;
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light)
+	.ash-desktop-editor-area
+	.ash-tool-editor-workspace
+	.ash-workbench-part-frame
+	> .ash-workbench-part {
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

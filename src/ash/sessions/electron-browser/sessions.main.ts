@@ -214,7 +214,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.snippets',
 					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',
-					'sessions.contrib.filesGroupDetails',
+					'sessions.contrib.filesView',
 					'terminal.native',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
