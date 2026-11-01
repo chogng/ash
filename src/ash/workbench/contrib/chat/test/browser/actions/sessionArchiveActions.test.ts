@@ -32,6 +32,7 @@ suite('sessionArchiveActions browser component', () => {
 				const result = await page.evaluate(() => window.ashChatTranscriptIntegration.sessionLifecycleState());
 				expect(errors).toEqual([]);
 				expect(result).toEqual({
+					activeThreadId: 'lifecycle',
 					requests: [{ operation: 'archive', sessionId: 'lifecycle' }, { operation: 'restore', sessionId: 'lifecycle' }],
 					opened: ['lifecycle/lifecycle'],
 					sessions: [{ id: 'lifecycle', status: 'active', threads: ['lifecycle/active', 'lifecycle-child/archived'] }],

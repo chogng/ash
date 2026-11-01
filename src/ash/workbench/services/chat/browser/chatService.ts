@@ -13,7 +13,7 @@ import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/c
 import { IAgentThreadService, IAgentTurnService } from '../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../../platform/turnChanges/common/turnChangesApi.js';
-import type { ModelRef, SessionId, ThreadId } from '../common/chatService.js';
+import type { QueuedMessage, QueueMessageTarget, ModelRef, SessionId, ThreadId } from '../common/chatService.js';
 import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../common/chatService.js';
 import type { ResolvedChatContext } from '../common/chatContextService.js';
 import type { ChatCheckpoint, RestoreChatCheckpointOptions } from '../common/chatService.js';
@@ -344,6 +344,52 @@ export class ChatService extends Disposable implements IChatService {
 	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
 		const result = await this.turnApi.listQueued({ sessionId, threadId });
 		return result.messages.filter(message => message.status === 'pending' || message.status === 'paused' || message.status === 'delivering').length;
+	}
+
+	async getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]> {
+		const result = await this.turnApi.listQueued({ sessionId, threadId });
+		return result.messages.filter(message => message.status === 'pending' || message.status === 'paused' || message.status === 'rejected');
+	}
+
+	async pausePendingRequest(target: QueueMessageTarget) {
+		this.assertAIEnabled();
+		return this.turnApi.editQueued(target, { type: 'pause' });
+	}
+
+	async resumePendingRequest(target: QueueMessageTarget) {
+		// Cancelling an editor restores already admitted work, including after AI is disabled.
+		return this.turnApi.editQueued(target, { type: 'resume' });
+	}
+
+	async editPendingRequest(target: QueueMessageTarget, text: string) {
+		this.assertAIEnabled();
+		return this.turnApi.editQueued(target, { type: 'replaceText', text });
+	}
+
+	async removePendingRequest(target: QueueMessageTarget) {
+		return this.turnApi.cancelQueued(target);
+	}
+
+	async sendPendingRequestImmediately(target: QueueMessageTarget): Promise<void> {
+		this.assertAIEnabled();
+		const generation = this.connectionEpoch;
+		const { thread } = await this.readThread(target.sessionId, target.threadId);
+		const active = thread.turns.find(turn => ['created', 'running', 'waitingForApproval', 'waitingForUserInput', 'waitingForCapability', 'cancelling'].includes(turn.status));
+		if (this.isDisposed || generation !== this.connectionEpoch) throw canceled();
+		this.assertAIEnabled();
+		// Keep identity, frozen input and FIFO ownership in Core. Promotion precedes
+		// interruption so another queued message cannot claim the newly idle thread.
+		await this.turnApi.editQueued(target, { type: 'send' });
+		if (!active) return;
+		if (this.isDisposed || generation !== this.connectionEpoch) throw canceled();
+		try {
+			await this.interruptTurn({ sessionId: target.sessionId, threadId: target.threadId, turnId: active.turnId, expectedSequence: thread.sequence });
+		} catch (error) {
+			// Completion may race the exact-turn interrupt. Never stop a successor.
+			if (this.isDisposed || generation !== this.connectionEpoch) throw error;
+			const current = await this.readThread(target.sessionId, target.threadId);
+			if (current.thread.turns.some(turn => turn.turnId === active.turnId && ['created', 'running', 'waitingForApproval', 'waitingForUserInput', 'waitingForCapability', 'cancelling'].includes(turn.status))) throw error;
+		}
 	}
 
 	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {

@@ -1,3 +1,15 @@
+import { registerChatExportActions } from './actions/chatImportExport.js';
+import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
+import { registerChatToolActions } from './actions/chatToolActions.js';
+import { registerChatTitleActions } from './actions/chatTitleActions.js';
+import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
+import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
+import { registerChatQueueActions } from './actions/chatQueueActions.js';
+import { registerChatPromptNavigationActions } from './actions/chatPromptNavigationActions.js';
+import { registerChatAccessibilityActions } from './actions/chatAccessibilityActions.js';
+import { registerChatFindActions } from './actions/chatFindActions.js';
+import { ChatFindAccessibilityHelp } from './widget/chatFind/chatFindAccessibilityHelp.js';
 import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -75,6 +87,18 @@ registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, I
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 registerSingleton(IQuickChatService, QuickChatService, InstantiationType.Delayed);
 registerQuickChatActions();
+registerChatFindActions();
+registerChatPromptNavigationActions();
+registerChatExecuteActions();
+registerChatToolActions();
+registerChatTitleActions();
+registerChatExportActions();
+registerChatCopyActions();
+registerChatCodeBlockActions();
+registerChatElicitationActions();
+registerChatQueueActions();
+registerChatAccessibilityActions();
+AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
 	key: AGENT_SESSIONS_PRESENTATION_SETTING,

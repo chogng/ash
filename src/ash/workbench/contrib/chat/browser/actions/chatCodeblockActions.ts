@@ -1,3 +1,7 @@
+import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { IChatWidgetService } from '../chat.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -15,6 +19,26 @@ export function isCodeBlockActionContext(value: unknown): value is ICodeBlockAct
 }
 
 export function registerChatCodeBlockActions(): void {
+	for (const previous of [false, true]) {
+		registerAction2(class NavigateCodeBlockAction extends Action2 {
+			constructor() {
+				super({
+					id: previous ? 'workbench.action.chat.previousCodeBlock' : 'workbench.action.chat.nextCodeBlock',
+					title: previous ? localize2('chat.code.previous', 'Chat: Previous Code Block') : localize2('chat.code.next', 'Chat: Next Code Block'),
+					f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+					keybinding: {
+						primary: KeyMod.CtrlCmd | KeyMod.Alt | (previous ? KeyCode.PageUp : KeyCode.PageDown),
+						weight: KeybindingWeight.WorkbenchContrib, when: ChatContextKeys.inChatSession.isEqualTo(true)
+					}
+				});
+			}
+			public override run(accessor: ServicesAccessor): void {
+				const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+				if (!widget?.visible) { return; }
+				widget.focusCodeBlock(previous);
+			}
+		});
+	}
 	registerAction2(class CopyCodeBlockAction extends Action2 {
 		constructor() { super({ id: 'workbench.action.chat.copyCodeBlock', title: localize2('chat.code.copy', 'Copy') }); }
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {

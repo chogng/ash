@@ -1,3 +1,4 @@
+import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
@@ -89,7 +90,7 @@ import { IContextViewService, IContextMenuService } from '../../../src/ash/platf
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
-import { IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -110,7 +111,7 @@ import { IEditorService } from '../../../src/ash/workbench/services/editor/commo
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
-import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
@@ -310,6 +311,7 @@ root.style.cssText = 'display:flex;width:600px;height:400px';
 document.body.append(root);
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: document.body })));
 const accessibleView = resources.add(services.createInstance(AccessibleViewService));
+services.registerInstance(IAccessibleViewService, accessibleView);
 let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
@@ -615,6 +617,8 @@ declare global {
 			refresh(): void;
 			imageReadCount(): number;
 			renderItems(items: readonly IChatListItem[]): void;
+			showFind(query?: string): void;
+			runNavigationCommand(command: string): Promise<void>;
 			prepareRequestEditing(cowork: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; }[];
 			finishRequestEdit(failure?: boolean): void;
@@ -783,6 +787,19 @@ window.ashChatTranscriptIntegration = {
 		theme.setColorTheme(palette);
 	},
 	imageReadCount: () => imageReads,
+	showFind: query => list.getFindController().show(query),
+	runNavigationCommand: async command => {
+		const widget = {
+			visible: true, domNode: list.element,
+			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
+			getFocus: () => list.getFocus(),
+			getSibling: (item, type) => list.getSibling(item, type),
+			focus: item => list.focus(item),
+			reveal: item => list.reveal(item),
+		} as IChatWidget;
+		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget } as IChatWidgetService]));
+		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
+	},
 	renderItems: items => { rendererItems = items; list.render(items); },
 	prepareRequestEditing: cowork => {
 		requestEditMode = true;

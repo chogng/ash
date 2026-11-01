@@ -341,7 +341,11 @@ export function pickChatContextItem<T extends IQuickPickItem>(quickInput: IQuick
 			// Quick Input preserves the active item by identity when results change.
 			// Start empty so the completed catalog selects its first actual source.
 			const active = retainActive ? picker.activeItems[0] : undefined;
-			if (!retainActive) picker.items = [];
+			if (!retainActive) {
+				// Removing a focused pagination row would blur-close an anchored picker.
+				picker.focus();
+				picker.items = [];
+			}
 			picker.busy = true;
 			try {
 				const items = await provide(query, token);

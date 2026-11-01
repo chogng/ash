@@ -5,7 +5,6 @@ import { createTestLanguageModelToolsService } from '../common/tools/testLanguag
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import { registerChatCopyActions } from '../../browser/actions/chatCopyActions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
@@ -52,7 +51,6 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 
-registerChatCopyActions();
 const document = browserEnvironment.window.document;
 
 test('Chat renders connection-qualified conversation links without permitting script links', () => {
@@ -468,6 +466,7 @@ suite('chatRenderer browser component', () => {
 		{ id: 'media', type: 'agentMessage', text: 'Delayed media.', content: [image], attachmentSource: source, transient: false },
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
+
 
 	test('accessible transcript follows streamed model text and restores the focused response', async () => {
 		const { page } = browserTests;

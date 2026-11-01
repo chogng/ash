@@ -1,3 +1,4 @@
+import { ChatRequestQueueKind } from '../../../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -445,13 +446,17 @@ export class CoworkWidgetModel extends Disposable {
 				source: options?.source,
 				skills,
 			};
-			if (turn && (turn.mode !== mode || skills?.length)) {
+			const needsNewTurn = !!turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
+			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn) {
+				throw new Error(localize('chat.steer.incompatible', 'The current request has a different mode, Skill or task type. Add this message to the queue instead.'));
+			}
+			if (turn && (options?.queue === ChatRequestQueueKind.Queued || needsNewTurn)) {
 				// A frozen Turn keeps its approach. A new approach gets its own durable submission.
 				await this.chatService.queueTurn(submission);
 				if (!this.isCurrentOperation(operation)) { this.recoverCancelledSubmission(operation, stateRequest); return; }
 				await this.loadQueue();
 			} else if (turn) {
-				if (!isSteerableTurn(turn)) throw new Error(`The active ${turn.status} Turn cannot accept steering`);
+				if (!isSteerableTurn(turn)) throw new Error(localize('chat.steer.unavailable', 'The current request cannot accept steering. Add this message to the queue instead.'));
 				await this.chatService.steerTurn({ ...submission, turnId: turn.turnId });
 			} else {
 				await this.chatService.startTurn(submission);
@@ -583,7 +588,8 @@ export class CoworkWidgetModel extends Disposable {
 		const isCurrent = () => stateRequest === this.stateRequest && this.isCurrentOperation(operation) && activeTurn(this._thread)?.turnId === turn.turnId;
 		try {
 			this.setState('submitting');
-			this.requireCurrentOperation(operation);
+			// Stopping existing work remains permitted when the preference blocks new AI requests.
+			if (!this.isCurrentOperation(operation)) { throw canceled(); }
 			await this.chatService.interruptTurn({
 				sessionId: thread.sessionId,
 				threadId: thread.threadId,
@@ -598,12 +604,13 @@ export class CoworkWidgetModel extends Disposable {
 		}
 	}
 
-	async resolveInteraction(response: AgentResponse): Promise<void> {
+	async resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void> {
 		const thread = this._thread;
 		const offer = thread ? this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) : undefined;
 		const interaction = offer?.interaction;
 		const turn = activeTurn(thread);
 		if (!thread || !turn || !offer || !interaction || offer.turnId !== turn.turnId) return;
+		if (expectedRequestId !== undefined && interaction.requestId !== expectedRequestId) { throw canceled(); }
 		if (response.type !== interaction.request.type) {
 			throw new Error('Interaction response kind does not match request');
 		}
@@ -1115,7 +1122,7 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
 }
 
 function isSteerableTurn(turn: Turn): boolean {
-	return turn.status === 'running' || turn.status === 'waitingForApproval' || turn.status === 'waitingForUserInput';
+	return (turn.kind === undefined || turn.kind === 'coding' || turn.kind === 'review') && (turn.status === 'running' || turn.status === 'waitingForApproval' || turn.status === 'waitingForUserInput');
 }
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {

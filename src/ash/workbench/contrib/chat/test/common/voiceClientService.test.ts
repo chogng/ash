@@ -25,6 +25,17 @@ test('Chat widget targeting belongs to one window and releases each registered f
 	const widget: IChatWidget = {
 		sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None, domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false, onDidHide: Event.None, onDidChangeViewModel: Event.None,
 		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
+		getFindController: () => undefined,
+		get input(): never { throw new Error('Unexpected composer operation'); },
+		retryFailedTurn: async () => { throw new Error('Unexpected retry'); },
+		focusCodeBlock: () => { throw new Error('Unexpected code block navigation'); },
+		acceptInput: async () => { },
+		focusInput: () => { },
+		getFocus: () => undefined,
+		getSibling: () => undefined,
+		focus: () => { },
+		reveal: () => { },
+		focusResponseItem: () => { },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	using registration = firstWindow.register(widget);

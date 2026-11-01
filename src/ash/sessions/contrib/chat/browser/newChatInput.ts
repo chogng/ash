@@ -1,3 +1,4 @@
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
@@ -41,6 +42,7 @@ export class NewChatInputWidget extends ChatInputPart {
 	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
 	private readonly permissionButton: HTMLButtonElement;
+	private readonly permissionPicker: NewChatPermissionPicker;
 
 	constructor(
 		container: HTMLElement,
@@ -58,15 +60,16 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, {
 			...delegate,
-			send: async (text, mode, skills, contexts, submissionSignal) => {
+			send: async (text, mode, skills, contexts, submissionSignal, queue) => {
 				if (this.isDisposed || submissionSignal?.aborted) return;
 				this.submittedMessage = true;
 				this.updateConversation();
 				try {
-					await delegate.send(text, mode, skills, contexts, submissionSignal);
+					await delegate.send(text, mode, skills, contexts, submissionSignal, queue);
 				} catch (error) {
 					// A retired submission must not change the newly selected conversation's welcome state.
 					if (!this.isDisposed && !submissionSignal?.aborted) {
@@ -92,7 +95,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver);
+		}], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys);
 		this.element.classList.add('ash-sessions-chat-input', 'floating-card');
 		this.element.classList.add('chat-composer');
 		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, this.element, model));
@@ -122,7 +125,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.createContextUsageToolbar(footer, contextMenus);
 		this.element.append(footer);
 		this.element.append(tipContainer);
-		this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
+		this.permissionPicker = this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
 		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
@@ -149,6 +152,15 @@ export class NewChatInputWidget extends ChatInputPart {
 			return '';
 		}
 		return super.statusText(state);
+	}
+
+	public override invalidatePendingInput(): void {
+		super.invalidatePendingInput();
+		this.permissionPicker?.hide();
+	}
+
+	public override openPermissionPicker(): void {
+		if (!this.isDisposed && this.visible && !this.model.inputState.aiDisabled) this.permissionPicker.show();
 	}
 
 	private updateConversation(): void {

@@ -86,6 +86,7 @@ export const enum AccessibleViewProviderId {
 	IssueReporter = 'issueReporter',
 	Output = 'output',
 	TerminalFindHelp = 'terminalFindHelp',
+	ChatFindHelp = 'chatFindHelp',
 	Terminal = 'terminal',
 	TerminalHelp = 'terminal-help',
 }

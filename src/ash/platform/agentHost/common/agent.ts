@@ -241,8 +241,29 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 }
 
 export interface QueuedMessage {
+	readonly sessionId: string;
+	readonly threadId: string;
+	/** The durable enqueue command is also the message's stable identity. */
+	readonly commandId: string;
+	readonly revision: number;
 	readonly status: 'pending' | 'paused' | 'delivering' | 'started' | 'rejected' | 'cancelled';
+	readonly mode: SessionMode;
+	readonly text: string;
+	/** Non-text input is retained by Core and never reconstructed by an editor. */
+	readonly contextCount: number;
+	readonly turnId?: string;
+	readonly error?: string;
 }
+
+export interface QueueMessageTarget extends QueueListParams {
+	readonly commandId: string;
+	readonly expectedRevision: number;
+}
+
+export type QueueMessageEdit =
+	| { readonly type: 'pause' | 'resume'; }
+	| { readonly type: 'replaceText'; readonly text: string; }
+	| { readonly type: 'send'; };
 
 export interface QueueListParams extends SessionReadParams {
 	readonly threadId: string;

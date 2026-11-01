@@ -88,6 +88,15 @@ export class ChatMarkdownContentPart extends Disposable {
 		return true;
 	}
 
+	public focusCodeBlock(reverse = false): void {
+		if (this.isDisposed || !this.visible) { return; }
+		const blocks = [...this.codeBlocks].sort(([left], [right]) => left - right).map(([, block]) => block);
+		if (!blocks.length) { return; }
+		const current = blocks.findIndex(block => block.hasFocus);
+		const index = current < 0 ? (reverse ? blocks.length - 1 : 0) : (current + (reverse ? blocks.length - 1 : 1)) % blocks.length;
+		blocks[index].focus();
+	}
+
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
 		if (!visible) this.update.clear();

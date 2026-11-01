@@ -296,7 +296,9 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
         call(&mut tui, 5, request.clone())["result"]["type"],
         "conversationBusy"
     );
-    store.cancel(&session_id, &thread_id, &command_id).unwrap();
+    store
+        .cancel(&session_id, &thread_id, &command_id, None)
+        .unwrap();
     assert_eq!(
         call(&mut tui, 6, request.clone())["result"]["type"],
         "conversationUnavailable"

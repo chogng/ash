@@ -1107,6 +1107,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	const turn: IAgentTurnService = {
 		enqueue: async () => { throw new Error('Queue is unavailable in this fixture'); },
 		listQueued: async () => ({ messages: [] }),
+		editQueued: async () => { throw new Error('Not used'); },
+		cancelQueued: async () => { throw new Error('Not used'); },
 		async consultAdvisor() { throw new Error('Not used'); },
 		async start() { throw new Error('Not used'); },
 		async startReview() { throw new Error('Not used'); },

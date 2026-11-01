@@ -2,6 +2,132 @@ use super::*;
 use protocol::UserInput;
 
 #[test]
+fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
+    let root = tempfile::tempdir().unwrap();
+    let store = QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+    let mut request = input("editable");
+    let context = UserInput::Context {
+        name: "snapshot".into(),
+        content: "immutable".into(),
+    };
+    let tools = UserInput::ToolSelection {
+        disabled: vec![],
+        allowed: Some(vec![]),
+    };
+    request.input = vec![
+        UserInput::Text {
+            text: "Before".into(),
+        },
+        context.clone(),
+        UserInput::Text {
+            text: "After".into(),
+        },
+        tools.clone(),
+    ];
+    let first = store.enqueue(&request).unwrap();
+    store.enqueue(&input("second")).unwrap();
+    let paused = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            first.revision,
+            &crate::QueueEdit::Pause,
+        )
+        .unwrap();
+    assert!(store.candidates(0).unwrap().is_empty());
+    assert!(matches!(
+        store.cancel(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            Some(first.revision)
+        ),
+        Err(QueueError::Conflict)
+    ));
+    assert!(matches!(
+        store.edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            first.revision,
+            &crate::QueueEdit::ReplaceText {
+                text: "stale".into()
+            }
+        ),
+        Err(QueueError::Conflict)
+    ));
+    let resumed = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            &crate::QueueEdit::Resume,
+        )
+        .unwrap();
+    assert_eq!(resumed.request, request);
+    assert_eq!(
+        store.list(&request.session_id, &request.thread_id).unwrap()[0]
+            .request
+            .command_id,
+        request.command_id
+    );
+    let paused = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            resumed.revision,
+            &crate::QueueEdit::Pause,
+        )
+        .unwrap();
+    assert!(matches!(
+        store.edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            &crate::QueueEdit::ReplaceText { text: " \n".into() }
+        ),
+        Err(QueueError::Invalid(_))
+    ));
+    let edited = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            &crate::QueueEdit::ReplaceText {
+                text: "Edited\ntext".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        edited.request.input,
+        vec![
+            UserInput::Text {
+                text: "Edited\ntext".into()
+            },
+            context,
+            tools
+        ]
+    );
+    assert_eq!(edited.request.command_id, request.command_id);
+    assert_eq!(edited.status, QueueStatus::Pending);
+    let cancelled = store
+        .cancel(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            Some(edited.revision),
+        )
+        .unwrap();
+    assert_eq!(cancelled.status, QueueStatus::Cancelled);
+    assert!(cancelled.revision > edited.revision);
+}
+
+#[test]
 fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("state.sqlite");
@@ -124,7 +250,8 @@ fn leases_exclude_other_connections_and_stale_acknowledgments() {
         second.cancel(
             &queued.request.session_id,
             &queued.request.thread_id,
-            &queued.request.command_id
+            &queued.request.command_id,
+            None
         ),
         Err(QueueError::Busy)
     ));
@@ -157,12 +284,18 @@ fn cancellation_is_durable_and_cannot_cross_session_boundaries() {
         store.cancel(
             &SessionId::new("wrong").unwrap(),
             &request.thread_id,
-            &request.command_id
+            &request.command_id,
+            None
         ),
         Err(QueueError::NotFound)
     ));
     let cancelled = store
-        .cancel(&request.session_id, &request.thread_id, &request.command_id)
+        .cancel(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            None,
+        )
         .unwrap();
     assert_eq!(cancelled.status, QueueStatus::Cancelled);
     assert_eq!(store.enqueue(&request).unwrap(), cancelled);

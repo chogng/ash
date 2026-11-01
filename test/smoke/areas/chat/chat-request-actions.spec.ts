@@ -123,6 +123,28 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await expect(transcript).toContainText('Request action answer 1');
 			await draft.focus();
 			await page.keyboard.insertText('Unsent original draft');
+			// Both command-palette and transcript shortcuts return to this composer's draft.
+			await window.quickaccess.runCommand('workbench.action.chat.focusInput');
+			await expect(draft).toBeFocused();
+			await transcript.getByRole('button', { name: 'Copy message', exact: true }).first().focus();
+			await page.keyboard.press('ControlOrMeta+ArrowDown');
+			await expect(draft).toBeFocused();
+			if (!('windows' in application)) await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+			const previousClipboard = 'windows' in application
+				? await application.evaluate(({ clipboard }) => clipboard.readText())
+				: await page.evaluate(() => navigator.clipboard.readText());
+			try {
+				await window.quickaccess.runCommand('workbench.action.chat.copyAll');
+				const copied = 'windows' in application
+					? await application.evaluate(({ clipboard }) => clipboard.readText())
+					: await page.evaluate(() => navigator.clipboard.readText());
+				expect(copied).toBe('User: Original request\n\nAssistant: Request action answer 1');
+				await expect(composer.locator('.view-lines')).toContainText('Unsent original draft');
+				expect(modelCalls).toBe(1);
+			} finally {
+				if ('windows' in application) await application.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+				else await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+			}
 			await chat.getByRole('button', { name: 'Edit message', exact: true }).click();
 			const edit = chat.getByRole('textbox', { name: 'Edit request', exact: true });
 			await expect(edit).toHaveValue('Original request');

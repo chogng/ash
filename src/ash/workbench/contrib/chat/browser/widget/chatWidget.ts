@@ -1,8 +1,9 @@
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { readWorkspaceChanges } from './input/chatInput.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { ChatSubmissionOptions } from '../../../../services/chat/common/chatService.js';
+import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -13,6 +14,8 @@ import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../services/chat/common/chatService.js';
@@ -25,7 +28,7 @@ import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
 import type { IChatListItem } from './chatListItems.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
-import { getActiveWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -48,7 +51,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
-import { IChatWidgetService, type IChatWidget } from '../chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../chat.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -76,7 +79,7 @@ export interface IChatWidgetModel extends IDisposable {
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode(mode: ApprovalMode): void;
-	resolveInteraction(response: AgentResponse): Promise<void>;
+	resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }
 
@@ -91,7 +94,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
-	private readonly inputPart: IChatInputPart;
+	public readonly input: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
 	private readonly olderHistoryElement: HTMLDivElement;
 	private readonly olderHistoryButton: Button;
@@ -121,6 +124,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		@IDialogService dialogs: IDialogService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatWidgetService widgets: IChatWidgetService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
 		this.model = this._register(model);
@@ -140,6 +144,20 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.element.setAttribute('role', 'tabpanel');
 		this.element.hidden = true;
 		container.append(this.element);
+		const context = this._register(contextKeys.createScoped(this.element));
+		ChatContextKeys.inChatSession.bindTo(context).set(true);
+		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
+		activeRequest.set(model.inputState.canInterrupt);
+		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
+		ChatContextKeys.findSupported.bindTo(context).set(true);
+		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
+		// Detached Markdown fragments still inherit this conversation's command scope.
+		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
+		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
+		this._register(addDisposableListener(this.element, 'focusin', () => {
+			// Quick Chat borrows this widget by reparenting it; its original scope stays alive.
+			inQuickChat.set(contextKeys.getContext(this.element.parentElement).getValue<boolean>(ChatContextKeys.inQuickChat.key) === true);
+		}));
 		this.goalElement = h(ownerDocument, 'div');
 		this.goalElement.className = 'ash-chat-goal';
 		this.goalElement.hidden = true;
@@ -189,12 +207,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			}));
 		}
-		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
+		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
+			getHistoryState: () => this.model.olderHistory,
+			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
 			imageResourceLoader,
 			mcpAppDelegate: {
 				updateModelContext: (source, text, images = []) => {
 					const id = this.appContextId(source);
-					const model = this.inputPart.attachmentModel;
+					const model = this.input.attachmentModel;
 					const owned = (attachment: ChatContextAttachment) => attachment.id === id || attachment.id.startsWith(`${id}:image:`);
 					const lifetime = new DisposableStore();
 					const name = localize('chat.mcpApp.contextLabel', 'App context');
@@ -212,7 +233,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				sendMessage: async (source, text, signal, images = []) => {
 					const id = this.appContextId(source);
 					// An App follow-up includes its own source context, never a user's unsent draft or files.
-					const contexts = [...this.inputPart.attachmentModel.attachments.filter(attachment => attachment.id === id || attachment.id.startsWith(`${id}:image:`)), ...images];
+					const contexts = [...this.input.attachmentModel.attachments.filter(attachment => attachment.id === id || attachment.id.startsWith(`${id}:image:`)), ...images];
 					await this.send(text, this.model.inputState.mode, undefined, contexts, source, signal);
 				},
 			} satisfies IChatMcpAppDelegate,
@@ -236,7 +257,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}),
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
-			send: (text, mode, skills, contexts, submissionSignal) => this.send(text, mode, skills, contexts, undefined, submissionSignal),
+			send: (text, mode, skills, contexts, submissionSignal, queue) => this.send(text, mode, skills, contexts, undefined, submissionSignal, queue),
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
@@ -269,26 +290,26 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				if (!this.isDisposed && identity === (this.model.threadId ?? this.model.untitledSessionId)) this.model.selectApprovalMode(mode);
 			},
 			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
-			resolveInteraction: (response) => this.model.resolveInteraction(response),
+			resolveInteraction: (response, expectedRequestId) => this.model.resolveInteraction(response, expectedRequestId),
 		};
-		this.inputPart = this._register(createInputPart
+		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
 		this._register(widgets.register(this));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
-			openSession: () => this.inputPart.focus(),
+			openSession: () => this.input.focus(),
 			toggleMute: () => { void this.runVoice(() => voiceClient.setMuted(!voiceClient.isMuted)); },
 			toggleInputMode: () => { void this.runVoice(() => voiceClient.setInputMode(voiceClient.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')); },
 			pttDown: () => { hold = generateUuid(); const id = hold; void this.runVoice(() => voiceClient.pttDown(id)); },
 			pttUp: () => { const id = hold; hold = undefined; if (id) void this.runVoice(() => voiceClient.pttUp(id)); },
 			disconnect: () => { void this.runVoice(() => voiceClient.disconnect()); },
 			stopPlayback: () => { void this.runVoice(() => voiceClient.stopSpeaking()); },
-			closeWindow: () => this.inputPart.focus(),
-			showSessionsPicker: () => this.inputPart.focus(),
+			closeWindow: () => this.input.focus(),
+			showSessionsPicker: () => this.input.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalElement, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.inputPart.element);
+		this.element.append(this.goalElement, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -296,7 +317,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			this.listWidget = widget;
 			widget.restoreViewState(state, this.model.items);
 		}));
-		this._register(this.model.onDidChangeComposer(() => this.inputPart.invalidatePendingInput()));
+		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
 		this._register(this.model.onDidChange(() => {
 			if (this.model.inputState.aiDisabled && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 			this.render();
@@ -319,8 +340,20 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	get domNode(): HTMLElement { return this.element; }
+	public cancelTranscriptProgress(): boolean {
+		if (this.isDisposed || !this.visible || !this.model.inputState.canInterrupt) { return false; }
+		void this.model.interrupt().catch(error => { if (!this.isDisposed && !isCancellationError(error)) { this.notifications.error(error); } });
+		return true;
+	}
+	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
+	public focusResponseItem(lastFocused?: boolean): void { this.listWidget.focusResponseItem(lastFocused); }
+	public focusCodeBlock(reverse = false): void { this.listWidget.focusCodeBlock(reverse); }
+	public focusInput(): void { this.input.focus(); }
+	public getFocus(): IChatListItem | undefined { return this.listWidget.getFocus(); }
+	public getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined { return this.listWidget.getSibling(item, type); }
+	public reveal(item: IChatListItem): void { this.listWidget.reveal(item); }
 	get visible(): boolean { return !this.element.hidden; }
-	get inputEditor() { return this.inputPart.inputEditor; }
+	get inputEditor() { return this.input.inputEditor; }
 	get isTranscriptProgressActive(): boolean { return this.model.inputState.inputBlocked === true || this.model.inputState.aiDisabled === true; }
 	get onDidChangeViewModel(): Event<void> { return this.model.onDidChangeComposer; }
 
@@ -340,12 +373,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
-		this.inputPart.setVisible(visible);
+		this.input.setVisible(visible);
 		this.listWidget.setVisible(visible);
 	}
 
-	focus(): void {
-		this.inputPart.focus();
+	public focus(item?: IChatListItem): void {
+		if (item) { this.listWidget.focus(item); }
+		else { this.focusInput(); }
 	}
 	/** A floating control starts through this Chat's original source and task dispatcher. */
 	startVoiceConversation(): Promise<void> {
@@ -353,36 +387,36 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
-		return this.inputPart.acquireContext(prepare, signal);
+		return this.input.acquireContext(prepare, signal);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
-		this.inputPart.addContext(attachment);
+		this.input.addContext(attachment);
 	}
 
 	captureScreenshot(capture?: ChatImageCapture): Promise<void> {
-		return this.inputPart.captureScreenshot(capture);
+		return this.input.captureScreenshot(capture);
 	}
 
 	bindDraftStorage(storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): void {
-		if (!(this.inputPart instanceof ChatInputPart)) throw new Error('This Chat input owns its draft lifecycle');
-		this.inputPart.bindDraftStorage(this.model, storage, onWillShutdown);
+		if (!(this.input instanceof ChatInputPart)) throw new Error('This Chat input owns its draft lifecycle');
+		this.input.bindDraftStorage(this.model, storage, onWillShutdown);
 	}
 
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
-		return this.inputPart.captureDraft();
+		return this.input.captureDraft();
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {
-		this.inputPart.restoreDraft(draft);
+		this.input.restoreDraft(draft);
 	}
 
 	appendToDraft(text: string): void {
-		this.inputPart.appendToDraft(text);
+		this.input.appendToDraft(text);
 	}
 
-	acceptInput(value?: string): Promise<void> {
-		return this.inputPart.acceptInput(value);
+	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		return this.input.acceptInput(value, options);
 	}
 
 	private async runVoice(operation: () => Promise<void>): Promise<void> {
@@ -391,7 +425,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 
-	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal): Promise<void> {
+	private async send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = [], appSource?: Parameters<IChatMcpAppDelegate['sendMessage']>[0], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void> {
 		const model = this.model;
 		const generation = model.composerGeneration;
 		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
@@ -401,7 +435,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			const resolvedContexts = await Promise.all(contexts.map(resolveChatContextAttachment));
 			if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) throw canceled();
 			if (appSource) this.appContextId(appSource);
-			await model.send(text, mode, skills, resolvedContexts, appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal: submissionSignal } : submissionSignal ? { signal: submissionSignal } : undefined);
+			const options = appSource ? { source: { sessionId: appSource.sessionId, threadId: appSource.threadId }, signal: submissionSignal } : submissionSignal ? { signal: submissionSignal } : undefined;
+			await model.send(text, mode, skills, resolvedContexts, queue ? { ...options, queue } : options);
 		} catch (error) {
 			if (!this.isDisposed && !submissionSignal?.aborted && generation === model.composerGeneration && model.items.length === 0) {
 				this.submittedMessage = false;
@@ -416,19 +451,25 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return JSON.stringify(['mcpApp', source.sessionId, source.threadId, source.itemId, source.contentIndex]);
 	}
 
+	public async retryFailedTurn(turnId?: string): Promise<void> {
+		if (this.isDisposed || !this.visible || this.model.inputState.aiDisabled) { return; }
+		const action = [...this.model.items].reverse().find(item => item.action?.type === 'retry' && (!turnId || item.action.turnId === turnId))?.action;
+		if (action?.type === 'retry') { await this.model.retryFailedTurn(action.turnId); }
+	}
+
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
 		switch (action.type) {
 			case 'retry':
-				await this.model.retryFailedTurn(action.turnId);
+				await this.retryFailedTurn(action.turnId);
 				return;
 			case 'chooseModel':
-				this.inputPart.openModelSelector();
+				this.input.openModelPicker();
 				return;
 			case 'startNewChat':
 				this.createUntitledSession();
 				return;
 			case 'revise':
-				this.inputPart.focus();
+				this.input.focus();
 				return;
 		}
 	}
@@ -442,7 +483,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.voiceSessionController.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		const voice = this.voiceSessionController;
 		const focused = this.element.ownerDocument.activeElement;
-		if (!voice.isActive && this.voiceWidget.element.contains(focused)) this.inputPart.focus();
+		if (!voice.isActive && this.voiceWidget.element.contains(focused)) this.input.focus();
 		this.voiceWidget.element.hidden = !voice.isActive;
 		this.voiceWidget.setConnected(voice.isConnected);
 		this.voiceWidget.setConnecting(voice.isActive && !voice.isConnected);
@@ -460,7 +501,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.inputPart.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
+		this.input.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private renderHistoryStatus(): void {

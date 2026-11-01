@@ -50,6 +50,8 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelReasoningEffort } from './modelCatalog.js';
 import type { ResolvedChatContext } from './chatContextService.js';
+import type { QueuedMessage, QueueMessageTarget } from '../../../../platform/agentHost/common/agent.js';
+export type { QueuedMessage, QueueMessageTarget } from '../../../../platform/agentHost/common/agent.js';
 
 import type { ApprovalMode } from '../../../../platform/agentHost/common/approvalModes.js';
 
@@ -127,8 +129,15 @@ export interface IChatHookPart {
 	readonly run: ChatHookRun;
 }
 
+export const enum ChatRequestQueueKind {
+	Queued = 'queued',
+	Steering = 'steering',
+}
+
 /** Captured origin, cancellation and idempotency of one composer submission. */
 export interface ChatSubmissionOptions {
+	/** An explicit choice; absence keeps the owning composer's automatic dispatch policy. */
+	readonly queue?: ChatRequestQueueKind;
 	readonly signal?: AbortSignal;
 	readonly source?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
 	readonly commandId?: string;
@@ -302,6 +311,13 @@ export interface IChatService {
 	startReview(options: StartReviewOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;
 	queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number>;
+	getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
+	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
+	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
+	editPendingRequest(target: QueueMessageTarget, text: string): Promise<QueuedMessage>;
+	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
+	/** Promote the durable message before interrupting the captured active task. */
+	sendPendingRequestImmediately(target: QueueMessageTarget): Promise<void>;
 	compactContext(options: CompactContextOptions): Promise<void>;
 	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
 	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;

@@ -148,3 +148,8 @@
 	margin: var(--ash-spacing-size80) 0;
 	color: var(--ash-description-foreground);
 }
+
+.ash-chat-item:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

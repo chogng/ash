@@ -29,11 +29,13 @@ registerAction2(class extends ForkConversationAction {
 registerAction2(class ChoosePermission extends Action2 {
 	constructor() { super({ id: OPEN_CHAT_PERMISSIONS_COMMAND_ID, title: localize2('sessions.chat.permissions', 'Permissions') }); }
 	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
+		const generation = model.composerGeneration;
+		const commands = accessor.get(ICommandService);
 		const value = argument.trim();
 		const definition = value ? approvalModeDefinitions.find(mode => mode.id === value) : undefined;
 		if (value && !definition) { throw new Error(localize('sessions.chat.permission.commandUsage', 'Use /permission manual|auto|bypassPermissions.')); }
 		const selected = definition?.id ?? (await selectReviewItem(accessor.get(IQuickInputService), localize('sessions.chat.permissions', 'Permissions'), approvalModeDefinitions.map(mode => ({ id: mode.id, label: localize(mode.label.key, mode.label.text), description: localize(mode.description.key, mode.description.text) }))))?.id;
-		if (selected) { await accessor.get(ICommandService).executeCommand(`sessions.chat.permission.${selected}`, model); }
+		if (selected && generation === model.composerGeneration && !model.inputState.aiDisabled) { await commands.executeCommand(`sessions.chat.permission.${selected}`, model); }
 	}
 });
 
@@ -48,6 +50,7 @@ for (const definition of approvalModeDefinitions) {
 		}
 
 		override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
+			const generation = model.composerGeneration;
 			if (definition.requiresConfirmation) {
 				const result = await accessor.get(IDialogService).confirm({
 					message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
@@ -57,7 +60,7 @@ for (const definition of approvalModeDefinitions) {
 				if (!result.confirmed) { return; }
 			}
 			// The menu carries its own composer model, including when another pane is active.
-			model.selectApprovalMode(mode);
+			if (generation === model.composerGeneration && !model.inputState.aiDisabled) model.selectApprovalMode(mode);
 		}
 	});
 }

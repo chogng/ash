@@ -1,4 +1,4 @@
-import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
+import type { ChatRequestQueueKind, ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
@@ -59,7 +59,7 @@ export interface ChatInputState {
 export interface ChatInputDelegate {
 	readonly voiceConversation?: { readonly isAvailable: boolean; readonly isActive: boolean; readonly isConnected: boolean; toggle(): Promise<void>; interrupt(): Promise<void>; };
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal): Promise<void>;
+	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
@@ -73,7 +73,7 @@ export interface ChatInputDelegate {
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
-	resolveInteraction(response: AgentResponse): Promise<void>;
+	resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void>;
 }
 
 /** Validates the optional Git extension's command result at its process boundary. */

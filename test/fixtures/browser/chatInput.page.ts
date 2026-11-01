@@ -951,7 +951,7 @@ window.ashChatInputIntegration = {
 	},
 	releaseInstructions: () => { for (const resolve of instructionWaiters.splice(0)) resolve(); },
 	showModels: renderModels,
-	openModels: () => part.openModelSelector(),
+	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
 	showQuestions: () => part.render({

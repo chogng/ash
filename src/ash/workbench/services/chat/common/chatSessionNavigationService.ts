@@ -1,3 +1,7 @@
+import { canceled } from '../../../../base/common/errors.js';
+import type { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { localize } from '../../../../nls.js';
+import type { IChatService, ThreadRead } from './chatService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { OpenSessionLink } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -35,3 +39,34 @@ export interface IChatSessionNavigationService {
 }
 
 export const IChatSessionNavigationService = createServiceIdentifier<IChatSessionNavigationService>('chatSessionNavigationService');
+
+/** Keeps local conversation reads and their consumers within the captured backend incarnation. */
+export async function withChatConversation(
+	chat: IChatService,
+	appServer: IAppServerApi,
+	sessionId: string,
+	threadId: string,
+	operation: (conversation: ThreadRead) => Promise<void>,
+): Promise<void> {
+	const generation = appServer.connectionGeneration;
+	let retired = false;
+	// Close can retire a resolved response before its consumer runs without changing generation.
+	const listener = appServer.onConnectionState(state => {
+		if (state !== 'ready') {
+			retired = true;
+		}
+	});
+	try {
+		const result = await chat.readThread(sessionId, threadId);
+		const state = await appServer.getConnectionState();
+		if (retired || generation !== appServer.connectionGeneration || state !== 'ready') {
+			throw canceled();
+		}
+		if (result.thread.sessionId !== sessionId || result.thread.threadId !== threadId) {
+			throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
+		}
+		await operation(result);
+	} finally {
+		listener.dispose();
+	}
+}

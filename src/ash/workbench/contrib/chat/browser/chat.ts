@@ -1,3 +1,5 @@
+import type { IChatInputPart } from './widget/input/chatInputPart.js';
+import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -8,9 +10,15 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatWidget } from './widget/chatWidget.js';
+import type { IChatListItem } from './widget/chatListItems.js';
+
+export interface IChatAcceptInputOptions {
+	readonly queue?: ChatRequestQueueKind;
+}
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;
 	readonly domNode: HTMLElement;
@@ -20,9 +28,33 @@ export interface IChatWidget {
 	readonly isTranscriptProgressActive: boolean;
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
+	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
+	cancelTranscriptProgress?(): boolean;
+	retryFailedTurn(turnId?: string): Promise<void>;
+	getFindController(): IChatFindController | undefined;
+	focusResponseItem(lastFocused?: boolean): void;
+	focusCodeBlock(reverse?: boolean): void;
+	focusInput(): void;
+	getFocus(): IChatListItem | undefined;
+	/** An absent item selects the first or last boundary of the current transcript. */
+	getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined;
+	focus(item: IChatListItem): void;
+	reveal(item: IChatListItem): void;
 	startVoiceConversation(): Promise<void>;
 	/** Prepares references within this composer’s draft lifetime and admission rules. */
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+}
+
+export interface IChatFindController {
+	readonly visible: boolean;
+	show(seedText?: string, focus?: boolean): void;
+	hide(): void;
+	next(): void;
+	previous(): void;
+	toggleCaseSensitive(): void;
+	toggleWholeWord(): void;
+	toggleRegex(): void;
+	focus(): void;
 }
 
 export interface IChatWidgetService {

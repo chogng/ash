@@ -1,3 +1,4 @@
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
@@ -60,14 +61,15 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, {
 			...delegate,
-			send: async (text, mode, skills, contexts, signal) => {
+			send: async (text, mode, skills, contexts, signal, queue) => {
 				this.submittedMessage = true;
 				this.updateConversation();
 				try {
-					await delegate.send(text, mode, skills, contexts, signal);
+					await delegate.send(text, mode, skills, contexts, signal, queue);
 				} catch (error) {
 					if (this.model.items.length === 0) {
 						this.submittedMessage = false;
@@ -89,7 +91,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver);
+		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');

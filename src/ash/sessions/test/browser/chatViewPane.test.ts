@@ -159,7 +159,7 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IContextViewService, contextView);
 	services.registerInstance(IMenuService, menus ?? new MenuService(inputResources.add(new CommandService(services)), services.get(IContextKeyService)));
-	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => { } } as unknown as IContextMenuService);
+	services.registerInstance(IContextMenuService, contextMenus ?? { showContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } as unknown as IContextMenuService);
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
@@ -434,6 +434,10 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await waitFor(() => dom.window.document.querySelector('.ash-quick-chat textarea') !== null);
 	const original = dom.window.document.querySelector<HTMLElement>('.ash-quick-chat .ash-chat')!;
 	const input = original.querySelector<HTMLTextAreaElement>('textarea')!;
+	const contextKeys = services.get(IContextKeyService);
+	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatSession.key), true);
+	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatInput.key), true);
+	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inQuickChat.key), true);
 	assert.equal(sessions.navigationRevision, revision);
 	assert.equal(sessions.active?.session.sessionId, 'existing');
 	assert.equal(mainInput.value, 'Keep the main draft');
@@ -481,6 +485,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await quick.openInChatView();
 	assert.equal(focusedMain, 1);
 	assert.equal(original.closest('.ash-chat-pane-host') !== null, true);
+	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inQuickChat.key), false);
 	assert.equal(original.querySelector('textarea'), input);
 	assert.equal(input.value, 'A later draft');
 	const preparationSurvived = preparationSignal?.aborted === false;
@@ -1451,6 +1456,7 @@ test('sending from one session preserves a later draft during first-session crea
 		recordingDialogService([]),
 		editorServices.get(IQuickInputService),
 		editorServices.get(IChatWidgetService),
+		editorServices.get(IContextKeyService),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -1471,7 +1477,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService), editorServices.get(IChatWidgetService));
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService), editorServices.get(IChatWidgetService), editorServices.get(IContextKeyService));
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -4700,8 +4706,8 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inl
 	const services = createInputServices(contextView, chat);
 	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 	using widget = kind === 'Code'
-		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService))
-		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService));
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService))
+		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService));
 	widget.setVisible(true);
 	const first = new DeferredPromise<{ name: string; content: string; }>();
 	const second = new DeferredPromise<{ name: string; content: string; }>();
@@ -4742,7 +4748,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService));
+		}, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');

@@ -1082,8 +1082,6 @@ export abstract class Workbench extends Disposable {
 				layout.setActivityBarLocation(location);
 			}
 		}));
-		// Browser integration resolves editor and view services; install it after the window graph is complete.
-		if (options.createBrowserHost) this._register(options.createBrowserHost(services));
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys));

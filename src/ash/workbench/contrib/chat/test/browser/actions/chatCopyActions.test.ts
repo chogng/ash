@@ -1,3 +1,4 @@
+import { AgentHostOpenSessionLinkOpenerContribution } from '../../../browser/agentSessions/agentHost/openSessionLinkOpener.contribution.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -24,7 +25,7 @@ import { IContextMenuService } from '../../../../../../platform/contextview/brow
 import { IOpenerService, type IOpener } from '../../../../../../platform/opener/common/opener.js';
 import { IChatService } from '../../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
-import { ChatSessionLinkOpener, CopyChatSessionLinkAction } from '../../../browser/actions/chatCopyActions.js';
+import { CopyChatSessionLinkAction } from '../../../browser/actions/chatCopyActions.js';
 import { ChatViewTitleControl } from '../../../browser/widgetHosts/viewPane/chatViewTitleControl.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 
@@ -60,7 +61,7 @@ suite('Conversation links', () => {
 		services.registerInstance(IOpenerService, {
 			registerOpener: opener => { registered = opener; return toDisposable(() => { registered = undefined; }); },
 		} as IOpenerService);
-		lifetime.add(services.createInstance(ChatSessionLinkOpener));
+		lifetime.add(services.createInstance(AgentHostOpenSessionLinkOpenerContribution));
 		return {
 			copied, opened, announcements,
 			routeWith: (prepare: NonNullable<IChatSessionNavigationService['prepareConversationLink']>, open: NonNullable<IChatSessionNavigationService['openConversationLink']>) => { navigation.prepareConversationLink = prepare; navigation.openConversationLink = open; },

@@ -191,6 +191,14 @@ export class CodeBlockPart extends Disposable {
 	}
 
 	/** Hidden transcripts retain source and selection, without a second live editor document. */
+	public get hasFocus(): boolean { return this.element.contains(this.element.ownerDocument.activeElement); }
+
+	public focus(): void {
+		if (this.isDisposed) { return; }
+		this.setVisible(true);
+		this.editor.focus();
+	}
+
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;

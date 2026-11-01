@@ -118,9 +118,14 @@ export class AgentThreadHistoryConflictError extends Error {
 	constructor() { super('Thread files changed after their checkpoint'); }
 }
 
+/** The displayed queue revision is stale or has already entered delivery. */
+export class AgentQueueConflictError extends Error { }
+
 export interface IAgentTurnService {
 	enqueue(params: Agent.QueueEnqueueParams, signal?: AbortSignal): Promise<Agent.QueuedMessage>;
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
+	editQueued(params: Agent.QueueMessageTarget, action: Agent.QueueMessageEdit): Promise<Agent.QueuedMessage>;
+	cancelQueued(params: Agent.QueueMessageTarget): Promise<Agent.QueuedMessage>;
 	consultAdvisor(params: Agent.SessionOperationInput<'consultAdvisor'>): Promise<Agent.TurnStartResult>;
 	start(params: Agent.SessionOperationInput<'startTurn'>, signal?: AbortSignal): Promise<Agent.TurnStartResult>;
 	startReview(params: Agent.SessionOperationInput<'startReview'>): Promise<Agent.TurnStartResult>;

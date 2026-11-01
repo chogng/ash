@@ -46,8 +46,8 @@ test('permission commands use shared Chinese copy and require confirmation only 
 	using commands = new CommandService(services);
 	const selections: ApprovalMode[] = [];
 	const otherSelections: ApprovalMode[] = [];
-	const model = { selectApprovalMode: (mode: ApprovalMode) => selections.push(mode) } as unknown as IChatWidgetModel;
-	const otherModel = { selectApprovalMode: (mode: ApprovalMode) => otherSelections.push(mode) } as unknown as IChatWidgetModel;
+	const model = { composerGeneration: 0, inputState: { aiDisabled: false }, selectApprovalMode: (mode: ApprovalMode) => selections.push(mode) } as unknown as IChatWidgetModel;
+	const otherModel = { composerGeneration: 0, inputState: { aiDisabled: false }, selectApprovalMode: (mode: ApprovalMode) => otherSelections.push(mode) } as unknown as IChatWidgetModel;
 	try {
 		assert.deepEqual(approvalModeDefinitions.map(definition => [localize(definition.label.key, definition.label.text), localize(definition.description.key, definition.description.text)]), [
 			['自动', '自动审核操作，无法判断时询问你'],

@@ -3,8 +3,8 @@ import { URI } from '../../../base/common/uri.js';
 import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, withRemoteWorkspacePath } from '../../remote/common/remote.js';
 import type { SessionCreateParams as SessionCreateParamsDto } from '../../../../../.build/protocol/typescript/index.js';
 import type { IAgentHostResourceService } from '../common/agentHostResourceService.js';
-import type { InputItem } from '../../../../../.build/protocol/typescript/index.js';
-import type { AgentInput, SessionCreateParams } from '../common/agent.js';
+import type { QueuedMessage as QueuedMessageDto, InputItem } from '../../../../../.build/protocol/typescript/index.js';
+import type { QueuedMessage, AgentInput, SessionCreateParams } from '../common/agent.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
@@ -18,7 +18,7 @@ import { createAppServerResourceApi, readAppServerResource } from './appServerAp
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
 import { AppServerRemoteError } from '../common/appServerError.js';
-import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError } from '../common/agentService.js';
+import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
 	Thread as ThreadDto,
@@ -120,6 +120,8 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 	return {
 		enqueue: () => unavailable('queue.enqueue'),
 		listQueued: () => unavailable('queue.list'),
+		editQueued: () => unavailable('queue.edit'),
+		cancelQueued: () => unavailable('queue.cancel'),
 		start: () => unavailable('turn.start'),
 		startReview: () => unavailable('turn.startReview'),
 		compact: () => unavailable('turn.compact'),
@@ -491,14 +493,34 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 	};
 }
 
+/** Normalize the persisted queue snapshot once at the protocol boundary. */
+function queuedMessage(value: QueuedMessageDto): QueuedMessage {
+	return {
+		sessionId: value.request.sessionId, threadId: value.request.threadId, commandId: value.request.commandId,
+		revision: value.revision, status: value.status, mode: value.request.mode,
+		text: value.request.input.flatMap(item => item.type === 'text' ? [item.text] : []).join(''),
+		contextCount: value.request.input.filter(item => item.type !== 'text').length,
+		turnId: value.turnId ?? undefined, error: value.error ?? undefined,
+	};
+}
+
+function queueFailure(error: unknown): never {
+	if (error instanceof AppServerRemoteError && ['QueueNotFound', 'QueueConflict', 'QueueBusy'].includes(error.errorName)) {
+		throw new AgentQueueConflictError(localize('chat.queue.conflict', 'This queued message changed or has already started. Choose it again from the queue.'));
+	}
+	throw error;
+}
+
 export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
 		enqueue: (params, signal) =>
-			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then((result) => ({ status: result.status })),
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then(queuedMessage),
 		listQueued: (params) =>
 			appServerRequest(connection, 'queue/list', params).then((result) => ({
-				messages: result.messages.map((message) => ({ status: message.status }))
+				messages: result.messages.map(queuedMessage)
 			})),
+		editQueued: (params, action) => appServerRequest(connection, 'queue/edit', { ...params, action: action.type === 'send' ? { type: 'send', turnId: null } : action }).then(queuedMessage).catch(queueFailure),
+		cancelQueued: params => appServerRequest(connection, 'queue/cancel', params).then(queuedMessage).catch(queueFailure),
 		start: (params, signal) =>
 			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(
 				connection,

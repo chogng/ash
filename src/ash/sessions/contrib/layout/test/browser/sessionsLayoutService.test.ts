@@ -159,6 +159,16 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(chatEntry);
+		fixture.openDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, true);
+		assert.equal(fixture.visible.get('editor'), true);
+	});
+
 	test('reopening an already active document leaves the conversation entry even without an editor change', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
@@ -421,6 +431,11 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
+	public openDocument(input: IResourceEditorInput): void {
+		this.activeInput = input;
+		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.services.get(IEditorPart).activeGroup.id, event: { kind: 'activeEditorChanged', editor: undefined } });
+	}
+
 	constructor(savedVisibility?: unknown, codeCards?: ICodeCardLayout) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));

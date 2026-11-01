@@ -350,3 +350,28 @@ test('the real trace reader projects remote identity and round-trips backend pag
 	await debug.stopWireLog(context.sessionId, 'wire');
 	assert.deepEqual(calls.at(-1), { sessionId: 'same', captureId: 'wire' });
 });
+
+test('Queue snapshots and revisioned operations retain the originating provider scope', async () => {
+	using f = fixture();
+	using chat = new SessionsChatService(f.scopes);
+	const calls: unknown[] = [];
+	const message = { sessionId: 'same', threadId: 'thread', commandId: 'stable-command', revision: 12, status: 'paused' as const, mode: 'agent' as const, text: 'Retained input', contextCount: 2 };
+	f.remoteChat.getPendingRequests = async (...args) => { calls.push(['list', ...args]); return [message]; };
+	for (const method of ['pausePendingRequest', 'resumePendingRequest', 'editPendingRequest', 'removePendingRequest'] as const) {
+		Object.assign(f.remoteChat, { [method]: async (...args: unknown[]) => { calls.push([method, ...args]); return message; } });
+	}
+	f.remoteChat.sendPendingRequestImmediately = async target => { calls.push(['send', target]); };
+	const target = { sessionId: f.sessionId, threadId: f.threadId, commandId: 'stable-command', expectedRevision: 12 };
+	const backend = { ...target, sessionId: 'same', threadId: 'thread' };
+	const qualified = { ...message, sessionId: f.sessionId, threadId: f.threadId };
+	assert.deepEqual(await chat.getPendingRequests(f.sessionId, f.threadId), [qualified]);
+	assert.deepEqual(await chat.pausePendingRequest(target), qualified);
+	assert.deepEqual(await chat.resumePendingRequest(target), qualified);
+	assert.deepEqual(await chat.editPendingRequest(target, 'Changed'), qualified);
+	assert.deepEqual(await chat.removePendingRequest(target), qualified);
+	await chat.sendPendingRequestImmediately(target);
+	assert.deepEqual(calls, [['list', 'same', 'thread'], ['pausePendingRequest', backend], ['resumePendingRequest', backend], ['editPendingRequest', backend, 'Changed'], ['removePendingRequest', backend], ['send', backend]]);
+	f.registration.dispose();
+	await assert.rejects(chat.removePendingRequest(target));
+	assert.equal(calls.length, 6);
+});

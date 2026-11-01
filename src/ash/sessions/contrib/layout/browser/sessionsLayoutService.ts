@@ -147,7 +147,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register((editor as SessionsEditorPart).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
 			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
-			if (event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged')) revealActiveEditor();
+			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
+			else if (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged') { revealActiveEditor(true); }
 		}));
 		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
 		const workspaceMode = SessionsWorkspaceModeContext.bindTo(this.contextKeys);
