@@ -1,17 +1,19 @@
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { isRecord } from '../../../../../base/common/types.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IChatService, type ThreadRead } from '../../../../services/chat/common/chatService.js';
+import { IChatService, type ThreadItem, type ThreadRead } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService, withChatConversation } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IChatWidgetService } from '../chat.js';
+import { getToolSpecificDataDescription } from '../accessibility/chatResponseAccessibleView.js';
 
 interface SavedTranscript {
 	readonly format: 'ash.chat.transcript';
@@ -38,14 +40,61 @@ function parseTranscript(content: string): SavedTranscript {
 
 function snapshotTranscript(conversation: ThreadRead): SavedTranscript {
 	const messages: SavedTranscript['messages'][number][] = [];
+	// Provider call IDs may repeat in later Turns. Results enrich the original
+	// call in place, without adding a second message at the result's position.
+	const toolKey = (turnId: string, toolCallId: string): string => JSON.stringify([turnId, toolCallId]);
+	const results = new Map(conversation.transcript.entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolResult'
+		? [[toolKey(entry.turnId, entry.item.toolCallId), entry.item] as const] : []));
+	const stoppedTurns = new Set(conversation.thread.turns.filter(turn => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'interrupted').map(turn => turn.turnId));
+	for (const entry of conversation.transcript.entries) {
+		if (entry.type === 'turnError') { stoppedTurns.add(entry.turnId); }
+	}
 	for (const entry of conversation.transcript.entries) {
 		if (entry.type === 'item' && (entry.item.type === 'userMessage' || entry.item.type === 'agentMessage')) {
 			messages.push({ role: entry.item.type === 'userMessage' ? 'user' : 'assistant', text: entry.item.text, partial: entry.transient });
+		} else if (entry.type === 'item' && entry.item.type === 'toolCall') {
+			const result = results.get(toolKey(entry.turnId, entry.item.toolCallId));
+			const message = toolTranscriptMessage({ call: entry.item, result, stopped: stoppedTurns.has(entry.turnId) });
+			if (message) { messages.push(message); }
 		} else if (entry.type === 'voiceTranscript') {
 			messages.push({ role: entry.transcript.speaker === 'user' ? 'user' : 'assistant', text: entry.transcript.text, partial: false });
 		}
 	}
 	return { format: 'ash.chat.transcript', version: 1, title: conversation.thread.title, messages };
+}
+
+function toolTranscriptMessage({ call, result, stopped }: {
+	readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
+	readonly result: Extract<ThreadItem, { readonly type: 'toolResult'; }> | undefined;
+	readonly stopped: boolean;
+}): SavedTranscript['messages'][number] | undefined {
+	const partial = !result && !stopped;
+	if (partial && (call.name === 'imagegen' || call.binding?.sourceChain.some(source => source.type === 'mcp' && source.remoteName === 'imagegen'))) { return undefined; }
+	let exitCode: number | undefined;
+	let error = result?.isError ? result.text : undefined;
+	if (result && (call.name === 'shell-command' || call.binding?.activity?.type === 'command')) {
+		// shell-command returns a successful tool envelope even when its process
+		// exits unsuccessfully. Read only that envelope's status, never its output.
+		let value: unknown;
+		try { value = JSON.parse(result.text); } catch { /* Other tools and execution failures may return plain text. */ }
+		if (isRecord(value) && value.tool === 'shell-command' && isRecord(value.result)
+			&& typeof value.result.exit_code === 'number' && Number.isSafeInteger(value.result.exit_code)) {
+			exitCode = value.result.exit_code;
+			error = undefined;
+		}
+	}
+	const failed = result?.isError || exitCode !== undefined && exitCode !== 0;
+	let summary: string;
+	if (result) {
+		summary = failed ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name);
+	} else {
+		summary = stopped ? localize('chat.tool.stopped', '{0} · No result', call.name) : localize('chat.tool.pending', '{0} · Awaiting result', call.name);
+	}
+	const sections = [summary, getToolSpecificDataDescription(call.binding?.activity)];
+	if (call.argumentsJson) { sections.push(`${localize('chat.tool.input', 'Input')}\n${call.argumentsJson}`); }
+	if (exitCode !== undefined && exitCode !== 0) { sections.push(localize('chat.transfer.toolExitCode', 'Tool execution failed with exit code {0}', exitCode)); }
+	if (error) { sections.push(`${localize('chat.tool.error', 'Error')}\n${error}`); }
+	return { role: 'assistant', text: sections.filter(Boolean).join('\n\n'), partial };
 }
 
 /** Saved documents contain readable messages, never authority to resume or execute a Thread. */
@@ -55,13 +104,18 @@ export function registerChatExportActions(): DisposableStore {
 		constructor() {
 			super({
 				id: 'workbench.action.chat.export', title: localize2('chat.transfer.export', 'Chat: Export Conversation Transcript'),
-				f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true)
+				shortTitle: localize2('chat.transfer.export.label', 'Export Transcript…'),
+				f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+				menu: { id: MenuId.ChatTitle, when: ChatContextKeys.enabled.isEqualTo(true), group: '1_cutcopypaste', order: 9 },
 			});
 		}
-		public override async run(accessor: ServicesAccessor): Promise<void> {
+		public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 			const navigation = accessor.get(IChatSessionNavigationService);
-			const selected = accessor.get(IChatWidgetService).lastFocusedWidget ?? navigation.getActiveConversation();
-			if (!selected?.sessionId || !selected.threadId) { return; }
+			const selected = context === undefined ? accessor.get(IChatWidgetService).lastFocusedWidget ?? navigation.getActiveConversation() : context;
+			if (!selected || typeof selected !== 'object' || !('sessionId' in selected) || !('threadId' in selected)
+				|| typeof selected.sessionId !== 'string' || !selected.sessionId || typeof selected.threadId !== 'string' || !selected.threadId) {
+				return;
+			}
 			const { sessionId, threadId } = selected;
 			const chat = accessor.get(IChatService);
 			const dialogs = accessor.get(IFileDialogService);

@@ -53,10 +53,8 @@ export function registerChatCopyActions(): void {
 				super({
 					id: finalResponse ? 'workbench.action.chat.copyFinalResponse' : 'workbench.action.chat.copyAll',
 					title: finalResponse ? localize2('chat.copyFinalResponse', 'Chat: Copy Final Response') : localize2('chat.copyAll', 'Chat: Copy Conversation'),
-					shortTitle: finalResponse ? undefined : localize2('interactive.copyAll.label', 'Copy All'),
 					precondition: ChatContextKeys.enabled.isEqualTo(true),
 					f1: true,
-					menu: finalResponse ? undefined : { id: MenuId.ChatTitle, when: ChatContextKeys.enabled.isEqualTo(true), group: '1_cutcopypaste', order: 9 },
 				});
 			}
 
