@@ -787,7 +787,16 @@ test.describe('SCM editor groups', () => {
 		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open src/details.ts for Changes', exact: true }) });
 		await expect(row).toBeVisible();
 		const retained = await row.elementHandle();
-		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 16 });
+		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 12 });
+		const guide = row.locator('.ash-tree-indent-guide').last();
+		await row.locator('.ash-scm-change-open').click();
+		await expect(guide).toHaveClass(/active/u);
+		await page.locator('.ash-scm-input').hover();
+		await expect(guide).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
+		await row.hover();
+		await expect.poll(() => guide.evaluate(element => getComputedStyle(element).borderLeftColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await page.locator('.ash-scm-input').hover();
+		await expect(guide).toHaveCSS('border-left-color', 'rgba(0, 0, 0, 0)');
 
 		await workbench.quickaccess.runCommand('workbench.action.openSettings');
 		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -796,7 +805,7 @@ test.describe('SCM editor groups', () => {
 		const indent = settings.getByRole('spinbutton', { name: 'Tree indentation', exact: true });
 		await indent.fill('16');
 		await indent.press('Tab');
-		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 40 : 62, guideOffset: 16 });
+		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 40 : 62, guideOffset: 12 });
 		await search.fill('@id:workbench.tree.renderIndentGuides');
 		const mode = settings.locator('[data-configuration-key="workbench.tree.renderIndentGuides"]').getByRole('combobox');
 		await mode.click();
@@ -807,12 +816,12 @@ test.describe('SCM editor groups', () => {
 			await workbench.quickaccess.runCommand('workbench.action.selectIconTheme');
 			await workbench.quickaccess.select(theme);
 			const icons = theme === 'Seti' && hasFileIcons;
-			const expected = { arrowWidth: icons ? 0 : 16, contentOffset: icons ? 40 : 62, guideOffset: 16 };
+			const expected = { arrowWidth: icons ? 0 : 16, contentOffset: icons ? 40 : 62, guideOffset: 12 };
 			await expect.poll(() => metrics(row)).toEqual(expected);
 			expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
 			await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
 			await expect(explorer.getByRole('tree')).toHaveClass(/ash-tree-indent-guides-none/u);
-			await expect.poll(() => metrics(file)).toEqual({ ...expected, contentOffset: icons ? 24 : 46 });
+			await expect.poll(() => metrics(file)).toEqual({ ...expected, contentOffset: icons ? 24 : 46, guideOffset: 16 });
 			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		}
 		const group = tree.getByRole('treeitem').filter({ has: page.getByText('Changes', { exact: true }) });
