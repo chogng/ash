@@ -251,7 +251,7 @@ function chatHistoryItems(sessions: ISessionsManagementService, storage: IStorag
 	];
 	const items: ChatHistoryQuickPickItem[] = sessions.untitledSessions.map(session => ({
 		kind: 'draft', untitledSessionId: session.untitledSessionId,
-		label: session.title.trim() || localize('chat.title.new', 'New Chat'),
+		label: localize('sessions.list.draft', '{0} (draft)', session.title.trim() || localize('chat.title.new', 'New Chat')),
 		className: 'ash-chat-history-item', pinned: false, buttons: buttons(false),
 	}));
 	const archived: ChatHistoryQuickPickItem[] = [];

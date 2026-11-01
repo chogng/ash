@@ -1881,7 +1881,9 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 				{ id: 'agentSession.archive', target: 'source' },
 				{ id: 'agentSession.delete', target: 'source' },
 			]);
-			const draftActions = openMenu(items.find(item => item.label === draft.title)!);
+			const draftItem = items.find(item => item.label === (locale === 'zh-CN' ? 'Unsent draft（草稿）' : 'Unsent draft (draft)'));
+			assert.ok(draftItem);
+			const draftActions = openMenu(draftItem);
 			assert.equal(draftActions.find(action => action.id === 'fork')?.enabled, false);
 			menu!.onHide?.(false);
 			await draftActions.find(action => action.id === 'delete')!.run();
