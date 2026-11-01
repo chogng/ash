@@ -1574,11 +1574,16 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
             RpcError::new(-32062, AppServerErrorName::GitNotRepository)
         }
         GitRuntimeError::Service(GitServiceError::Git(
-            error @ GitError::UnsupportedVersion { .. },
+            error @ (GitError::UnsupportedVersion { .. }
+            | GitError::CommandFailed { .. }
+            | GitError::TimedOut { .. }
+            | GitError::OutputLimitExceeded { .. }),
         )) => RpcError::with_details(
             -32061,
             AppServerErrorName::GitOperationFailed,
-            error.to_string(),
+            // Git stderr is bounded at capture, but can still be much larger than
+            // a client error dialog. Preserve the actionable diagnostic prefix.
+            error.to_string().chars().take(8192).collect(),
         ),
         GitRuntimeError::Service(GitServiceError::Git(_)) => {
             RpcError::new(-32061, AppServerErrorName::GitOperationFailed)

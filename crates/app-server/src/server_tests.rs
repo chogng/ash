@@ -8168,6 +8168,28 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
         std::fs::read_to_string(peer.join("local.txt")).unwrap(),
         "from app server\n"
     );
+    run_git(&dir, &["remote", "set-url", "origin", "../missing.git"]);
+    for (index, operation) in [
+        serde_json::json!({"kind":"fetch","mode":"all"}),
+        serde_json::json!({"kind":"pull","mode":"configured"}),
+        serde_json::json!({"kind":"push","expectedHead":pushed["result"]["status"]["head"]}),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let failed = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":100+index,"method":"git/transport",
+                "params":{"operationId":format!("failure-{index}"),
+                    "transport":ash_app_server_protocol::protocol::git::GitTransportOptionsDto::default(),"operation":operation}}),
+        );
+        assert_eq!(failed["error"]["code"], -32061, "{failed}");
+        assert_eq!(failed["error"]["data"]["kind"], "GitOperationFailed");
+        let message = failed["error"]["message"].as_str().unwrap();
+        assert!(message.contains("missing.git"), "{failed}");
+        assert!(message.contains("exit code"), "{failed}");
+    }
     run_git(
         &dir,
         &[

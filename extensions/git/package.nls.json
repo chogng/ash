@@ -176,6 +176,7 @@
   "git.stashConflicts": "The stash has conflicts. Resolve the files in Source Control. The stash is kept until you delete it.",
   "git.commandCompleted": "Git operation completed.",
   "git.commandFailed": "Git operation failed: {0}",
+  "git.openGitLog": "Open Git Log",
   "git.valueRequired": "Enter a value.",
   "git.chooseBranch": "Choose a branch",
   "git.renameBranchName": "New branch name",

@@ -253,11 +253,27 @@ impl GitRuntime {
             }
         }
         let _ = self.publish();
-        if matches!(command, "git.sync" | "git.syncRebase")
-            && outcome
-                .as_ref()
-                .is_err_and(|error| error.code == external_ext_sdk::HostErrorCode::Cancelled)
+        // Feedback belongs to the interactive command, after its repository state
+        // settles. Consume handled failures so menus do not display a second error.
+        drop(_guard);
+        if matches!(
+            command,
+            "git.fetch"
+                | "git.fetchAll"
+                | "git.pull"
+                | "git.pullRebase"
+                | "git.push"
+                | "git.pushForce"
+                | "git.sync"
+                | "git.syncRebase"
+                | "git.publish"
+                | "ash.git.pull"
+                | "ash.git.push"
+        ) && let Err(error) = &outcome
         {
+            if error.code != external_ext_sdk::HostErrorCode::Cancelled {
+                self.api.command_error(command, error, token)?;
+            }
             return Ok(Value::Null);
         }
         outcome

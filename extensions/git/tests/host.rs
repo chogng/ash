@@ -1009,9 +1009,92 @@ fn verify_sync_confirmation(
             );
         }
     }
+    verify_remote_command_feedback(supervisor, client, &status, language);
     verify_sync_followup_prompts(supervisor, client, &status, &confirmation);
     verify_cancelled_remote_picker(supervisor, client, status);
     *client.status_override.lock().unwrap() = None;
+}
+
+fn verify_remote_command_feedback(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    status: &Value,
+    language: &str,
+) {
+    for command in ["git.fetchAll", "git.pull", "git.push"] {
+        // The same registered command must recover after failure and cancellation
+        // through the real extension process.
+        for failure in [Some("GitOperationFailed"), Some("RequestCancelled"), None] {
+            let before = supervisor.snapshot().output_events.len();
+            let mut prompts = 0;
+            let mut transports = 0;
+            let result = supervisor
+                .begin_invoke(invocation(
+                    command,
+                    "execute",
+                    json!({"arguments":["root"]}),
+                ))
+                .unwrap()
+                .wait_with_client(|operation, _, _| match operation {
+                    Operation::BackendRequest { ref method, .. } if method == "runTransport" => {
+                        transports += 1;
+                        wait_for_sync_snapshot(client, true, false);
+                        Ok(ResultValue::Value {
+                            value: match failure {
+                                Some(name) => json!({"backendError":{"name":name,"message":format!("{name}: Synthetic transport failure")}}),
+                                None => json!({"status":status,"outcome":{"kind":"completed"}}),
+                            },
+                        })
+                    }
+                    Operation::BackendRequest { ref method, .. } if method == "pullPreflight" => {
+                        Ok(ResultValue::Value { value: json!({"upstreamRewritten":false}) })
+                    }
+                    Operation::EditorOperation { payload } if payload["method"] == "prompt" => {
+                        prompts += 1;
+                        assert_eq!(failure, Some("GitOperationFailed"));
+                        assert_eq!(payload["title"], "Git");
+                        assert_eq!(payload["severity"], "error");
+                        assert_eq!(payload["message"], if language == "zh-CN" {
+                            "Git 操作失败：Synthetic transport failure"
+                        } else {
+                            "Git operation failed: Synthetic transport failure"
+                        });
+                        assert_eq!(payload["buttons"], json!([if language == "zh-CN" { "打开 Git 日志" } else { "Open Git Log" }]));
+                        let settled = wait_for_sync_snapshot(client, false, true);
+                        assert_eq!(settled["statusMessage"], "Synthetic transport failure");
+                        Ok(ResultValue::Value { value: json!({"selection":0}) })
+                    }
+                    operation => client.request(operation),
+                })
+                .unwrap();
+            assert_eq!(transports, 1, "{command}, {failure:?}");
+            let failed = failure == Some("GitOperationFailed");
+            assert_eq!(prompts, usize::from(failed), "{command}, {failure:?}");
+            if failure.is_some() {
+                assert_eq!(
+                    result.payload,
+                    Value::Null,
+                    "handled errors must not reach a second UI error handler"
+                );
+            }
+            let output = supervisor.snapshot().output_events;
+            assert_eq!(
+                output[before..]
+                    .iter()
+                    .filter(|event| matches!(
+                        event.event.operation,
+                        host::HostOutputOperation::Show { .. }
+                    ))
+                    .count(),
+                usize::from(failed)
+            );
+            if failed {
+                assert!(output[before..].iter().any(|event| matches!(&event.event.operation,
+                    host::HostOutputOperation::Append { text, .. } if text.contains(command) && text.contains("Synthetic transport failure"))));
+            }
+            wait_for_sync_snapshot(client, false, true);
+        }
+    }
 }
 
 fn verify_cancelled_remote_picker(
@@ -1128,6 +1211,11 @@ fn verify_sync_followup_prompts(
             let result = supervisor.begin_invoke(request)
                 .unwrap().wait_with_client(|operation, _, _| match operation {
                     Operation::EditorOperation { payload } if payload["method"] == "prompt" => {
+                        if payload["severity"] == "error" && matches!(scenario, Scenario::Failure) {
+                            assert!(payload["message"].as_str().unwrap().contains("Synthetic transport failure"));
+                            wait_for_sync_snapshot(client, false, true);
+                            return Ok(ResultValue::Value { value: json!({"selection":null}) });
+                        }
                         let waiting = wait_for_sync_snapshot(client, false, false);
                         assert_eq!(
                             waiting["historyOperationRevision"],
@@ -1202,16 +1290,7 @@ fn verify_sync_followup_prompts(
                     }
                     operation => client.request(operation),
                 });
-            if matches!(scenario, Scenario::Failure) {
-                assert!(
-                    result
-                        .unwrap_err()
-                        .to_string()
-                        .contains("Synthetic transport failure")
-                );
-            } else {
-                result.unwrap();
-            }
+            result.unwrap();
             assert_eq!(
                 confirmations,
                 usize::from(!matches!(

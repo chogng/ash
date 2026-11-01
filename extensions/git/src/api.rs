@@ -245,11 +245,16 @@ impl Api {
                 let message = if error["name"] == "GitUnavailable" {
                     self.text("git.unavailable", &[])
                 } else {
-                    error["message"]
+                    let name = error["name"].as_str().unwrap_or("Unavailable");
+                    let message = error["message"]
                         .as_str()
                         .filter(|message| !message.is_empty())
-                        .or_else(|| error["name"].as_str())
-                        .unwrap_or("Unavailable")
+                        .unwrap_or(name);
+                    // RPC messages prefix diagnostics with their stable error name;
+                    // the typed name still determines cancellation below.
+                    message
+                        .strip_prefix(&format!("{name}: "))
+                        .unwrap_or(message)
                         .to_owned()
                 };
                 return Err(ExtensionError::new(
@@ -300,6 +305,26 @@ impl Api {
             self.text(key, &[]),
             token,
         )
+    }
+    pub fn command_error(
+        &self,
+        command: &str,
+        error: &ExtensionError,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        let _ = self
+            .output
+            .append_line(format!("[Git] {command}: {}", error.message));
+        let choice = self.editor(
+            json!({"method":"prompt","title":"Git","severity":"error",
+                "message":self.text("git.commandFailed", &[&error.message]),
+                "buttons":[self.text("git.openGitLog", &[])]}),
+            Some(token),
+        )?;
+        if choice["selection"] == 0 {
+            self.output.show()?;
+        }
+        Ok(())
     }
     pub fn status(
         &self,
