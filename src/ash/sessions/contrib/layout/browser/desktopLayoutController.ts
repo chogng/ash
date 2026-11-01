@@ -169,6 +169,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 				this.layout.focus();
 			} else {
 				cards.setFilesVisible(true);
+				// An empty retained editor must not reserve a column when reopening the tree.
+				if (!this.hasDocumentEditors) { this.existingSession.hideEditor(); }
 				await this.detailPanel.update(this.layout.isPartVisible('auxiliarybar'));
 				if (!this.isDisposed) { this.focus(); }
 			}

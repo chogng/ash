@@ -29,6 +29,8 @@ import type { EditorWorkingSet, EditorWorkingSetTarget } from '../../../../../wo
 import { ISessionsService, SessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession } from '../../../../services/sessions/common/session.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
 const { IEditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { DesktopLayoutController } = await import('../../browser/desktopLayoutController.js');
@@ -401,6 +403,44 @@ suite('DesktopLayoutController', () => {
 		using services = new InstantiationService();
 		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /paneCompositePartService/);
 	});
+
+	for (const hasDocument of [false, true]) {
+		test(`reopening Files ${hasDocument ? 'retains the document editor' : 'replaces an empty editor with the tree'}`, async () => {
+			using fixture = new LayoutFixture();
+			const opened: string[] = [];
+			fixture.services.registerInstance(IViewsService, {
+				isViewContainerActive: () => false,
+				openViewContainer: async (id: string) => { opened.push(id); },
+			} as unknown as IViewsService);
+			fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+			const inputs = hasDocument ? [{ resource: URI.file('/retained.txt') }] : [];
+			const groups = [{ id: 1, inputs }, { id: 2, inputs: [{ resource: URI.parse('ash-chatgpt:/retained') }] }];
+			fixture.editor.groups = groups;
+			Object.assign(fixture.editor, { focus: () => { } });
+			fixture.editorVisible = true;
+			let filesVisible = false;
+			Object.assign(fixture.services.get(ILayoutService), {
+				codeCards: {
+					isCardVisible: () => filesVisible,
+					setFilesVisible: (visible: boolean) => { filesVisible = visible; },
+				},
+				updateParts: (operation: () => void) => operation(),
+				focus: () => { },
+			});
+			using controller = fixture.services.createInstance(DesktopLayoutController, 2, {
+				isSessionContent: true, isDocumentContent: true,
+				documentContent: observableValue('documents', true), isChangingContent: false,
+				runOperation: async (operation: () => Promise<void>) => operation(),
+			});
+			await controller.toggleFiles();
+			assert.equal(filesVisible, true);
+			assert.equal(fixture.editorVisible, hasDocument);
+			assert.equal(fixture.auxiliaryVisible, !hasDocument);
+			assert.equal(opened.length, hasDocument ? 0 : 1);
+			assert.equal(fixture.editor.groups, groups, 'Reopening the card retains document and product groups');
+			assert.equal(fixture.editor.groups[0]!.inputs, inputs);
+		});
+	}
 });
 
 class TestEditors extends Disposable {
