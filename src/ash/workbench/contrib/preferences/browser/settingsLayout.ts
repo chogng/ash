@@ -657,6 +657,14 @@ export const SettingsNavigation = [
 		description: localize({ bundle: 'ash.settings', key: 'groups.agents.description' }, 'Configure chats, agents, models, and shared capabilities.'),
 		categories: [
 			{
+				id: 'chat-usage',
+				label: localize('chat.usage.title', 'Usage'),
+				description: localize('chat.usage.description', 'Inspect the current chat’s context estimate and accumulated token usage.'),
+				keywords: ['context', 'tokens', 'usage', 'budget'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
 				id: 'chat-appearance',
 				label: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.label' }, 'Appearance'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.description' }, 'Customize the message input and code blocks in replies.'),

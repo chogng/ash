@@ -27,11 +27,6 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
-.ash-chat-context-details-close {
-	flex-shrink: 0;
-	font-size: var(--ash-lxiconFontSize-compact);
-}
-
 .ash-chat-context-details-summary {
 	margin: var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
 	font-variant-numeric: tabular-nums;
@@ -104,15 +99,8 @@
 	border-radius: var(--ash-cornerRadius-xSmall);
 }
 
-.ash-chat-context-details-notes {
+.ash-chat-context-details-actions {
 	margin-top: var(--ash-spacing-size80);
 	padding-top: var(--ash-spacing-size80);
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-chat-context-details-notes p {
-	margin: var(--ash-spacing-size40) 0 0;
-	overflow-wrap: anywhere;
 }

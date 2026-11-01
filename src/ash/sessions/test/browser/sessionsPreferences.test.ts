@@ -1,3 +1,5 @@
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -122,6 +124,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	let advisor: import('../../../workbench/services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
 	const advisorWrites: (typeof advisor | null)[] = [];
 	const chat = {
+		onDidBecomeReady: Event.None,
+		onDidUpdateThread: Event.None,
 		onDidChangeModels: changed.event,
 		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherModel, displayName: 'Claude Test' }],
 		readAdvisorDefault: async () => advisor,
@@ -154,6 +158,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using transcription = new NullLocalTranscriptionService();
 	const { IChatService: ChatService } = await import('../../../workbench/services/chat/common/chatService.js');
 	services.registerInstance(ChatService, chat);
+	using chatWidgets = services.createInstance(ChatWidgetService);
+	services.registerInstance(IChatWidgetService, chatWidgets);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -278,6 +284,18 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const settingsHost = { ...baseHost, executionSettings: services.get(IAgentExecutionSettingsService), workspaceTrust: services.get(IWorkspaceTrustApi), agentCapabilities: services.get(IAgentCapabilitiesService), appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready' as const } };
 	const settingsScope: ISessionProviderScope = { providerId: 'primary', services: { host: settingsHost } as SessionProviderServices, thread: settingsHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
 	services.registerInstance(ISessionProviderScopeService, { getScope: () => settingsScope, onDidChange: Event.None, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService);
+	const [{ ISessionsService }, { ITeamsManagementService }, { IStorageService }, { IAgentSessionService }, { observableValue }] = await Promise.all([
+		import('../../services/sessions/browser/sessionsService.js'),
+		import('../../services/teams/common/teamsManagement.js'),
+		import('../../../platform/storage/common/storage.js'),
+		import('../../../platform/agentHost/common/agentService.js'),
+		import('../../../base/common/observable.js'),
+	]);
+	services.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as import('../../services/sessions/browser/sessionsService.js').ISessionsService);
+	services.registerInstance(ITeamsManagementService, { teams: observableValue('teams', []) } as unknown as import('../../services/teams/common/teamsManagement.js').ITeamsManagementService);
+	const savedState = new Map<string, string>();
+	services.registerInstance(IStorageService, { get: (key: string) => savedState.get(key), store: (key: string, value: string) => { savedState.set(key, value); } } as unknown as import('../../../platform/storage/common/storage.js').IStorageService);
+	services.registerInstance(IAgentSessionService, { readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as import('../../../platform/agentHost/common/agentService.js').IAgentSessionService);
 	let editorReveals = 0;
 	let editorRevealing = false;
 	using preferences = services.createInstance(SessionsPreferences, window.document.body, async () => {
@@ -362,6 +380,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(cancelledMenu.menu.isConnected, false);
 	assert.equal(window.document.activeElement, cancelledMenu.more);
 	assert.equal([...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].some(button => button.textContent === 'Tools'), false);
+	await preferences.open({ section: 'chat-usage' });
+	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
+	assert.ok(usageButton?.querySelector('.ash-icon-dashboard'));
+	assert.ok(window.document.querySelector('[data-settings-item-id="chat.usage"]'));
+	assert.match(window.document.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
 	assert.ok(designButton);
 	designButton.click();

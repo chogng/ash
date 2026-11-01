@@ -6,10 +6,13 @@ import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../
 import { getHoverDelegate, type IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
+import { onUnexpectedError } from '../../../../../../base/common/errors.js';
 import { localize } from '../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { OpenSettingsCommandId } from '../../../../preferences/common/preferences.js';
 import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import { ChatContextUsageDetails } from './chatContextUsageDetails.js';
 
@@ -24,7 +27,10 @@ export class ChatContextUsageWidget extends Disposable {
 	private readonly detailsListeners = this._register(new DisposableStore());
 	private usage: ChatContextUsage | undefined;
 
-	constructor(document: Document, @IContextViewService private readonly contextViews: IContextViewService) {
+	constructor(document: Document,
+		@IContextViewService private readonly contextViews: IContextViewService,
+		@ICommandService private readonly commands: ICommandService,
+	) {
 		super();
 		this.button = this._register(new Button(h(document, 'div'), {
 			...defaultButtonStyles,
@@ -59,7 +65,7 @@ export class ChatContextUsageWidget extends Disposable {
 					const detailsText = details.innerText;
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View
 						? detailsText
-						: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the input budget for automatic compaction; model context capacity is shown separately. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.'),
+						: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the input budget for automatic compaction. Unknown capacity shows token counts without percentages. Activate See detailed breakdown to open Usage settings for context details and accumulated chat usage. Press Escape to return to the context ring. Use Tab to reach the button or leave the details.'),
 						() => details.isConnected ? details.focus() : this.button.focus(), AccessibilityVerbositySettingId.Chat);
 				},
 			}));
@@ -91,7 +97,10 @@ export class ChatContextUsageWidget extends Disposable {
 			this.details.value.domNode.focus({ preventScroll: true });
 			return true;
 		}
-		const details = new ChatContextUsageDetails(this.domNode.ownerDocument, () => this.hideDetails());
+		const details = new ChatContextUsageDetails(this.domNode.ownerDocument, () => {
+			this.hideDetails();
+			void this.commands.executeCommand(OpenSettingsCommandId, { section: 'chat-usage', jsonEditor: false }).catch(onUnexpectedError);
+		});
 		details.update(this.usage);
 		this.details.value = details;
 		this.detailsListeners.add(addDisposableListener(details.domNode, 'focusout', event => {

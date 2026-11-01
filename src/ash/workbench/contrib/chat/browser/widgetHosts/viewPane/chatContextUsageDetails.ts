@@ -3,7 +3,6 @@ import './media/chatContextUsageDetails.css';
 import { h } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
 import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
@@ -13,7 +12,7 @@ export class ChatContextUsageDetails extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly body: HTMLElement;
 
-	constructor(document: Document, onClose: () => void) {
+	constructor(document: Document, onSeeDetails: () => void) {
 		super();
 		const root = h(document, 'div');
 		this.domNode = root;
@@ -27,19 +26,17 @@ export class ChatContextUsageDetails extends Disposable {
 		header.className = 'ash-chat-context-details-header';
 		const title = h(document, 'h3');
 		title.textContent = localize('chat.input.contextUsage', 'Context usage');
-		const close = this._register(new Button(header, {
-			...defaultButtonStyles,
-			label: '',
-			icon: Lxicon.close,
-			iconOnly: true,
-			size: 'small',
-			ariaLabel: localize('chat.input.contextClose', 'Close context usage details'),
-			onClick: onClose,
-		}));
-		header.prepend(title);
-		close.domNode.classList.add('ash-chat-context-details-close');
+		header.append(title);
 		this.body = h(document, 'div');
-		root.append(header, this.body);
+		const actions = h(document, 'div');
+		actions.className = 'ash-chat-context-details-actions';
+		this._register(new Button(actions, {
+			...defaultButtonStyles,
+			label: localize('chat.input.contextSeeDetails', 'See detailed breakdown'),
+			presentation: 'secondary',
+			onClick: onSeeDetails,
+		}));
+		root.append(header, this.body, actions);
 		this._register(toDisposable(() => root.remove()));
 	}
 
@@ -100,18 +97,6 @@ export class ChatContextUsageDetails extends Disposable {
 		};
 		for (const { category, tokens } of usage.categories) appendRow(categoryLabels[category], tokens, category);
 		if (capacity !== undefined) appendRow(localize('chat.input.contextRemaining', 'Remaining input budget'), Math.max(0, capacity - usage.estimatedTokens));
-		const notes = h(document, 'div');
-		notes.className = 'ash-chat-context-details-notes';
-		const addNote = (text: string): void => {
-			const note = h(document, 'p');
-			note.textContent = text;
-			notes.append(note);
-		};
-		if (usage.model) addNote(localize('chat.input.contextModel', 'Model: {0}/{1}', usage.model.provider, usage.model.model));
-		if (usage.contextWindow !== undefined) addNote(localize('chat.input.contextCapacity', 'Model context capacity: {0} tokens', usage.contextWindow.toLocaleString()));
-		if (usage.autoCompactAt !== undefined) addNote(localize('chat.input.contextCompaction', 'Automatic compaction at: {0} tokens', usage.autoCompactAt.toLocaleString()));
-		if (usage.latestRequestTokens !== undefined) addNote(localize('chat.input.contextLatest', 'Latest request measurement: {0} tokens', usage.latestRequestTokens.toLocaleString()));
-		addNote(localize('chat.input.contextDraft', 'The unsent draft is not included in this estimate.'));
-		body.append(summary, bar, table, notes);
+		body.append(summary, bar, table);
 	}
 }

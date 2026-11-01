@@ -406,6 +406,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.ChatUsage,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError('Chat usage accessibility verbosity must be boolean');
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('chat.usage.verbosityTitle', 'Chat usage accessibility help'),
+		description: localize('chat.usage.verbosityDescription', 'Announce how to open accessibility help for Usage settings.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatModelConfiguration,
 	defaultValue: true,
 	parse(value: unknown): boolean {

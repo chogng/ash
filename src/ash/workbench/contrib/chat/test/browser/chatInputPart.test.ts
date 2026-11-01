@@ -2664,6 +2664,47 @@ suite('chatInput browser component', () => {
 				await expect(page.getByRole('tooltip')).toBeHidden();
 				await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' })).toBeVisible();
 			});
+
+			test(`Context usage details opens Usage settings and preserves keyboard focus in ${locale} ${theme}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showModels());
+				const ring = page.locator('.ash-chat-context-usage-button');
+				await ring.focus();
+				await page.keyboard.press('Enter');
+				const details = page.getByRole('dialog', { name: locale === 'en' ? 'Context usage' : '上下文用量' });
+				const breakdown = details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' });
+				await expect(details).toBeFocused();
+				await expect(details.getByRole('button')).toHaveCount(1);
+				await expect(details.locator('.ash-chat-context-details-notes, .ash-chat-context-details-close')).toHaveCount(0);
+				await expect(details.getByRole('table')).toBeVisible();
+				const bounds = (await details.boundingBox())!;
+				const anchor = (await ring.boundingBox())!;
+				expect(bounds.y >= anchor.y + anchor.height || bounds.y + bounds.height <= anchor.y).toBe(true);
+				expect(bounds.y).toBeGreaterThanOrEqual(0);
+				expect(bounds.y + bounds.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+				await page.keyboard.press('Tab');
+				await expect(breakdown).toBeFocused();
+				await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 600));
+				await expect(details.locator('.ash-chat-context-details-summary')).toContainText('60%');
+				await expect(breakdown).toBeFocused();
+				await details.screenshot({ path: browserTests.info.outputPath('context-usage.png') });
+				await breakdown.press('Enter');
+				await expect(details).toBeHidden();
+				await expect(page.getByLabel('Opened sources')).toContainText('"section":"chat-usage"');
+				await expect(ring).toBeFocused();
+				await ring.press('Enter');
+				await expect(details).toBeVisible();
+				await page.keyboard.press('Escape');
+				await expect(details).toBeHidden();
+				await expect(ring).toBeFocused();
+				await ring.click();
+				const input = page.locator('.ash-chat-textarea-input');
+				await input.click({ position: { x: 8, y: 8 } });
+				await expect(details).toBeHidden();
+				await expect(input).toBeFocused();
+				await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+			});
 		}
 	}
 
@@ -2724,10 +2765,14 @@ suite('chatInput browser component', () => {
 				const conversationBackground = { light: 'rgb(248, 248, 248)', dark: 'rgb(37, 37, 38)', hcLight: 'rgb(255, 255, 255)', hcDark: 'rgb(0, 0, 0)' }[theme]!;
 				await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
 				await expect(page.locator('.ash-chat-view')).toHaveCSS('background-color', conversationBackground);
-				await page.locator('main').evaluate(element => { element.style.setProperty('--ash-auxiliaryBar-background', 'rgb(250, 245, 240)'); });
+				// The view resolves the theme token; its descendants inherit the computed background.
+				await page.locator('.ash-chat-view').evaluate(element => { element.style.setProperty('--ash-auxiliaryBar-background', 'rgb(250, 245, 240)'); });
+				await expect(page.locator('.ash-chat-view')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
+				await expect(page.locator('.ash-chat-pane-host')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
 				await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(250, 245, 240)');
 				await expect(page.locator('.ash-chat-input-container')).toHaveCSS('background-color', composerBackground);
-				await page.locator('main').evaluate(element => { element.style.removeProperty('--ash-auxiliaryBar-background'); });
+				await page.locator('.ash-chat-view').evaluate(element => { element.style.removeProperty('--ash-auxiliaryBar-background'); });
+				await expect(page.locator('main')).toHaveCSS('background-color', conversationBackground);
 
 				const composer = await page.locator('.ash-chat-input-container').boundingBox();
 				const footerBounds = await footer.boundingBox();
@@ -2795,7 +2840,7 @@ suite('chatInput browser component', () => {
 				await expect(context).toHaveAttribute('aria-expanded', 'false');
 				await context.click();
 				await page.keyboard.press('Tab');
-				await expect(details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' })).toBeFocused();
+				await expect(details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' })).toBeFocused();
 				await page.keyboard.press('Tab');
 				await expect(details).toBeHidden();
 				await context.focus();
@@ -2863,12 +2908,13 @@ suite('chatInput browser component', () => {
 				await expect(ring.locator('.ash-chat-context-usage-value')).toHaveAttribute('stroke-dasharray', '50 50');
 				await context.click();
 				await expect(details).toBeVisible();
-				const close = details.getByRole('button', { name: locale === 'en' ? 'Close context usage details' : '关闭上下文用量明细' });
-				await close.focus();
+				const breakdown = details.getByRole('button', { name: locale === 'en' ? 'See detailed breakdown' : '查看详细明细' });
+				await breakdown.focus();
 				await page.evaluate(() => window.ashChatInputIntegration.setContextUsage(true, 1000, 600));
 				await expect(details.locator('.ash-chat-context-details-summary')).toContainText('60%');
-				await expect(close).toBeFocused();
-				await close.click();
+				await expect(breakdown).toBeFocused();
+				await breakdown.click();
+				await expect(page.getByLabel('Opened sources')).toContainText('chat-usage');
 				await expect(details).toBeHidden();
 				await expect(context).toBeFocused();
 				await context.click();

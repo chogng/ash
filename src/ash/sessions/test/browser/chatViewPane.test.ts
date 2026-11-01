@@ -1222,7 +1222,8 @@ test('Sessions custom composer context ring opens details without sending and st
 	ring.click();
 	assert.equal(ring.getAttribute('aria-expanded'), 'true');
 	const details = document.querySelector('.ash-chat-context-details')!;
-	assert.match(details.textContent!, /Model context capacity: 1,000 tokens/u);
+	assert.match(details.textContent!, /Estimated input: 800 \/ 800 tokens/u);
+	assert.equal(details.querySelector('.ash-chat-context-details-notes'), null);
 	assert.deepEqual(sent, []);
 	assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep the draft while inspecting context');
 	fixture.input.render(state);

@@ -1,3 +1,5 @@
+import { IChatWidgetService } from '../../../chat/browser/chat.js';
+import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../../../../platform/browserView/common/browserPasswordService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
@@ -2960,6 +2962,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const advisorWrites: (typeof advisor | null)[] = [];
 	let rejectAdvisorSave = false;
 	const chatService = {
+		onDidBecomeReady: Event.None,
+		onDidUpdateThread: Event.None,
 		onDidChangeModels: modelsChanged.event,
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => {
@@ -3111,6 +3115,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
 	});
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(IChatWidgetService, disposables.add(services.createInstance(ChatWidgetService)));
 	services.registerInstance(IAgentModelsService, {
 		...createDisconnectedAgentModelsService(async operation => { throw new Error(`Unexpected ${operation}`); }),
 		readDefaults: () => (chatService as unknown as ILanguageModelsService).readModelDefaults(),
@@ -3405,6 +3410,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
+	await preferences.openSettings({ section: 'chat-usage' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Usage');
+	assert.ok(root.querySelector('[data-settings-item-id="chat.usage"]'));
+	assert.match(root.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
 	await preferences.openSettings({ section: 'chat-appearance' });
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Appearance');
 	assert.equal(root.querySelector('[data-settings-category-id="chat-appearance"]')?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
