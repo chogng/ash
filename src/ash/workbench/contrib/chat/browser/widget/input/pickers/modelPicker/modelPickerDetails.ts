@@ -1,10 +1,10 @@
-import { getActiveDocument, h } from '../../../../../../../base/browser/dom.js';
-import { renderMarkdown } from '../../../../../../../base/browser/markdownRenderer.js';
-import { MarkdownString } from '../../../../../../../base/common/htmlContent.js';
-import type { DisposableStore } from '../../../../../../../base/common/lifecycle.js';
-import type { URI } from '../../../../../../../base/common/uri.js';
-import { localize } from '../../../../../../../nls.js';
-import type { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
+import { getActiveDocument, h } from '../../../../../../../../base/browser/dom.js';
+import { renderMarkdown } from '../../../../../../../../base/browser/markdownRenderer.js';
+import { MarkdownString } from '../../../../../../../../base/common/htmlContent.js';
+import type { DisposableStore } from '../../../../../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../../../../../base/common/uri.js';
+import { localize } from '../../../../../../../../nls.js';
+import type { IOpenerService } from '../../../../../../../../platform/opener/common/opener.js';
 
 export function getMaxContextLabel(): string {
 	return localize('chat.modelPicker.maxContext', 'Max context');

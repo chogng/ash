@@ -1,23 +1,23 @@
-import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
-import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
-import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
-import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../../../nls.js';
+import { addDisposableListener, h } from '../../../../../../../../base/browser/dom.js';
+import { Menu } from '../../../../../../../../base/browser/ui/menu/menu.js';
+import { Switch } from '../../../../../../../../base/browser/ui/toggle/toggle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../../../base/common/lifecycle.js';
+import { localize } from '../../../../../../../../nls.js';
 import {
 	AccessibleContentProvider,
 	AccessibleViewProviderId,
 	AccessibleViewType,
 	AccessibilityVerbositySettingId,
 	IAccessibleViewService,
-} from '../../../../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { TabbedActionListWidget } from '../../../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
-import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
-import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
-import { defaultButtonStyles, defaultToggleStyles, defaultMenuStyles, defaultKeybindingLabelStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
-import type { ModelRef, ModelProviderCredentialStatus } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
-import { ILanguageModelsService } from '../../../../common/languageModels.js';
+} from '../../../../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { TabbedActionListWidget } from '../../../../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
+import { ICommandService } from '../../../../../../../../platform/commands/common/commands.js';
+import { IInstantiationService } from '../../../../../../../../platform/instantiation/common/instantiation.js';
+import { defaultButtonStyles, defaultToggleStyles, defaultMenuStyles, defaultKeybindingLabelStyles } from '../../../../../../../../platform/theme/browser/defaultStyles.js';
+import type { ModelRef, ModelProviderCredentialStatus } from '../../../../../../../services/chat/common/chatService.js';
+import type { ModelCatalogEntry } from '../../../../../../../services/chat/common/modelCatalog.js';
+import { ILanguageModelsService } from '../../../../../common/languageModels.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { ModelCard, type IModelCardOptions } from './modelPickerCard.js';
 import { ModelPickerDetailsMenu } from './modelPickerHover.js';

@@ -1,9 +1,9 @@
-import { h } from '../../../../../../../base/browser/dom.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
-import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import { h } from '../../../../../../../../base/browser/dom.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../../base/common/lifecycle.js';
+import type { ModelRef } from '../../../../../../../services/chat/common/chatService.js';
+import type { ModelCatalogEntry } from '../../../../../../../services/chat/common/modelCatalog.js';
 import { ModelCard } from './modelPickerCard.js';
-import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../../../../../../platform/instantiation/common/instantiation.js';
 
 /** Positions the read-only model description beside the active provider list. */
 export class ModelPickerDetailsMenu extends Disposable {

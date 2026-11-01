@@ -1,5 +1,5 @@
-import { localize } from '../../../../../../../nls.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
+import { localize } from '../../../../../../../../nls.js';
+import type { ModelCatalogEntry } from '../../../../../../../services/chat/common/modelCatalog.js';
 
 export interface IModelBadge {
 	readonly text: string;

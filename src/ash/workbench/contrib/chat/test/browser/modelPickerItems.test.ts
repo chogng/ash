@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { buildModelPickerItems } from '../../browser/widget/input/modelPicker/modelPickerItems.js';
+import { buildModelPickerItems } from '../../browser/widget/input/pickers/modelPicker/modelPickerItems.js';
 
 test('The unified catalog shows only model names while preserving order, exact identities and selection', () => {
 	const models: ModelCatalogEntry[] = [

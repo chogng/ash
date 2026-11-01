@@ -5,9 +5,9 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IModelPickerDelegate } from '../../browser/widget/input/modelPicker/modelPickerActionItem.js';
+import type { IModelPickerDelegate } from '../../browser/widget/input/pickers/modelPicker/modelPickerActionItem.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { ModelPickerWidget } from '../../browser/widget/input/modelPicker/modelPickerWidget.js';
+import { ModelPickerWidget } from '../../browser/widget/input/pickers/modelPicker/modelPickerWidget.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 

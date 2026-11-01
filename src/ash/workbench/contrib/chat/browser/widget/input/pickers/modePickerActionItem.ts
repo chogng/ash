@@ -1,8 +1,8 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
-import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
-import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import type { ChatMode } from '../../../../../services/chat/common/chatService.js';
-import { ChatSessionPickerActionItem } from '../../chatSessions/chatSessionPickerActionItem.js';
+import type { IAction } from '../../../../../../../base/common/actions.js';
+import type { IDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import type { ChatMode } from '../../../../../../services/chat/common/chatService.js';
+import { ChatSessionPickerActionItem } from '../../../chatSessions/chatSessionPickerActionItem.js';
 
 interface IModePickerAction extends IAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);

@@ -66,11 +66,11 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
-import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
-import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
+import { ChatInputPickerResponsiveLayout } from './pickers/chatInputPickerResponsiveLayout.js';
+import { ModelPickerActionItem } from './pickers/modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
-import { PermissionPickerActionItem } from './permissionPickerActionItem.js';
-import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
+import { PermissionPickerActionItem } from './pickers/permissionPickerActionItem.js';
+import { ModePickerActionItem, type ChatInputMode } from './pickers/modePickerActionItem.js';
 import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 
 type ChatInputToolbarPresentation = 'mode' | 'model' | 'mic' | 'voice' | 'send' | 'interrupt';

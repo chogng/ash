@@ -1,9 +1,9 @@
-import { ActionViewItem } from '../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import type { IAction } from '../../../../../../../base/common/actions.js';
-import type { Event } from '../../../../../../../base/common/event.js';
-import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
-import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import { ActionViewItem } from '../../../../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import type { IAction } from '../../../../../../../../base/common/actions.js';
+import type { Event } from '../../../../../../../../base/common/event.js';
+import { IInstantiationService } from '../../../../../../../../platform/instantiation/common/instantiation.js';
+import type { ModelRef } from '../../../../../../../services/chat/common/chatService.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../../services/chat/common/modelCatalog.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {

@@ -1,7 +1,7 @@
-import { getActiveDocument, h } from '../../../../../../../base/browser/dom.js';
-import { Button } from '../../../../../../../base/browser/ui/button/button.js';
-import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
+import { getActiveDocument, h } from '../../../../../../../../base/browser/dom.js';
+import { Button } from '../../../../../../../../base/browser/ui/button/button.js';
+import { DisposableStore, toDisposable } from '../../../../../../../../base/common/lifecycle.js';
+import { defaultButtonStyles } from '../../../../../../../../platform/theme/browser/defaultStyles.js';
 import type { IModelPickerDestination } from './modelPickerTabs.js';
 
 /** Renders the destination's explanation and actions; their host owns navigation and state. */

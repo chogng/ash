@@ -16,7 +16,7 @@ import type { ChatInputTipPresenter } from '../../../../src/ash/workbench/contri
 import type { ChatWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { CoworkWidget } from '../../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
 import type { ViewPane } from '../../../../src/ash/workbench/browser/parts/views/viewPane.js';
-import type { ModelPickerWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.js';
+import type { ModelPickerWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/pickers/modelPicker/modelPickerWidget.js';
 import type { Emitter } from '../../../../src/ash/base/common/event.js';
 
 declare global {
@@ -64,7 +64,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 		test.setTimeout(180_000);
 		const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 		const paths = {
-			card: 'workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerCard.ts',
+			card: 'workbench/contrib/chat/browser/widget/input/pickers/modelPicker/modelPickerCard.ts',
 			chat: 'workbench/contrib/chat/browser/widget/chatListWidget.ts',
 			sidebar: 'sessions/browser/parts/sidebar/sessionsList.ts',
 		};
@@ -103,7 +103,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				const { IAgentVoiceService } = await import(moduleUrl('platform/agentHost/common/agentService.ts'));
 				const { IDialogService } = await import(moduleUrl('platform/dialogs/common/dialogs.ts'));
 				const { DialogService } = await import(moduleUrl('workbench/services/dialogs/common/dialogService.ts'));
-				const { ModelPickerWidget } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts'));
+				const { ModelPickerWidget } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/pickers/modelPicker/modelPickerWidget.ts'));
 				const { ILanguageModelsService } = await import(moduleUrl('workbench/contrib/chat/common/languageModels.ts'));
 				const chatModule = await import(moduleUrl(chatSurface === 'code' ? 'workbench/contrib/chat/browser/widget/chatWidget.ts' : 'sessions/contrib/cowork/browser/widget/coworkWidget.ts'));
 				const ChatWidget = chatSurface === 'code' ? chatModule.ChatWidget : chatModule.CoworkWidget;

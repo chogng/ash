@@ -1,9 +1,9 @@
-import type { IAction } from '../../../../../../base/common/actions.js';
-import type { Event } from '../../../../../../base/common/event.js';
-import type { IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
-import { localize } from '../../../../../../nls.js';
-import type { IActionWidgetDropdownActionProvider } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
-import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import type { IAction } from '../../../../../../../base/common/actions.js';
+import type { Event } from '../../../../../../../base/common/event.js';
+import type { IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
+import { localize } from '../../../../../../../nls.js';
+import type { IActionWidgetDropdownActionProvider } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputPickerActionViewItem } from './chatInputPickerActionItem.js';
 
 /** Keeps the permission trigger focused while the chat model updates its selection. */

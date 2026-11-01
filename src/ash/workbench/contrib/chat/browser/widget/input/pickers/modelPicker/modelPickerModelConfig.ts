@@ -1,5 +1,5 @@
-import { localize } from '../../../../../../../nls.js';
-import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import { localize } from '../../../../../../../../nls.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../../services/chat/common/modelCatalog.js';
 
 /** The toolbar shows thinking level and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
