@@ -63,12 +63,12 @@ export function registerAgentSessionsLayoutActions(): void {
 				id: TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID,
 				title: localize2('chat.sessions.showSidebar', 'Show Agent Sessions'),
 				tooltip: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
-				icon: Lxicon.layoutSidebarRightOff1,
+				icon: Lxicon.layoutSidebarRightOff,
 				toggled: {
 					condition: ChatContextKeys.agentSessionsViewerOrientation.isEqualTo(AgentSessionsViewerOrientation.SideBySide),
 					title: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 					tooltip: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
-					icon: Lxicon.layoutSidebarRight1,
+					icon: Lxicon.layoutSidebarRight,
 				},
 				menu: [
 					{

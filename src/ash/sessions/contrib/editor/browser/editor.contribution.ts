@@ -183,7 +183,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOff2 },
+						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOffSession },
 						when: editorShown,
 						group: 'navigation',
 						order: 91,
@@ -192,7 +192,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...showEditor, icon: Lxicon.layoutSidebarRight2 },
+						command: { ...showEditor, icon: Lxicon.layoutSidebarRightSession },
 						when: editorHidden,
 						group: 'navigation',
 						order: 91,

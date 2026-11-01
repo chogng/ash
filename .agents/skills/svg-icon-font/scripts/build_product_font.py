@@ -22,8 +22,10 @@ REQUIREMENTS = SCRIPTS.parent / "requirements.txt"
 BUN = ROOT / "node_modules/bun" / ("bun.exe" if os.name == "nt" else "bun")
 COLOR_GLYPHS = {
     "claude": "Brand color", "csv-green": "File type color", "docx-blue": "File type color",
-    "layout-panel-off-1": "Fixed color/opacity", "layout-sidebar-left-off-1": "Fixed color/opacity",
-    "layout-sidebar-right-off-1": "Fixed color/opacity", "pdf-filled": "File type color",
+    "layout-panel-off": "Fixed color/opacity",
+    "layout-sidebar-left-off": "Fixed color/opacity",
+    "layout-sidebar-right-off": "Fixed color/opacity",
+    "pdf-filled": "File type color",
     "pdf-red": "File type color", "xls-green": "File type color",
     "inspect": "Fixed white fill with black outlines", "symbol-method": "Translucent stroke overlay",
 }

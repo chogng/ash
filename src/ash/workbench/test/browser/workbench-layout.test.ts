@@ -2834,8 +2834,8 @@ test('panel layout actions use state icons', () => {
 			.flatMap(([, actions]) => actions)
 			.find(action => action.id === 'workbench.action.toggleMaximizedPanel');
 
-	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff1);
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff1);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeftOff);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanelOff);
 	assert.ok(
 		menuService
 			.getMenuActions(MenuId.PanelTitle)
@@ -2843,9 +2843,9 @@ test('panel layout actions use state icons', () => {
 			.some(action => action.id === 'workbench.action.closePanel'),
 	);
 	contextKeys.setContext('sideBarVisible', true);
-	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft1);
+	assert.equal(sidebarAction()?.icon, Lxicon.layoutSidebarLeft);
 	contextKeys.setContext('panelVisible', true);
-	assert.equal(panelAction()?.icon, Lxicon.layoutPanel1);
+	assert.equal(panelAction()?.icon, Lxicon.layoutPanel);
 	assert.equal(maximizePanelAction()?.icon, Lxicon.screenFull);
 	assert.equal(maximizePanelAction()?.checked, false);
 	contextKeys.setContext('panelMaximized', true);

@@ -531,7 +531,7 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 		command: {
 			id: 'test.titlebar.toggleSidebar',
 			title: 'Toggle sidebar',
-			icon: Lxicon.layoutSidebarLeft1,
+			icon: Lxicon.layoutSidebarLeft,
 		},
 		group: 'navigation',
 	}));

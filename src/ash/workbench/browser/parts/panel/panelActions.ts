@@ -17,12 +17,12 @@ export class TogglePanelAction extends Action2 {
 			id: TogglePanelAction.ID,
 			title: TogglePanelAction.LABEL,
 			tooltip: localize2({ bundle: 'ash.actions', key: 'showPanel' }, 'Show Panel'),
-			icon: Lxicon.layoutPanelOff1,
+			icon: Lxicon.layoutPanelOff,
 			toggled: {
 				condition: PanelVisibleContext.isEqualTo(true),
 				title: localize2({ bundle: 'ash.actions', key: 'hidePanel' }, 'Hide Panel'),
 				tooltip: localize2({ bundle: 'ash.actions', key: 'hidePanel' }, 'Hide Panel'),
-				icon: Lxicon.layoutPanel1,
+				icon: Lxicon.layoutPanel,
 			},
 			menu: [
 				{

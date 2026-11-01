@@ -15,12 +15,12 @@ registerAction2(class ToggleSideBarAction extends Action2 {
 			id: ToggleSideBarCommandId,
 			title: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
 			tooltip: localize2({ bundle: 'ash.actions', key: 'showPrimarySidebar' }, 'Show Primary Side Bar'),
-			icon: Lxicon.layoutSidebarLeftOff1,
+			icon: Lxicon.layoutSidebarLeftOff,
 			toggled: {
 				condition: SideBarVisibleContext.isEqualTo(true),
 				title: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
 				tooltip: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar'),
-				icon: Lxicon.layoutSidebarLeft1,
+				icon: Lxicon.layoutSidebarLeft,
 			},
 			menu: [
 				{

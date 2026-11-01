@@ -18,7 +18,7 @@ export function registerMoveActions(): void {
 			super({
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, 'Move Chat to Editor Area'),
-				icon: Lxicon.layoutPanel1,
+				icon: Lxicon.layoutPanel,
 				precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.not('chatInEditor')),
 				f1: true,
 				menu: {

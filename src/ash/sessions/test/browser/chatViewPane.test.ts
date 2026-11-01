@@ -795,7 +795,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: 'Move Chat to Editor Area',
 				enabled: true,
-				icon: Lxicon.layoutPanel1,
+				icon: Lxicon.layoutPanel,
 			},
 			{
 				id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
