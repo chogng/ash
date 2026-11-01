@@ -744,23 +744,30 @@ test('Extension settings use catalog identities and standard schemas without a p
 	);
 });
 
-test('Image preview zoom preferences belong to Features with validated defaults and Chinese labels', async () => {
+test('Image preview preferences belong to Features with validated defaults and Chinese labels', async () => {
 	using reset = toDisposable(resetNlsResolver);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	const defaults = new DefaultSettings();
 	const zoom = defaults.get('mediaPreview.image.defaultZoom');
 	const percentage = defaults.get('mediaPreview.image.fitToWindowPercentage');
+	const information = defaults.get('mediaPreview.image.showImageInfo');
 	assert.equal(zoom.title, '默认图片缩放');
 	assert.equal(percentage.title, '适应区域占比（%）');
+	assert.equal(information.title, '显示图片信息');
 	assert.equal(zoom.configuration.defaultValue, 'fit');
 	assert.equal(percentage.configuration.defaultValue, 100);
 	assert.equal(zoom.configuration.scope, ConfigurationScope.WINDOW);
+	assert.equal(information.configuration.defaultValue, true);
+	assert.equal(information.configuration.scope, ConfigurationScope.WINDOW);
 	const layout = createSettingsLayout(defaults.all);
-	for (const setting of [zoom, percentage]) assert.equal(findSettingCategory(layout, setting.id), 'media-preview');
+	for (const setting of [zoom, percentage, information]) assert.equal(findSettingCategory(layout, setting.id), 'media-preview');
 	using configuration = new InMemoryConfigurationService();
 	await assert.rejects(configuration.updateValue(zoom.id, 'fill'), TypeError);
 	for (const value of [0, 101, NaN, '50']) await assert.rejects(configuration.updateValue(percentage.id, value), TypeError);
+	for (const value of ['false', 0, null]) await assert.rejects(configuration.updateValue(information.id, value), TypeError);
+	await configuration.updateValue(information.id, false);
+	assert.equal(configuration.getValue(information.id), false);
 	await configuration.updateValue(percentage.id, 50);
 	assert.equal(configuration.getValue(percentage.id), 50);
 });

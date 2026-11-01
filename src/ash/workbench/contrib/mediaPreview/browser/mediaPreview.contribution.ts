@@ -53,6 +53,23 @@ for (const kind of ['audio', 'video'] as const) {
 	});
 }
 
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: ImagePreviewConfiguration.showImageInfo,
+	defaultValue: true,
+	scope: ConfigurationScope.WINDOW,
+	setting: {
+		valueType: 'boolean',
+		get title(): string { return localize('media.image.showInfo.title', 'Show image information'); },
+		get description(): string { return localize('media.image.showInfo.description', 'Show image dimensions and file size in the status bar. The image zoom control is always shown.'); },
+	},
+	parse: value => {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize('mediaPreview.invalidBoolean', '{0} must be true or false.', ImagePreviewConfiguration.showImageInfo));
+		}
+		return value;
+	},
+});
+
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'fit' | 'actualSize'>({
 	key: ImagePreviewConfiguration.defaultZoom,
 	defaultValue: 'fit',
@@ -63,8 +80,8 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description(): string { return localize('media.image.defaultZoom.description', 'Zoom for images without a saved view. Changes also apply to open image previews.'); },
 		get options(): readonly { value: 'fit' | 'actualSize'; label: string; }[] {
 			return [
-				{ value: 'fit' as const, label: localize('media.image.fit', 'Fit to window') },
-				{ value: 'actualSize' as const, label: localize('media.image.actualSize', 'Actual size') },
+				{ value: 'fit' as const, label: localize('media.image.defaultZoom.fit', 'fit') },
+				{ value: 'actualSize' as const, label: localize('media.image.defaultZoom.raw', 'raw') },
 			];
 		},
 	},
@@ -184,7 +201,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.ImagePreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Once focused, click the image to zoom in, use a modifier with the scroll wheel, or pinch on a trackpad. Choose Copy image or use the system copy shortcut to copy it. Right click or press Shift+F10 for the image menu. The status bar shows dimensions, file size and zoom; activate it to select a zoom level. Zoom and scroll position are restored when reopening the image. If loading fails, use Retry in the error message. Default zoom and fit area percentage can be configured in Settings under Features > Media Preview. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
+					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Once focused, click the image to zoom in, use a modifier with the scroll wheel, or pinch on a trackpad. Choose Copy image or use the system copy shortcut to copy it. Right click or press Shift+F10 for the image menu. Activate the dimensions and file size in the status bar to view image information, copy dimensions or full information, or hide image information. Press Escape in the details to close and return to the status bar. The status bar has a separate image zoom button; activate it to select Fit to window or a zoom level. Show image information in Settings controls whether dimensions and file size are displayed beside it. Zoom and scroll position are restored when reopening the image. If loading fails, use Retry in the error message. Default zoom and fit area percentage can be configured in Settings under Features > Media Preview. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.ImagePreview,

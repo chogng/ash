@@ -30,9 +30,11 @@ export interface IStatusbarEntry {
 	readonly showProgress?: boolean;
 	readonly kind?: StatusbarEntryKind;
 	readonly ariaLabel?: string;
+	readonly ariaHasPopup?: 'dialog';
+	readonly ariaExpanded?: boolean;
 	readonly tooltip?: string;
-	/** Optional activation hook for entries that expose a status action. */
-	readonly run?: () => unknown;
+	/** UI activation supplies a borrowed button for anchoring overlays; consumers must not mutate it. */
+	readonly run?: (anchor?: HTMLElement) => unknown;
 }
 
 /** Stable placement metadata supplied when an entry is registered. */

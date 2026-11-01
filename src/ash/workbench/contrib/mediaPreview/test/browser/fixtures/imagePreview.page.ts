@@ -7,7 +7,8 @@ import { IClipboardService } from '../../../../../../platform/clipboard/common/c
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
@@ -17,7 +18,7 @@ import { TestThemeService } from '../../../../../../platform/theme/test/common/t
 import { EditorPanes } from '../../../../../browser/editor.js';
 import { type EditorPane } from '../../../../../browser/parts/editor/editorPane.js';
 import { binaryDiffEditorDescriptor } from '../../../../../browser/parts/editor/binaryDiffEditor.js';
-import { StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
+import { StatusbarService, StatusbarPart } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { createBinaryDiffEditorInput } from '../../../../../common/editor/diffEditorInput.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
@@ -51,6 +52,8 @@ services.registerInstance(IContextMenuService, {
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body })));
 const statusbar = resources.add(new StatusbarService());
 services.registerInstance(IStatusbarService, statusbar);
+services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
+resources.add(services.createInstance(StatusbarPart, document.querySelector<HTMLElement>('#statusbar')!));
 resources.add(statusbar.onDidChangeEntries(() => {
 	document.querySelector('#status')!.textContent = statusbar.getEntries(StatusbarAlignment.Right).map(item => item.entry.text).join(' ');
 }));

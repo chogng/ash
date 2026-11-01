@@ -10,12 +10,14 @@ import { installEditorTestDom } from '../../../../../editor/test/browser/editorT
 import { resetNlsResolver, setNlsResolver, formatNlsMessage } from '../../../../../nls.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IFileService, FileKind, type IFileChangeEvent, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { EditorPanes } from '../../../../browser/editor.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ImagePreviewEditor } from '../../browser/imagePreviewEditor.js';
+import { ImagePreviewInfo } from '../../browser/imagePreviewInfo.js';
 import { IMAGE_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -99,6 +101,24 @@ test('Image preview opens through the registered pane, zooms and releases its UR
 	assert.deepEqual([image.hasAttribute('src'), fixture.revoked], [false, [url]]);
 });
 
+test('Image information reports clipboard failures without closing or changing the preview', async () => {
+	using fixture = new ImageFixture();
+	const document = fixture.browser.window.document;
+	using views = new BrowserContextViewService(document.body);
+	fixture.services.registerInstance(IContextViewService, views);
+	await fixture.preview.setInput({ resource, label: 'Product' }, new AbortController().signal);
+	const anchor = document.createElement('button');
+	document.body.append(anchor);
+	using details = fixture.services.createInstance(ImagePreviewInfo, fixture.preview, anchor, () => { });
+	details.show();
+	const copy = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Copy dimensions')!;
+	copy.click();
+	await setImmediate();
+	assert.match(document.querySelector('.ash-image-preview-info [role="alert"]')!.textContent!, /browser clipboard is unavailable/);
+	assert.equal(details.visible, true);
+	assert.deepEqual(fixture.preview.imageInfo, { name: 'Product', width: 800, height: 600, mediaType: 'image/png', fileSize: png.length });
+});
+
 test('Image preview keeps a first-open read failure in the pane and retries it', async () => {
 	using fixture = new ImageFixture();
 	fixture.read = async () => { throw new Error('Read denied'); };
@@ -158,9 +178,19 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	using fixture = new ImageFixture();
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 
-	assert.match(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.textContent!, /像素.*适应窗口/);
+	assert.equal(fixture.browser.window.document.querySelector('.ash-image-preview-summary')!.classList.contains('hidden'), true);
 	assert.match(fixture.preview.getAccessibleContent(), /图片：product.png[\s\S]*格式：image\/png/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.hidden, true);
+	const document = fixture.browser.window.document;
+	using views = new BrowserContextViewService(document.body);
+	fixture.services.registerInstance(IContextViewService, views);
+	const anchor = document.createElement('button');
+	document.body.append(anchor);
+	using details = fixture.services.createInstance(ImagePreviewInfo, fixture.preview, anchor, () => { });
+	details.show();
+	assert.equal(document.querySelector('.ash-image-preview-info')!.getAttribute('aria-label'), '图片信息');
+	assert.deepEqual(Array.from(document.querySelectorAll('.ash-image-preview-info dt')).map(term => term.textContent), ['文件名', '格式', '尺寸', '文件大小']);
+	assert.equal(document.querySelectorAll('.ash-image-preview-info dd')[2].textContent, '800 × 600 像素');
 	fixture.preview.clearInput();
 	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);

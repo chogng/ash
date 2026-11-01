@@ -5,6 +5,7 @@ import type { IResourceEditorInput } from '../../../common/editor.js';
 export const IMAGE_PREVIEW_EDITOR_ID = 'ash.imagePreview';
 
 export const ImagePreviewConfiguration = {
+	showImageInfo: 'mediaPreview.image.showImageInfo',
 	defaultZoom: 'mediaPreview.image.defaultZoom',
 	fitToWindowPercentage: 'mediaPreview.image.fitToWindowPercentage',
 } as const;

@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import { createMediaPreviewFixture, mediaPreviewEvidence } from './mediaPreviewFixture.js';
 
 declare global {
@@ -55,7 +56,66 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	await expect(preview).toBeVisible();
 	await expect(preview.getByRole('toolbar')).toHaveCount(0);
 	await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
-	await expect(preview.locator('.ash-image-preview-summary')).toContainText('800 × 600 pixels');
+	await expect(preview.locator('.ash-image-preview-summary')).toBeHidden();
+	await expect(page.locator('[data-part="statusbar"]')).toContainText('800 × 600 pixels');
+	const information = page.locator('[data-statusbar-item-id="status.mediaPreview"]');
+	const zoom = page.locator('[data-statusbar-item-id="status.mediaPreview.zoom"]').getByRole('button');
+	await expect(zoom).toHaveText('Fit to window');
+	await zoom.click();
+	await workbench.quickaccess.select('100%');
+	await expect(zoom).toHaveText('100%');
+	await expect(image).toHaveCSS('width', '800px');
+	const informationButton = information.getByRole('button');
+	await informationButton.click();
+	const details = page.getByRole('dialog', { name: /^Image information/u });
+	await expect(details.locator('dd')).toHaveText(['product.png', 'image/png', '800 × 600 pixels', /\d+ bytes/u]);
+	await expect(informationButton).toHaveAttribute('aria-expanded', 'true');
+	await details.getByRole('button', { name: 'Copy dimensions', exact: true }).click();
+	if (target.kind === 'electron') {
+		await expect.poll(() => (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())).toBe('800 × 600');
+	}
+	await details.getByRole('button', { name: 'Copy image information', exact: true }).click();
+	if (target.kind === 'electron') {
+		await expect.poll(() => (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())).toMatch(/^File name: product.png\nFormat: image\/png\nDimensions: 800 × 600 pixels\nFile size: \d+ bytes$/u);
+	}
+	await testInfo.attach('image-information', { body: await page.screenshot(), contentType: 'image/png' });
+	await page.keyboard.press('Alt+F1');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Image information shows the file name/u);
+	await page.keyboard.press('Escape');
+	await expect(details.getByRole('button', { name: 'Copy image information', exact: true })).toBeFocused();
+	await page.keyboard.press('Alt+F2');
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/File name: product.png[\s\S]*Format: image\/png[\s\S]*800 × 600 pixels/u);
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await expect(details).toHaveCount(0);
+	await expect(informationButton).toBeFocused();
+	await informationButton.press('Enter');
+	await details.getByRole('button', { name: 'Hide image information', exact: true }).click();
+	await expect(details).toHaveCount(0);
+	await expect(information).toHaveCount(0);
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('media-preview');
+	const showInformation = workbench.settingsEditor.element.locator('[data-configuration-key="mediaPreview.image.showImageInfo"]');
+	await expect(showInformation).toHaveAttribute('aria-checked', 'false');
+	await expect.poll(async () => (await readUserSettings(page)).content).toMatch(/"mediaPreview.image.showImageInfo":\s*false/u);
+	await page.keyboard.press('Escape');
+	await expect(information).toHaveCount(0);
+	await zoom.focus();
+	await zoom.press('Enter');
+	await workbench.quickaccess.select('Fit to window');
+	await expect(zoom).toHaveText('Fit to window');
+	await testInfo.attach('image-statusbar-zoom-only', { body: await page.locator('[data-part="statusbar"]').screenshot(), contentType: 'image/png' });
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('media-preview');
+	await showInformation.focus();
+	await showInformation.press('Space');
+	await expect(showInformation).toHaveAttribute('aria-checked', 'true');
+	await expect.poll(async () => (await readUserSettings(page)).content).not.toMatch(/"mediaPreview.image.showImageInfo":\s*false/u);
+	await page.keyboard.press('Escape');
+	await expect(information).toContainText('800 × 600 pixels');
+	await testInfo.attach('image-statusbar-with-information', { body: await page.locator('[data-part="statusbar"]').screenshot(), contentType: 'image/png' });
 	const originalURL = await image.getAttribute('src');
 	if (target.kind === 'electron') {
 		const desktop = application as ElectronApplication;
@@ -95,7 +155,7 @@ test('Image preview opens workspace images, zooms, exposes metadata and releases
 	if (target.kind === 'electron') {
 		const updated = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 90; return canvas.toDataURL().split(',')[1]!; });
 		await writeFile(join(testWorkspace.directory, 'product.png'), Buffer.from(updated, 'base64'));
-		await expect(preview.locator('.ash-image-preview-summary')).toContainText('120 × 90 pixels');
+		await expect(page.locator('[data-part="statusbar"]')).toContainText('120 × 90 pixels');
 		await expect.poll(() => page.evaluate(url => window.imagePreviewRevokedURLs.has(url!), originalURL)).toBe(true);
 	}
 	for (const name of ['product.jpg', 'product.webp']) {
@@ -150,7 +210,7 @@ test('Image preview retries a first read failure, recovers corrupted content and
 		await expect(retry).toBeEnabled();
 		await retry.focus(); await retry.press('Enter');
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
-		await expect(preview.getByRole('status')).toContainText('800 × 600 pixels');
+		await expect(page.locator('[data-part="statusbar"]')).toContainText('800 × 600 pixels');
 		await expect(preview.getByRole('alert')).toHaveCount(0);
 		await expect(retry).toHaveCount(0);
 		const url = (await image.getAttribute('src'))!;
@@ -179,7 +239,7 @@ test('Image preview retries a first read failure, recovers corrupted content and
 			await preview.getByRole('button', { name: 'Retry', exact: true }).click();
 		}
 		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(800);
-		await expect(preview.getByRole('status')).toContainText('800 × 600 pixels');
+		await expect(page.locator('[data-part="statusbar"]')).toContainText('800 × 600 pixels');
 		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 
 		await page.evaluate(() => window.mediaRetryProbe.hold.add('pending.png'));

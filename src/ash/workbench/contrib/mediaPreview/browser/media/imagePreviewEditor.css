@@ -9,7 +9,8 @@
 	background: var(--ash-editor-background);
 }
 
-.ash-image-preview.hidden {
+.ash-image-preview.hidden,
+.ash-image-preview-summary.hidden {
 	display: none;
 }
 

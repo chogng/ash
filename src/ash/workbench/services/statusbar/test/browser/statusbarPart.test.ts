@@ -15,6 +15,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { StatusbarPart, StatusbarService } from '../../../../../workbench/browser/parts/statusbar/statusbarPart.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../../../workbench/services/statusbar/browser/statusbar.js';
 import { Event } from '../../../../../base/common/event.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 
@@ -48,6 +49,29 @@ test('status bar entries render an icon before their text', () => {
 	assert.equal(label.firstElementChild, icon);
 	assert.equal(label.lastChild, textNode);
 	assert.equal(textNode?.textContent, 'develop');
+});
+
+test('status bar activation supplies the retained anchor and updates popup accessibility', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using close = toDisposable(() => browser.window.close());
+	const document = browser.window.document;
+	using service = new StatusbarService();
+	const anchors: (HTMLElement | undefined)[] = [];
+	const run = (anchor?: HTMLElement): void => { anchors.push(anchor); };
+	using entry = service.addEntry({ text: 'Details', ariaHasPopup: 'dialog', ariaExpanded: false, run }, { id: 'test.details', alignment: StatusbarAlignment.Right });
+	using services = createStatusbarServices(document, service);
+	using part = services.createInstance(StatusbarPart, document.body);
+	const anchor = part.domNode.querySelector<HTMLElement>('.ash-statusbar-item-label')!;
+	anchor.click();
+	anchor.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+	assert.deepEqual(anchors, [anchor, anchor]);
+	assert.equal(anchor.getAttribute('aria-haspopup'), 'dialog');
+	assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+	entry.update({ text: 'Details', ariaHasPopup: 'dialog', ariaExpanded: true, run });
+	assert.equal(anchor.getAttribute('aria-expanded'), 'true');
+	entry.update({ text: 'Details', run });
+	assert.equal(anchor.hasAttribute('aria-haspopup'), false);
+	assert.equal(anchor.hasAttribute('aria-expanded'), false);
 });
 
 test('status bar entries support accessible icon-only presentation', () => {

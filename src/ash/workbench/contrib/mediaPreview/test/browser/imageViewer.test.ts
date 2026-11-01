@@ -15,7 +15,70 @@ suite('Built-in image viewer', () => {
 			await page.evaluate(format => window.imagePreviewFixture.open(format), format);
 			await expect(page.locator('.ash-image-viewer img')).toHaveAttribute('alt', `product.${format}`);
 			await expect(page.locator('#status')).toContainText(format === 'gif' ? '1 × 1 pixels' : '800 × 600 pixels');
+			await expect(page.locator('.ash-image-preview-summary')).toBeHidden();
 		}
+	});
+
+	test('opens image details, copies metadata and hides only the information entry', async () => {
+		const { page } = browser;
+		await page.goto('/imagePreview.html');
+		await page.evaluate(() => window.imagePreviewFixture.open('svg', 150, 150));
+		const information = page.locator('[data-statusbar-item-id="status.mediaPreview"]').getByRole('button');
+		await expect(information).toHaveAttribute('aria-haspopup', 'dialog');
+		await information.click();
+		const details = page.getByRole('dialog', { name: 'Image information', exact: true });
+		await expect(details.locator('dd')).toHaveText(['product.svg', 'image/svg+xml', '150 × 150 pixels', /\d+ bytes/]);
+		await expect(information).toHaveAttribute('aria-expanded', 'true');
+		await details.getByRole('button', { name: 'Copy dimensions', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('150 × 150');
+		await details.getByRole('button', { name: 'Copy image information', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^File name: product.svg\nFormat: image\/svg\+xml\nDimensions: 150 × 150 pixels\nFile size: \d+ bytes$/u);
+		await page.keyboard.press('Escape');
+		await expect(details).toHaveCount(0);
+		await expect(information).toBeFocused();
+		await expect(information).toHaveAttribute('aria-expanded', 'false');
+		await information.press('Enter');
+		await details.getByRole('button', { name: 'Hide image information', exact: true }).click();
+		await expect(details).toHaveCount(0);
+		await expect(information).toHaveCount(0);
+		await expect(page.locator('#status')).toHaveText('Fit to window');
+		await expect(page.getByLabel('Image viewport', { exact: true })).toBeFocused();
+		await page.evaluate(() => window.imagePreviewFixture.configure('showImageInfo', true));
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+			await page.evaluate(theme => window.imagePreviewFixture.theme(theme), theme);
+			await information.click();
+			await expect(details).toBeVisible();
+			const bounds = await details.boundingBox();
+			expect(bounds!.x).toBeGreaterThanOrEqual(0);
+			expect(bounds!.y).toBeGreaterThanOrEqual(0);
+			await browser.info.attach(`image-info-${theme}.png`, { body: await page.screenshot(), contentType: 'image/png' });
+			await details.getByRole('button', { name: 'Close image information', exact: true }).click();
+		}
+		await information.click();
+		await page.evaluate(() => window.imagePreviewFixture.open('png'));
+		await expect(details).toHaveCount(0);
+		await information.click();
+		await expect(details.locator('dd').first()).toHaveText('product.png');
+		await page.evaluate(() => window.imagePreviewFixture.close());
+		await expect(details).toHaveCount(0);
+	});
+
+	test('hides image information live while retaining the independent zoom control', async () => {
+		const { page } = browser;
+		await page.goto('/imagePreview.html');
+		await page.evaluate(() => window.imagePreviewFixture.open('svg', 150, 150));
+		await expect(page.locator('#status')).toContainText('150 × 150 pixels');
+		await expect(page.locator('#status')).toContainText('Fit to window');
+		await page.evaluate(() => window.imagePreviewFixture.configure('showImageInfo', false));
+		await expect(page.locator('#status')).toHaveText('Fit to window');
+		await page.getByLabel('Image viewport', { exact: true }).press('1');
+		await expect(page.locator('#status')).toHaveText('100%');
+		await page.evaluate(() => window.imagePreviewFixture.open('png'));
+		await expect(page.locator('#status')).toHaveText('Fit to window');
+		await page.evaluate(() => window.imagePreviewFixture.configure('showImageInfo', true));
+		await expect(page.locator('#status')).toContainText('800 × 600 pixels');
+		await page.evaluate(() => window.imagePreviewFixture.close());
+		await expect(page.locator('#status')).toBeEmpty();
 	});
 
 	test('fits within the editor viewport percentage and applies the configured default zoom live', async () => {
@@ -56,7 +119,7 @@ suite('Built-in image viewer', () => {
 		await expect(image).toHaveCSS('height', `${height}px`);
 		expect(height).toBeGreaterThan(150);
 		await expect(image).not.toHaveClass(/pixelated/u);
-		await expect(page.locator('.ash-image-preview-summary')).toContainText('150 × 150 pixels');
+		await expect(page.locator('#status')).toContainText('150 × 150 pixels');
 		await page.locator('#editor').evaluate(element => { element.style.width = '250px'; });
 		await expect(image).toHaveCSS('width', '250px');
 		await page.locator('#editor').evaluate(element => { element.style.width = '600px'; element.style.height = '700px'; });
@@ -127,8 +190,8 @@ suite('Built-in image viewer', () => {
 		await page.evaluate(() => window.imagePreviewFixture.openDiff());
 		await expect(page.locator('.ash-image-preview')).toHaveCount(2);
 		await expect(page.locator('.ash-image-preview-controls, [role="toolbar"]')).toHaveCount(0);
-		await expect(page.locator('.ash-side-by-side-editor-secondary .ash-image-preview-summary')).toContainText('800 × 600');
-		await expect(page.locator('.ash-side-by-side-editor-primary .ash-image-preview-summary')).toContainText('320 × 240');
+		await expect(page.locator('.ash-side-by-side-editor-secondary .ash-image-viewer img')).toHaveJSProperty('naturalWidth', 800);
+		await expect(page.locator('.ash-side-by-side-editor-primary .ash-image-viewer img')).toHaveJSProperty('naturalWidth', 320);
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
 			await page.evaluate(theme => window.imagePreviewFixture.theme(theme), theme);
 			const viewport = page.getByLabel('Image viewport', { exact: true }).first();

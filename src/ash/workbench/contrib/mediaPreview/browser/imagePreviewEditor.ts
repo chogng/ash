@@ -63,6 +63,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		this.viewer = this._register(this.instantiation.createInstance(ImageViewer, content));
 		this._register(this.viewer.onDidChangeScale(() => { this.updateSummary(); this.imageInfoChanged.fire(); }));
 		this._register(this.viewer.onDidFailCopy(error => {
+			this.summaryDomNode.classList.remove('hidden');
 			this.summaryDomNode.setAttribute('role', 'alert');
 			this.summaryTextDomNode.textContent = localize('media.image.copyFailed', 'Could not copy image: {0}', error instanceof Error ? error.message : String(error));
 		}));
@@ -138,7 +139,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 	public override focus(): void { this.viewer.domNode.focus(); }
 
 	public getAccessibleContent(): string {
-		const metadata = this.metadata;
+		const metadata = this.imageInfo;
 		if (!metadata || !this.input) {
 			return this.loadFailure === undefined ? localize('media.image.empty', 'No image loaded.') : localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
 		}
@@ -216,9 +217,12 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 	public get imageViewer(): ImageViewer { return this.viewer; }
 	public get fileSize(): number | undefined { return this.viewer.hasImage ? this.byteLength : undefined; }
 
-	private get metadata(): { width: number; height: number; mediaType: string; } | undefined {
+	/** Current decoded image details, derived from the editor's accepted resource. */
+	public get imageInfo(): { readonly name: string; readonly width: number; readonly height: number; readonly mediaType: string; readonly fileSize: number; } | undefined {
 		const size = this.viewer.naturalSize;
-		return size && this.mediaType ? { ...size, mediaType: this.mediaType } : undefined;
+		return size && this.mediaType && this.input
+			? { ...size, name: this.input.label ?? basename(this.input.resource), mediaType: this.mediaType, fileSize: this.byteLength }
+			: undefined;
 	}
 
 	private zoomLabel(): string {
@@ -257,13 +261,8 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 	}
 
 	private updateSummary(): void {
-		const metadata = this.metadata;
-		let summary = '';
-		if (metadata) {
-			summary = localize('media.image.summary', '{0} × {1} pixels · {2} bytes · {3}', metadata.width, metadata.height, this.byteLength, this.zoomLabel());
-		} else if (this.loadFailure !== undefined) {
-			summary = localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
-		}
+		const summary = this.loadFailure === undefined ? '' : localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
+		this.summaryDomNode.classList.toggle('hidden', !summary);
 		this.summaryDomNode.setAttribute('role', this.loadFailure === undefined ? 'status' : 'alert');
 		this.summaryTextDomNode.textContent = summary;
 		this.summaryDomNode.title = summary;
