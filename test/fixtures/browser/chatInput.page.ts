@@ -215,7 +215,7 @@ services.registerSingleton(IMenuService, () => services.createInstance(MenuServi
 const footerStatusVisible = contextKeys.createKey<boolean>('test.chat.status.visible', false);
 const footerStatus = new URLSearchParams(location.search).has('footerStatus')
 	? resources.add(MenusRegistry.appendMenuItem(extensionMenuId('chat/input/status'), {
-		command: { id: 'test.chat.status', title: 'Extension status', icon: Lxicon.chat4 },
+		command: { id: 'test.chat.status', title: 'Extension status', icon: Lxicon.chat },
 		when: ContextKeyExpr.has('test.chat.status.visible'), group: 'status',
 	})) : undefined;
 const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg=='), character => character.charCodeAt(0));

@@ -1,4 +1,5 @@
 import { Event } from '../../../../../../base/common/event.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../../../base/common/network.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../nls.js';
@@ -19,6 +20,7 @@ export class ChatEditorInput extends EditorInput {
 	readonly showBreadcrumbs = false;
 
 	getName(): string { return localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'); }
+	getIcon(): typeof Lxicon.commentDiscussion { return Lxicon.commentDiscussion; }
 }
 
 /** Editor restoration carries only canvas identity; the conversation owner restores its drafts. */

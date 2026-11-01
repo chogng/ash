@@ -51,7 +51,7 @@ test(
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(headings).toHaveText(['Projects', 'Recents']);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
-		await expect(list.locator('.ash-sessions-list-item > [data-ash-icon-id=chat-4]').first()).toBeVisible();
+		await expect(list.locator('.ash-sessions-list-item > [data-ash-icon-id=chat]').first()).toBeVisible();
 		await recent.focus();
 		await recent.press('ArrowLeft');
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');

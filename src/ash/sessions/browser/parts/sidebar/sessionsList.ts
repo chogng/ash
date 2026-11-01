@@ -208,7 +208,7 @@ export class SessionsList extends DomWidget {
 		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
 		const itemFor = (key: string): SessionListItem => {
 			present.add(key);
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat4 : undefined));
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat : undefined));
 			item.domNode.dataset.item = key;
 			return item;
 		};

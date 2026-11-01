@@ -4,6 +4,7 @@ import { observeElementSize } from '../../../../../../base/browser/observer.js';
 import { Orientation, Sash, SashState } from '../../../../../../base/browser/ui/sash/sash.js';
 import { toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../../../base/common/numbers.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -541,6 +542,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			id: entry.pane.element.id,
 			value: entry.id,
 			label: entry.label,
+			icon: Lxicon.commentDiscussion,
 			tabId: `${entry.pane.element.id}-tab`,
 			panelId: entry.detached?.placeholder.id ?? entry.pane.element.id,
 			closeActionTooltip: localize('chat.sessions.closeTab', 'Close session tab'),

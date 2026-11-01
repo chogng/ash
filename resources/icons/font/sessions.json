@@ -20,6 +20,7 @@
     "cloud": [0],
     "collab": [0, 1],
     "collapse-all": [2],
+    "comment-discussion": [0],
     "copy": [1],
     "copy-code": [1],
     "debug": [0, 1],

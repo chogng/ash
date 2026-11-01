@@ -31,7 +31,7 @@ const icons = resources.add(new SegmentedControl(document.querySelector('#icons'
 	ariaLabel: chinese ? '工作区' : 'Workspace',
 	selectedId: 'chat', presentation: 'icon',
 	items: [
-		{ id: 'chat', label: chinese ? '聊天' : 'Chat', icon: Lxicon.chat1 },
+		{ id: 'chat', label: chinese ? '聊天' : 'Chat', icon: Lxicon.chat },
 		{ id: 'code', label: chinese ? '代码' : 'Code', icon: Lxicon.code },
 		{ id: 'projects', label: chinese ? '项目' : 'Projects', icon: Lxicon.projects },
 	],

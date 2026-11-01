@@ -93,7 +93,7 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 	{ id: 'plan', label: 'Plan', icon: Lxicon.plan },
 	{ id: 'debug', label: 'Debug', icon: Lxicon.debug },
 	{ id: 'multitask', label: 'Multitask', icon: Lxicon.multitask },
-	{ id: 'ask', label: 'Ask', icon: Lxicon.chat4 },
+	{ id: 'ask', label: 'Ask', icon: Lxicon.ask },
 ];
 
 const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {

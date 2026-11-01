@@ -197,16 +197,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-4",
-      "file": "chat-4.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "chat-4-filled",
-      "file": "chat-4-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "chat-filled",
       "file": "chat-filled.svg",
       "rendering": "symbolic"
@@ -339,6 +329,11 @@
     {
       "id": "command",
       "file": "command.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "comment-discussion",
+      "file": "comment-discussion.svg",
       "rendering": "symbolic"
     },
     {

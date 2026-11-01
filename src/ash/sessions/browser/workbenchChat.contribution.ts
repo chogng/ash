@@ -92,7 +92,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 		title: 'Chat',
 		localizationKey: { bundle: 'ash.views', key: 'chat' },
 		location: ViewContainerLocation.AuxiliaryBar,
-		icon: Lxicon.chat4,
+		icon: Lxicon.chat,
 		order: 1,
 		isDefault: true,
 	});

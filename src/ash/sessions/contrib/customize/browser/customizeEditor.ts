@@ -1150,7 +1150,7 @@ export class CustomizeEditorPane extends EditorPane {
 					...this.menuAction('createWithAsh', localize('customize.createWithAsh', 'Create with Ash'), () =>
 						this.skillActions.createWithAsh(),
 					),
-					icon: Lxicon.chat1,
+					icon: Lxicon.chat,
 				},
 			];
 		return [

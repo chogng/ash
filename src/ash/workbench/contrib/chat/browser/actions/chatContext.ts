@@ -150,7 +150,7 @@ export class ScreenshotContextValuePick implements IChatContextValueItem {
 
 export class SessionReferenceContextPickerPick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
-	public readonly icon = Lxicon.chat4;
+	public readonly icon = Lxicon.chat;
 	public get label(): string { return localize('chat.context.sessions', 'Sessions…'); }
 	constructor(
 		private readonly current: { readonly sessionId: string; readonly threadId: string; } | undefined,

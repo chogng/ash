@@ -273,7 +273,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				if (entry.key) { root.dataset.key = entry.key; }
 				if (entry.record) { root.dataset.eventId = entry.record.eventId; }
 				const type = entry.record?.event.type;
-				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat1 : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record, entry.performance)].filter(Boolean).join(' · ') });
+				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record, entry.performance)].filter(Boolean).join(' · ') });
 				this.rowLabels.set(root, label);
 				if (entry.failed) {
 					const failure = h(document, 'span', { className: 'ash-agent-trace-failure' });

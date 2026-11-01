@@ -74,7 +74,7 @@ suite('SegmentedControl contract', () => {
 		let activations = 0;
 		using control = new SegmentedControl(dom.window.document.body, {
 			ariaLabel: 'View', selectedId: 'list', presentation: 'icon',
-			items: [{ id: 'list', label: 'List', icon: Lxicon.chat1 }, { id: 'grid', label: 'Grid', icon: Lxicon.code }],
+			items: [{ id: 'list', label: 'List', icon: Lxicon.chat }, { id: 'grid', label: 'Grid', icon: Lxicon.code }],
 			hoverDelegate: {
 				...getHoverDelegate(),
 				setupDelayedHover: () => { registrations++; return toDisposable(() => { registrations--; }); },

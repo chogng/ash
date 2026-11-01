@@ -333,7 +333,8 @@
     "chat-filled": "E14A",
     "chat-mode-filled": "E14B",
     "chat-mode": "E14C",
-    "chat": "E14D"
+    "chat": "E14D",
+    "comment-discussion": "E14E"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -374,8 +375,6 @@
     "chat-2": "923792639ff8beabc496d86c631bcc40eec271f535cbf7c770dd85a34595341e",
     "chat-3-filled": "e6c3379105361dfeb260927aa8a2a8fa25d7ad72f48946137cef2d447a8516bc",
     "chat-3": "5a2ecabf49bdfba33465024b4b193544b30de73c5c55c69740ac43534fbfce2f",
-    "chat-4-filled": "9ff91ce5f30d163a0a9bfd94aa516d200447bcf088e73a2a774d7f5c70b549a7",
-    "chat-4": "5dccd58446288e7b3bcb95a128c3e4a3974301aed81b91f59583e9de6fc58d31",
     "chat-filled": "9ff91ce5f30d163a0a9bfd94aa516d200447bcf088e73a2a774d7f5c70b549a7",
     "chat-mode-filled": "40501b102b7b12ffc9ee142ec5b1a332ce65fe6e49b25aba43587a3d1329bd8d",
     "chat-mode": "dcce90e4f1b605dedf4c4d570dfe45f4330e7ade67d75fa76273474a93899c72",
@@ -404,6 +403,7 @@
     "collab": "e1938457c40875b7d569ff283e3bd7ab4d2744bb8408c4f57fc90b8d30149b8b",
     "collapse-all": "57ae0aab711d8757a0278dc3d1311007125f52bfa545d477efd940b202c0f95a",
     "command": "e87233276480a94e00f3c7a30bedf7204e0a7b54d95dbd95fa60565c39db484b",
+    "comment-discussion": "60ccbcadb79e7efc340adfa8080136b60e8dbdfb0b385a6e7cac4ff2499d73b0",
     "connectors": "57bf7fad7ac01a97eef64f41529b55788d6874dafd85c27f7956c6d1565320a9",
     "copy-code": "2c55910bb037e5c713a0bba1f98fdb7f8aecf233408506dcc46495ccc57cf4f9",
     "copy": "b56c999f69c8a2f89b48a5b2c03be1ad695d98f1205f846eef6a9d5a11d575d7",

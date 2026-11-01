@@ -916,7 +916,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
-		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
+		['unlimited', 'plan', 'debug', 'multitask', 'ask'],
 	);
 	assert.deepEqual(
 		[...modeMenu?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []].map(item => item.getAttribute('aria-checked')),

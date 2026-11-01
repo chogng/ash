@@ -387,7 +387,7 @@ for (const locale of ['en', 'zh-CN'])
 		await pane.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText(draft);
 		const session = await pane.getAttribute('data-untitled-session-id');
-		await expect(chat.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat-1');
+		await expect(chat.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat');
 		for (const mode of [code, chat]) {
 			await mode.click();
 			await expect(mode).toHaveAttribute('aria-pressed', 'true');
@@ -1050,7 +1050,7 @@ for (const locale of ['en', 'zh-CN'])
 		await projectToggle.press('ArrowRight');
 		await expect(projectToggle).toHaveAttribute('aria-expanded', 'true');
 		const taskA = project.getByRole('button', { name: 'Task from Host A', exact: true });
-		await expect(taskA.locator(':scope > [data-ash-icon-id=chat-4]')).toBeVisible();
+		await expect(taskA.locator(':scope > [data-ash-icon-id=chat]')).toBeVisible();
 		await taskA.click();
 		await expect
 			.poll(() =>
