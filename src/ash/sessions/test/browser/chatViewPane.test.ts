@@ -88,7 +88,7 @@ import { TestNotificationService } from '../../../workbench/services/notificatio
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputHideReason, QuickInputType, type IQuickInputHideEvent, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { ForkConversationActionId } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
@@ -1951,15 +1951,19 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
 			await sessions.initialize();
 			const draft = sessions.createUntitledSession('Unsent draft');
-			using hidden = new Emitter<void>();
+			using hidden = new Emitter<IQuickInputHideEvent>();
 			using triggered = new Emitter<{ item: IQuickPickItem; button: IQuickPickItemButton; anchor: HTMLElement; }>();
 			const picker: IQuickPick<IQuickPickItem> = {
+				title: undefined, description: undefined, step: undefined, totalSteps: undefined,
+				buttons: [], enabled: true, busy: false, contextKey: undefined, ignoreFocusOut: false,
+				onWillHide: Event.None, onDispose: Event.None, onDidTriggerButton: Event.None,
+				willHide() { }, didHide() { },
 				type: QuickInputType.QuickPick, items: [], activeItems: [], selectedItems: [],
 				ariaLabel: '', placeholder: '', value: 'Keep search', valueSelection: { start: 0, end: 0 },
 				sortByLabel: true, canSelectMany: false, filterValue: value => value,
 				onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
 				onDidAccept: Event.None, onDidChangeValue: Event.None, onDidBlur: Event.None, onDidChangeSelection: Event.None,
-				show() { }, hide() { hidden.fire(); }, focus() { }, accept() { }, toggle() { }, dispose() { },
+				show() { }, hide() { hidden.fire({ reason: QuickInputHideReason.Other }); }, focus() { }, accept() { }, toggle() { }, dispose() { },
 				[Symbol.dispose]() { this.dispose(); },
 			};
 			let menu: IContextMenuDelegate | undefined;

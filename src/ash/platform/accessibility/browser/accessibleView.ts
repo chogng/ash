@@ -3,6 +3,7 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum AccessibleViewProviderId {
+	QuickInput = 'quickInput',
 	Hover = 'hover',
 	TreeView = 'treeView',
 	ChatScreenshot = 'chatScreenshot',
@@ -95,6 +96,7 @@ export const enum AccessibleViewType {
 }
 
 export const enum AccessibilityVerbositySettingId {
+	QuickInput = 'accessibility.verbosity.quickInput',
 	Hover = 'accessibility.verbosity.hover',
 	TreeView = 'accessibility.verbosity.treeView',
 	ChatScreenshot = 'accessibility.verbosity.chatScreenshot',

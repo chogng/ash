@@ -19,6 +19,7 @@ import { QuickInputService } from '../../../../../platform/quickinput/browser/qu
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { errorHandler } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
@@ -1101,7 +1102,11 @@ suite('Quick Input shared foundations', () => {
 		assert.throws(() => service.createQuickPick(), /storageService/);
 		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'position', flushInterval: 0 });
 		services.registerInstance(IStorageService, storage);
+		assert.throws(() => service.createQuickPick(), /openerService/);
+		assert.throws(() => service.createQuickTree(), /openerService/);
+		services.registerInstance(IOpenerService, { open() { throw new Error('Unexpected Quick Input link'); } } as unknown as IOpenerService);
 		assert.throws(() => service.createQuickPick(), /contextMenuService/);
+		assert.throws(() => service.createQuickTree(), /contextMenuService/);
 		services.registerInstance(IContextMenuService, contextMenus);
 		const key = 'workbench.quickInput.viewState';
 		for (const value of ['broken json', 'null', '[]', '{"top":0.2}', '{"top":-1,"left":0.5}', '{"top":0.2,"left":2}', '{"top":"0.2","left":0.5}']) {

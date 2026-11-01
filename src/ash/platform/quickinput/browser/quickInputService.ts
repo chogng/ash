@@ -8,10 +8,12 @@ import type { IContextKey } from '../../contextkey/common/contextkey.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILayoutService } from '../../layout/browser/layoutService.js';
 import type { IQuickAccessController } from '../common/quickAccess.js';
-import { QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickWidget } from '../common/quickInput.js';
+import { QuickInputHideReason, QuickInputType, QuickPickFocus, type IInputOptions, type IKeyMods, type IQuickInput, type IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickWidget } from '../common/quickInput.js';
 import { endOfQuickInputBoxContext, inQuickInputContext, quickInputFocusContext, quickInputTypeContextKey } from './quickInput.js';
 import { QuickAccessController } from './quickAccess.js';
 import { QuickInputController } from './quickInputController.js';
+import type { IQuickTree, IQuickTreeItem } from '../common/quickInput.js';
+import { QuickTree } from './tree/quickTree.js';
 
 /** Owns Quick Access and the shared input host within an application's service scope. */
 export class QuickInputService extends Disposable implements IQuickInputService {
@@ -81,6 +83,11 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		let focus: IContextKey<boolean>;
 		let end: IContextKey<boolean>;
 		let widgetContext: IContextKey<boolean> | undefined;
+		const updateContext = (input: IQuickInput): void => {
+			widgetContext?.reset();
+			widgetContext = input.contextKey ? scope.createKey(input.contextKey, false) : undefined;
+			widgetContext?.set(true);
+		};
 		const controller: QuickInputController = this.instantiationService.createInstance(QuickInputController, container, className, {
 			onShow: input => {
 				for (const [owner, controller] of this.inputControllers) {
@@ -89,10 +96,7 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 					if (controller.currentQuickInput !== input) controller.currentQuickInput?.hide();
 				}
 				this.visibleInputs.add(input);
-				if (input.type === QuickInputType.QuickWidget && (input as IQuickWidget).contextKey) {
-					widgetContext = scope.createKey((input as IQuickWidget).contextKey!, false);
-					widgetContext.set(true);
-				}
+				updateContext(input);
 				type.set(input.type);
 				this.inQuickInput.set(true);
 				this.shown.fire();
@@ -105,13 +109,16 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 					}
 				}
 				this.visibleInputs.delete(input);
-				widgetContext?.reset();
-				widgetContext = undefined;
-				type.reset(); focus.reset(); end.reset();
+				if (!controller.currentQuickInput) {
+					widgetContext?.reset();
+					widgetContext = undefined;
+					type.reset(); focus.reset(); end.reset();
+				}
 				if (!this.visibleInputs.size) this.inQuickInput.reset();
 				this.hidden.fire();
 			},
 			onFocus: (withinInput, atEnd) => { focus.set(withinInput); end.set(atEnd); },
+			onContextKeyChange: updateContext,
 			getContext: target => this.contextKeyService.getContext(target),
 			// Dismissing an overlay during a window switch must leave focus in the new window.
 			shouldRestoreFocus: () => this.layoutService.activeContainer.contains(controller.getDomNode()),
@@ -145,6 +152,10 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		return this.controller.createQuickWidget();
 	}
 
+	public createQuickTree<T extends IQuickTreeItem>(): IQuickTree<T> {
+		return this.controller.createQuickTree<T>();
+	}
+
 	public input(options: IInputOptions = {}, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
 		return this.controller.input(options, token);
 	}
@@ -156,10 +167,15 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 	}
 
 	public toggle(): void {
+		if (this.currentQuickInput instanceof QuickTree) this.currentQuickInput.toggle();
 		if (this.currentQuickInput?.type === QuickInputType.QuickPick) (this.currentQuickInput as IQuickPick<IQuickPickItem>).toggle();
 	}
 
 	public navigate(next: boolean): void {
+		if (!this.currentQuickInput?.enabled) return;
+		if (this.currentQuickInput?.type === QuickInputType.QuickTree) {
+			(this.currentQuickInput as IQuickTree<IQuickTreeItem>).focus(next ? QuickPickFocus.Next : QuickPickFocus.Previous);
+		}
 		if (this.currentQuickInput?.type === QuickInputType.QuickPick) {
 			(this.currentQuickInput as IQuickPick<IQuickPickItem>).focus(next ? QuickPickFocus.Next : QuickPickFocus.Previous);
 		}
@@ -171,5 +187,5 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		await current?.accept();
 	}
 
-	public async cancel(): Promise<void> { this.currentQuickInput?.hide(); }
+	public async cancel(): Promise<void> { this.currentQuickInput?.hide(QuickInputHideReason.Gesture); }
 }

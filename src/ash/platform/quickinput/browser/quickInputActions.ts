@@ -5,8 +5,9 @@ import { CommandsRegistry } from '../../commands/common/commands.js';
 import { ContextKeyExpr, type Context, type ContextKeyValue } from '../../contextkey/common/contextkey.js';
 import { KeybindingResolver, KeybindingResolveKind } from '../../keybinding/common/keybindingResolver.js';
 import { KeybindingSource, KeybindingsRegistry, KeybindingWeight } from '../../keybinding/common/keybindingsRegistry.js';
-import { IQuickInputService, QuickInputType, QuickPickFocus, type IKeyMods, type IQuickInput, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
+import { IQuickInputService, QuickInputHideReason, QuickInputType, QuickPickFocus, type IKeyMods, type IQuickInput, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
 import { endOfQuickInputBoxContext, inQuickInputContext, quickInputFocusContext, quickInputTypeContextKey } from './quickInput.js';
+import { QuickTree } from './tree/quickTree.js';
 
 interface QuickInputCommand {
 	readonly id: string;
@@ -33,23 +34,29 @@ const commands: readonly QuickInputCommand[] = [
 
 /** Command invocation and DOM fallback share these operations; there is no second key map. */
 function run(command: QuickInputCommand, input: IQuickInput | undefined, mods?: IKeyMods): void {
-	if (!input || command.pickOnly && input.type !== QuickInputType.QuickPick) return;
+	if (!input?.enabled && command.id !== 'quickInput.hide') return;
+	if (!input || command.pickOnly && input.type !== QuickInputType.QuickPick && input.type !== QuickInputType.QuickTree) return;
+	if (command.id === 'quickInput.acceptInBackground' && input.type !== QuickInputType.QuickPick) return;
 	const picker = input.type === QuickInputType.QuickPick ? input as IQuickPick<IQuickPickItem> : undefined;
+	const tree = input instanceof QuickTree ? input : undefined;
 	if (mods && picker) picker.keyMods = mods;
-	if (command.focus !== undefined) picker?.focus(command.focus);
-	else if (command.id === 'quickInput.hide') input.hide();
-	else if (command.id === 'quickInput.toggleCheckbox') picker?.toggle();
+	if (command.focus !== undefined) (picker ?? tree)?.focus(command.focus);
+	else if (command.id === 'quickInput.hide') input.hide(QuickInputHideReason.Gesture);
+	else if (command.id === 'quickInput.toggleCheckbox') (picker ?? tree)?.toggle();
 	else void input.accept(command.id === 'quickInput.acceptInBackground');
 }
 
 for (const command of commands) {
 	CommandsRegistry.register(command.id, (accessor, mods) => run(command, accessor.get(IQuickInputService).currentQuickInput, mods as IKeyMods | undefined));
+	const selectionContext = command.id === 'quickInput.acceptInBackground'
+		? quickInputTypeContextKey.isEqualTo(QuickInputType.QuickPick)
+		: ContextKeyExpr.or(quickInputTypeContextKey.isEqualTo(QuickInputType.QuickPick), quickInputTypeContextKey.isEqualTo(QuickInputType.QuickTree));
 	const when = ContextKeyExpr.and(
 		inQuickInputContext.isEqualTo(true),
 		// An owned menu can live outside the picker. Its Escape must dismiss that menu first.
 		command.anywhere ? ContextKeyExpr.has(quickInputTypeContextKey.key) : undefined,
 		command.anywhere ? undefined : ContextKeyExpr.and(quickInputFocusContext.isEqualTo(true), ContextKeyExpr.notEquals(quickInputTypeContextKey.key, QuickInputType.QuickWidget)),
-		command.pickOnly ? quickInputTypeContextKey.isEqualTo(QuickInputType.QuickPick) : undefined,
+		command.pickOnly ? selectionContext : undefined,
 		command.endOnly ? endOfQuickInputBoxContext.isEqualTo(true) : undefined,
 	);
 	const bits = [KeyMod.CtrlCmd, KeyMod.WinCtrl, KeyMod.Alt, KeyMod.Shift];

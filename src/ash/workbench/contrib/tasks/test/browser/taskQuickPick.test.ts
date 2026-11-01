@@ -1,18 +1,25 @@
 import assert from 'node:assert/strict';
+import '../../../../../editor/test/browser/testEditorDom.js';
 import { suite, test } from 'mocha';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ITaskService } from '../../common/taskService.js';
 import type { IWorkspaceTask } from '../../common/tasks.js';
 import { TaskQuickPick, type ITaskQuickPickEntry } from '../../browser/taskQuickPick.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 
 class Picker extends Disposable {
 	readonly accepted = this._register(new Emitter<void>());
 	readonly hidden = this._register(new Emitter<void>());
 	readonly onDidAccept = this.accepted.event;
 	readonly onDidHide = this.hidden.event;
+	readonly onDidChangeValue = Event.None;
+	readonly onDidTriggerItemButton = Event.None;
+	activeItems: readonly ITaskQuickPickEntry[] = [];
+	value = '';
+	sortByLabel = true;
 	items: readonly ITaskQuickPickEntry[] = [];
 	selectedItems: readonly ITaskQuickPickEntry[] = [];
 	placeholder = '';
@@ -28,9 +35,10 @@ suite('TaskQuickPick', () => {
 	test('follows catalog updates, rejects a removed selection and returns the current task', async () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
+		using storage = new BrowserStorageService({ ownerWindow: window, workspaceId: 'task-quick-pick-test', flushInterval: 0 });
 		let catalog = [task];
 		const tasks = { get tasks() { return catalog; }, onDidChangeTasks: changes.event } as unknown as ITaskService;
-		using controller = new TaskQuickPick(tasks => tasks, tasks, { createQuickPick: () => picker } as unknown as IQuickInputService);
+		using controller = new TaskQuickPick(tasks => tasks, tasks, { createQuickPick: () => picker } as unknown as IQuickInputService, storage);
 		const result = controller.show('Select task');
 		const removed = picker.items[0]!;
 		const replacement = { ...task, id: 'check', label: 'Check', command: 'check' };
@@ -54,7 +62,8 @@ suite('TaskQuickPick', () => {
 		test(`${action} settles selection and releases its listeners`, async () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
 			using picker = new Picker();
-			using controller = new TaskQuickPick(tasks => tasks, { tasks: [task], onDidChangeTasks: changes.event } as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+			using storage = new BrowserStorageService({ ownerWindow: window, workspaceId: 'task-quick-pick-test', flushInterval: 0 });
+			using controller = new TaskQuickPick(tasks => tasks, { tasks: [task], onDidChangeTasks: changes.event } as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService, storage);
 			const result = controller.show('Configure task', { label: 'Create configuration', task: null });
 			if (action === 'cancel') picker.hide();
 			else if (action === 'dispose') controller.dispose();
@@ -67,10 +76,11 @@ suite('TaskQuickPick', () => {
 	test('accepting an old row uses the latest task configuration from the catalog', async () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
+		using storage = new BrowserStorageService({ ownerWindow: window, workspaceId: 'task-quick-pick-test', flushInterval: 0 });
 		let catalog = [task];
 		using controller = new TaskQuickPick(tasks => tasks, {
 			get tasks() { return catalog; }, onDidChangeTasks: changes.event,
-		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService, storage);
 		const result = controller.show('Configure task');
 		const oldRow = picker.items[0]!;
 		const current = { ...task, cwd: '/updated', detail: 'Updated configuration' };
@@ -84,10 +94,11 @@ suite('TaskQuickPick', () => {
 	test('a task that leaves the selected group cannot be accepted through an old row', async () => {
 		using changes = new Emitter<readonly IWorkspaceTask[]>();
 		using picker = new Picker();
+		using storage = new BrowserStorageService({ ownerWindow: window, workspaceId: 'task-quick-pick-test', flushInterval: 0 });
 		let catalog = [task];
 		using controller = new TaskQuickPick(tasks => tasks.filter(task => task.group === 'build'), {
 			get tasks() { return catalog; }, onDidChangeTasks: changes.event,
-		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+		} as unknown as ITaskService, { createQuickPick: () => picker } as unknown as IQuickInputService, storage);
 		const result = controller.show('Build task');
 		const oldRow = picker.items[0]!;
 		catalog = [{ ...task, group: 'test' }];

@@ -7,6 +7,20 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.QuickInput,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('quickInput.verbosityInvalid', 'Quick Input accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('quickInput.verbosityTitle', 'Quick Input accessibility help'); },
+		get description() { return localize('quickInput.verbosityDescription', 'Announce how to open accessibility help in Quick Pick and Quick Tree.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.Hover,
 	defaultValue: true,
 	parse(value: unknown): boolean {

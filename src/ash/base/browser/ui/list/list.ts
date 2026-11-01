@@ -31,6 +31,8 @@ export interface ListAccessibilityProvider<T> {
 	readonly getAriaSetSize?: (item: T) => number | undefined;
 	readonly getAriaPosInSet?: (item: T) => number | undefined;
 	readonly isExpanded?: (item: T) => boolean | undefined;
+	readonly isChecked?: (item: T) => boolean | 'mixed' | undefined;
+	readonly isDisabled?: (item: T) => boolean | undefined;
 }
 
 export const ListDragTargetSector = Object.freeze({ Top: 'top', CenterTop: 'center-top', CenterBottom: 'center-bottom', Bottom: 'bottom' } as const);

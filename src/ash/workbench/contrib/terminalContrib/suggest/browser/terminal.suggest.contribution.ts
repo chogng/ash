@@ -129,7 +129,7 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 		let selected: CompletionPick | undefined;
 		await new Promise<void>(resolve => {
 			lifetime.add(picker.onDidAccept(() => { selected = picker.selectedItems[0]; picker.hide(); }));
-			lifetime.add(picker.onDidHide(resolve));
+			lifetime.add(picker.onDidHide(() => resolve()));
 			picker.show();
 		});
 		if (!selected || !canSend() || selected.isValid?.() === false) return;

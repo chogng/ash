@@ -194,6 +194,7 @@ export class LabelActionViewItem extends ActionViewItem {
 		const button = h(container.ownerDocument, 'button');
 		const label = h(container.ownerDocument, 'span');
 		button.className = 'ash-action-label';
+		if (this.action.class) button.classList.add(...this.action.class.split(/\s+/).filter(Boolean));
 		button.type = 'button';
 		button.disabled = !this.action.enabled;
 		if (this.action.checked !== undefined) {
@@ -213,7 +214,13 @@ export class LabelActionViewItem extends ActionViewItem {
 		label.className = 'ash-action-label-text';
 		label.textContent = this.options.label ?? this.action.label;
 		button.append(label);
-		this._register(addDisposableListener(button, 'click', () => this.runActionWithContext()));
+		this._register(addDisposableListener(button, 'click', () => {
+			this.runActionWithContext();
+			if (this.action.checked !== undefined) {
+				button.classList.toggle('checked', this.action.checked);
+				setAriaAttribute(button, 'pressed', this.action.checked);
+			}
+		}));
 		this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));
 		this.button = button;

@@ -8,6 +8,7 @@ export interface IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	readonly class?: string;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
 	readonly badge?: string;

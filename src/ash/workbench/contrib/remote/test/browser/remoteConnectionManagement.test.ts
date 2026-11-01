@@ -1,5 +1,5 @@
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { strict as assert } from 'node:assert';
@@ -188,6 +188,7 @@ class TestQuickInputService implements IQuickInputService {
 	navigate = quickInputServiceTestControls.navigate;
 	accept = quickInputServiceTestControls.accept;
 	cancel = quickInputServiceTestControls.cancel;
+	createQuickTree = quickInputServiceTestControls.createQuickTree;
 	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	readonly pickers: TestQuickPick<IQuickPickItem>[] = [];
@@ -201,6 +202,20 @@ class TestQuickInputService implements IQuickInputService {
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
+	title: string | undefined;
+	description: string | undefined;
+	step: number | undefined;
+	totalSteps: number | undefined;
+	buttons: IQuickInput['buttons'] = [];
+	enabled = true;
+	busy = false;
+	contextKey: string | undefined;
+	ignoreFocusOut = false;
+	readonly onWillHide = Event.None;
+	readonly onDispose = Event.None;
+	readonly onDidTriggerButton = Event.None;
+	willHide(): void { }
+	didHide(): void { }
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
 	focus(): void { }
@@ -213,7 +228,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	sortByLabel = true;
 	private readonly acceptEmitter = new Emitter<IQuickPickDidAcceptEvent>();
 	private readonly valueEmitter = new Emitter<string>();
-	private readonly hideEmitter = new Emitter<void>();
+	private readonly hideEmitter = new Emitter<IQuickInputHideEvent>();
 	private visible = false;
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidChangeValue = this.valueEmitter.event;
@@ -241,7 +256,7 @@ class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
 	hide(): void {
 		if (!this.visible) return;
 		this.visible = false;
-		this.hideEmitter.fire();
+		this.hideEmitter.fire({ reason: QuickInputHideReason.Other });
 	}
 	dispose(): void {
 		this.acceptEmitter.dispose();

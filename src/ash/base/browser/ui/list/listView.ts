@@ -423,6 +423,8 @@ export class ListView<T> extends Disposable {
 		this.setNumericAria(row, 'aria-posinset', accessibility?.getAriaPosInSet?.(item));
 		const expanded = accessibility?.isExpanded?.(item);
 		setAriaAttribute(row, 'expanded', expanded);
+		setAriaAttribute(row, 'checked', accessibility?.isChecked?.(item));
+		setAriaAttribute(row, 'disabled', accessibility?.isDisabled?.(item));
 		const ariaLabel = accessibility?.getAriaLabel?.(item);
 		setAriaAttribute(row, 'label', ariaLabel || undefined);
 	}

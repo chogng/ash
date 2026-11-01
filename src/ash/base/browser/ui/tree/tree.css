@@ -206,6 +206,10 @@
 	flex: 1 1 auto;
 }
 
+.ash-tree-template {
+	display: contents;
+}
+
 .ash-tree-find-widget {
 	display: flex;
 	position: absolute;

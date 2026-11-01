@@ -7,13 +7,16 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { localize } from '../../../nls.js';
-import { QuickInputType, type IInputOptions, type IQuickInput, type IQuickPick, type IQuickPickItem, type IQuickWidget } from '../common/quickInput.js';
+import { QuickInputHideReason, QuickInputType, type IInputOptions, type IQuickInput, type IQuickPick, type IQuickPickItem, type IQuickTree, type IQuickTreeItem, type IQuickWidget } from '../common/quickInput.js';
+import { QuickTree } from './tree/quickTree.js';
 import type { Context } from '../../contextkey/common/contextkey.js';
 import { dispatchQuickInputKeyDown } from './quickInputActions.js';
-import { QuickPick, QuickWidget, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
+import { QuickInput, QuickPick, QuickWidget, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
 import { QuickInputBox } from './quickInputBox.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { IOpenerService } from '../../opener/common/opener.js';
+import { IContextMenuService } from '../../contextview/browser/contextView.js';
 
 const viewStateStorageKey = 'workbench.quickInput.viewState';
 
@@ -31,6 +34,7 @@ export class QuickInputController extends Disposable {
 	private readonly hidden = this._register(new Emitter<void>());
 	private active: IBrowserQuickInputHost | undefined;
 	private focusToRestore: HTMLElement | undefined;
+	private hidingFocus: HTMLElement | undefined;
 	private readonly visibleListeners = this._register(new DisposableStore());
 	private readonly dragListeners = this._register(new DisposableStore());
 	private viewState: QuickInputViewState | undefined;
@@ -43,6 +47,7 @@ export class QuickInputController extends Disposable {
 	constructor(container: HTMLElement, className: string | undefined, private readonly callbacks: {
 		readonly onShow?: (input: IQuickInput) => void;
 		readonly onHide?: (input: IQuickInput) => void;
+		readonly onContextKeyChange?: (input: IQuickInput) => void;
 		readonly onFocus?: (inputOrList: boolean, atEnd: boolean) => void;
 		readonly getContext?: (target: Node) => Context;
 		readonly shouldRestoreFocus?: () => boolean;
@@ -70,10 +75,10 @@ export class QuickInputController extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
-			if ((this.active instanceof QuickPick || this.active instanceof QuickWidget) && this.active.ignoreFocusOut) return;
-			const anchor = this.active instanceof QuickPick ? this.active.anchor : undefined;
+			if (this.active?.ignoreFocusOut || this.active?.isContextMenuVisible) return;
+			const anchor = this.active?.anchor;
 			if (this.active && !event.composedPath().includes(this.host) && !(isHTMLElement(anchor) && event.composedPath().includes(anchor))) {
-				this.active.hide();
+				this.active.hide(QuickInputHideReason.Blur);
 			}
 		}, true));
 		// Modifier state belongs to the existing picker, including commands rebound by the host.
@@ -117,8 +122,9 @@ export class QuickInputController extends Disposable {
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		this.assertNotDisposed();
 		const quickPick = this.instantiationService.createInstance(QuickPick<TItem>, this.host, {
+			onContextKeyChange: candidate => this.callbacks.onContextKeyChange?.(candidate),
 			onShow: candidate => this.show(candidate),
-			onHide: candidate => this.hide(candidate),
+			onHide: (candidate, reason) => this.hide(candidate, reason),
 			onDispose: candidate => {
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
@@ -130,16 +136,29 @@ export class QuickInputController extends Disposable {
 
 	public createQuickWidget(): IQuickWidget {
 		this.assertNotDisposed();
-		const widget = new QuickWidget(this.host, {
+		const widget = this.instantiationService.createInstance(QuickWidget, this.host, {
+			onContextKeyChange: candidate => this.callbacks.onContextKeyChange?.(candidate),
 			onShow: candidate => this.show(candidate),
-			onHide: candidate => this.hide(candidate),
+			onHide: (candidate, reason) => this.hide(candidate, reason),
 			onDispose: candidate => {
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
-		});
+		} satisfies BrowserQuickInputHostOptions);
 		this.quickInputs.add(widget);
 		return widget;
+	}
+
+	public createQuickTree<T extends IQuickTreeItem>(): IQuickTree<T> {
+		this.assertNotDisposed();
+		const tree = this.instantiationService.createInstance(QuickTree<T>, this.host, {
+			onContextKeyChange: candidate => this.callbacks.onContextKeyChange?.(candidate),
+			onShow: candidate => this.show(candidate),
+			onHide: (candidate, reason) => this.hide(candidate, reason),
+			onDispose: candidate => { this.quickInputs.delete(candidate); this.hide(candidate); },
+		} satisfies BrowserQuickInputHostOptions);
+		this.quickInputs.add(tree);
+		return tree;
 	}
 
 	public input(options: IInputOptions, token: CancellationToken = CancellationToken.None): Promise<string | undefined> {
@@ -149,16 +168,17 @@ export class QuickInputController extends Disposable {
 		}
 		let cancellation: IDisposable | undefined;
 		const listeners = new DisposableStore();
-		const input = new InputQuickInput(this.host, options, {
+		const input = this.instantiationService.createInstance(InputQuickInput, this.host, options, {
+			onContextKeyChange: candidate => this.callbacks.onContextKeyChange?.(candidate),
 			onShow: candidate => this.show(candidate),
-			onHide: candidate => this.hide(candidate),
+			onHide: (candidate, reason) => this.hide(candidate, reason),
 			onDispose: candidate => {
 				cancellation?.dispose();
 				listeners.dispose();
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
-		});
+		} satisfies BrowserQuickInputHostOptions);
 		this.quickInputs.add(input);
 		return new Promise((resolve, reject) => {
 			let settled = false;
@@ -201,7 +221,7 @@ export class QuickInputController extends Disposable {
 
 	/** Custom coordinates use the same host-relative fractions as saved positions. */
 	public setAlignment(alignment: 'top' | 'center' | { top: number; left: number; }): void {
-		if (this.active instanceof QuickPick && isHTMLElement(this.active.anchor)) return;
+		if (this.active?.anchor) return;
 		this.dragListeners.clear();
 		this.viewState = alignment === 'top' ? undefined : alignment === 'center' ? { top: 0.25, left: 0.5 } : alignment;
 		this.saveViewState();
@@ -235,10 +255,11 @@ export class QuickInputController extends Disposable {
 
 	private isDragTarget(target: EventTarget | null): boolean {
 		if (!this.active || !isHTMLElement(target)) return false;
-		if (this.active instanceof QuickPick && isHTMLElement(this.active.anchor)) return false;
+		if (this.active.anchor) return false;
 		// Only surface/header whitespace is draggable; fields, tabs and actions keep their input behavior.
 		return target === this.active.element
-			|| target.parentElement === this.active.element && target.classList.contains('ash-quick-pick-input');
+			|| target.parentElement === this.active.element && target.classList.contains('ash-quick-pick-input')
+			|| !!target.closest('.ash-quick-input-titlebar') && !target.closest('button');
 	}
 
 	private startDrag(event: MouseEvent): void {
@@ -288,7 +309,7 @@ export class QuickInputController extends Disposable {
 	private layoutActiveInput(): void {
 		const input = this.active;
 		if (!input) return;
-		if (this.viewState && !(input instanceof QuickPick && isHTMLElement(input.anchor))) {
+		if (this.viewState && !input.anchor) {
 			const element = input.element;
 			const desiredLeft = this.viewState.left * this.host.clientWidth - element.offsetWidth / 2;
 			const desiredTop = this.viewState.top * this.host.clientHeight;
@@ -299,7 +320,7 @@ export class QuickInputController extends Disposable {
 		} else {
 			input.element.style.removeProperty('transform');
 		}
-		if (input instanceof QuickPick) input.layout();
+		input.layout();
 	}
 
 	private show(quickPick: IBrowserQuickInputHost): void {
@@ -309,17 +330,26 @@ export class QuickInputController extends Disposable {
 		}
 		this.active?.hide();
 		const focused = this.host.ownerDocument.activeElement;
-		this.focusToRestore = isHTMLElement(focused) ? focused : undefined;
+		this.focusToRestore = this.hidingFocus ?? (isHTMLElement(focused) ? focused : undefined);
 		this.active = quickPick;
 		this.host.replaceChildren(quickPick.element);
 		this.host.hidden = false;
 		this.viewState = this.loadViewState();
-		const anchor = quickPick instanceof QuickPick ? quickPick.anchor : undefined;
-		quickPick.element.classList.toggle('anchored', isHTMLElement(anchor));
+		const anchor = quickPick.anchor;
+		quickPick.element.classList.toggle('anchored', !!anchor);
+		if (!anchor) for (const property of ['width', 'left', 'top']) quickPick.element.style.removeProperty(property);
 		if (!isHTMLElement(anchor)) {
 			this.visibleListeners.add(observeResize(quickPick.element, () => this.layoutActiveInput()));
 		}
-		if (quickPick instanceof QuickPick && isHTMLElement(anchor)) {
+		const checkFocus = this.visibleListeners.add(new RunOnceScheduler(() => {
+			const focused = this.host.ownerDocument.activeElement;
+			if (!quickPick.ignoreFocusOut && !quickPick.isContextMenuVisible && !quickPick.element.contains(focused) && !(isHTMLElement(anchor) && anchor.contains(focused))) quickPick.hide(QuickInputHideReason.Blur);
+		}, 0));
+		this.visibleListeners.add(addDisposableListener(quickPick.element, 'focusout', () => checkFocus.schedule()));
+		this.visibleListeners.add(addDisposableListener(this.host.ownerDocument.defaultView!, 'blur', () => {
+			if (!quickPick.ignoreFocusOut && !quickPick.isContextMenuVisible) quickPick.hide(QuickInputHideReason.Blur);
+		}));
+		if (isHTMLElement(anchor)) {
 			this.focusToRestore = anchor;
 			const layout = (): void => quickPick.layout();
 			// Composer content can move a toolbar button without changing the button's own size.
@@ -333,15 +363,8 @@ export class QuickInputController extends Disposable {
 				this.visibleListeners.add(addDisposableListener(viewport, 'resize', layout));
 				this.visibleListeners.add(addDisposableListener(viewport, 'scroll', layout));
 			}
-			const checkFocus = this.visibleListeners.add(new RunOnceScheduler(() => {
-				// Native focus changes briefly pass through body before reaching the trigger.
-				// Check after that transition; leaving the document produces no focusin event.
-				const focused = this.host.ownerDocument.activeElement;
-				if (!quickPick.ignoreFocusOut && !quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
-			}, 0));
-			this.visibleListeners.add(quickPick.onDidBlur(() => checkFocus.schedule()));
 			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'focusin', event => {
-				if (!quickPick.ignoreFocusOut && !event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
+				if (!quickPick.ignoreFocusOut && !quickPick.isContextMenuVisible && !event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide(QuickInputHideReason.Blur);
 			}));
 		}
 		this.shown.fire();
@@ -350,83 +373,61 @@ export class QuickInputController extends Disposable {
 		quickPick.focus();
 	}
 
-	private hide(quickPick: IBrowserQuickInputHost): void {
+	private hide(quickPick: IBrowserQuickInputHost, reason = QuickInputHideReason.Other): void {
 		if (this.active !== quickPick) {
 			return;
 		}
-		const shouldRestoreFocus = this.callbacks.shouldRestoreFocus?.() !== false && quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.active = undefined;
+		const shouldRestoreFocus = this.callbacks.shouldRestoreFocus?.() !== false && quickPick.element.contains(this.host.ownerDocument.activeElement);
 		this.dragListeners.clear();
 		this.visibleListeners.clear();
-		this.host.replaceChildren();
-		this.host.hidden = true;
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
-		this.hidden.fire();
-		this.callbacks.onHide?.(quickPick);
-		if (shouldRestoreFocus && focusToRestore?.isConnected) {
-			focusToRestore.focus({ preventScroll: true });
+		this.hidingFocus = focusToRestore;
+		try {
+			quickPick.willHide(reason);
+			quickPick.element.remove();
+			if (!this.active) this.host.hidden = true;
+			this.hidden.fire();
+			this.callbacks.onHide?.(quickPick);
+			if (!this.active && shouldRestoreFocus && focusToRestore?.isConnected) focusToRestore.focus({ preventScroll: true });
+			quickPick.didHide(reason);
+		} finally {
+			this.hidingFocus = undefined;
 		}
 	}
 }
 
-class InputQuickInput extends Disposable implements IBrowserQuickInputHost {
+class InputQuickInput extends QuickInput {
 	public readonly type = QuickInputType.InputBox;
-	public readonly element: HTMLDivElement;
 	public readonly onDidAccept: Event<string>;
-	public readonly onDidHide: Event<void>;
 	public readonly onDidError: Event<unknown>;
 	private readonly inputBox: QuickInputBox;
 	private readonly acceptEmitter = this._register(new Emitter<string>());
-	private readonly hideEmitter = this._register(new Emitter<void>());
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
-	private visible = false;
 
-	constructor(host: HTMLElement, options: IInputOptions, private readonly hostOptions: BrowserQuickInputHostOptions) {
-		super();
-		this.element = h(host.ownerDocument, 'div');
-		this.element.className = 'ash-quick-pick';
+	constructor(host: HTMLElement, options: IInputOptions, hostOptions: BrowserQuickInputHostOptions, @IOpenerService opener: IOpenerService, @IContextMenuService menus: IContextMenuService) {
+		super(host, hostOptions, opener, menus, 'ash-quick-pick');
 		setRole(this.element, 'dialog');
 		setAriaAttribute(this.element, 'label', options.title ?? localize('quickInput.inputTitle', 'Quick Input'));
 		this.inputBox = this._register(new QuickInputBox(this.element, options));
+		this.element.append(this.descriptionElement, this.progress);
+		this.title = options.title;
 		this.onDidAccept = this.acceptEmitter.event;
-		this.onDidHide = this.hideEmitter.event;
 		this.onDidError = this.errorEmitter.event;
 		this._register(this.inputBox.onDidAccept(value => {
 			this.acceptEmitter.fire(value);
 			this.hide();
 		}));
 		this._register(this.inputBox.onDidError(error => this.errorEmitter.fire(error)));
-		this._register(toDisposable(() => {
-			this.hide();
-			hostOptions.onDispose(this);
-			this.element.remove();
-		}));
+		this._register(this.onWillHide(() => this.inputBox.clear()));
 	}
 
-	public show(): void {
-		if (this.visible) {
-			this.focus();
-			return;
-		}
-		this.visible = true;
-		this.hostOptions.onShow(this);
-		this.focus();
-	}
-
-	public hide(): void {
-		if (!this.visible) {
-			return;
-		}
-		this.visible = false;
-		this.inputBox.clear();
-		this.hostOptions.onHide(this);
-		this.hideEmitter.fire();
-	}
+	protected override updateEnabled(): void { this.inputBox.enabled = this.enabled; }
 
 	public focus(): void {
 		this.inputBox.focus();
 	}
 
-	public accept(): Promise<void> { return this.inputBox.accept(); }
+	public async accept(): Promise<void> { if (this.enabled) await this.inputBox.accept(); }
 }

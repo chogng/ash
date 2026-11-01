@@ -1,5 +1,5 @@
 import { mapDragAndDropData, type DragAndDropData } from '../dnd/dnd.js';
-import type { ListDragOverPosition, ListDragTargetSector } from '../list/list.js';
+import type { IListRenderer, ListDragOverPosition, ListDragTargetSector } from '../list/list.js';
 import type { ContextMenuAnchor } from '../../contextmenu.js';
 
 export interface TreeContextMenuEvent<T> {
@@ -15,11 +15,24 @@ export const TreeVisibility = Object.freeze({
 } as const);
 
 export type TreeVisibility = typeof TreeVisibility[keyof typeof TreeVisibility];
-export type TreeFilterResult = boolean | TreeVisibility;
-
-export interface TreeFilter<T> {
-	filter(element: T, parentVisibility: TreeVisibility): TreeFilterResult;
+export interface ITreeFilterDataResult<T> {
+	readonly visibility: boolean | TreeVisibility;
+	readonly data: T;
 }
+
+export type TreeFilterResult<T = unknown> = boolean | TreeVisibility | ITreeFilterDataResult<T>;
+
+export interface TreeFilter<T, TFilterData = unknown> {
+	filter(element: T, parentVisibility: TreeVisibility): TreeFilterResult<TFilterData>;
+}
+
+export interface ITreeNode<T, TFilterData = unknown> extends AbstractTreeNode<T> {
+	readonly filterData: TFilterData;
+	readonly parent: ITreeNode<T, TFilterData> | undefined;
+	readonly children: readonly ITreeNode<T, TFilterData>[];
+}
+
+export interface ITreeRenderer<T, TFilterData, TTemplateData> extends IListRenderer<ITreeNode<T, TFilterData>, TTemplateData> { }
 
 export interface TreeSorter<T> {
 	compare(left: T, right: T): number;

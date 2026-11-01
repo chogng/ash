@@ -1,8 +1,9 @@
-import type { ListAccessibilityProvider } from '../list/list.js';
+import type { IListElementRenderDetails, IListVirtualDelegate, ListAccessibilityProvider } from '../list/list.js';
+import { RowCache, type IRow } from '../list/rowCache.js';
 import type { IFindWidgetStyles } from './abstractTree.js';
 import type { IListStyles } from '../list/listWidget.js';
 import { Emitter, Event } from '../../../common/event.js';
-import type { TreeContextMenuEvent } from './tree.js';
+import type { ITreeNode, ITreeRenderer, TreeContextMenuEvent } from './tree.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import type { ListScrolling } from '../list/list.js';
 import { AbstractTree } from './abstractTree.js';
@@ -14,7 +15,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly styles?: IListStyles;
 	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
-	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<TNode>, 'getAriaLabel'>;
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<TNode>, 'getAriaLabel' | 'isChecked' | 'isDisabled'>;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
@@ -37,7 +38,17 @@ export interface ObjectTreeOptions<TNode> {
 	/** Releases resources for a discarded row or replaced payload; data-tree-id identifies its model node. */
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly renderElement: (element: TNode, node: ObjectTreeNode<TNode>) => HTMLElement;
+	readonly virtualDelegate?: never;
+	readonly renderers?: never;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
+}
+
+/** Template renderers own reusable content, while the tree retains row structure and ARIA. */
+export interface ObjectTreeRendererOptions<T> extends Omit<ObjectTreeOptions<T>, 'renderElement' | 'virtualDelegate' | 'renderers' | 'getHeight'> {
+	readonly renderElement?: never;
+	readonly getHeight?: never;
+	readonly virtualDelegate: IListVirtualDelegate<T>;
+	readonly renderers: readonly ITreeRenderer<T, any, any>[];
 }
 
 export interface ObjectTreeActivateEvent<TNode> {
@@ -117,11 +128,28 @@ export class ObjectTree<TNode> extends Disposable {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
 	}
 
-	constructor(container: HTMLElement, options: ObjectTreeOptions<TNode>) {
+	constructor(container: HTMLElement, options: ObjectTreeOptions<TNode> | ObjectTreeRendererOptions<TNode>) {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.onWillRender = options.onWillRender;
 		this.model = this._register(new ObjectTreeModel(options.modelOptions));
+		const renderers = new Map(options.renderers?.map(renderer => [renderer.templateId, renderer]));
+		if (renderers.size ? !options.virtualDelegate || options.renderElement : !options.renderElement) {
+			this.dispose();
+			throw new TypeError('ObjectTree requires either a render callback or a virtual delegate with renderers');
+		}
+		const templates = renderers.size ? this._register(new RowCache<ITreeNode<TNode>>(renderers, container.ownerDocument)) : undefined;
+		const mounted = new Map<HTMLElement, { row: IRow; node: ObjectTreeNode<TNode>; index: number; details: IListElementRenderDetails; }>();
+		const release = (row: HTMLDivElement): void => {
+			const content = row.querySelector<HTMLElement>(':scope > .ash-tree-row-inner > .ash-tree-contents')?.firstElementChild;
+			const entry = content && mounted.get(content as HTMLElement);
+			if (entry) {
+				mounted.delete(content as HTMLElement);
+				try { renderers.get(entry.row.templateId)!.disposeElement?.(entry.node, entry.index, entry.row.templateData, entry.details); }
+				finally { templates!.release(entry.row); }
+			}
+			options.onDidRemoveRow?.(row);
+		};
 		this.tree = this._register(new AbstractTree(container, {
 			styles: options.styles,
 			findWidgetStyles: options.findWidgetStyles,
@@ -134,7 +162,7 @@ export class ObjectTree<TNode> extends Disposable {
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
-			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
+			getHeight: options.virtualDelegate ? node => options.virtualDelegate!.getHeight(node.element) : options.getHeight ? node => options.getHeight!(node.element) : undefined,
 			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
 			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider ? { getKeyboardNavigationLabel: (element) => options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element) } : undefined,
 			findMode: options.findMode,
@@ -143,9 +171,32 @@ export class ObjectTree<TNode> extends Disposable {
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-			reuseRows: options.reuseRows,
-			onDidRemoveRow: options.onDidRemoveRow,
-			renderElement: (node) => options.renderElement(node.element, node),
+			reuseRows: templates ? false : options.reuseRows,
+			onDidRemoveRow: templates ? release : options.onDidRemoveRow,
+			updateElement: templates ? (node, index, content) => {
+				const entry = mounted.get(content);
+				if (!entry || entry.index === index) return;
+				const renderer = renderers.get(entry.row.templateId)!;
+				renderer.disposeElement?.(entry.node, entry.index, entry.row.templateData, entry.details);
+				entry.node = node;
+				entry.index = index;
+				renderer.renderElement(node, index, entry.row.templateData, entry.details);
+			} : undefined,
+			renderElement: (node, index) => {
+				if (!templates) return options.renderElement!(node.element, node);
+				const { row } = templates.alloc(options.virtualDelegate!.getTemplateId(node.element));
+				row.domNode.classList.add('ash-tree-template');
+				const renderer = renderers.get(row.templateId)!;
+				const details = { height: options.virtualDelegate!.getHeight(node.element) };
+				try { renderer.renderElement(node, index, row.templateData, details); }
+				catch (error) {
+					try { renderer.disposeElement?.(node, index, row.templateData, details); }
+					finally { templates.release(row); }
+					throw error;
+				}
+				mounted.set(row.domNode, { row, node, index, details });
+				return row.domNode;
+			},
 			renderTwistie: options.renderTwistie
 				? (node, state, container) => options.renderTwistie!(node.element, state, container)
 				: undefined,
@@ -161,6 +212,7 @@ export class ObjectTree<TNode> extends Disposable {
 				return;
 			}
 			this.render(kind === 'structure' || kind === 'sort', visibleSplice);
+			if (templates && kind === 'filter') for (const node of this.model.visibleNodes) this.tree.rerender(node.id);
 		}));
 		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });

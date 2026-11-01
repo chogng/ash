@@ -26,7 +26,7 @@ export class BrowserEditorEmulationSupport extends Disposable {
 		let selection: IQuickPickItem & { device?: IBrowserDeviceProfile; } | undefined;
 		using pending = toDisposable(() => picker.hide());
 		await new Promise<void>(resolve => {
-			listeners.add(picker.onDidHide(resolve));
+			listeners.add(picker.onDidHide(() => resolve()));
 			listeners.add(picker.onDidAccept(() => { selection = picker.selectedItems[0]; picker.hide(); }));
 			this.pendingPicker.value = pending;
 			picker.show();
