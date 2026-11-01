@@ -347,7 +347,13 @@ export class ListView<T> extends Disposable {
 			row.classList.add(DndCssClasses.Draggable);
 		}
 		this.updateAccessibility(row, item, true);
-		this.renderer.renderElement(item, index, row);
+		try {
+			this.renderer.renderElement(item, index, row);
+		} catch (error) {
+			// A failed render never enters renderedRows, so release its element resources here.
+			this.releaseRow(row, item, index);
+			throw error;
+		}
 		return row;
 	}
 

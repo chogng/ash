@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ListView } from '../../../../browser/ui/list/listView.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../common/utils.js';
 
 suite('ListView streamed row insertion', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
 	test('inserts a whole burst with one live DOM mutation', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
@@ -66,4 +69,116 @@ suite('ListView streamed row insertion', () => {
 		} finally { dom.window.close(); }
 	});
 
+});
+
+suite('ListView render failure cleanup', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('releases a partially rendered row before recovering from a failed splice', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const activeRows = new Set<HTMLElement>();
+		const removedItems: string[] = [];
+		const renderError = new Error('Render failed');
+		try {
+			{
+				using list = new ListView<string>(dom.window.document.body, {
+					getId: item => item,
+					renderItem: (item, _index, row) => {
+						activeRows.add(row);
+						if (item === 'failing') {
+							throw renderError;
+						}
+						return Object.assign(dom.window.document.createElement('span'), { textContent: item });
+					},
+					onDidRemoveRow: row => {
+						activeRows.delete(row);
+						removedItems.push(row.dataset.listId!);
+					},
+				});
+				assert.throws(() => list.splice(0, 0, ['retained', 'failing']), error => error === renderError);
+				assert.deepEqual(removedItems, ['failing']);
+				assert.deepEqual([...activeRows].map(row => row.dataset.listId), ['retained']);
+
+				list.splice(1, 1, ['recovered']);
+				assert.deepEqual([...list.element.children].map(row => row.textContent), ['retained', 'recovered']);
+				assert.equal(activeRows.size, 2);
+			}
+			assert.equal(activeRows.size, 0);
+			assert.deepEqual(removedItems, ['failing', 'retained', 'recovered']);
+		} finally { dom.window.close(); }
+	});
+
+	test('releases resources from both the previous row and a failed rerender', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const activeRows = new Set<HTMLElement>();
+		let shouldFail = false;
+		let removals = 0;
+		const renderError = new Error('Rerender failed');
+		try {
+			{
+				using list = new ListView<string>(dom.window.document.body, {
+					renderItem: (item, _index, row) => {
+						activeRows.add(row);
+						if (shouldFail) {
+							throw renderError;
+						}
+						return Object.assign(dom.window.document.createElement('span'), { textContent: item });
+					},
+					onDidRemoveRow: row => {
+						activeRows.delete(row);
+						removals++;
+					},
+				});
+				list.items = ['item'];
+				assert.equal(activeRows.size, 1);
+				shouldFail = true;
+				assert.throws(() => list.rerender(0), error => error === renderError);
+				assert.equal(activeRows.size, 0);
+				assert.equal(list.element.childElementCount, 0);
+				assert.equal(removals, 2);
+			}
+			assert.equal(removals, 2);
+		} finally { dom.window.close(); }
+	});
+
+	test('disposes a failing list before queued resize observers can render again', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const observations = new Set<TestResizeObserver>();
+		class TestResizeObserver implements ResizeObserver {
+			constructor(private readonly callback: ResizeObserverCallback) { }
+			public observe(): void { observations.add(this); }
+			public unobserve(): void { }
+			public disconnect(): void { observations.delete(this); }
+			public deliver(): void { this.callback([], this); }
+		}
+		Object.defineProperty(dom.window, 'ResizeObserver', { value: TestResizeObserver });
+		const renderedItems: string[] = [];
+		const renderError = new Error('Render failed');
+		try {
+			const resizeDelivery = Promise.resolve().then(() => {
+				for (const observer of observations) {
+					observer.deliver();
+				}
+			});
+			{
+				// Release the deliberately failing renderer before yielding to layout delivery.
+				using list = new ListView<string>(dom.window.document.body, {
+					scrolling: 'managed',
+					renderItem: item => {
+						renderedItems.push(item);
+						if (item === 'failing') {
+							throw renderError;
+						}
+						return Object.assign(dom.window.document.createElement('span'), { textContent: item });
+					},
+				});
+				assert.ok(observations.size > 0);
+				assert.throws(() => list.splice(0, 0, ['retained', 'failing']), error => error === renderError);
+			}
+			assert.equal(observations.size, 0);
+			assert.equal(dom.window.document.body.childElementCount, 0);
+			await resizeDelivery;
+			assert.deepEqual(renderedItems, ['retained', 'failing']);
+		} finally { dom.window.close(); }
+	});
 });
