@@ -479,6 +479,7 @@ export class ActionBar extends Disposable {
 	private onDragOver(event: DragEvent, duration = 0): void {
 		const { entry, position } = this.dropTargetFromEvent(event);
 		if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.clearDropTarget();
 			return;
 		}
@@ -493,6 +494,7 @@ export class ActionBar extends Disposable {
 	private onDrop(event: DragEvent): void {
 		const { entry, position } = this.dropTargetFromEvent(event);
 		if (!this.dragAndDrop?.canDrop(event, entry?.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.endDrag();
 			return;
 		}
@@ -504,6 +506,7 @@ export class ActionBar extends Disposable {
 	private onEntryDragEnter(entry: ActionBarEntry, event: DragEvent): void {
 		const position = this.dropPositionForEntry(entry, event);
 		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.clearDropTarget();
 			return;
 		}
@@ -515,6 +518,7 @@ export class ActionBar extends Disposable {
 	private onEntryDragOver(entry: ActionBarEntry, event: DragEvent, duration: number): void {
 		const position = this.dropPositionForEntry(entry, event);
 		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.clearDropTarget();
 			return;
 		}
@@ -526,6 +530,7 @@ export class ActionBar extends Disposable {
 	private onEntryDrop(entry: ActionBarEntry, event: DragEvent): void {
 		const position = this.dropPositionForEntry(entry, event);
 		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) {
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
 			this.endDrag();
 			return;
 		}

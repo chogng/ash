@@ -505,7 +505,15 @@ suite('ActionBar drag feedback lifecycle', () => {
 					target.dispatchEvent(dragEvent(dom.window, 'dragover', coordinate));
 					assert.equal(second.classList.contains('ash-dnd-drop-after'), true);
 					acceptsDrop = false;
-					target.dispatchEvent(dragEvent(dom.window, 'drop', coordinate));
+					const transfer = { dropEffect: 'copy' };
+					for (const type of destination === 'item' ? ['dragenter', 'dragover', 'drop'] : ['dragover', 'drop']) {
+						transfer.dropEffect = 'copy';
+						const event = dragEvent(dom.window, type, coordinate);
+						Object.defineProperty(event, 'dataTransfer', { value: transfer });
+						target.dispatchEvent(event);
+						assert.equal(transfer.dropEffect, 'none', `Rejected ${type} must not retain an allowed cursor`);
+						assert.equal(second.classList.contains('ash-dnd-drop-after'), false);
+					}
 					assert.equal(bar.element.querySelector('.ash-dnd-drop-after, .ash-dnd-dragging'), null);
 					assert.equal(dropped, 0);
 					assert.equal(ended, origin === 'internal' ? 1 : 0);

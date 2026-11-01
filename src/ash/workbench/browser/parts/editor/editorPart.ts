@@ -260,10 +260,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.dialogService = options.dialogService;
 		this.fileDialogService = options.fileDialogService;
-		this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
-			this.dragOverlays.clear();
-			this.dropEditor(event);
-		});
+		this.tabDragAndDrop = new EditorTabDragAndDropController(event => this.dropEditor(event), () => this.dragOverlays.clear());
 		const initial = this.createGroup();
 		this._groups.push(initial);
 		this._activeGroup = initial.group;
@@ -273,9 +270,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			size: 1,
 		}, { styles: EDITOR_GROUP_GRID_STYLES });
 		this.observeGrid();
-		this._register(new EditorDropTarget(
+		this._register(instantiationService.createInstance(EditorDropTarget,
 			this.contentDomNode,
-			target => this._groups.find(host => host.group.domNode.contains(target))?.group,
+			(target: Node) => this._groups.find(host => host.group.domNode.contains(target))?.group,
 			this.tabDragAndDrop,
 		));
 		this.modalEditor = this._register(instantiationService.createInstance(ModalEditorPart, {
@@ -981,7 +978,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			overlay.className = 'ash-editor-drop-overlay';
 			overlay.setAttribute('data-browser-overlay', 'editor-drop');
 			overlay.setAttribute('aria-hidden', 'true');
-			overlay.style.top = `${group.titleHeight.total}px`;
+			overlay.style.top = `${group.titleHeight.offset}px`;
 			group.domNode.append(overlay);
 			this.dragOverlays.add(toDisposable(() => overlay.remove()));
 		}
@@ -1002,8 +999,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				startGroup: source => { this.tabDragAndDrop.startGroup(source); this.showDragOverlays(); },
 				isDragging: () => this.tabDragAndDrop.isDragging(),
 				getOperation: (target, copyRequested, splitDirection) => this.tabDragAndDrop.getOperation(target, copyRequested, splitDirection),
+				getGroupDropOperation: (target, copyRequested) => this.tabDragAndDrop.getGroupDropOperation(target, copyRequested),
 				drop: (target, targetInput, position, splitDirection, copyRequested) => this.tabDragAndDrop.drop(target, targetInput, position, splitDirection, copyRequested),
-				end: () => { this.tabDragAndDrop.end(); this.dragOverlays.clear(); },
+				end: () => this.tabDragAndDrop.end(),
 			},
 		} satisfies EditorGroupOptions);
 		const listeners = new DisposableStore();
@@ -1092,6 +1090,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private dropEditor(event: EditorTabDropEvent): void {
 		const source = event.source;
+		// Dropping back into the same content area is not a tab-strip reorder.
+		if (source === event.target && event.targetArea === 'content' && event.splitDirection === undefined) return;
 		if (source && event.wholeGroup && !event.copy && this.groupHosts.get(source.id)?.group === source) {
 			if (source === event.target) return;
 			if (event.splitDirection !== undefined) {

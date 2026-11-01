@@ -1178,6 +1178,105 @@ for (const pin of [true, false]) {
 	});
 }
 
+for (const sticky of [false, true]) test(`dropping a tab into its own content preserves order and pin state (${sticky ? 'pinned' : 'ordinary'})`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.selfContentDrop', '.ts', () => new TestEditorPane('test.selfContentDrop')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const group = editor.activeGroup;
+		const inputs = [input('/first.ts'), input('/second.ts'), input('/third.ts')];
+		for (const input of inputs) await group.openEditor(input, { pinned: true });
+		if (sticky) group.stickEditor(inputs[0]!);
+		group.domNode.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 800, 600);
+		group.domNode.querySelector('.ash-tab')!.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+		group.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 }));
+		group.domNode.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 }));
+		await nextTask();
+		assert.deepEqual(group.inputs, inputs);
+		assert.equal(group.isSticky(inputs[0]!), sticky);
+		assert.equal(editor.groups.length, 1);
+		assert.equal(group.domNode.querySelector('.ash-editor-drop-overlay'), null);
+	} finally { dom.window.close(); }
+});
+
+for (const scenario of [
+	{ wholeGroup: false, copy: false, singleton: false, allowed: false },
+	{ wholeGroup: true, copy: false, singleton: false, allowed: false },
+	{ wholeGroup: false, copy: true, singleton: false, allowed: true },
+	{ wholeGroup: false, copy: true, singleton: true, allowed: false },
+]) test(`self split validates the drag operation ${JSON.stringify(scenario)}`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.selfSplitDrop', '.ts', () => new TestEditorPane('test.selfSplitDrop')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		editor.layout({ width: 800, height: 600 });
+		const group = editor.activeGroup;
+		const retained = { ...input('/retained.ts'), capabilities: scenario.singleton ? EditorInputCapabilities.Singleton : EditorInputCapabilities.None };
+		await group.openEditor(retained, { pinned: true });
+		group.domNode.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 800, 600);
+		const source = group.domNode.querySelector(scenario.wholeGroup ? '.ash-editor-title-control' : '.ash-tab')!;
+		source.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+		const transfer = { dropEffect: 'move' };
+		const options = { bubbles: true, cancelable: true, clientX: 795, clientY: 300, altKey: scenario.copy, ctrlKey: scenario.copy };
+		const over = new dom.window.MouseEvent('dragover', options);
+		Object.defineProperty(over, 'dataTransfer', { value: transfer });
+		group.domNode.dispatchEvent(over);
+		assert.equal(transfer.dropEffect, scenario.allowed ? 'copy' : 'none');
+		assert.equal(group.domNode.dataset.editorDropDirection, scenario.allowed ? 'right' : undefined);
+		group.domNode.dispatchEvent(new dom.window.MouseEvent('drop', options));
+		await nextTask();
+		assert.deepEqual(group.inputs, [retained]);
+		assert.equal(editor.groups.length, scenario.allowed ? 2 : 1);
+		assert.equal(group.domNode.querySelector('.ash-editor-drop-overlay'), null);
+		if (scenario.allowed) assert.deepEqual(editor.activeGroup.inputs, [retained]);
+	} finally { dom.window.close(); }
+});
+
+for (const preferred of ['right', 'down'] as const) test(`editor-area split hotzones follow the current ${preferred} preference and exclude the title`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.dropHotzones', '.ts', () => new TestEditorPane('test.dropHotzones')));
+		using configuration = new InMemoryConfigurationService();
+		using editor = createEditorPart(dom.window.document.body, { registry, configurationService: configuration });
+		editor.layout({ width: 1200, height: 800 });
+		const source = editor.activeGroup;
+		await source.openEditor(input('/source.ts'), { pinned: true });
+		const target = editor.addGroup(source.id, Direction.Right);
+		await target.openEditor(input('/target.ts'), { pinned: true });
+		target.domNode.getBoundingClientRect = () => new dom.window.DOMRect(600, 0, 600, 800);
+		// Read preferences while dragging rather than snapshotting configuration at construction.
+		await configuration.updateValue('workbench.editor.openSideBySideDirection', preferred);
+		for (const wholeGroup of [false, true]) {
+			const dragSource = source.domNode.querySelector(wholeGroup ? '.ash-editor-title-control' : '.ash-tab')!;
+			dragSource.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+			const offset = editor.getTabsHeight();
+			const overlay = target.domNode.querySelector<HTMLElement>('.ash-editor-drop-overlay')!;
+			assert.equal(overlay.style.top, `${offset}px`);
+			for (const point of [
+				{ x: 0.5, y: 0.5, direction: undefined },
+				{ x: 0.05, y: 0.5, direction: 'left' },
+				{ x: 0.95, y: 0.5, direction: 'right' },
+				{ x: 0.5, y: 0.05, direction: 'up' },
+				{ x: 0.5, y: 0.95, direction: 'down' },
+				{ x: 0.2, y: 0.02, direction: preferred === 'right' ? 'left' : 'up' },
+				{ x: 0.8, y: 0.98, direction: preferred === 'right' ? 'right' : 'down' },
+				{ x: 0.2, y: 0.5, direction: wholeGroup && preferred === 'right' ? 'left' : undefined },
+				{ x: 0.5, y: 0.2, direction: wholeGroup && preferred === 'down' ? 'up' : undefined },
+			]) {
+				target.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 600 + point.x * 600, clientY: offset + point.y * (800 - offset) }));
+				assert.equal(target.domNode.dataset.editorDropDirection, point.direction, `${wholeGroup ? 'group' : 'tab'} at ${point.x},${point.y}`);
+				assert.equal(overlay.classList.contains('ash-dnd-drop-target'), point.direction === undefined);
+			}
+			dragSource.dispatchEvent(new dom.window.MouseEvent('dragend', { bubbles: true }));
+			assert.equal(target.domNode.dataset.editorDropDirection, undefined);
+			assert.equal(target.domNode.querySelector('.ash-editor-drop-overlay'), null);
+		}
+	} finally { dom.window.close(); }
+});
+
 test('dragging a group title moves every retained pane without reopening editors', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -1195,7 +1294,7 @@ test('dragging a group title moves every retained pane without reopening editors
 		await target.openEditor(input('/project/target.ts'));
 		target.domNode.getBoundingClientRect = () => new dom.window.DOMRect(500, 0, 500, 700);
 		source.domNode.querySelector('.ash-editor-title-control')!.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
-		target.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 750, clientY: 5 }));
+		target.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 750, clientY: editor.getTabsHeight() + 5 }));
 		target.domNode.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
 		assert.equal(editor.groups.length, 2);
 		assert.deepEqual(source.inputs, [first, second]);
@@ -1219,7 +1318,7 @@ for (const surface of ['tabs', 'content', 'split'] as const) test(`a contributio
 		const dropped = input('/contribution.ts');
 		transfer.setData([new DraggedEditorIdentifier(undefined, dropped)], DraggedEditorIdentifier.prototype);
 		const target = surface === 'tabs' ? group.domNode.querySelector('.ash-tab')! : group.domNode;
-		const coordinates = { clientX: 400, clientY: surface === 'split' ? 5 : 300 };
+		const coordinates = { clientX: 400, clientY: surface === 'split' ? editor.getTabsHeight() + 5 : 300 };
 		target.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, ...coordinates }));
 		target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true, ...coordinates }));
 		await nextTask();
@@ -1244,7 +1343,7 @@ test('dropping a tab above its group preserves the zero-valued Up direction and 
 		source.domNode.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 800, 600);
 		const tab = source.domNode.querySelector('.ash-tab')!;
 		tab.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
-		source.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 400, clientY: 5 }));
+		source.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 400, clientY: editor.getTabsHeight() + 5 }));
 		assert.equal(source.domNode.dataset.editorDropDirection, 'up');
 		source.domNode.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
 		await nextTask();
