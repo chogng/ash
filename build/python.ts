@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ProcessRun } from './processes.ts';
+import { detachedProcess, ProcessRun } from './processes.ts';
 
 export interface PythonHost {
 	readonly platform: NodeJS.Platform;
@@ -39,7 +39,7 @@ export async function runPython(arguments_: string[], options: { cwd: string; en
 		// An inherited active stdin pipe can stall the Windows Python launcher.
 		// A dedicated group is safe only while the caller owns its cancellation;
 		// ordinary CLI preparation still receives the terminal's group signals.
-		const child = spawn(command, args, { cwd: options.cwd, env: options.environment ?? process.env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, detached: signal !== undefined && process.platform !== 'win32' });
+		const child = spawn(command, args, { cwd: options.cwd, env: options.environment ?? process.env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, detached: signal !== undefined && detachedProcess(options.environment) });
 		const exited = new Promise<void>((resolvePromise, reject) => {
 			child.once('error', reject);
 			child.once('close', (code, termination) => {

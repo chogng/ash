@@ -13,6 +13,9 @@ doctest = false
 ash-file-system = { workspace = true }
 mxc-sandbox = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+ash-utils-pty = { workspace = true }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 ash-file-watcher = { workspace = true }
 

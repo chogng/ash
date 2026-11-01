@@ -35,7 +35,7 @@ pub fn configure_command_session(command: &mut std::process::Command) {
 }
 
 #[cfg(unix)]
-/// Kills an owned session while its leader PID is still reserved by an unreaped child.
+/// Kills an owned session whose identity is pinned by an unreaped leader or a private guard member.
 pub fn kill_process_session(session_id: u32) -> io::Result<()> {
     let session_id = session_id as libc::pid_t;
     // Stop the leader first, so its children cannot be replenished during cleanup.
@@ -45,7 +45,7 @@ pub fn kill_process_session(session_id: u32) -> io::Result<()> {
         system.refresh_processes_specifics(
             sysinfo::ProcessesToUpdate::All,
             true,
-            sysinfo::ProcessRefreshKind::nothing(),
+            sysinfo::ProcessRefreshKind::nothing().without_tasks(),
         );
         for pid in system.processes().keys() {
             let pid = pid.as_u32() as libc::pid_t;

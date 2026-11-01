@@ -18,6 +18,20 @@ fn ordinary_product_commands_are_not_consumed() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn session_guard_requires_its_private_launch_context_and_rejects_extra_arguments() {
+    for arguments in [
+        vec!["--ash-process-session-guard"],
+        vec!["--ash-process-session-guard", "unexpected"],
+    ] {
+        assert!(matches!(
+            dispatch(arguments.into_iter().map(Into::into)),
+            Some(Err(_))
+        ));
+    }
+}
+
 #[test]
 fn malformed_elevated_role_fails_before_connecting_to_a_socket() {
     for arguments in [

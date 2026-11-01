@@ -4,6 +4,25 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Rust 后端生命周期 · Windows 验收
+
+- [ ] **验收 · Windows 用户实机** · 同步当前 Rust 改动和新增的 guard／watchdog／managed fixture 源文件，在已配置的 Windows 开发环境执行下列命令，保留完整输出、Windows 版本、架构及实际执行／跳过的测试数。macOS 原生测试及 Linux／Windows 交叉编译不能替代此项；Windows 的 Unix 专属 session/SIGSTOP 用例按 cfg 不执行。
+
+```powershell
+just verify ash-process-hardening --profile ci-test
+just verify ash-utils-pty --profile ci-test
+just verify ash-sandboxing --profile ci-test
+just verify ash-external-ext --profile ci-test
+just verify ash-arg0 --profile ci-test
+just verify ash-app-server-daemon --profile ci-test
+just verify ash-app-server-runtime --profile ci-test --lib --filter managed::tests
+just verify ash-app-server --profile ci-test --process-tests --test managed_lifecycle --test managed_initialize
+```
+
+Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Job Object 对 owned 子孙进程的回收、扩展探测超时后的旧代清理与恢复、停用后不被迟到探测重启，以及 daemon 显式停止后的连接／监听释放和同 profile 重启。另在隔离 profile 启动真实 App Server 与扩展宿主，强制结束 App Server，检查其 Job 内宿主及后代已退出、原监听端口可重新绑定；不要结束日常使用的 profile。只关闭客户端时，仍有有效 lease 的共享 daemon／后台任务应保持运行。命令和实机验收均通过后移除此节。
+
+2026-11-01 本机 Linux arm64 容器已通过上述 8 个包的 214 项定向测试及对应 check／rust-warnings；组合故障场景已验证后代退出、端口重绑及同 profile 重启。测试结束后无残留工作进程或 TCP 监听；Linux 线程枚举导致守护进程提前自杀的问题已修复，macOS PTY 和 daemon 回归通过。原始日志与范围见[验证记录](.build/lifecycle-linux-20261101/validation.json)。
+
 ## 窗口缩放布局 · Windows 验收
 
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。

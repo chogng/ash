@@ -142,7 +142,10 @@ fn failed_initialization_reaps_only_the_new_backend() {
     use std::os::unix::fs::PermissionsExt;
 
     let root = tempfile::tempdir().unwrap();
-    let executable = root.path().join("failed-backend");
+    // Keep package discovery inside the fixture rather than probing the shared
+    // temporary directory for an unrelated ash-package.json.
+    let executable = root.path().join("bin/failed-backend");
+    std::fs::create_dir(executable.parent().unwrap()).unwrap();
     std::fs::write(&executable, "#!/bin/sh\nexit 23\n").unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let options = ConnectionOptions::new(root.path(), None, GrantSource::HostConfiguration, None);

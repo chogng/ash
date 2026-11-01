@@ -34,6 +34,8 @@ struct PipeChildTerminator {
     job: Arc<crate::win::JobObject>,
     #[cfg(unix)]
     process_group_id: u32,
+    #[cfg(unix)]
+    guard: Option<crate::process_guard::ProcessGuard>,
 }
 
 impl ChildTerminator for PipeChildTerminator {
@@ -54,7 +56,11 @@ impl ChildTerminator for PipeChildTerminator {
     fn kill(&mut self) -> io::Result<()> {
         #[cfg(unix)]
         {
-            crate::process_group::kill_process_group(self.process_group_id)
+            if self.guard.is_some() {
+                crate::process_group::kill_process_session(self.process_group_id)
+            } else {
+                crate::process_group::kill_process_group(self.process_group_id)
+            }
         }
 
         #[cfg(windows)]
@@ -148,6 +154,9 @@ async fn spawn_process_with_stdin_mode(
     }
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
+
+    #[cfg(unix)]
+    let guard = crate::process_guard::configure_command_guard(command.as_std_mut())?;
 
     #[cfg(windows)]
     let job = Arc::new(crate::win::JobObject::create()?);
@@ -244,6 +253,8 @@ async fn spawn_process_with_stdin_mode(
             job,
             #[cfg(unix)]
             process_group_id,
+            #[cfg(unix)]
+            guard,
         }),
         reader_handle,
         reader_abort_handles,

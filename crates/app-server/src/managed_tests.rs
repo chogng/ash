@@ -196,3 +196,143 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     assert!(!endpoint.with_extension("pid.json").exists());
     assert!(IpcStream::connect(endpoint).is_err());
 }
+
+#[cfg(unix)]
+#[test]
+fn managed_forced_exit_reclaims_owned_extension_sessions_and_allows_profile_restart() {
+    use ash_app_server_daemon::ConnectionOptions;
+    use ash_app_server_daemon::GrantSource;
+    use ash_app_server_daemon::LifecycleCommand;
+    use ash_app_server_daemon::LifecycleStatus;
+    use ash_app_server_daemon::run_lifecycle;
+    use ash_uds::IpcStream;
+    use std::net::TcpListener;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::process::Stdio;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    struct Child(std::process::Child);
+    impl Drop for Child {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let executable = PathBuf::from(
+        std::env::var_os("ASH_MANAGED_LIFECYCLE_TEST_HOST").expect("managed lifecycle test host"),
+    );
+    for scenario in ["killed", "extension-stopped", "daemon-stopped"] {
+        let profile = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let mut child = Child(
+            Command::new(&executable)
+                .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+                .env("ASH_HOME", profile.path())
+                .env("ASH_TEST_MANAGED_OWNED_PROCESSES", directory.path())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let endpoint = ash_app_server_daemon::daemon_endpoint_path(profile.path()).unwrap();
+        let options =
+            ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None);
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !directory.path().join("descendant").exists()
+            || IpcStream::connect(&endpoint).is_err()
+        {
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "managed fixture exited during startup"
+            );
+            assert!(Instant::now() < deadline, "managed fixture did not start");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let ready = run_lifecycle(LifecycleCommand::Version, options.clone(), &executable).unwrap();
+        assert_eq!(ready.status, LifecycleStatus::Running);
+        assert_eq!(ready.pid, Some(child.0.id()));
+        let owned = ["leader", "descendant"].map(|name| {
+            let contents = std::fs::read_to_string(directory.path().join(name)).unwrap();
+            let (pid, address) = contents.split_once(' ').unwrap();
+            (pid.parse::<u32>().unwrap(), address.to_owned())
+        });
+        assert!(TcpListener::bind(&owned[0].1).is_err());
+        let daemon_pid = child.0.id();
+        let stopped_pid = match scenario {
+            "extension-stopped" => Some(owned[0].0),
+            "daemon-stopped" => Some(daemon_pid),
+            "killed" => None,
+            _ => unreachable!(),
+        };
+        if let Some(pid) = stopped_pid {
+            assert!(
+                Command::new("kill")
+                    .args(["-STOP", &pid.to_string()])
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        if scenario == "daemon-stopped" {
+            let stopped =
+                run_lifecycle(LifecycleCommand::Stop, options.clone(), &executable).unwrap();
+            assert_eq!(stopped.status, LifecycleStatus::Stopped);
+        } else {
+            child.0.kill().unwrap();
+        }
+        child.0.wait().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        for (pid, address) in &owned {
+            loop {
+                let dead = Command::new("ps")
+                    .args(["-p", &pid.to_string(), "-o", "stat="])
+                    .output()
+                    .unwrap();
+                let status = String::from_utf8_lossy(&dead.stdout);
+                if (!dead.status.success() || status.trim().starts_with('Z'))
+                    && TcpListener::bind(address).is_ok()
+                {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "owned extension {pid} retained its process or listener"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        assert!(IpcStream::connect(&endpoint).is_err());
+        // Reuse this exact profile and endpoint after a forced exit left its on-disk
+        // rendezvous record behind. A new generation must claim and release it safely.
+        let mut replacement = Child(
+            Command::new(&executable)
+                .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+                .env("ASH_HOME", profile.path())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while IpcStream::connect(&endpoint).is_err() {
+            assert!(replacement.0.try_wait().unwrap().is_none());
+            assert!(
+                Instant::now() < deadline,
+                "profile endpoint was not recovered"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let ready = run_lifecycle(LifecycleCommand::Version, options.clone(), &executable).unwrap();
+        assert_eq!(ready.status, LifecycleStatus::Running);
+        assert_eq!(ready.pid, Some(replacement.0.id()));
+        assert_eq!(
+            run_lifecycle(LifecycleCommand::Stop, options, &executable)
+                .unwrap()
+                .status,
+            LifecycleStatus::Stopped
+        );
+        assert!(replacement.0.wait().unwrap().success());
+    }
+}

@@ -8,6 +8,25 @@ use std::ffi::OsString;
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
     let mut arguments = arguments.into_iter();
     let role = arguments.next();
+    #[cfg(unix)]
+    {
+        if role.as_deref()
+            == Some(std::ffi::OsStr::new(
+                ash_utils_pty::process_guard::PROCESS_GUARD_ARGUMENT,
+            ))
+        {
+            if arguments.next().is_some() {
+                return Some(Err("Process session guard accepts no arguments".into()));
+            }
+            return Some(
+                ash_utils_pty::process_guard::run_process_guard()
+                    .map_err(|error| error.to_string()),
+            );
+        }
+        if let Err(error) = ash_utils_pty::process_guard::enable_process_guard() {
+            return Some(Err(error.to_string()));
+        }
+    }
     #[cfg(target_os = "macos")]
     if role.as_deref()
         == Some(std::ffi::OsStr::new(

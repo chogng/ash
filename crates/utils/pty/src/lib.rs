@@ -3,6 +3,8 @@ mod linux_fds;
 pub mod pipe;
 mod process;
 pub mod process_group;
+#[cfg(unix)]
+pub mod process_guard;
 pub mod pty;
 #[cfg(test)]
 #[path = "tests.rs"]

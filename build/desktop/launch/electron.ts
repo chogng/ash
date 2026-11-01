@@ -2,15 +2,43 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { watchHost } from '../host.ts';
-import { ProcessRun, withProcessRun } from '../../processes.ts';
+import { detachedProcess, ProcessRun } from '../../processes.ts';
 import { prepareAppServer } from '../appServer.ts';
 import { resolveDevelopmentElectronExecutable } from '../electron.ts';
 
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
-	await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
-		process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_ELECTRON_LAUNCH_WORKER: '1' })).code;
+	const child = spawn(process.execPath, [resolve(import.meta.dirname, 'supervisor.ts'), ...process.argv.slice(2)], {
+		cwd: resolve(import.meta.dirname, '../../..'),
+		env: process.env,
+		stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+		detached: process.platform !== 'win32',
+		windowsHide: true,
 	});
+	const interrupt = (): void => { child.kill('SIGINT'); };
+	const terminate = (): void => { child.kill('SIGTERM'); };
+	process.on('SIGINT', interrupt);
+	process.on('SIGTERM', terminate);
+	try {
+		process.exitCode = await new Promise<number>((resolveExit, reject) => {
+			child.once('error', reject);
+			child.once('exit', (code, signal) => resolveExit(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1));
+		});
+	} finally {
+		process.off('SIGINT', interrupt);
+		process.off('SIGTERM', terminate);
+	}
 } else {
+	if (process.send) {
+		if (!process.connected) process.exit(1);
+		const disconnected = (): void => process.exit(1);
+		process.once('disconnect', disconnected);
+		await new Promise<void>(resolveStart => process.on('message', function start(message) {
+			if (message !== 'ash:dev:start') return;
+			process.off('message', start);
+			resolveStart();
+		}));
+		process.off('disconnect', disconnected);
+	}
 	const sourceRoot = resolve(import.meta.dirname, '../../..');
 	const executable = resolveDevelopmentElectronExecutable(sourceRoot);
 	const args = process.argv.slice(2);
@@ -24,6 +52,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	// Product-launched commands must own independent supervisors and registries.
 	delete environment.ASH_ELECTRON_LAUNCH_WORKER;
 	delete environment.ASH_SMOKE_RUN_DIRECTORY;
+	delete environment.ASH_DEV_PROCESS_SUPERVISED;
 	if (watch) {
 		environment.ASH_DEV_LAUNCHER = '1';
 		environment.ASH_HOME ??= resolve(sourceRoot, '.build/desktop/dev/profile');
@@ -31,6 +60,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	} else {
 		delete environment.ASH_DEV_LAUNCHER;
 	}
+	const serviceEnvironment = { ...environment, ASH_SMOKE_RUN_DIRECTORY: process.env.ASH_SMOKE_RUN_DIRECTORY, ASH_DEV_PROCESS_SUPERVISED: process.env.ASH_DEV_PROCESS_SUPERVISED };
 
 	let electronRun: ProcessRun | undefined;
 	const servicesRun = developmentServices ? new ProcessRun(sourceRoot, undefined, 5_000) : undefined;
@@ -51,9 +81,9 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let output = '';
 		const child = spawn(process.execPath, arguments_, {
 			cwd: sourceRoot,
-			env: environment,
+			env: serviceEnvironment,
 			stdio: ['ignore', 'pipe', 'inherit'],
-			detached: process.platform !== 'win32',
+			detached: detachedProcess(),
 		});
 		child.stdout.on('data', (chunk: Buffer) => {
 			process.stdout.write(chunk);
@@ -80,7 +110,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let ready = false;
 		let relaunch = false;
 		let busy = false;
-		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: process.platform !== 'win32' });
+		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: detachedProcess() });
 		const inspector = args.find(argument => /^--inspect(?:-brk)?=/u.test(argument));
 		if (inspector) {
 			// js-debug can suppress the runtime's Inspector stderr. Publish from the
@@ -158,6 +188,15 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 
 	process.once('SIGINT', () => { void stop().catch(fail); });
 	process.once('SIGTERM', () => { void stop().catch(fail); });
+	// A debugger can kill the supervisor without delivering a termination signal
+	// to this detached worker. IPC closure still retires its services and Electron.
+	process.once('disconnect', () => { void stop().catch(fail); });
+	process.channel?.unref();
+	if (process.send && !process.connected) await stop();
+	const heartbeat = process.send ? setInterval(() => {
+		if (process.connected) process.send!('ash:dev:heartbeat', () => { });
+	}, 1_000).unref() : undefined;
+	process.once('exit', () => clearInterval(heartbeat));
 	if (environment.ASH_DESKTOP_UI_ONLY !== '1') {
 		try { await prepareAppServer('host-provided-node', cancellation.signal); }
 		catch (error) { if (!stopped) throw error; }
