@@ -18,6 +18,7 @@ import { isRecord } from '../../../../base/common/types.js';
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', false);
+const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
@@ -50,6 +51,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const editorVisible = editorVisibleContext.bindTo(contextKeys);
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const fileEditorsVisible = filesVisibleContext.bindTo(contextKeys);
+		const changesVisible = changesVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
 		const updateContext = (): void =>
@@ -59,11 +61,13 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					(!(editor as DesktopEditorParts).filesDetailsVisible || (editor as DesktopEditorParts).filesPart.isEditorVisible));
 				detailsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).filesDetailsVisible);
 				fileEditorsVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && (editor as DesktopEditorParts).fileEditorsVisible);
+				changesVisible.set(context.isDocumentContent && layout.isPartVisible('editor') && editor.groups.some(group =>
+					editor.isGroupVisible(group.id) && group.activeInput?.resource.scheme === 'ash-session-changes'));
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, fileEditorsVisible, changesVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
@@ -94,6 +98,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		for (const [id, operation] of [
 			['ash.sessions.toggleDetails', () => controller.toggleDetails()],
 			['ash.sessions.toggleFiles', () => controller.toggleFiles()],
+			['ash.sessions.toggleChanges', () => controller.toggleChanges()],
 			[
 				'ash.sessions.closeDetails',
 				async () => {
@@ -191,9 +196,10 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: Menus.TitleBarRightLayout,
 					item: {
 						command: {
-							id: 'workbench.agentSessions.action.viewChanges',
+							id: 'ash.sessions.toggleChanges',
 							title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
 							icon: Lxicon.diffChanges,
+							toggled: changesVisibleContext.isEqualTo(true),
 						},
 						when: codeWhen, group: 'navigation', order: 4,
 					},

@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
@@ -37,6 +38,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	const started = new DeferredPromise<void>();
 	let queue = Promise.resolve();
 	let supportsDetails = true;
+	let changesVisible = false;
 	const context: IDesktopLayoutContext = {
 		isSessionContent: true,
 		get isDocumentContent() { return documentContent.get(); },
@@ -55,6 +57,7 @@ test('editor contributions follow layout state, serialize open commands without 
 			effects.push('files');
 		},
 		async openChanges() { effects.push('changes'); },
+		async toggleChanges() { parts.editor = true; changesVisible = !changesVisible; },
 		async hideEditor() { filesDetails.isEditorVisible = false; parts.auxiliarybar = true; },
 		async showEditor() { parts.editor = true; filesDetails.isEditorVisible = true; },
 		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
@@ -66,6 +69,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	} as unknown as IAgentWorkbenchLayoutService);
 	services.registerInstance(IEditorPart, {
 		onDidChangeEditors: editorChanged.event, filesPart: filesDetails,
+		groups: [{ id: 2, activeInput: { resource: URI.parse('ash-session-changes:/test') } }],
+		isGroupVisible() { return changesVisible; },
 		get filesDetailsOpen() { return parts.auxiliarybar; },
 		get filesDetailsVisible() { return parts.editor && parts.auxiliarybar; },
 		get fileEditorsVisible() { return true; },
@@ -81,6 +86,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
 	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
+	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
+	const changesAction = () => layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
 	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
@@ -122,6 +129,27 @@ test('editor contributions follow layout state, serialize open commands without 
 	await pending.complete();
 	await Promise.all([files, changes]);
 	assert.deepEqual(effects, ['files', 'changes']);
+	assert.equal(changesAction().checked, false);
+	await changesAction().run();
+	assert.equal(changesVisible, true);
+	assert.equal(changesAction().checked, true);
+	await changesAction().run();
+	assert.equal(changesVisible, false);
+	assert.equal(changesAction().checked, false);
+	changesVisible = true;
+	editorChanged.fire();
+	assert.equal(changesAction().checked, true, 'Opening Changes elsewhere updates the titlebar selection');
+	parts.editor = false;
+	layoutChanged.fire();
+	assert.equal(changesAction().checked, false, 'Hiding the editor area clears the titlebar selection');
+	parts.editor = true;
+	layoutChanged.fire();
+	assert.equal(changesAction().checked, true);
+	changesVisible = false;
+	editorChanged.fire();
+	assert.equal(changesAction().checked, false, 'Closing Changes elsewhere clears the titlebar selection');
+	parts.editor = false;
+	layoutChanged.fire();
 	documentContent.set(false, undefined);
 	assert.deepEqual(headerActions(), []);
 	assert.deepEqual(title.getActions(), []);
@@ -137,13 +165,14 @@ test('editor contributions follow layout state, serialize open commands without 
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.openFilesTab'), undefined);
 	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.expand'), undefined);
 	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.close'), undefined);
-	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane']) {
+	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane', 'toggleChanges']) {
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.' + id), undefined);
 	}
 	assert.equal(layoutChanged.hasListeners(), false);
 	assert.equal(editorChanged.hasListeners(), false);
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.filesVisible'), false);
+	assert.equal(contextKeys.getValue('sessions.changesVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.supportedDetails'), false);
 
 	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
@@ -155,6 +184,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
+		assert.equal(changesAction().label, '更改');
 	} finally {
 		resetNlsResolver();
 	}

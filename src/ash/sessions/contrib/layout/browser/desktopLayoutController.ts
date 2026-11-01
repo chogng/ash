@@ -358,4 +358,21 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (this.isDisposed) { return; }
 		await this.tabs.openChanges();
 	}
+
+	public async toggleChanges(): Promise<void> {
+		if (this.isDisposed) { return; }
+		const editor = this.editor as DesktopEditorParts;
+		if (!this.documentsVisible || !await editor.toggleToolEditors(input => input.resource.scheme === 'ash-session-changes')) {
+			await this.openChanges();
+			return;
+		}
+		const visibleGroup = this.documentGroups.find(group => editor.isGroupVisible(group.id));
+		if (visibleGroup) {
+			this.layout.showPart('editor');
+			if (!editor.isGroupVisible(editor.activeGroup.id)) { editor.activateGroup(visibleGroup.id); }
+		} else {
+			this.layout.hidePart('editor');
+		}
+		this.layout.focus();
+	}
 }
