@@ -1115,6 +1115,28 @@ fn git_file_admission_keeps_staged_order_and_rejects_invalid_comparisons() {
 }
 
 #[test]
+fn git_comparison_batches_keep_one_exclusive_repository_publication() {
+    let definition = super::client_method_definition("git/changeFiles").unwrap();
+    for comparison in ["staged", "unstaged"] {
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({
+                    "repositoryId":"repo", "paths":["a.txt","b.txt"], "comparison":comparison
+                }))
+                .unwrap(),
+            Some(ClientRequestSerializationScope::Repository {
+                repository_id: Some("repo".into()),
+                access: SerializationAccess::Exclusive
+            })
+        );
+    }
+    let schema = schemars::schema_for!(crate::protocol::git::GitChangeFilesParams);
+    let value = serde_json::to_value(schema).unwrap();
+    assert_eq!(value["properties"]["paths"]["minItems"], 1);
+    assert_eq!(value["properties"]["paths"]["maxItems"], 16);
+}
+
+#[test]
 fn extension_recommendation_environment_round_trips_without_host_paths() {
     use super::super::extension_packages::ExtensionsRecommendationEnvironmentResult;
     let wire = serde_json::json!({ "platform": "linux", "executables": ["python3", "node"] });

@@ -209,7 +209,7 @@ test('small frozen resources share reads without sharing mutable bytes or retire
 
 test('language extension syntax follows backend enablement, including revocation and offline failure', async () => {
 	const base = packageSnapshot(1, 'ash.rust', 'builtIn');
-	const catalog = { ...base, extensions: [{ ...base.extensions[0]!, manifestJson: JSON.stringify({ ashLanguageServers: { version: 1, servers: [] } }) }] };
+	let catalog: ExtensionCatalog = { ...base, extensions: [{ ...base.extensions[0]!, manifestJson: JSON.stringify({ ashLanguageServers: { version: 1, servers: [] } }) }] };
 	let enabled = true;
 	let offline = false;
 	const management = {
@@ -226,6 +226,9 @@ test('language extension syntax follows backend enablement, including revocation
 	assert.equal((await api.list('cached', { includeDisabled: true })).extensions.length, 1);
 	enabled = true; offline = true;
 	assert.equal((await api.list('cached')).extensions.length, 0);
+	offline = false;
+	catalog = packageSnapshot(2, 'ash.rust', 'builtIn');
+	assert.equal((await api.list('cached')).extensions.length, 0, 'A replacement manifest follows its current enablement owner');
 });
 
 test('warm language catalog reads overlap provider IO and share only its pending result', async () => {

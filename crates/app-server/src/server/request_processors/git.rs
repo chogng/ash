@@ -12,6 +12,8 @@ use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitCatalogResult;
 use ash_app_server_protocol::protocol::git::GitChangeFileParams;
+use ash_app_server_protocol::protocol::git::GitChangeFilesParams;
+use ash_app_server_protocol::protocol::git::GitChangeFilesResult;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelParams;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelResult;
 use ash_app_server_protocol::protocol::git::GitCheckIgnoreCancelStatusDto;
@@ -1052,6 +1054,20 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                 .change_file_for(params.repository_id.as_deref(), &path, params.comparison)
                 .map_err(git_error)?,
         )
+    }
+
+    pub(super) fn git_change_files(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitChangeFilesParams = decode(value)?;
+        if params.paths.len() > 16 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let paths = paths(params.paths)?;
+        let files = self
+            .context
+            .git_runtime_service()?
+            .change_files_for(params.repository_id.as_deref(), &paths, params.comparison)
+            .map_err(git_error)?;
+        result(&GitChangeFilesResult { files })
     }
 
     pub(super) fn git_conflict_file(&self, value: &Value) -> Result<Value, RpcError> {

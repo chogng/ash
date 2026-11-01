@@ -190,7 +190,7 @@ interface GitHubPick extends IQuickPickItem {
 
 export class GitHubContextValuePick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
-	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.circleLarge : Lxicon.gitPullRequest; }
+	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.issues : Lxicon.gitPullRequest; }
 	public get label(): string { return this.kind === 'issue' ? localize('chat.context.issue', 'Issue…') : localize('chat.context.pullRequest', 'Pull Request…'); }
 	constructor(
 		private readonly kind: 'issue' | 'pullRequest',

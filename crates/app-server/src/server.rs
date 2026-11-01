@@ -4492,6 +4492,9 @@ impl AppServer {
             Some(ClientMethod::GitChangeFile) => {
                 self.git_processor().git_change_file(&request.params)
             }
+            Some(ClientMethod::GitChangeFiles) => {
+                self.git_processor().git_change_files(&request.params)
+            }
             Some(ClientMethod::GitConflictFile) => {
                 self.git_processor().git_conflict_file(&request.params)
             }

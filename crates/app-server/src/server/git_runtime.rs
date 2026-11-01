@@ -1023,6 +1023,58 @@ impl GitRuntime {
             .change_file(path, comparison)
     }
 
+    pub(super) fn change_files_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: &[PathBuf],
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<Vec<GitChangeFileResult>, GitRuntimeError> {
+        let repository = self.repository(repository_id)?;
+        // One published mapping must serve the whole batch, including renames.
+        let _operation = lock_current_operation(&repository.operation)
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let needs_status = paths.iter().try_fold(false, |missing, path| {
+            repository
+                .published_comparison_original_path(path, comparison)
+                .map(|original| missing || original.is_none())
+        })?;
+        if needs_status {
+            // A direct caller may not have watched SCM yet, or may name a new
+            // path. Resolve the batch from one fresh owner snapshot in that case.
+            let (identity, snapshot) = repository
+                .service
+                .snapshot()
+                .map_err(GitRuntimeError::Service)?;
+            repository.accept(identity, snapshot)?;
+        }
+        let paths = paths
+            .iter()
+            .map(|path| {
+                let original = repository
+                    .published_comparison_original_path(path, comparison)?
+                    .ok_or(GitRuntimeError::Service(
+                        GitServiceError::CommitChangeNotFound,
+                    ))?;
+                Ok((original, path.clone()))
+            })
+            .collect::<Result<Vec<_>, GitRuntimeError>>()?;
+        let comparison = match comparison {
+            GitChangeFileComparisonDto::Staged => GitChangeFileComparison::Staged,
+            GitChangeFileComparisonDto::Unstaged => GitChangeFileComparison::Unstaged,
+        };
+        let files = repository
+            .service
+            .change_files_at_paths(&repository.identity, &paths, comparison)
+            .map_err(GitRuntimeError::Service)?;
+        Ok(files
+            .iter()
+            .map(|file| GitChangeFileResult {
+                original: commit_file_content(file.original()),
+                modified: commit_file_content(file.modified()),
+            })
+            .collect())
+    }
+
     pub(super) fn conflict_file_for(
         &self,
         repository_id: Option<&str>,
@@ -1843,48 +1895,54 @@ impl GitRepositoryRuntime {
         self.change_file_using_published_status(path, comparison)
     }
 
+    fn published_comparison_original_path(
+        &self,
+        path: &Path,
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<Option<PathBuf>, GitRuntimeError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let wire_path = wire_path(path)?;
+        let change = state.status.as_ref().and_then(|status| {
+            status
+                .changes
+                .iter()
+                .find(|change| change.path == wire_path)
+        });
+        change
+            .map(|change| {
+                let status = match comparison {
+                    GitChangeFileComparisonDto::Staged => change.index_status,
+                    GitChangeFileComparisonDto::Unstaged => change.worktree_status,
+                };
+                match status {
+                    GitChangeStatusDto::Unmodified => Ok(None),
+                    GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied => change
+                        .original_path
+                        .as_ref()
+                        .map(|path| Some(PathBuf::from(path)))
+                        .ok_or(GitRuntimeError::Boundary),
+                    GitChangeStatusDto::Modified
+                    | GitChangeStatusDto::Added
+                    | GitChangeStatusDto::Deleted
+                    | GitChangeStatusDto::TypeChanged
+                    | GitChangeStatusDto::Unmerged
+                    | GitChangeStatusDto::Untracked
+                    | GitChangeStatusDto::Ignored => Ok(Some(path.to_path_buf())),
+                }
+            })
+            .transpose()
+            .map(Option::flatten)
+    }
+
     fn change_file_using_published_status(
         &self,
         path: &Path,
         comparison: GitChangeFileComparisonDto,
     ) -> Result<GitChangeFileResult, GitRuntimeError> {
-        let original_path = {
-            let state = self
-                .state
-                .lock()
-                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-            let wire_path = wire_path(path)?;
-            let change = state.status.as_ref().and_then(|status| {
-                status
-                    .changes
-                    .iter()
-                    .find(|change| change.path == wire_path)
-            });
-            change
-                .map(|change| {
-                    let status = match comparison {
-                        GitChangeFileComparisonDto::Staged => change.index_status,
-                        GitChangeFileComparisonDto::Unstaged => change.worktree_status,
-                    };
-                    match status {
-                        GitChangeStatusDto::Unmodified => Ok(None),
-                        GitChangeStatusDto::Renamed | GitChangeStatusDto::Copied => change
-                            .original_path
-                            .as_ref()
-                            .map(|path| Some(PathBuf::from(path)))
-                            .ok_or(GitRuntimeError::Boundary),
-                        GitChangeStatusDto::Modified
-                        | GitChangeStatusDto::Added
-                        | GitChangeStatusDto::Deleted
-                        | GitChangeStatusDto::TypeChanged
-                        | GitChangeStatusDto::Unmerged
-                        | GitChangeStatusDto::Untracked
-                        | GitChangeStatusDto::Ignored => Ok(Some(path.to_path_buf())),
-                    }
-                })
-                .transpose()?
-                .flatten()
-        };
+        let original_path = self.published_comparison_original_path(path, comparison)?;
         let comparison = match comparison {
             GitChangeFileComparisonDto::Staged => GitChangeFileComparison::Staged,
             GitChangeFileComparisonDto::Unstaged => GitChangeFileComparison::Unstaged,

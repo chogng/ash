@@ -27,6 +27,18 @@ export function createDisconnectedExtensionApi(unavailable: UnavailableOperation
 
 /** Consumers share profile enablement while the window composition owns which packages it supports. */
 export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement: IGlobalExtensionEnablementService, management?: IExtensionManagementService, supportsExtension?: (extension: ExtensionDescriptor) => boolean): IExtensionApi {
+	// Descriptors are immutable catalog snapshots. Retain only derived manifest
+	// metadata by identity; enablement and backend grants still refresh per read.
+	const languageMetadata = new WeakMap<ExtensionDescriptor, boolean>();
+	const isLanguageExtension = (extension: ExtensionDescriptor): boolean => {
+		if (extension.sourceKind !== 'builtIn') return false;
+		let declared = languageMetadata.get(extension);
+		if (declared === undefined) {
+			declared = !!JSON.parse(extension.manifestJson).ashLanguageServers;
+			languageMetadata.set(extension, declared);
+		}
+		return declared;
+	};
 	let preloadProviders = false;
 	let pendingProviders: Promise<Awaited<ReturnType<IExtensionManagementService['listBuiltInProviders']>> | undefined> | undefined;
 	const readProviders = () => {
@@ -50,7 +62,7 @@ export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement
 			const catalog = supportsExtension ? { ...source, extensions: source.extensions.filter(supportsExtension) } : source;
 			if (options?.includeDisabled) { return catalog; }
 			const disabled = new Set(enablement.getDisabledExtensions().map(extension => extension.id));
-			const languageExtensions = new Set(catalog.extensions.filter(extension => extension.sourceKind === 'builtIn' && JSON.parse(extension.manifestJson).ashLanguageServers).map(extension => extension.id));
+			const languageExtensions = new Set(catalog.extensions.filter(isLanguageExtension).map(extension => extension.id));
 			preloadProviders = languageExtensions.size > 0;
 			// The backend owns these extensions' enablement for both syntax and executable
 			// contributions. Do not mirror it in the declarative-only profile setting.

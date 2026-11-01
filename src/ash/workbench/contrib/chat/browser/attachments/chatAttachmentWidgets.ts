@@ -214,7 +214,7 @@ function getDefaultAttachmentIcon(kind: string): Icon {
 		case 'searchResults': return Lxicon.search;
 		case 'symbol': return Lxicon.code;
 		case 'debug': return Lxicon.bug;
-		case 'issue': return Lxicon.circleLarge;
+		case 'issue': return Lxicon.issues;
 		case 'pullRequest': return Lxicon.gitPullRequest;
 		default: return Lxicon.file;
 	}

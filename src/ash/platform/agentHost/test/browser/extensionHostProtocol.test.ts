@@ -387,7 +387,10 @@ test('abandoned invocation discards a successful result when completion wins can
 
 test('payload byte limits count JSON escaping, Unicode and numeric wire representation exactly', () => {
 	const limit = 64 * 1024 * 1024;
-	const values = [null, true, false, 0, -0, 1.2e30, 1e-9, '中文😀\ud800x\udfff\u0000\b\t\n\f\r"\\'];
+	const values = [null, true, false, 0, -0, 1.2e30, 1e-9, '中文😀\ud800x\udfff\u0000\b\t\n\f\r"\\',
+		('a'.repeat(8191) + '"\\\u0000\b\t\n\f\r').repeat(3),
+		('a'.repeat(8191) + '😀\ud800中文\udfff').repeat(3),
+	];
 	const envelope = { values, ['quoted"\\\n中文😀\ud800']: { sparse: new Array(3) }, padding: '' };
 	const overhead = Buffer.byteLength(JSON.stringify(envelope));
 	const padding = 'x'.repeat(limit - overhead);

@@ -405,6 +405,31 @@ impl Api {
             token,
         )?)
     }
+    pub fn change_files(
+        &self,
+        repository: &Repository,
+        paths: &[&crate::paths::RepoPath],
+        comparison: crate::model::Comparison,
+        token: &CancellationToken,
+    ) -> Result<Vec<crate::model::FileComparison>, ExtensionError> {
+        #[derive(serde::Deserialize)]
+        struct Response {
+            files: Vec<crate::model::FileComparison>,
+        }
+        let response: Response = decode(self.repository_request(
+            repository,
+            "changeFiles",
+            json!({"paths": paths, "comparison": comparison}),
+            token,
+        )?)?;
+        if response.files.len() != paths.len() {
+            return Err(invalid(
+                "Git comparison batch did not match its requested paths",
+            ));
+        }
+        Ok(response.files)
+    }
+
     pub fn index_diff(
         &self,
         repository: &Repository,

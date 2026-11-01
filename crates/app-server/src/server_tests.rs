@@ -8437,6 +8437,93 @@ fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
 }
 
 #[test]
+fn git_change_files_rpc_preserves_order_freshness_and_rejects_partial_or_unbounded_reads() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Ash Test"]);
+    run_git(&root, &["config", "user.email", "ash@example.test"]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("HEAD {name}\n")).unwrap();
+    }
+    run_git(&root, &["add", "."]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("INDEX {name}\n")).unwrap();
+    }
+    run_git(&root, &["add", "."]);
+    for name in ["first.txt", "second.txt"] {
+        std::fs::write(root.join(name), format!("WORKTREE {name}\n")).unwrap();
+    }
+    let server = server()
+        .with_git_root(dir_authorization(&root, DirPermission::InspectRepository))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for (index, (comparison, before, after)) in [
+        ("staged", "HEAD", "INDEX"),
+        ("unstaged", "INDEX", "WORKTREE"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":index + 2, "method":"git/changeFiles",
+                "params":{"paths":["second.txt","first.txt"], "comparison":comparison}
+            }),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+        for (index, name) in ["second.txt", "first.txt"].iter().enumerate() {
+            assert_eq!(
+                response["result"]["files"][index]["original"]["text"],
+                format!("{before} {name}\n")
+            );
+            assert_eq!(
+                response["result"]["files"][index]["modified"]["text"],
+                format!("{after} {name}\n")
+            );
+        }
+    }
+    std::fs::write(root.join("first.txt"), "fresh\n").unwrap();
+    let fresh = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"git/changeFiles",
+            "params":{"paths":["first.txt"], "comparison":"unstaged"}
+        }),
+    );
+    assert_eq!(fresh["result"]["files"][0]["modified"]["text"], "fresh\n");
+    for (index, paths) in [
+        vec![],
+        vec!["first.txt"; 17],
+        vec!["../outside"],
+        vec!["first.txt", "missing.txt"],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":index + 5, "method":"git/changeFiles",
+                "params":{"paths":paths, "comparison":"unstaged"}
+            }),
+        );
+        assert!(response.get("error").is_some(), "{response}");
+        assert_ne!(response["error"]["message"], "InvalidRequest", "{response}");
+        assert!(
+            response.get("result").is_none(),
+            "No partial comparisons may escape a failed batch"
+        );
+    }
+}
+
+#[test]
 fn git_change_file_rpc_preserves_renames_and_rejects_sources_outside_the_grant() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
@@ -8460,6 +8547,23 @@ fn git_change_file_rpc_preserves_renames_and_rejects_sources_outside_the_grant()
             .unwrap();
         let mut connection = server.connection();
         initialize(&server, &mut connection);
+        let batch = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":3, "method":"git/changeFiles",
+                "params":{"paths":[path], "comparison":"staged"}
+            }),
+        );
+        if allowed {
+            assert!(batch.get("error").is_none(), "{batch}");
+            assert_eq!(
+                batch["result"]["files"][0]["original"]["text"],
+                "original content\n"
+            );
+        } else {
+            assert!(batch.get("error").is_some(), "{batch}");
+        }
         let result = call(
             &server,
             &mut connection,

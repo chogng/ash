@@ -74,6 +74,39 @@ impl Client {
         let unstaged = !self.git(&["diff", "--name-only"]).is_empty();
         json!({"repositoryId":"root","streamInstanceId":"11111111-1111-4111-8111-111111111111","revision":self.revision.load(Ordering::Relaxed),"historyRevision":1,"path":"","head":{"type":"branch","name":"main","objectId":head,"upstream":null},"changes":if staged||unstaged {vec![json!({"path":"file.txt","originalPath":null,"indexStatus":if staged {"modified"} else {"unmodified"},"worktreeStatus":if unstaged {"modified"} else {"unmodified"},"conflicted":false,"submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}})]} else {vec![]}})
     }
+    fn comparison(&self, path: &Value, comparison: &Value) -> Value {
+        if self.binary_comparison.load(Ordering::Acquire) {
+            assert_eq!(*path, "image.bin");
+            json!({"original":{"kind":"binary","data":"AAEA"},"modified":{"kind":"binary","data":"AAIA"}})
+        } else {
+            if path.as_str().is_some_and(|path| path.starts_with("batch/")) {
+                return json!({"original":{"kind":"text","text":format!("old {}", path.as_str().unwrap())},"modified":{"kind":"text","text":format!("new {}", path.as_str().unwrap())}});
+            }
+            assert_eq!(*path, "file.txt");
+            let staged = *comparison == "staged";
+            let status = self.status();
+            let changed = &status["changes"][0][if staged {
+                "indexStatus"
+            } else {
+                "worktreeStatus"
+            }];
+            if changed == "unmodified" || changed.is_null() {
+                json!({"backendError":{"name":"GitOperationFailed","message":"No change in this comparison"}})
+            } else {
+                let original =
+                    self.git(&["show", if staged { "HEAD:file.txt" } else { ":file.txt" }]);
+                let modified = if staged {
+                    self.git(&["show", ":file.txt"])
+                } else {
+                    std::fs::read_to_string(self.root.join("file.txt"))
+                        .unwrap()
+                        .trim()
+                        .to_string()
+                };
+                json!({"original":{"kind":"text","text":original},"modified":{"kind":"text","text":modified}})
+            }
+        }
+    }
     fn request(&self, operation: Operation) -> Result<ResultValue, host::HostFailure> {
         let result = match operation {
             Operation::BackendState {
@@ -234,37 +267,9 @@ impl Client {
                         assert!(self.conflict_comparison.load(Ordering::Acquire));
                         json!({"stageIds":[null,null,null],"resultObjectId":null,"base":{"kind":"missing"},"current":{"kind":"binary","data":"AAEA"},"incoming":{"kind":"missing"},"result":{"kind":"binary","data":"AAIA"}})
                     }
-                    "changeFile" => {
-                        if self.binary_comparison.load(Ordering::Acquire) {
-                            assert_eq!(params["path"], "image.bin");
-                            json!({"original":{"kind":"binary","data":"AAEA"},"modified":{"kind":"binary","data":"AAIA"}})
-                        } else {
-                            assert_eq!(params["path"], "file.txt");
-                            let staged = params["comparison"] == "staged";
-                            let status = self.status();
-                            let changed = &status["changes"][0][if staged {
-                                "indexStatus"
-                            } else {
-                                "worktreeStatus"
-                            }];
-                            if changed == "unmodified" || changed.is_null() {
-                                json!({"backendError":{"name":"GitOperationFailed","message":"No change in this comparison"}})
-                            } else {
-                                let original = self.git(&[
-                                    "show",
-                                    if staged { "HEAD:file.txt" } else { ":file.txt" },
-                                ]);
-                                let modified = if staged {
-                                    self.git(&["show", ":file.txt"])
-                                } else {
-                                    std::fs::read_to_string(self.root.join("file.txt"))
-                                        .unwrap()
-                                        .trim()
-                                        .to_string()
-                                };
-                                json!({"original":{"kind":"text","text":original},"modified":{"kind":"text","text":modified}})
-                            }
-                        }
+                    "changeFile" => self.comparison(&params["path"], &params["comparison"]),
+                    "changeFiles" => {
+                        json!({"files":params["paths"].as_array().unwrap().iter().map(|path| self.comparison(path, &params["comparison"])).collect::<Vec<_>>()})
                     }
                     "stage" => {
                         self.revision.fetch_add(1, Ordering::Relaxed);
@@ -807,6 +812,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         verify_history_references(&supervisor, &client);
         verify_checkout_picker(&supervisor, &client, language);
         verify_workspace_comparisons(&supervisor, &client, language);
+        verify_batched_workspace_comparisons(&supervisor, &client);
         verify_binary_comparisons(&supervisor, &client);
         for cancellable in [false, true] {
             client.configuration.lock().unwrap()["supportCancellation"] = json!(cancellable);
@@ -1866,6 +1872,91 @@ fn verify_workspace_comparisons(
         assert_eq!(input["items"][0]["modified"]["initialText"], expected);
     }
     client.git(&["reset", "--hard", "HEAD"]);
+}
+
+fn verify_batched_workspace_comparisons(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+) {
+    let mut status = client.status();
+    status["changes"] = json!((0..35).map(|index| json!({
+        "path": format!("batch/{index:02}.txt"), "originalPath":null,
+        "indexStatus":"unmodified", "worktreeStatus":"modified", "conflicted":false,
+        "submodule":{"isSubmodule":false,"commitChanged":false,"trackedChanges":false,"untrackedChanges":false}
+    })).collect::<Vec<_>>());
+    *client.status_override.lock().unwrap() = Some(status);
+    let before = client.requests.lock().unwrap().len();
+    let request = || {
+        invocation(
+            "git.openUncommittedChanges",
+            "execute",
+            json!({"arguments":["root"]}),
+        )
+    };
+    execute(supervisor, client, request());
+    {
+        let requests = client.editor_requests.lock().unwrap();
+        let input = &requests
+            .iter()
+            .rev()
+            .find(|request| request["method"] == "open")
+            .unwrap()["input"];
+        let items = input["items"].as_array().unwrap();
+        assert_eq!(items.len(), 35);
+        for (index, item) in items.iter().enumerate() {
+            assert_eq!(item["id"], format!("batch/{index:02}.txt"));
+            assert_eq!(
+                item["modified"]["initialText"],
+                format!("new batch/{index:02}.txt")
+            );
+        }
+    }
+    {
+        let requests = client.requests.lock().unwrap();
+        let batch_sizes = requests[before..]
+            .iter()
+            .filter(|(method, _)| method == "changeFiles")
+            .map(|(_, params)| params["paths"].as_array().unwrap().len())
+            .collect::<Vec<_>>();
+        assert_eq!(batch_sizes, [16, 16, 3]);
+        assert!(
+            requests[before..]
+                .iter()
+                .all(|(method, _)| method != "changeFile")
+        );
+    }
+    let opened = || {
+        client
+            .editor_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|request| request["method"] == "open")
+            .count()
+    };
+    let open_count = opened();
+    let failed = supervisor.begin_invoke(request()).unwrap().wait_with_client(|operation, _, _| {
+        if matches!(&operation, Operation::BackendRequest { method, .. } if method == "changeFiles") {
+            return Ok(ResultValue::Value { value: json!({"files":[]}) });
+        }
+        client.request(operation)
+    });
+    assert!(
+        failed.is_err(),
+        "An incomplete batch must not publish an editor input"
+    );
+    assert_eq!(opened(), open_count);
+    let handle = supervisor.begin_invoke(request()).unwrap();
+    let cancelled = handle.wait_with_client(|operation, _, _| {
+        if matches!(&operation, Operation::BackendRequest { method, .. } if method == "changeFiles")
+        {
+            handle.cancel(host::CancelReason::Caller).unwrap();
+        }
+        client.request(operation)
+    });
+    assert!(cancelled.is_err());
+    assert_eq!(opened(), open_count);
+    *client.status_override.lock().unwrap() = None;
 }
 
 fn verify_binary_comparisons(supervisor: &host::ExtensionHostSupervisor, client: &Client) {

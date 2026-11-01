@@ -112,6 +112,9 @@
           "changeFile": {
             "route": "git/changeFile"
           },
+          "changeFiles": {
+            "route": "git/changeFiles"
+          },
           "conflictFile": {
             "route": "git/conflictFile"
           },

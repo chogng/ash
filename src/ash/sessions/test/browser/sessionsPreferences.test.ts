@@ -305,7 +305,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const categoryButton = (id: string): HTMLButtonElement => window.document.querySelector<HTMLButtonElement>(`[data-settings-category-id="${id}"]`)!;
 	assert.equal(categoryButton('worktree'), null, 'unsupported worktree management is not offered as an empty page');
 	assert.equal(categoryButton('archived-chats'), null);
-	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'projects', 'design', 'customize', 'dictation', 'general']) {
+	assert.equal(categoryButton('projects'), null);
+	for (const id of ['execution-trace', 'appearance', 'browser', 'tab', 'code-intelligence', 'environment', 'keyboard-shortcuts', 'account', 'design', 'customize', 'dictation', 'general']) {
 		await preferences.open({ section: id });
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');

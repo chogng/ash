@@ -1202,6 +1202,10 @@ use crate::protocol::git::GitChangeFileParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeFileResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangeFilesParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitChangeFilesResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangeStatusDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitChangesSummaryResult;
@@ -5491,6 +5495,11 @@ client_methods! {
         response: GitChangeFileResult,
         serialization: RepositoryChangeFile,
     },
+    GitChangeFiles => "git/changeFiles" {
+        params: GitChangeFilesParams,
+        response: GitChangeFilesResult,
+        serialization: RepositoryExclusive,
+    },
     GitConflictFile => "git/conflictFile" {
         params: GitConflictFileParams,
         response: GitConflictFileResult,
@@ -7763,6 +7772,8 @@ typescript_bindings! {
     GitChangeFileComparisonDto,
     GitChangeFileParams,
     GitChangeFileResult,
+    GitChangeFilesParams,
+    GitChangeFilesResult,
     GitConflictFileParams,
     GitConflictFileResult,
     GitConflictResolutionDto,
