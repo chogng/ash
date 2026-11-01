@@ -49,6 +49,12 @@
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
+/* Rename's input can transfer :focus-visible to its pointer-activated origin. */
+.ash-chat-view-title.pointer-navigation
+	.ash-chat-view-title-button:focus-visible {
+	outline: none;
+}
+
 .ash-chat-view-title-label {
 	min-width: 0;
 	overflow: hidden;

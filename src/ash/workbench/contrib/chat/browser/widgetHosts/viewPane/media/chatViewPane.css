@@ -17,6 +17,12 @@
 	min-height: 0;
 	min-width: 0;
 	flex: 1 1 auto;
+	background: inherit;
+}
+
+/* Share the selected tab's surface; List mode keeps the mounting host's background. */
+.ash-chat-body.has-session-tabs {
+	background: var(--ash-editor-background);
 }
 
 .ash-chat-pane-host {
@@ -24,6 +30,7 @@
 	min-height: 0;
 	min-width: 0;
 	flex: 1 1 auto;
+	background: inherit;
 }
 
 .ash-chat-sessions-sidebar {
@@ -127,7 +134,7 @@
 
 .ash-chat-pane-host > .ash-chat {
 	height: 100%;
-	background: var(--ash-auxiliaryBar-background);
+	background: inherit;
 }
 
 .ash-chat-pane-host > .ash-chat[hidden] {

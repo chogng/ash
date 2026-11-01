@@ -64,6 +64,11 @@ export class WorkbenchTabsControl<T> extends Disposable {
 		this.layout();
 	}
 
+	/** Preserves a host action's input modality when an overlay returns focus to a tab. */
+	setInputModality(modality: 'pointer' | 'keyboard'): void {
+		this.container.classList.toggle('pointer-navigation', modality === 'pointer');
+	}
+
 	/** Only the bottom row of a stacked title can connect to the content surface. */
 	setConnectedToContent(touchesContent: boolean): void {
 		if (this.touchesContent === touchesContent) return;

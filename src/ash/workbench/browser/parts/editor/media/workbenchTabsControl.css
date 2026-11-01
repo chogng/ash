@@ -44,7 +44,13 @@
 	text-overflow: ellipsis;
 }
 
-.ash-flush-editor-tabs .ash-tab-label:focus-visible {
+.ash-workbench-tabs-control .ash-tab > .ash-tab-label:focus-visible {
+	outline: none;
+}
+
+/* Tab navigation includes the label, actions and padding in one focus boundary. */
+.ash-workbench-tabs-control:not(.pointer-navigation)
+	.ash-tab:has(> .ash-tab-label:focus-visible) {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

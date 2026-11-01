@@ -538,6 +538,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 
 	private updateSessionTabs(entries: readonly IChatViewPaneEntry<TModel>[]): void {
 		const tabs = this.sessionsPresentation === AgentSessionsPresentation.Tabs;
+		this.body.classList.toggle('has-session-tabs', tabs);
 		this.titleControl.setTabs(entries.map(entry => ({
 			id: entry.pane.element.id,
 			value: entry.id,
