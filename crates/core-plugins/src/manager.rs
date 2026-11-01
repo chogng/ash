@@ -128,6 +128,10 @@ pub(crate) struct InstallationRecord {
     pub capabilities: Vec<CapabilityRecord>,
     #[serde(default)]
     product_runtime_authority: Option<String>,
+    // Content-derived installation IDs can be reused after uninstall/reinstall. In-flight
+    // updates must retain this process-local incarnation; no update survives a restart.
+    #[serde(skip)]
+    generation: u64,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -241,6 +245,11 @@ struct RuntimeState {
 
 struct LeaseRecord {
     lease: CapabilityLease,
+}
+
+enum InstallationOperation<'a> {
+    Install,
+    Update(&'a InstallationRecord),
 }
 
 impl ExtensionPackageManager {
@@ -546,6 +555,7 @@ impl ExtensionPackageManager {
                     .get(&installation.installation_id);
                 if !current.is_some_and(|record| {
                     record.package == installation.package
+                        && record.generation == installation.generation
                         && record.state == InstallationState::Installed
                 }) {
                     continue;
@@ -558,10 +568,7 @@ impl ExtensionPackageManager {
                 available: candidate.clone(),
             };
             if apply && !cancelled() {
-                match self.update(UpdatePackageRequest {
-                    installation_id: installation.installation_id,
-                    version: Some(candidate.version),
-                }) {
+                match self.update_installation(&installation, Some(candidate.version)) {
                     Ok(installed) => updated.push(installed.package),
                     Err(_) => {
                         failures.push(installation.package.id);
@@ -707,6 +714,7 @@ impl ExtensionPackageManager {
     fn install_downloaded(
         &self,
         downloaded: &dyn ExtensionPackagePayload,
+        operation: InstallationOperation<'_>,
     ) -> Result<InstalledPackage, ExtensionsClientError> {
         let artifact = self.store.materialize(downloaded)?;
         self.ensure_supported_package(&artifact.package)?;
@@ -733,10 +741,8 @@ impl ExtensionPackageManager {
             })
             .collect::<Vec<_>>();
         let mut installation = InstallationRecord {
-            product_runtime_authority: {
-                let runtime = self.lock_runtime()?;
-                self.product_runtime_authority(&artifact.package.id, &runtime.durable)?
-            },
+            product_runtime_authority: None,
+            generation: 0,
             installation_id: installation_id.clone(),
             package: artifact.package,
             state: InstallationState::Installed,
@@ -747,15 +753,69 @@ impl ExtensionPackageManager {
                 activation::descriptor(&self.store, &installation.package, capability)?;
         }
         let mut runtime = self.lock_runtime()?;
-        let installation = runtime
-            .durable
+        // Revalidate and retire the old installation in the same transaction that publishes
+        // its replacement. Downloading or materializing bytes alone never reinstalls a package.
+        if let InstallationOperation::Update(expected) = &operation {
+            let current = runtime
+                .durable
+                .installations
+                .get(&expected.installation_id)
+                .ok_or_else(installation_not_found)?;
+            if current.package != expected.package || current.generation != expected.generation {
+                return Err(installation_not_found());
+            }
+            if current.state != InstallationState::Installed {
+                return Err(installation_in_use());
+            }
+        }
+        installation.product_runtime_authority =
+            self.product_runtime_authority(&installation.package.id, &runtime.durable)?;
+        installation.generation = runtime.generation;
+        let mut durable = runtime.durable.clone();
+        let installation = durable
             .installations
             .entry(installation_id)
             .or_insert(installation)
             .clone();
-        self.store.write_state(&runtime.durable)?;
+        if let InstallationOperation::Update(previous) = operation
+            && previous.installation_id != installation.installation_id
+        {
+            let in_use = runtime
+                .leases
+                .values()
+                .any(|lease| lease.lease.installation_id == previous.installation_id);
+            if in_use {
+                durable
+                    .installations
+                    .get_mut(&previous.installation_id)
+                    .expect("update source was checked under the same lock")
+                    .state = InstallationState::PendingRemoval;
+            } else {
+                durable.installations.remove(&previous.installation_id);
+            }
+        }
+        self.store.write_state(&durable)?;
+        runtime.durable = durable;
         publish_change(&mut runtime)?;
         Ok(installation.public())
+    }
+
+    fn update_installation(
+        &self,
+        installation: &InstallationRecord,
+        version: Option<String>,
+    ) -> Result<InstalledPackage, ExtensionsClientError> {
+        if installation.state != InstallationState::Installed {
+            return Err(installation_in_use());
+        }
+        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
+            package_id: installation.package.id.clone(),
+            version,
+        })?;
+        self.install_downloaded(
+            downloaded.as_ref(),
+            InstallationOperation::Update(installation),
+        )
     }
 
     fn lock_runtime(
@@ -918,36 +978,23 @@ impl ExtensionPackageService for ExtensionPackageManager {
             package_id: request.package_id,
             version: request.version,
         })?;
-        self.install_downloaded(downloaded.as_ref())
+        self.install_downloaded(downloaded.as_ref(), InstallationOperation::Install)
     }
 
     fn update(
         &self,
         request: UpdatePackageRequest,
     ) -> Result<InstalledPackage, ExtensionsClientError> {
-        let package_id = {
+        let installation = {
             let runtime = self.lock_runtime()?;
             runtime
                 .durable
                 .installations
                 .get(&request.installation_id)
                 .ok_or_else(installation_not_found)?
-                .package
-                .id
                 .clone()
         };
-        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
-            package_id,
-            version: request.version,
-        })?;
-        let installed = self.install_downloaded(downloaded.as_ref())?;
-        if installed.installation_id != request.installation_id {
-            self.uninstall(UninstallPackageRequest {
-                installation_id: request.installation_id,
-                mode: UninstallMode::WhenUnused,
-            })?;
-        }
-        Ok(installed)
+        self.update_installation(&installation, request.version)
     }
 
     fn uninstall(&self, request: UninstallPackageRequest) -> Result<(), ExtensionsClientError> {

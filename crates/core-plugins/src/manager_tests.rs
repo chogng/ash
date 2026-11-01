@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use crate::AcquireCapabilityRequest;
 use crate::AvailableCapability;
@@ -120,6 +123,215 @@ fn scheduled_extension_updates_install_from_the_persisted_profile_policy() {
             .package
             .version,
         "2.0.0"
+    );
+}
+
+#[test]
+fn in_flight_automatic_update_does_not_restore_an_uninstalled_package() {
+    let root = tempfile::tempdir().unwrap();
+    let (registry, started, resume) = PausingRegistry::new();
+    let manager = ExtensionPackageManager::open(root.path(), providers(registry)).unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    manager
+        .set_update_policy(
+            crate::ExtensionUpdatePolicy {
+                auto_check_updates: true,
+                auto_update: true,
+            },
+            0,
+        )
+        .unwrap();
+
+    std::thread::scope(|scope| {
+        let update = scope
+            .spawn(|| manager.check_for_updates_if_due(&std::sync::atomic::AtomicBool::new(false)));
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id,
+                mode: UninstallMode::IfUnused,
+            })
+            .unwrap();
+        assert_eq!(
+            manager.list_installed(ListInstalledRequest {}).unwrap(),
+            Vec::new()
+        );
+        resume.send(()).unwrap();
+        update.join().unwrap().unwrap();
+        assert!(manager.updates().unwrap().updated.is_empty());
+    });
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        Vec::new()
+    );
+    drop(manager);
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert_eq!(
+        reopened.list_installed(ListInstalledRequest {}).unwrap(),
+        Vec::new()
+    );
+}
+
+#[test]
+fn in_flight_update_cannot_replace_a_reinstalled_copy_of_the_same_package() {
+    let root = tempfile::tempdir().unwrap();
+    let (registry, started, resume) = PausingRegistry::new();
+    let manager = ExtensionPackageManager::open(root.path(), providers(registry)).unwrap();
+    let request = InstallPackageRequest {
+        package_id: "demo@test".into(),
+        version: Some("1.0.0".into()),
+    };
+    let installed = manager.install(request.clone()).unwrap();
+    let reinstalled = std::thread::scope(|scope| {
+        let update = scope.spawn(|| {
+            manager.update(UpdatePackageRequest {
+                installation_id: installed.installation_id.clone(),
+                version: Some("2.0.0".into()),
+            })
+        });
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id.clone(),
+                mode: UninstallMode::IfUnused,
+            })
+            .unwrap();
+        let reinstalled = manager.install(request).unwrap();
+        assert_eq!(reinstalled, installed);
+        resume.send(()).unwrap();
+        assert_eq!(
+            update.join().unwrap().unwrap_err().kind(),
+            crate::ExtensionsClientErrorKind::Remote(
+                crate::ExtensionsErrorCode::InstallationNotFound
+            )
+        );
+        reinstalled
+    });
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![reinstalled.clone()]
+    );
+    drop(manager);
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert_eq!(
+        reopened.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![reinstalled]
+    );
+}
+
+#[test]
+fn in_flight_update_respects_deferred_uninstallation() {
+    let root = tempfile::tempdir().unwrap();
+    let (registry, started, resume) = PausingRegistry::new();
+    let manager = ExtensionPackageManager::open(root.path(), providers(registry)).unwrap();
+    let mut installed = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let acquired = manager
+        .acquire_capability(AcquireCapabilityRequest {
+            capability: installed.capabilities[0].reference.clone(),
+        })
+        .unwrap();
+    std::thread::scope(|scope| {
+        let update = scope.spawn(|| {
+            manager.update(UpdatePackageRequest {
+                installation_id: installed.installation_id.clone(),
+                version: Some("2.0.0".into()),
+            })
+        });
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        manager
+            .uninstall(UninstallPackageRequest {
+                installation_id: installed.installation_id.clone(),
+                mode: UninstallMode::WhenUnused,
+            })
+            .unwrap();
+        resume.send(()).unwrap();
+        assert_eq!(
+            update.join().unwrap().unwrap_err().kind(),
+            crate::ExtensionsClientErrorKind::Remote(crate::ExtensionsErrorCode::InstallationInUse)
+        );
+    });
+    installed.state = crate::InstallationState::PendingRemoval;
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![installed]
+    );
+    assert!(
+        manager
+            .release_capability(ReleaseCapabilityRequest {
+                lease_id: acquired.lease.id,
+            })
+            .unwrap()
+            .installation_changed
+    );
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        Vec::new()
+    );
+    drop(manager);
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert_eq!(
+        reopened.list_installed(ListInstalledRequest {}).unwrap(),
+        Vec::new()
+    );
+}
+
+#[test]
+fn in_flight_update_cannot_overwrite_a_completed_update() {
+    let root = tempfile::tempdir().unwrap();
+    let (registry, started, resume) = PausingRegistry::new();
+    let manager = ExtensionPackageManager::open(root.path(), providers(registry)).unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let latest = std::thread::scope(|scope| {
+        let update = scope.spawn(|| {
+            manager.update(UpdatePackageRequest {
+                installation_id: installed.installation_id.clone(),
+                version: Some("2.0.0".into()),
+            })
+        });
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        let latest = manager
+            .update(UpdatePackageRequest {
+                installation_id: installed.installation_id.clone(),
+                version: Some("3.0.0".into()),
+            })
+            .unwrap();
+        resume.send(()).unwrap();
+        assert_eq!(
+            update.join().unwrap().unwrap_err().kind(),
+            crate::ExtensionsClientErrorKind::Remote(
+                crate::ExtensionsErrorCode::InstallationNotFound
+            )
+        );
+        latest
+    });
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![latest.clone()]
+    );
+    drop(manager);
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert_eq!(
+        reopened.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![latest]
     );
 }
 
@@ -386,7 +598,7 @@ fn local_manager_updates_uninstalls_and_owns_resource_leases() {
     let root = tempfile::tempdir().unwrap();
     let manager =
         ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
-    let installed = manager
+    let mut installed = manager
         .install(InstallPackageRequest {
             package_id: "demo@test".into(),
             version: Some("1.0.0".into()),
@@ -401,6 +613,32 @@ fn local_manager_updates_uninstalls_and_owns_resource_leases() {
         crate::ActivationSpec::Skill(skill) => skill.resource.clone(),
         _ => panic!("expected Skill activation"),
     };
+    let changes = manager.subscribe().unwrap();
+    let updated = manager
+        .update(UpdatePackageRequest {
+            installation_id: installed.installation_id.clone(),
+            version: Some("2.0.0".into()),
+        })
+        .unwrap();
+    assert_eq!(updated.package.version, "2.0.0");
+    assert_eq!(changes.try_iter().count(), 1);
+    installed.state = crate::InstallationState::PendingRemoval;
+    let mut expected = vec![installed.clone(), updated.clone()];
+    expected.sort_by(|left, right| left.installation_id.cmp(&right.installation_id));
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        expected
+    );
+    assert_eq!(
+        manager
+            .update(UpdatePackageRequest {
+                installation_id: installed.installation_id,
+                version: Some("3.0.0".into()),
+            })
+            .unwrap_err()
+            .kind(),
+        crate::ExtensionsClientErrorKind::Remote(crate::ExtensionsErrorCode::InstallationInUse)
+    );
     let content = manager
         .open_resource(OpenResourceRequest {
             lease_id: acquired.lease.id.clone(),
@@ -413,15 +651,7 @@ fn local_manager_updates_uninstalls_and_owns_resource_leases() {
             lease_id: acquired.lease.id,
         })
         .unwrap();
-    assert!(!release.installation_changed);
-
-    let updated = manager
-        .update(UpdatePackageRequest {
-            installation_id: installed.installation_id,
-            version: Some("2.0.0".into()),
-        })
-        .unwrap();
-    assert_eq!(updated.package.version, "2.0.0");
+    assert!(release.installation_changed);
     assert_eq!(
         manager.list_installed(ListInstalledRequest {}).unwrap(),
         vec![updated.clone()]
@@ -574,6 +804,55 @@ fn packaged_stdio_mcp_uses_a_path_free_executable_resource() {
 }
 
 struct FakeRegistry;
+
+/// Stops the new-version download so tests can finish a competing operation first.
+struct PausingRegistry {
+    started: mpsc::Sender<()>,
+    resume: Mutex<mpsc::Receiver<()>>,
+}
+
+impl PausingRegistry {
+    fn new() -> (Arc<Self>, mpsc::Receiver<()>, mpsc::Sender<()>) {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        (
+            Arc::new(Self {
+                started: started_tx,
+                resume: Mutex::new(resume_rx),
+            }),
+            started_rx,
+            resume_tx,
+        )
+    }
+}
+
+impl ExtensionSource for PausingRegistry {
+    fn search(
+        &self,
+        request: SearchPackagesRequest,
+    ) -> Result<SearchPackagesResult, ExtensionsClientError> {
+        FakeRegistry.search(request)
+    }
+
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
+        FakeRegistry.get(request)
+    }
+
+    fn download(
+        &self,
+        request: DownloadPackageRequest,
+    ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
+        if request.version.as_deref() == Some("2.0.0") {
+            self.started.send(()).unwrap();
+            self.resume
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap();
+        }
+        FakeRegistry.download(request)
+    }
+}
 
 impl ExtensionSource for FakeRegistry {
     fn search(
