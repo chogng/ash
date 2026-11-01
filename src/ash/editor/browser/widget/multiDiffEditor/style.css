@@ -32,8 +32,8 @@
 
 .stanza-multi-diff-editor-section {
 	position: absolute;
-	right: 8px;
-	left: 8px;
+	right: var(--ash-spacing-size80);
+	left: var(--ash-spacing-size80);
 	box-sizing: border-box;
 	overflow: visible;
 	background: var(--ash-multiDiffEditor-background);
@@ -41,7 +41,17 @@
 	border-radius: var(--ash-cornerRadius-medium);
 }
 
-.stanza-multi-diff-editor-header {
+.stanza-multi-diff-editor.flat .stanza-multi-diff-editor-section {
+	right: 0;
+	left: 0;
+	border-width: 0 0 var(--ash-strokeThickness);
+	border-radius: 0;
+}
+
+.stanza-multi-diff-editor.flat .stanza-multi-diff-editor-header,
+.stanza-multi-diff-editor.flat
+	.stanza-multi-diff-editor-section.collapsed
+	.stanza-multi-diff-editor-header {
 	height: calc(34px - var(--ash-strokeThickness, 0px));
 	border-radius: 0;
 }
@@ -274,6 +284,10 @@
 .stanza-multi-diff-editor-body {
 	position: relative;
 	min-width: 100%;
+}
+
+.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-body {
+	display: none;
 }
 
 .stanza-multi-diff-editor-item-editor {

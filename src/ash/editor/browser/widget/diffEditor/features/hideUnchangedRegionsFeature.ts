@@ -197,93 +197,114 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		let range = initialRange;
 		const domNode = h(editor.getDomNode().ownerDocument, 'div');
 		domNode.className = 'ash-diff-hidden-region';
-		const content = h(domNode.ownerDocument, 'div');
-		content.className = 'ash-diff-hidden-region-content';
-		domNode.append(content);
-		const disclosure = h(domNode.ownerDocument, 'div');
-		disclosure.className = 'ash-diff-hidden-region-disclosure';
-		content.append(disclosure);
-		const count = h(domNode.ownerDocument, 'span');
-		count.className = 'ash-diff-hidden-region-count';
-		count.textContent = localize('diffEditor.hiddenLines', '{0} hidden lines', range.length);
-		count.title = count.textContent;
-		content.append(count);
-		resources.add(addDisposableListener(count, 'dblclick', event => {
-			if (event.button !== 0) {
-				return;
-			}
-			event.preventDefault();
-			region.revealedAbove = region.original.length;
-			this.render();
-			editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
-			editor.focus();
-			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
-		}));
-
-		const above = this.addButton(resources, domNode, localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-above', () => {
-			const count = Math.min(range.length, this.options.revealLineCount);
-			const line = range.startLineNumber;
-			region.revealedAbove += count;
-			this.render();
-			editor.revealRange(new Range(line, 1, line, 1));
-			editor.focus();
-			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', count));
-		});
-		const showAllLabel = localize('diffEditor.showAll', 'Show all unchanged lines');
-		const showAll = resources.add(new Button(disclosure, {
-			...defaultButtonStyles,
-			label: showAllLabel,
-			title: showAllLabel,
-			icon: Lxicon.unfold,
-			iconOnly: true,
-			presentation: 'quiet',
-			size: 'small',
-		}));
-		resources.add(showAll.onDidClick(() => {
-			region.revealedAbove = region.original.length;
-			this.render();
-			editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
-			editor.focus();
-			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
-		}));
-		const below = this.addButton(resources, domNode, localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-below', () => {
-			const count = Math.min(range.length, this.options.revealLineCount);
-			const line = range.endLineNumberExclusive - 1;
-			region.revealedBelow += count;
-			this.render();
-			editor.revealRange(new Range(line, 1, line, 1));
-			editor.focus();
-			editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', count));
-		});
-
-		const currentRange = observableValue('hidden region range', range);
-		const source = this.source.value;
-		if (showBreadcrumbs && source) {
-			const breadcrumbs = h(domNode.ownerDocument, 'span');
-			breadcrumbs.className = 'ash-diff-hidden-region-breadcrumbs';
-			content.append(breadcrumbs);
-			resources.add(autorun(reader => {
-				breadcrumbs.replaceChildren(...source.getBreadcrumbItems(currentRange.read(reader), reader).map(item => {
-					const button = h(breadcrumbs.ownerDocument, 'button');
-					button.type = 'button';
-					button.className = 'ash-diff-hidden-region-symbol';
-					button.textContent = item.name;
-					button.title = localize('diffEditor.revealSymbol', 'Go to {0}', item.name);
-					button.dataset.line = String(item.startLineNumber);
-					return button;
-				}));
-				breadcrumbs.hidden = breadcrumbs.childElementCount === 0;
-			}));
-			resources.add(addDisposableListener(breadcrumbs, 'click', event => {
-				const target = event.target;
-				if (!(target instanceof HTMLElement) || target.tagName !== 'BUTTON' || !target.dataset.line) return;
+		let updateContent: (() => void) | undefined;
+		let layoutContent: (() => void) | undefined;
+		const mountContent = (): void => {
+			if (updateContent) { return; }
+			const content = h(domNode.ownerDocument, 'div');
+			content.className = 'ash-diff-hidden-region-content';
+			domNode.append(content);
+			const disclosure = h(domNode.ownerDocument, 'div');
+			disclosure.className = 'ash-diff-hidden-region-disclosure';
+			content.append(disclosure);
+			const count = h(domNode.ownerDocument, 'span');
+			count.className = 'ash-diff-hidden-region-count';
+			count.textContent = localize('diffEditor.hiddenLines', '{0} hidden lines', range.length);
+			count.title = count.textContent;
+			content.append(count);
+			resources.add(addDisposableListener(count, 'dblclick', event => {
+				if (event.button !== 0) {
+					return;
+				}
+				event.preventDefault();
 				region.revealedAbove = region.original.length;
 				this.render();
-				const line = Number(target.dataset.line);
-				this.modified.revealRange(new Range(line, 1, line, 1));
-				this.modified.focus();
+				editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
+				editor.focus();
+				editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
 			}));
-		}
+
+			const above = this.addButton(resources, domNode, localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-above', () => {
+				const count = Math.min(range.length, this.options.revealLineCount);
+				const line = range.startLineNumber;
+				region.revealedAbove += count;
+				this.render();
+				editor.revealRange(new Range(line, 1, line, 1));
+				editor.focus();
+				editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', count));
+			});
+			const showAllLabel = localize('diffEditor.showAll', 'Show all unchanged lines');
+			const showAll = resources.add(new Button(disclosure, {
+				...defaultButtonStyles,
+				label: showAllLabel,
+				title: showAllLabel,
+				icon: Lxicon.unfold,
+				iconOnly: true,
+				presentation: 'quiet',
+				size: 'small',
+			}));
+			resources.add(showAll.onDidClick(() => {
+				region.revealedAbove = region.original.length;
+				this.render();
+				editor.revealRange(new Range(range.startLineNumber, 1, range.startLineNumber, 1));
+				editor.focus();
+				editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', range.length));
+			}));
+			const below = this.addButton(resources, domNode, localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount)), 'ash-diff-hidden-region-below', () => {
+				const count = Math.min(range.length, this.options.revealLineCount);
+				const line = range.endLineNumberExclusive - 1;
+				region.revealedBelow += count;
+				this.render();
+				editor.revealRange(new Range(line, 1, line, 1));
+				editor.focus();
+				editor.announceAccessibilityStatus(localize('diffEditor.revealedLines', 'Revealed {0} unchanged lines', count));
+			});
+
+			const currentRange = observableValue('hidden region range', range);
+			const source = this.source.value;
+			if (showBreadcrumbs && source) {
+				const breadcrumbs = h(domNode.ownerDocument, 'span');
+				breadcrumbs.className = 'ash-diff-hidden-region-breadcrumbs';
+				content.append(breadcrumbs);
+				resources.add(autorun(reader => {
+					breadcrumbs.replaceChildren(...source.getBreadcrumbItems(currentRange.read(reader), reader).map(item => {
+						const button = h(breadcrumbs.ownerDocument, 'button');
+						button.type = 'button';
+						button.className = 'ash-diff-hidden-region-symbol';
+						button.textContent = item.name;
+						button.title = localize('diffEditor.revealSymbol', 'Go to {0}', item.name);
+						button.dataset.line = String(item.startLineNumber);
+						return button;
+					}));
+					breadcrumbs.hidden = breadcrumbs.childElementCount === 0;
+				}));
+				resources.add(addDisposableListener(breadcrumbs, 'click', event => {
+					const target = event.target;
+					if (!(target instanceof HTMLElement) || target.tagName !== 'BUTTON' || !target.dataset.line) return;
+					region.revealedAbove = region.original.length;
+					this.render();
+					const line = Number(target.dataset.line);
+					this.modified.revealRange(new Range(line, 1, line, 1));
+					this.modified.focus();
+				}));
+			}
+
+			this.addDrag(resources, above, editor, region, 'revealedAbove');
+			this.addDrag(resources, below, editor, region, 'revealedBelow');
+			updateContent = (): void => {
+				currentRange.set(range, undefined);
+				count.textContent = localize('diffEditor.hiddenLines', '{0} hidden lines', range.length);
+				count.title = count.textContent;
+				above.label = localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount));
+				below.label = localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount));
+				above.setTitle(above.label);
+				below.setTitle(below.label);
+			};
+			layoutContent = (): void => {
+				disclosure.style.width = `${editor.getLayoutInfo().contentLeft}px`;
+			};
+			layoutContent();
+		};
 
 		let id!: string;
 		let top: number | undefined;
@@ -295,11 +316,9 @@ export class HideUnchangedRegionsFeature extends Disposable {
 		const layout = (): void => {
 			const info = editor.getLayoutInfo();
 			domNode.style.width = `${info.width - info.verticalScrollbarWidth}px`;
-			disclosure.style.width = `${info.contentLeft}px`;
+			layoutContent?.();
 			editor.layoutOverlayWidget(overlay);
 		};
-		this.addDrag(resources, above, editor, region, 'revealedAbove');
-		this.addDrag(resources, below, editor, region, 'revealedBelow');
 		const zone = {
 			afterLineNumber: range.startLineNumber - 1,
 			heightInPx: HIDDEN_REGION_HEIGHT,
@@ -309,6 +328,9 @@ export class HideUnchangedRegionsFeature extends Disposable {
 				const nextTop = position + HIDDEN_REGION_HEIGHT <= 0 ? undefined : position;
 				if (top === nextTop) { return; }
 				top = nextTop;
+				// Preserve overlay DOM order and zone space for all regions, but
+				// build buttons, drag listeners and breadcrumbs only on first use.
+				if (top !== undefined) { mountContent(); }
 				editor.layoutOverlayWidget(overlay);
 			},
 		};
@@ -323,13 +345,7 @@ export class HideUnchangedRegionsFeature extends Disposable {
 			update: (nextRange: LineRange): void => {
 				if (range.equals(nextRange)) { return; }
 				range = nextRange;
-				currentRange.set(range, undefined);
-				count.textContent = localize('diffEditor.hiddenLines', '{0} hidden lines', range.length);
-				count.title = count.textContent;
-				above.label = localize('diffEditor.showMoreAbove', 'Show {0} more lines above', Math.min(range.length, this.options.revealLineCount));
-				below.label = localize('diffEditor.showMoreBelow', 'Show {0} more lines below', Math.min(range.length, this.options.revealLineCount));
-				above.setTitle(above.label);
-				below.setTitle(below.label);
+				updateContent?.();
 				zone.afterLineNumber = range.startLineNumber - 1;
 				editor.changeViewZones(accessor => accessor.layoutZone(id));
 			},

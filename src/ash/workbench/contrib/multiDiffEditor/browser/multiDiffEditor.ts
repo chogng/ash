@@ -29,7 +29,7 @@ import { type MultiDiffEditorLocation } from '../../../../editor/browser/widget/
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDocumentDiffProvider } from '../../../../editor/common/diff/documentDiffProvider.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { MenuId, IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -54,6 +54,7 @@ import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfigura
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IResourceLabelService } from '../../../browser/labels.js';
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
 export const MultiDiffEditorHideUnchangedRegions = new RawContextKey<boolean>('multiDiffEditorHideUnchangedRegions', true);
@@ -328,6 +329,9 @@ class MultiDiffEditorSession extends Disposable {
 			const items = this.createItems(paneInput, resources);
 			this.model = this._register(new MultiDiffEditorModel(items));
 			this._register(configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
+					this.editor?.setLayoutStyle(configuration.getValue(WorkbenchConfiguration.layoutStyle));
+				}
 				if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap)
 					|| event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
 					this.editor?.setConfiguredWordWrap(getDiffWordWrap(configuration));
@@ -368,6 +372,7 @@ class MultiDiffEditorSession extends Disposable {
 						.finally(() => retention?.dispose());
 				},
 				wordWrap: getDiffWordWrap(configuration),
+				layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
 				...this.getEditorOptions(),
 				workbenchUIElementFactory: {
 					createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
@@ -415,8 +420,14 @@ class MultiDiffEditorSession extends Disposable {
 		this.editor?.layout({ width: dimension.width, height: Math.max(0, dimension.height - toolbarHeight) });
 	}
 
-	public resolveVisible(): Promise<void> {
-		return this.editor?.resolveVisible() ?? Promise.resolve();
+	public async resolveVisible(): Promise<void> {
+		await this.editor?.resolveVisible();
+		// Build the hidden candidate and compute its diff while lexical providers
+		// initialize. Publishing still waits for the same fully ready text models.
+		await Promise.all([...this.models].flatMap(model => [
+			model.original.tokenization.whenReady(this.abortController.signal),
+			model.modified.tokenization.whenReady(this.abortController.signal),
+		]));
 	}
 
 	public show(): void {
@@ -436,18 +447,22 @@ class MultiDiffEditorSession extends Disposable {
 	}
 
 	private async loadItem(input: MultiDiffEditorInputItem, resources: DisposableStore, signal: AbortSignal): Promise<DiffModel | undefined> {
+		using references = new DisposableStore();
+		const acquisition = new AbortController();
+		const acquisitionSignal = AbortSignal.any([signal, acquisition.signal]);
+		const acquire = async (side: TextModelInput): Promise<TextModelReference> => {
+			const reference = await this.modelService.acquire(side, acquisitionSignal, { waitForSyntax: false });
+			if (this.isDisposed || acquisitionSignal.aborted || resources.isDisposed || references.isDisposed) {
+				reference.dispose();
+				throw new Error('Multi-diff editor input loading was cancelled');
+			}
+			return references.add(reference);
+		};
 		try {
-			const original = await this.modelService.acquire(input.original, signal);
-			if (this.isDisposed || signal.aborted || resources.isDisposed) {
-				original.dispose();
-				throw new Error('Multi-diff editor input loading was cancelled');
-			}
+			const [original, modified] = await Promise.all([acquire(input.original), acquire(input.modified)]);
+			references.delete(original);
 			resources.add(original);
-			const modified = await this.modelService.acquire(input.modified, signal);
-			if (this.isDisposed || signal.aborted || resources.isDisposed) {
-				modified.dispose();
-				throw new Error('Multi-diff editor input loading was cancelled');
-			}
+			references.delete(modified);
 			if (input.modified.readOnly === true) {
 				resources.add(modified);
 			} else {
@@ -475,6 +490,7 @@ class MultiDiffEditorSession extends Disposable {
 			resources.add(toDisposable(() => this.models.delete(model)));
 			return model;
 		} catch (error) {
+			acquisition.abort();
 			resources.dispose();
 			if (error instanceof TextFileBinaryError) return undefined;
 			throw error;

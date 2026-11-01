@@ -209,6 +209,10 @@ let dynamicSecond: DocumentDiffItem | undefined;
 let completeDeferredComparison: (() => void) | undefined;
 let compressedEditor: MultiDiffEditorWidget | undefined;
 let compressedViewState: unknown;
+const reusableResources = resources.add(new MutableDisposable<DisposableStore>());
+let reusableEditor: MultiDiffEditorWidget | undefined;
+let reusableModels: DiffModel[] = [];
+const reusedControls = new Set<DiffEditorWidget>();
 let lastHunkAction: { text: string; originalStart: number; modifiedStart: number; } | undefined;
 let themeBinding: IDisposable | undefined;
 const sessionPane = resources.add(new MutableDisposable<SessionChangesEditor>());
@@ -478,6 +482,11 @@ const harness = {
 							case 'status': value = { ...titleGitStatus, path: '' }; break;
 							case 'catalog': value = { tags: [], stashes: [], remotes: ['origin'], upstreamReadOnly: false, operation: null }; break;
 							case 'changeFile': value = await titleGit.changeFile(String(params.path)); break;
+							case 'changeFiles': {
+								if (!Array.isArray(params.paths)) throw new TypeError('Expected Git comparison paths');
+								value = { files: await Promise.all(params.paths.map(path => titleGit.changeFile(String(path)))) };
+								break;
+							}
 							case 'indexDiff': value = await titleGit.indexDiff(String(params.path)); break;
 							case 'editIndex': value = { status: await titleGit.editIndex(String(params.path), String(params.comparison), { original: params.expectedOriginal, modified: params.expectedModified, hunks: [] }, params.selection, String(params.repositoryId)) }; break;
 							default: throw new Error(`Unexpected Rust Git backend method ${operation.method}`);
@@ -708,7 +717,9 @@ const harness = {
 	get gitGutterCalls() { return gitGutterCalls; },
 	expireGitGutterSnapshot(): void { titleGitStatus = { ...titleGitStatus, revision: titleGitStatus.revision + 1 }; },
 	selectTitleModified(range: [number, number, number, number]): void {
-		const editor = titleServices!.get(ICodeEditorService).listDiffEditors().find(candidate => candidate instanceof DiffEditorWidget) as DiffEditorWidget;
+		const pane = titleEditor!.activePane;
+		const editor = pane instanceof TextDiffEditor || pane instanceof MultiDiffEditor ? pane.getControl() : undefined;
+		if (!editor) throw new Error('Expected an active comparison');
 		editor.modifiedEditor.setSelection(new Range(...range));
 	},
 	async updateTitleEditorConfiguration(key: string, value: unknown, languageId?: string): Promise<void> {
@@ -736,7 +747,11 @@ const harness = {
 	readMultiDiffFoundation(): { active: string | undefined; activeCodeEditor: boolean; contents: string[]; fonts: number[]; lines: number[]; inspected: string[]; state: unknown; } {
 		const pane = titleEditor?.activePane;
 		const service = titleServices!.get(ICodeEditorService);
-		const editors = service.listDiffEditors().map(editor => editor.getModifiedEditor());
+		// Pool registration order records creation, while the DOM records current file order.
+		const editors = service.listDiffEditors().map(editor => editor.getModifiedEditor()).filter(editor => editor.getModel() !== null).sort((a, b) => {
+			const order = a.getContainerDomNode().compareDocumentPosition(b.getContainerDomNode());
+			return order & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : order & Node.DOCUMENT_POSITION_PRECEDING ? 1 : 0;
+		});
 		return {
 			active: pane instanceof MultiDiffEditor ? pane.getActiveDiffItem()?.label : undefined,
 			activeCodeEditor: service.getActiveCodeEditor() !== null && pane instanceof MultiDiffEditor && service.getActiveCodeEditor() === pane.getControl()?.getModifiedEditor(),
@@ -1007,6 +1022,60 @@ const harness = {
 	get layoutEventCount(): number { return layoutEventCount; },
 	setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
 		single.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited, inlineBreakpoint);
+	},
+	async showReusableComparisons(style: 'flat' | 'modern'): Promise<void> {
+		const store = new DisposableStore();
+		reusableResources.value = store;
+		reusedControls.clear();
+		reusableModels = Array.from({ length: 16 }, (_, index) => {
+			const before = store.add(new TextModel(Array.from({ length: 120 }, (_, line) => `before file ${index} line ${line} ` + 'wide text '.repeat(30)).join('\n')));
+			const after = store.add(new TextModel(before.getValue().replaceAll('before', 'after')));
+			return store.add(new DiffModel({ original: before, modified: after, diffProvider: computation, diffOptions }));
+		});
+		reusableEditor = store.add(editorServices.createInstance(MultiDiffEditorWidget, {
+			container: document.getElementById('many')!, layoutStyle: style, overscanRowCount: 0,
+			model: store.add(new MultiDiffEditorModel(reusableModels.map((model, index) => store.add(new DocumentDiffItem({
+				id: `reusable-${index}`, label: `reusable-${index}.txt`, readOnly: index % 2 === 1,
+				originalUri: model.original.uri, modifiedUri: model.modified.uri,
+				originalLabel: `Before ${index}`, modifiedLabel: `After ${index}`,
+			}, model))))),
+		}));
+		reusableEditor.layout({ width: 700, height: 240 });
+		await reusableEditor.resolveVisible();
+		reusedControls.add(reusableEditor.getActiveControl()!);
+	},
+	async revealReusableComparison(index: number): Promise<void> {
+		const model = reusableModels[index]!;
+		reusableEditor!.reveal({ original: model.original.uri, modified: model.modified.uri });
+		await reusableEditor!.resolveVisible();
+		reusedControls.add(reusableEditor!.getActiveControl()!);
+	},
+	async editReusableComparison(): Promise<void> {
+		const editor = reusableEditor!.getActiveControl()!.modifiedEditor;
+		editor.setPosition({ lineNumber: 20, column: 12 });
+		editor.executeEdits('integration', [{ range: new Range(1, 1, 1, 1), text: 'unsaved ' }]);
+		await reusableEditor!.resolveVisible();
+		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		editor.setScrollLeft(100);
+	},
+	focusReusableComparison(): void { reusableEditor!.getActiveControl()!.modifiedEditor.focus(); },
+	collapseReusableComparisons(): void { reusableEditor!.collapseAll(); },
+	closeReusableComparisons(): void {
+		reusableResources.clear();
+		reusableEditor = undefined;
+		reusableModels = [];
+	},
+	readReusableComparison(): { id?: string; text?: string; position?: { lineNumber: number; column: number; }; left: number; readOnly: boolean; label?: string; controlCount: number; registered: number; attached: number; } {
+		const active = reusableEditor?.getActiveControl();
+		const controls = [...reusedControls];
+		return {
+			id: active?.getId(), text: active?.modifiedEditor.getModel()?.getValue(),
+			position: active?.modifiedEditor.getPosition() ?? undefined, left: active?.modifiedEditor.getScrollLeft() ?? 0,
+			readOnly: active?.modifiedEditor.getOption(EditorOption.readOnly) ?? false,
+			label: active?.modifiedEditor.getOption(EditorOption.ariaLabel), controlCount: controls.length,
+			registered: editorServices.get(ICodeEditorService).listDiffEditors().filter(editor => controls.some(control => control === editor)).length,
+			attached: controls.filter(control => control.modifiedEditor.getModel() !== null).length,
+		};
 	},
 	showManyComparisons(count: number): void {
 		const manyResources = resources.add(new DisposableStore());

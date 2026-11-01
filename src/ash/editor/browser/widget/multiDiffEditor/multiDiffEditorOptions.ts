@@ -36,6 +36,8 @@ export interface IMultiDiffEditorWidgetOptions {
 	readonly wordWrap?: IEditorOptions['wordWrap'];
 	readonly wordWrapColumn?: number;
 	readonly overscanRowCount?: number;
+	/** Presentation selected by the embedding host; it does not change comparison behavior. */
+	readonly layoutStyle?: 'flat' | 'modern';
 	readonly ariaLabel?: string;
 	/** Opt-in review prototype. Wrapped content continues to use the full editor. */
 	readonly preview?: boolean;
@@ -53,6 +55,7 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 	if (!isFiniteNumber(lineHeight) || lineHeight < 0) throw new RangeError('Multi-diff editor line height must be non-negative and finite');
 	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
+	if (options.layoutStyle !== undefined && options.layoutStyle !== 'flat' && options.layoutStyle !== 'modern') throw new TypeError('Invalid multi-diff editor layout style');
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
 	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
 	for (const [name, value] of [

@@ -203,6 +203,11 @@ class RenderedViewLine {
 
 	getVisibleRanges(startColumn: number, endColumn: number, context: DomReadingContext): ReturnType<typeof RangeUtil.readHorizontalRanges> {
 		if (!this.hasColumn(startColumn) || !this.hasColumn(endColumn) || endColumn < startColumn) return null;
+		// Width and range geometry share the same trusted font/style eligibility.
+		// Keep distant columns measured so fractional advance errors cannot accumulate.
+		if (endColumn <= 256 && this.canUseMonospaceMetrics && !this.isRightToLeft()) {
+			return [this.getMonospaceVisibleRange(startColumn, endColumn, this.monospaceMetrics!.spaceWidth)!];
+		}
 		const start = this.characterMapping.getDomPosition(startColumn);
 		const end = this.characterMapping.getDomPosition(endColumn);
 		return RangeUtil.readHorizontalRanges(this.textElement, start.partIndex, start.charIndex, end.partIndex, end.charIndex, context);

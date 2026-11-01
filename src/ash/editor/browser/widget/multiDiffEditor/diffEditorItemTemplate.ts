@@ -1,8 +1,9 @@
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
+import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { type CodeEditorViewState, type CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../diffEditor/diffEditorWidget.js';
 import { type IDocumentDiffItem } from './model.js';
@@ -42,12 +43,14 @@ export class DiffEditorItemTemplate extends Disposable {
 	private readonly toggleDomNode: HTMLButtonElement;
 	private readonly bodyDomNode: HTMLDivElement;
 	private readonly incompleteStatusDomNode: HTMLSpanElement;
-	private readonly editorSlot = this._register(new MutableDisposable<DiffEditorWidget>());
+	private readonly editorSlot = this._register(new MutableDisposable<IDisposable & { readonly editor: DiffEditorWidget; }>());
 	private readonly modelRetention = this._register(new MutableDisposable<IDisposable>());
 	private readonly editorListeners = this._register(new DisposableStore());
+	private readonly pendingScrollRestore = this._register(new MutableDisposable<IDisposable>());
 	private originalState: CodeEditorViewState | null = null;
 	private modifiedState: CodeEditorViewState | null = null;
 	private editorHeight = 0;
+	private editorLayout: IDimension | undefined;
 	private layingOutEditor = false;
 	private readonly previewSlot = this._register(new MutableDisposable<ReviewPreview>());
 	private previewState: DiffEditorItemViewState['preview'];
@@ -60,6 +63,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		workbenchUIElementFactory: IWorkbenchUIElementFactory | undefined,
 		private readonly onLayoutChange: (() => void) | undefined,
 		private readonly onScrollChange: ((source: CodeEditorWidget) => void) | undefined,
+		private readonly releaseEditor: (editor: DiffEditorWidget) => void = editor => editor.dispose(),
 		onOpenEditor: ((side: 'original' | 'modified', range: Range) => void) | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
@@ -130,7 +134,7 @@ export class DiffEditorItemTemplate extends Disposable {
 	}
 
 	public get editor(): DiffEditorWidget | undefined {
-		return this.editorSlot.value;
+		return this.editorSlot.value?.editor;
 	}
 
 	public isHeaderTarget(target: EventTarget | null): boolean {
@@ -141,22 +145,33 @@ export class DiffEditorItemTemplate extends Disposable {
 		this.toggleDomNode.focus({ preventScroll: true });
 	}
 
-	public layout(layout: DiffEditorItemLayout, width: number, viewportHeight: number): void {
+	public layout(layout: DiffEditorItemLayout, width: number, viewportHeight: number): IDimension {
 		this.domNode.style.height = `${layout.height}px`;
 		this.domNode.style.top = `${layout.top}px`;
 		this.bodyDomNode.style.height = `${layout.bodyHeight}px`;
 		this.editorHeight = Math.min(layout.bodyHeight, Math.max(0, viewportHeight - MULTI_DIFF_HEADER_HEIGHT));
 		this.editorHostDomNode.style.height = `${this.editorHeight}px`;
-		this.layoutEditor(width);
+		return this.layoutEditor(width);
 	}
 
-	public layoutEditor(width: number): void {
+	public layoutEditor(width: number): IDimension {
+		const size = { width: Math.max(0, width), height: this.editorHeight };
+		const editor = this.editor;
+		if (!editor) {
+			return size;
+		}
+		// Scrolling moves the file template without resizing its editor viewport.
+		if (this.editorLayout?.width === size.width && this.editorLayout.height === size.height) {
+			return this.editorLayout;
+		}
 		this.layingOutEditor = true;
 		try {
-			this.editor?.layout({ width: Math.max(0, width - MULTI_DIFF_HORIZONTAL_INSET), height: this.editorHeight });
+			editor.layout(size);
+			this.editorLayout = size;
 		} finally {
 			this.layingOutEditor = false;
 		}
+		return size;
 	}
 
 	public renderPreview(model: DiffModel, layout: DiffPreviewLayout, scrollTop: number, lineHeight: number, overscan: number,
@@ -185,9 +200,10 @@ export class DiffEditorItemTemplate extends Disposable {
 		if (!this.modelRetention.value) this.modelRetention.value = this.item.retain?.();
 	}
 
-	public mount(editor: DiffEditorWidget): void {
+	public mount(editor: DiffEditorWidget, dimension: IDimension): void {
 		this.editorListeners.clear();
-		this.editorSlot.value = editor;
+		this.editorSlot.value = Object.assign(toDisposable(() => this.releaseEditor(editor)), { editor });
+		this.editorLayout = dimension;
 		if (this.onScrollChange) {
 			this.editorListeners.add(editor.originalEditor.onDidScrollChange(() => this.onScrollChange?.(editor.originalEditor)));
 			this.editorListeners.add(editor.modifiedEditor.onDidScrollChange(() => this.onScrollChange?.(editor.modifiedEditor)));
@@ -212,8 +228,10 @@ export class DiffEditorItemTemplate extends Disposable {
 		this.previewSlot.clear();
 		const editor = this.editor;
 		if (!editor) { this.modelRetention.clear(); return; }
-		this.originalState = editor.originalEditor.saveViewState();
-		this.modifiedState = editor.modifiedEditor.saveViewState();
+		const state = this.saveViewState();
+		this.originalState = state.original;
+		this.modifiedState = state.modified;
+		this.pendingScrollRestore.clear();
 		this.editorListeners.clear();
 		this.editorSlot.clear();
 		this.modelRetention.clear();
@@ -225,10 +243,15 @@ export class DiffEditorItemTemplate extends Disposable {
 			const range = this.editor[side === 'original' ? 'originalEditor' : 'modifiedEditor'].getSelection();
 			if (range) this.previewState = { side, range };
 		}
-
+		const capture = (control: CodeEditorWidget | undefined, saved: CodeEditorViewState | null): CodeEditorViewState | null => {
+			const current = control?.saveViewState() ?? saved;
+			return current && saved && this.pendingScrollRestore.value
+				? { ...current, viewState: { ...current.viewState, scrollLeft: saved.viewState.scrollLeft } }
+				: current;
+		};
 		return {
-			original: this.editor?.originalEditor.saveViewState() ?? this.originalState,
-			modified: this.editor?.modifiedEditor.saveViewState() ?? this.modifiedState,
+			original: capture(this.editor?.originalEditor, this.originalState),
+			modified: capture(this.editor?.modifiedEditor, this.modifiedState),
 			...((this.previewSlot.value?.location ?? this.previewState) ? { preview: this.previewSlot.value?.location ?? this.previewState } : {}),
 		};
 	}
@@ -241,11 +264,36 @@ export class DiffEditorItemTemplate extends Disposable {
 	}
 
 	private restoreEditorState(): void {
+		this.pendingScrollRestore.clear();
 		const editor = this.editor;
 		if (!editor) return;
+		// Resetting to the default cursor would reveal a hidden leading region on every mount.
 		if (this.originalState) editor.originalEditor.restoreViewState(this.originalState);
 		if (this.modifiedState) editor.modifiedEditor.restoreViewState(this.modifiedState);
 		if (this.previewState) editor[this.previewState.side === 'original' ? 'originalEditor' : 'modifiedEditor'].setSelection(this.previewState.range);
+		const targets = [[editor.originalEditor, this.originalState], [editor.modifiedEditor, this.modifiedState]] as const;
+		if (!targets.some(([control, state]) => state && control.getScrollLeft() !== state.viewState.scrollLeft)) return;
+		const pending = new DisposableStore();
+		this.pendingScrollRestore.value = pending;
+		let restoring = false;
+		const restoreHorizontal = () => {
+			restoring = true;
+			try {
+				for (const [control, state] of targets) {
+					if (state) control.setScrollLeft(state.viewState.scrollLeft);
+				}
+			} finally { restoring = false; }
+		};
+		// A newly attached View has not measured its content width yet. Restore
+		// during that first measurement, before paint, then stop tracking the size.
+		for (const [control] of targets) {
+			pending.add(control.onDidContentSizeChange(event => { if (event.contentWidthChanged) restoreHorizontal(); }));
+			pending.add(control.onDidScrollChange(event => { if (event.scrollLeftChanged && !restoring) this.pendingScrollRestore.clear(); }));
+		}
+		pending.add(scheduleAtNextAnimationFrame(getWindow(this.domNode), () => {
+			restoreHorizontal();
+			this.pendingScrollRestore.clear();
+		}));
 	}
 
 	public setCollapsed(collapsed: boolean): void {

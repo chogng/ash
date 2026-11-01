@@ -2,7 +2,7 @@ import './style.css';
 import './colors.js';
 import { addDisposableListener, getClientArea, getWindow, h, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
@@ -63,6 +63,8 @@ interface MultiDiffSectionLayout {
 export class MultiDiffEditorWidgetImpl extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly scrollView: CompressedVirtualizedScrollView<DiffEditorItemTemplate>;
+	private readonly editorPool: DisposableMap<DiffEditorWidget, DiffEditorWidget>;
+	private readonly idleEditors: DiffEditorWidget[] = [];
 	private readonly accessibilityStatusDomNode: HTMLDivElement;
 	private items: readonly IDocumentDiffItem[];
 	private readonly itemListeners = this._register(new DisposableStore());
@@ -87,6 +89,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private viewportWidth = 0;
 	private projecting = false;
 	private viewportHeight = 0;
+	private layoutStyle: 'flat' | 'modern';
 	private syncingEditorScroll = false;
 	private layoutRefreshScheduled = false;
 	private navigationGeneration = 0;
@@ -112,6 +115,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		validateMultiDiffEditorOptions(options);
 		this.previewEnabled = options.preview ?? false;
 		this.onOpenEditor = options.onOpenEditor;
+		this.layoutStyle = options.layoutStyle ?? 'modern';
 		this.items = options.model.items;
 		this.hideUnchangedRegionsEnabled = hideUnchangedRegions(configuration);
 		this._register(toDisposable(() => this.navigationAbortController.abort()));
@@ -142,6 +146,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		// Virtual rows and child editors must use the same computed height for automatic and relative settings.
 		this.lineHeight = this.fontInfoSettings.lineHeight;
 		const ownerDocument = options.container.ownerDocument;
+		// Stores unwind in reverse order: file leases return editors before the pool closes.
+		this.editorPool = this._register(new DisposableMap());
+		this._register(toDisposable(() => { this.idleEditors.length = 0; }));
 		this.scrollView = this._register(new CompressedVirtualizedScrollView(
 			options.container,
 			(contentDomNode, index) => {
@@ -150,6 +157,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					contentDomNode, item, () => this.toggleItem(item.id),
 					() => this.activateItem(item.id), this.workbenchUIElementFactory, () => this.scheduleLayoutRefresh(),
 					(source: CodeEditorWidget) => this.handleEditorScroll(index, source),
+					(editor: DiffEditorWidget) => this.releaseEditor(editor),
 					this.previewEnabled && this.onOpenEditor ? (side: 'original' | 'modified', range: Range) => this.onOpenEditor!(item, side, range) : undefined,
 				);
 				section.setCollapsed(this.viewModel.isCollapsed(item.id));
@@ -167,6 +175,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		));
 		this.domNode = this.scrollView.domNode;
 		this.domNode.classList.toggle('review-preview', this.previewEnabled);
+		this.domNode.classList.toggle('flat', this.layoutStyle === 'flat');
 		this.sections = this.scrollView.sections;
 		this.domNode.classList.toggle('word-wrapped', this.wordWrap);
 		this.domNode.classList.toggle('hide-line-numbers', !this.showLineNumbers);
@@ -178,9 +187,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
 		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
 		this.domNode.append(this.accessibilityStatusDomNode);
-		this._register(addDisposableListener(this.domNode, 'scroll', event => {
-			if (event.target === this.domNode) this.project();
-		}));
+		this._register(this.scrollView.onDidScroll(scrollTop => this.project(scrollTop)));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => this.handleKeydown(event), true));
 		// Explicit scrolling supersedes a header whose short last file could not
 		// yet reach the viewport top while neighboring comparisons were loading.
@@ -383,6 +390,19 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.refreshLayout();
 	}
 
+	public setLayoutStyle(style: 'flat' | 'modern'): void {
+		if (this.layoutStyle === style) return;
+		this.layoutStyle = style;
+		this.domNode.classList.toggle('flat', style === 'flat');
+		this.rowLayouts = new WeakMap();
+		this.measuredHeights.clear();
+		this.refreshLayout();
+	}
+
+	private get horizontalInset(): number {
+		return this.layoutStyle === 'flat' ? 0 : MULTI_DIFF_HORIZONTAL_INSET;
+	}
+
 	public toggleWordWrap(): void {
 		this.temporaryWordWrap = this.temporaryWordWrap === undefined ? (this.wordWrap ? 'off' : 'on') : undefined;
 		this.updateWordWrap();
@@ -557,7 +577,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		let wrapping: { readonly fontInfo: FontInfo; readonly column: number; } | undefined;
 		if (this.wordWrap) {
 			const gutterWidth = this.showLineNumbers ? 52 : 0;
-			const cellWidth = Math.max(1, (this.viewportWidth - MULTI_DIFF_HORIZONTAL_INSET - SCROLLBAR_RESERVE - 30) / 2 - gutterWidth);
+			const cellWidth = Math.max(1, (this.viewportWidth - this.horizontalInset - SCROLLBAR_RESERVE - 30) / 2 - gutterWidth);
 			const fontInfo = this.fontInfo ??= FontMeasurements.readFontInfo(getWindow(this.domNode), this.fontInfoSettings);
 			const viewportColumn = Math.max(1, Math.floor(cellWidth / fontInfo.typicalHalfwidthCharacterWidth));
 			const mode = this.temporaryWordWrap ?? this.configuredWordWrap;
@@ -565,7 +585,8 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			const column = mode === 'wordWrapColumn' ? configuredColumn : mode === 'bounded' ? Math.min(configuredColumn, viewportColumn) : viewportColumn;
 			wrapping = { fontInfo, column };
 		}
-		let top = SECTION_GAP;
+		const gap = this.layoutStyle === 'flat' ? 0 : SECTION_GAP;
+		let top = gap;
 		this.layouts.length = 0;
 		for (let index = 0; index < this.items.length; index++) {
 			const item = this.items[index]!;
@@ -579,14 +600,17 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 				this.rowLayouts.set(model, rows);
 			}
 			rows ??= { height: 0, getOffset: () => 0 };
-			const estimatedHeight = model ? rows.height : this.lineHeight * 5;
+			// A short placeholder would pull many unresolved files into the viewport
+			// and load them before the first comparison establishes its real height.
+			const estimatedHeight = model?.diff ? rows.height : item.binary ? this.lineHeight * 5
+				: Math.max(this.lineHeight * 5, this.viewportHeight - MULTI_DIFF_HEADER_HEIGHT);
 			const bodyHeight = collapsed ? 0 : Math.max(this.lineHeight, this.measuredHeights.get(item.id) ?? estimatedHeight);
 			const height = MULTI_DIFF_HEADER_HEIGHT + bodyHeight;
 			const layout = { top, bodyHeight, height, rows };
 			this.layouts.push(layout);
-			top += height + SECTION_GAP;
+			top += height + gap;
 		}
-		this.scrollView.setLayout(this.layouts, top, this.viewportHeight);
+		const appliedScrollTop = this.scrollView.setLayout(this.layouts, top, this.viewportHeight);
 		const anchor = this.restoredScrollAnchor;
 		const index = anchor ? this.items.findIndex(item => item.id === anchor.itemId) : -1;
 		const restored = this.layouts[index];
@@ -596,12 +620,12 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 			// Complete editor folding and neighbor loads can settle after the diff.
 			// Keep this file target until an explicit input supersedes restoration.
 		} else if (anchor) this.restoredScrollAnchor = undefined;
-		this.logger.layoutChanged(previousLayouts, this.layouts, previousScrollTop, this.scrollView.getLogicalScrollTop());
+		this.logger.layoutChanged(previousLayouts, this.layouts, previousScrollTop, appliedScrollTop);
 		this.project();
 	}
 
 	/** Mount editors only around the viewport; file models remain owned by the caller. */
-	private project(): void {
+	private project(viewportTop = this.scrollView.getLogicalScrollTop()): void {
 		if (!this.visible) return;
 		if (this.projecting) {
 			this.scheduleLayoutRefresh();
@@ -610,17 +634,16 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		// Editor layout and restoration can synchronously scroll; finish this mount pass before changing its range.
 		this.projecting = true;
 		try {
-			const viewportTop = this.scrollView.getLogicalScrollTop();
 			const overscan = this.overscanRowCount * this.lineHeight;
-			const { start, end } = this.scrollView.project(overscan);
+			const { start, end } = this.scrollView.project(overscan, viewportTop);
 			for (let index = start; index < end; index++) {
 				const item = this.items[index]!;
 				const section = this.sections.get(index)!;
 				const layout = this.layouts[index]!;
-				const rendered = this.scrollView.renderedRange(layout, overscan);
-				section.layout(this.scrollView.isCompressed
+				const rendered = this.scrollView.renderedRange(layout, overscan, viewportTop);
+				const dimension = section.layout(this.scrollView.isCompressed
 					? { top: rendered.top, height: rendered.height, bodyHeight: Math.max(0, rendered.height - MULTI_DIFF_HEADER_HEIGHT) }
-					: layout, this.viewportWidth, this.viewportHeight);
+					: layout, this.viewportWidth - this.horizontalInset, this.viewportHeight);
 				if (this.viewModel.isCollapsed(item.id)) {
 					section.unmount();
 					continue;
@@ -648,8 +671,17 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					continue;
 				}
 				if (!section.editor) {
-					section.mount(this.instantiationService.createInstance(DiffEditorWidget, {
+					// Mount the final aligned rows once instead of painting the full file
+					// and rebuilding it when its first diff and hidden ranges arrive.
+					if (item.model.state.kind === 'loading') continue;
+					const state = section.saveViewState();
+					const restoresCursor = [state.original, state.modified].some(state => state?.cursorState.some(cursor =>
+						cursor.position.lineNumber !== 1 || cursor.position.column !== 1
+						|| cursor.selectionStart.lineNumber !== 1 || cursor.selectionStart.column !== 1));
+					const hiddenRegions = this.getHideUnchangedRegionsOptions();
+					section.mount(this.acquireEditor({
 						container: section.editorHostDomNode,
+						dimension,
 						model: item.model,
 						originalAriaLabel: item.originalLabel,
 						modifiedAriaLabel: item.modifiedLabel,
@@ -658,11 +690,14 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						scrollbar: { vertical: 'hidden' },
 						renderOverviewRuler: false,
 						wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
+						// Restoring the unchanged default cursor emits no selection change.
+						// Only other cursors need restoration before compacting their regions.
+						hideUnchangedRegions: restoresCursor ? { ...hiddenRegions, enabled: false } : hiddenRegions,
 						...this.editorOptions,
-					}));
-					// Restore the file cursor before hiding regions so mounting does not expand them.
-					section.editor!.setHideUnchangedRegionsOptions(this.getHideUnchangedRegionsOptions());
-					section.layoutEditor(this.viewportWidth);
+					}), dimension);
+					if (restoresCursor) {
+						section.editor!.setHideUnchangedRegionsOptions(hiddenRegions);
+					}
 				}
 				const editor = section.editor!;
 				const contentHeight = editor.getContentHeight();
@@ -685,6 +720,36 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		} finally {
 			this.projecting = false;
 		}
+	}
+
+	private acquireEditor(options: DiffEditorWidgetOptions): DiffEditorWidget {
+		const editor = this.idleEditors.pop();
+		if (!editor) {
+			const created = this.instantiationService.createInstance(DiffEditorWidget, options);
+			this.editorPool.set(created, created);
+			return created;
+		}
+		// Configuration must not retain a retired file's model or hosting template.
+		const { container, model, dimension, ...configuration } = options;
+		try {
+			container.append(editor.element);
+			editor.layout(dimension);
+			editor.updateOptions({ ...configuration, readOnly: options.readOnly ?? false });
+			editor.setModel(model);
+			return editor;
+		} catch (error) {
+			this.editorPool.deleteAndDispose(editor);
+			throw error;
+		}
+	}
+
+	private releaseEditor(editor: DiffEditorWidget): void {
+		if (editor.hasFocus()) this.domNode.focus({ preventScroll: true });
+		editor.setModel(null);
+		editor.element.remove();
+		// Retain only a small set of model-free controls, including after Collapse All.
+		if (!this.isDisposed && this.idleEditors.length < 2) this.idleEditors.push(editor);
+		else this.editorPool.deleteAndDispose(editor);
 	}
 
 	private scheduleLayoutRefresh(): void {

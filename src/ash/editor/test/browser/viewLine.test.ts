@@ -214,6 +214,57 @@ test('Neutral token styles reuse only a declared normal editor font weight', () 
 	}
 });
 
+test('Trusted short ASCII ranges avoid layout and preserve shaped range fallbacks', () => {
+	const dom = new JSDOM('<main class="stanza-editor" style="font-weight: normal"></main>');
+	try {
+		const host = dom.window.document.querySelector<HTMLElement>('main')!;
+		using configuration = createTestConfiguration(host);
+		const options = new ViewLineOptions(configuration, ColorScheme.Dark);
+		const line = new ViewLine(host, 0, options, 4);
+		const row = line.getDomNode();
+		host.append(row);
+		const text = row.firstElementChild as HTMLElement;
+		let rangeReads = 0;
+		const createRange = dom.window.document.createRange.bind(dom.window.document);
+		dom.window.document.createRange = () => {
+			const range = createRange();
+			Object.defineProperty(range, 'getClientRects', { value: () => { rangeReads++; return [rectangle(130, 0, 24)]; } });
+			return range;
+		};
+		Object.defineProperty(row, 'getBoundingClientRect', { value: () => rectangle(100, 0, 100) });
+		Object.defineProperty(row, 'offsetWidth', { value: 100 });
+		line.renderLine('short ASCII', [], 10);
+		const context = new DomReadingContext(row, text);
+		assert.deepEqual(line.getVisibleRangesForRange(1, 2, 5, context)?.ranges.map(range => [range.left, range.width]), [[18, 24]]);
+		assert.equal(line.getVisibleRangesForRange(1, 5, 5, context)?.ranges[0]?.left, 42);
+		assert.equal(context.didDomLayout, false);
+		assert.equal(rangeReads, 0);
+		assert.equal(line.getVisibleRangesForRange(1, 0, 2, context), null);
+		assert.equal(line.getVisibleRangesForRange(1, 4, 2, context), null);
+
+		for (const value of ['\ttext', '中文', 'ab🙂', 'مرحبا']) {
+			line.renderLine(value, []);
+			assert.equal(line.getVisibleRangesForRange(1, 1, 2, new DomReadingContext(row, text))?.ranges[0]?.left, 30);
+		}
+		line.renderLine('ascii', [], 0, [new InlineDecoration(new Range(1, 1, 1, 2), 'custom-width', InlineDecorationType.Regular)]);
+		assert.equal(line.getVisibleRangesForRange(1, 1, 2, context)?.ranges[0]?.left, 30);
+		line.renderLine('ascii', [{ startColumn: 0, endColumn: 5, syntaxPresentation: { fontStyle: ['bold'] } }]);
+		assert.equal(line.getVisibleRangesForRange(1, 1, 2, context)?.ranges[0]?.left, 30);
+		line.renderLine('ascii', []);
+		text.style.direction = 'rtl';
+		assert.equal(line.getVisibleRangesForRange(1, 1, 2, context)?.ranges[0]?.left, 30);
+		text.style.direction = 'ltr';
+		line.renderLine('x'.repeat(512), []);
+		assert.equal(line.getVisibleRangesForRange(1, 250, 257, context)?.ranges[0]?.left, 30);
+		line.onMonospaceAssumptionsInvalidated();
+		line.renderLine('ascii', []);
+		assert.equal(line.getVisibleRangesForRange(1, 1, 2, context)?.ranges[0]?.left, 30);
+		assert.equal(rangeReads, 9);
+	} finally {
+		dom.window.close();
+	}
+});
+
 function rectangle(left: number, top: number, width: number): DOMRect {
 	return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
 }

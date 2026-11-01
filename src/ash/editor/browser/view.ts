@@ -113,6 +113,8 @@ export interface EditorViewportOptions {
 	readonly configuration: EditorConfiguration;
 	readonly theme: IColorTheme;
 	readonly dimension?: IDimension;
+	/** The host supplies aligned geometry before this View's first scheduled paint. */
+	readonly deferInitialRender?: boolean;
 	readonly padding?: EditorViewportPadding;
 	readonly ariaLabel?: string;
 	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean; };
@@ -261,12 +263,12 @@ export class View extends ViewEventHandler {
 			options.container.append(this.domNode.domNode);
 			this._register(toDisposable(() => this.domNode.domNode.remove()));
 		}
-		this.textMeasurer =
-			options.textMeasurer ??
-			new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
-		this.textMeasurer.refresh?.();
+		// The default measurer reads its font once, after the configured declaration
+		// is installed. A caller-owned measurer still refreshes for this new View.
+		this.textMeasurer = options.textMeasurer ?? new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
+		if (options.textMeasurer) this.textMeasurer.refresh?.();
 		const spaceWidth = this.fontInfo.spaceWidth;
 		this.cursorConfig = this.viewModel.cursorConfig;
 		this.coordinatesConverter = this.viewModel.coordinatesConverter;
@@ -544,7 +546,9 @@ export class View extends ViewEventHandler {
 		this._register(this.pixelRatio.onDidChange(() => this.render(false, true)));
 		this._register(this.featureScopes);
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
-		this.render(true, false);
+		// An explicitly empty viewport is staged by its host. Its pending render
+		// can consume the final dimensions instead of painting an interim view.
+		if (!options.deferInitialRender && (options.dimension?.width !== 0 || options.dimension.height !== 0)) this.render(true, false);
 	}
 
 	private get softWrapping(): boolean {

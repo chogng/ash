@@ -167,6 +167,34 @@ test('editor line-number width follows edits, undo, and model replacement before
 	assert.deepEqual(widths, [2, 1, 3, 1].map(digits => Math.round(digits * digitWidth)));
 });
 
+test('model attachment preserves resized geometry without submitting the construction dimensions again', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using first = new TextModel('first');
+	using second = new TextModel('second '.repeat(80));
+	for (const dimension of [{ width: 320, height: 120 }, { width: 0, height: 0 }]) {
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'), model: first, dimension,
+			wordWrap: 'on', minimap: { enabled: false }, contributions: [],
+		});
+		editor.layout({ width: 800, height: 300 });
+		const layouts: { width: number; height: number; }[] = [];
+		using listener = editor.onDidLayoutChange(info => layouts.push({ width: info.width, height: info.height }));
+		editor.setModel(second);
+		assert.equal(editor.getLayoutInfo().width, 800);
+		assert.equal(editor.getLayoutInfo().height, 300);
+		assert.ok(layouts.every(size => size.width === 800 && size.height === 300));
+		editor.setModel(null);
+		editor.layout({ width: 640, height: 240 });
+		layouts.length = 0;
+		editor.setModel(first);
+		assert.equal(editor.getLayoutInfo().width, 640);
+		assert.equal(editor.getLayoutInfo().height, 240);
+		assert.ok(layouts.every(size => size.width === 640 && size.height === 240));
+	}
+});
+
 test('editor reads long-line wrapping from each attached model and honors accessibility overrides', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

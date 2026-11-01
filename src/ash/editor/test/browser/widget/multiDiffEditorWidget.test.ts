@@ -1,4 +1,3 @@
-import { StandaloneLayoutService } from '../../../standalone/browser/standaloneLayoutService.js';
 import { computeDiffRowLayout, computeDiffPreviewLayout } from '../../../browser/widget/multiDiffEditor/compressedVirtualizedScrollLayout.js';
 import { TEST_FONT_INFO } from '../config/testConfiguration.js';
 import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
@@ -20,6 +19,7 @@ import { TextModel } from '../../../common/model/textModel.js';
 import { Range } from '../../../common/core/range.js';
 import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
+import { StandaloneLayoutService } from '../../../standalone/browser/standaloneLayoutService.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../browser/widget/multiDiffEditor/model.js';
@@ -384,8 +384,9 @@ for (const restore of [false, true]) {
 				const editorService = services.get(ICodeEditorService);
 				for (let iteration = 0; iteration < 5; iteration++) {
 					editor.collapseAll();
-					assert.equal(editorService.listDiffEditors().length, 0);
-					assert.equal(editorService.listCodeEditors().length, 0);
+					assert.equal(editorService.listDiffEditors().length, 1);
+					assert.equal(editorService.listCodeEditors().length, 2);
+					for (const child of editorService.listCodeEditors()) assert.equal(child.getModel(), null);
 					editor.expandAll();
 					assert.equal(editorService.listDiffEditors().length, 1);
 					assert.equal(editorService.listCodeEditors().length, 2);
@@ -403,6 +404,213 @@ for (const restore of [false, true]) {
 		}
 	});
 }
+
+test('MultiDiff bounds unresolved file loading and mounts editors only after their initial diff is ready', async () => {
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const container = h(browserEnvironment.window.document, 'main');
+	browserEnvironment.window.document.body.append(container);
+	const computation = new DeferredPromise<IDocumentDiff>();
+	let result: IDocumentDiff | undefined;
+	try {
+		const before = Array.from({ length: 1000 }, (_, index) => `shared ${index}`);
+		const after = [...before];
+		after[500] = 'changed';
+		const original = resources.add(new TextModel(before.join('\n')));
+		const modified = resources.add(new TextModel(after.join('\n')));
+		const provider = resources.add(new MultiDiffTestComputationService());
+		result = await provider.computeDiff(original, modified, diffOptions, { isCancellationRequested: false, onCancellationRequested: Event.None });
+		provider.computeDiff = () => computation.p;
+		let loaded = 0;
+		const items = Array.from({ length: 24 }, (_, index) => resources.add(new DocumentDiffItem({ id: String(index), label: `${index}.ts` }, async () => {
+			loaded++;
+			return resources.add(new DiffModel({ original, modified, diffProvider: provider, diffOptions }));
+		})));
+		using collection = new MultiDiffEditorModel(items);
+		using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20 });
+		editor.layout({ width: 800, height: 600 });
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.ok(loaded > 0 && loaded <= 2, 'Pending comparisons reserve viewport height instead of eagerly loading offscreen files');
+		assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0, 'Pending first diffs must not render an intermediate full-file editor');
+		await computation.complete(result);
+		await editor.resolveVisible();
+		assert.ok(editor.getActiveControl());
+		assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
+	} finally {
+		if (result) await computation.complete(result);
+		container.remove();
+	}
+});
+
+test('MultiDiff remounts a default cursor with compact geometry and restores other selections', async () => {
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const container = h(browserEnvironment.window.document, 'main');
+	browserEnvironment.window.document.body.append(container);
+	try {
+		const before = Array.from({ length: 200 }, (_, index) => `shared ${index}`);
+		const after = [...before];
+		after[99] = 'changed';
+		using original = new TextModel(before.join('\n'));
+		using modified = new TextModel(after.join('\n'));
+		using provider = new MultiDiffTestComputationService();
+		using model = new DiffModel({ original, modified, diffProvider: provider, diffOptions });
+		await waitForReady(model);
+		using item = new DocumentDiffItem({ id: 'first', label: 'first.ts' }, model);
+		using collection = new MultiDiffEditorModel([item]);
+		using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20 });
+		editor.restoreViewState({ scrollTop: 0, activeItemId: 'first', collapsedItemIds: [], itemViewStates: [] });
+		editor.layout({ width: 800, height: 300 });
+		await editor.resolveVisible();
+		const child = editor.getActiveControl()!;
+		const compactHeight = child.getContentHeight();
+		assert.ok(compactHeight < 200 * 20);
+		for (let iteration = 0; iteration < 3; iteration++) {
+			editor.collapseAll();
+			editor.expandAll();
+			await editor.resolveVisible();
+			assert.equal(editor.getActiveControl()!.modifiedEditor.getPosition()?.lineNumber, 1);
+			assert.equal(editor.getActiveControl()!.modifiedEditor.getPosition()?.column, 1);
+			assert.equal(editor.getActiveControl()!.getContentHeight(), compactHeight);
+		}
+		child.modifiedEditor.setSelection(new Range(100, 2, 101, 4));
+		editor.collapseAll();
+		editor.expandAll();
+		await editor.resolveVisible();
+		assert.ok(Range.equalsRange(editor.getActiveControl()!.modifiedEditor.getSelection(), new Range(100, 2, 101, 4)));
+	} finally {
+		container.remove();
+	}
+});
+
+test('MultiDiff scrolling preserves child layout while resize and remount apply current dimensions', async () => {
+	using resources = new DisposableStore();
+	const services = createCodeEditorServices(resources);
+	const container = h(browserEnvironment.window.document, 'main');
+	browserEnvironment.window.document.body.append(container);
+	try {
+		using original = new TextModel(lines('before', 200));
+		using modified = new TextModel(lines('after', 200));
+		using provider = new MultiDiffTestComputationService();
+		using model = new DiffModel({ original, modified, diffProvider: provider, diffOptions });
+		await waitForReady(model);
+		using item = new DocumentDiffItem({ id: 'first', label: 'first.ts' }, model);
+		using collection = new MultiDiffEditorModel([item]);
+		using editor = services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20 });
+		// Supply the native viewport geometry that jsdom does not calculate.
+		Object.defineProperties(editor.domNode, {
+			clientWidth: { get: () => 800 },
+			clientHeight: { get: () => 300 },
+			scrollHeight: { get: () => Number.parseFloat((editor.domNode.firstElementChild as HTMLElement).style.height) },
+		});
+		editor.layout({ width: 800, height: 300 });
+		await editor.resolveVisible();
+		const child = editor.getActiveControl();
+		assert.ok(child);
+		const layout = child.layout;
+		let layoutCalls = 0;
+		child.layout = function (size): void {
+			layoutCalls++;
+			layout.call(this, size);
+		};
+		try {
+			for (const scrollTop of [100, 200, 300, 200]) {
+				editor.domNode.scrollTop = scrollTop;
+				editor.domNode.dispatchEvent(new browserEnvironment.window.Event('scroll'));
+				assert.equal(child.originalEditor.getScrollTop(), scrollTop - 8);
+				assert.equal(child.modifiedEditor.getScrollTop(), scrollTop - 8);
+			}
+			assert.equal(layoutCalls, 0, 'Scrolling within a file must not resize its child editors');
+			assert.strictEqual(editor.getActiveControl(), child);
+			editor.layout({ width: 640, height: 240 });
+			assert.equal(layoutCalls, 1);
+			const dimensions = child.modifiedEditor.getLayoutInfo();
+			assert.equal(dimensions.height, 206);
+			editor.collapseAll();
+			assert.equal(child.originalEditor.getModel(), null);
+			assert.equal(child.modifiedEditor.getModel(), null);
+			editor.expandAll();
+			await editor.resolveVisible();
+			const remounted = editor.getActiveControl();
+			assert.ok(remounted);
+			assert.strictEqual(remounted, child);
+			assert.equal(remounted.modifiedEditor.getLayoutInfo().width, dimensions.width);
+			assert.equal(remounted.modifiedEditor.getLayoutInfo().height, dimensions.height);
+		} finally {
+			child.layout = layout;
+		}
+	} finally {
+		container.remove();
+	}
+});
+
+suite('MultiDiff editor reuse', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('crossing files bounds editor creation and restores file state without retaining idle models', async () => {
+		using resources = new DisposableStore();
+		const services = createCodeEditorServices(resources);
+		const codeEditors = services.get(ICodeEditorService);
+		const layout = resources.add(services.createInstance(StandaloneLayoutService));
+		const container = h(browserEnvironment.window.document, 'main');
+		browserEnvironment.window.document.body.append(container);
+		try {
+			const provider = resources.add(new MultiDiffTestComputationService());
+			const models = Array.from({ length: 16 }, (_, index) => {
+				const original = resources.add(new TextModel(lines(`before-${index} ` + 'wide '.repeat(40), 120)));
+				const modified = resources.add(new TextModel(lines(`after-${index} ` + 'wide '.repeat(40), 120)));
+				return resources.add(new DiffModel({ original, modified, diffProvider: provider, diffOptions }));
+			});
+			await Promise.all(models.map(waitForReady));
+			const items = models.map((model, index) => resources.add(new DocumentDiffItem({
+				id: `file-${index}`, label: `file-${index}.ts`, readOnly: index % 2 === 1,
+				originalUri: model.original.uri, modifiedUri: model.modified.uri,
+				originalLabel: `Before ${index}`, modifiedLabel: `After ${index}`,
+			}, model)));
+			const collection = resources.add(new MultiDiffEditorModel(items));
+			const editor = resources.add(services.createInstance(MultiDiffEditorWidget, { container, model: collection, lineHeight: 20, overscanRowCount: 0 }));
+			editor.layout({ width: 700, height: 240 });
+			await editor.resolveVisible();
+			editor.reveal({ original: models[0]!.original.uri, modified: models[0]!.modified.uri });
+			const first = editor.getActiveControl()!;
+			first.modifiedEditor.setPosition({ lineNumber: 20, column: 12 });
+			models[0]!.modified.applyEdits([{ range: new Range(1, 1, 1, 1), text: 'unsaved ' }]);
+			await waitForReady(models[0]!);
+			const seen = new Set([first]);
+			for (let index = 1; index < models.length; index++) {
+				editor.reveal({ original: models[index]!.original.uri, modified: models[index]!.modified.uri });
+				await editor.resolveVisible();
+				const child = editor.getActiveControl()!;
+				seen.add(child);
+				assert.strictEqual(child.modifiedEditor.getModel(), models[index]!.modified);
+				assert.equal(child.modifiedEditor.getOption(EditorOption.readOnly), index % 2 === 1);
+				assert.equal(child.modifiedEditor.getOption(EditorOption.ariaLabel), `After ${index}`);
+				assert.equal(child.originalEditor.getOption(EditorOption.ariaLabel), `Before ${index}`);
+				assert.ok(codeEditors.listDiffEditors().length <= 2);
+				assert.ok(codeEditors.listCodeEditors().length <= 4);
+			}
+			assert.ok(seen.size <= 2, 'Crossing sixteen files must reuse a bounded number of controls');
+			editor.reveal({ original: models[0]!.original.uri, modified: models[0]!.modified.uri });
+			await editor.resolveVisible();
+			const restored = editor.getActiveControl()!.modifiedEditor;
+			assert.equal(restored.getPosition()!.lineNumber, 20);
+			assert.equal(restored.getPosition()!.column, 12);
+			assert.ok(restored.getModel()!.getValue().startsWith('unsaved '));
+			editor.collapseAll();
+			assert.equal(container.querySelectorAll('.stanza-diff-editor').length, 0);
+			for (const child of codeEditors.listCodeEditors()) assert.equal(child.getModel(), null);
+			assert.strictEqual(layout.mainContainer, browserEnvironment.window.document.body);
+			assert.strictEqual(layout.activeContainer, browserEnvironment.window.document.body);
+			assert.equal([...layout.containers].length, 0);
+			assert.ok(codeEditors.listDiffEditors().length <= 2);
+			editor.dispose();
+			assert.equal(codeEditors.listDiffEditors().length, 0);
+			assert.equal(codeEditors.listCodeEditors().length, 0);
+			assert.ok(models.every(model => !model.isDisposed), 'Releasing controls must preserve caller-owned comparisons');
+		} finally { container.remove(); }
+	});
+});
 
 test('MultiDiffEditorWidget presents ordered file sections with one outer viewport', async () => {
 	using resources = new DisposableStore();

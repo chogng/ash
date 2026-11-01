@@ -522,8 +522,11 @@ for (const cancellation of ['signal', 'clear'] as const) {
 		let signalAcquisitionStarted: (() => void) | undefined;
 		const acquisitionStarted = new Promise<void>(resolve => { signalAcquisitionStarted = resolve; });
 		let deliver: ((reference: TextModelReference) => void) | undefined;
+		const requested: string[] = [];
 		const delayedModels: ITextModelResourceService = {
-			acquire: async () => {
+			acquire: async (input, signal) => {
+				requested.push(input.resource.toString());
+				if (input.resource.toString() !== originalInput.resource.toString()) return models.acquire(input, signal);
 				signalAcquisitionStarted?.();
 				return new Promise<TextModelReference>(resolve => { deliver = resolve; });
 			},
@@ -541,6 +544,7 @@ for (const cancellation of ['signal', 'clear'] as const) {
 			modified: { resource: URI.parse('git-change:/cancel/modified'), initialText: 'new' },
 		}], 'Cancel'), controller.signal);
 		await acquisitionStarted;
+		assert.deepEqual(requested, [originalInput.resource.toString(), 'git-change:/cancel/modified'], 'Both sides start before the delayed original resolves');
 		assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-session.pending').length, 1);
 		if (cancellation === 'signal') controller.abort();
 		else pane.clearInput();

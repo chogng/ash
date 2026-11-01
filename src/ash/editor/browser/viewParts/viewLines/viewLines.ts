@@ -59,7 +59,7 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private lastViewportData: ViewportData | undefined;
 	private _maxLineWidth = 0;
 	private contentRevision = 0;
-	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType; } | undefined;
+	private horizontalRevealRequest: { readonly range: Range; readonly minimalReveal: boolean; readonly scrollType: ScrollType; readonly originScrollTop: number; readonly targetScrollTop: number; } | undefined;
 
 	constructor(context: ViewContext, options: ViewLinesOptions) {
 		super(context);
@@ -227,7 +227,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 				layout.setScrollPosition({ scrollTop: next.scrollTop, scrollLeft: 0 }, event.scrollType);
 				return true;
 			}
-			this.horizontalRevealRequest = { range, minimalReveal: event.minimalReveal, scrollType: event.scrollType };
+			this.horizontalRevealRequest = {
+				range, minimalReveal: event.minimalReveal, scrollType: event.scrollType,
+				originScrollTop: layout.getCurrentScrollTop(), targetScrollTop: next.scrollTop,
+			};
 		} else {
 			this.horizontalRevealRequest = undefined;
 		}
@@ -236,7 +239,15 @@ export class ViewLines extends ViewPart implements IViewLines {
 	}
 
 	public override onScrollChanged(event: ViewScrollChangedEvent): boolean {
-		if (this.horizontalRevealRequest && event.scrollLeftChanged) this.horizontalRevealRequest = undefined;
+		const request = this.horizontalRevealRequest;
+		if (request && (event.scrollLeftChanged || event.scrollTopChanged && (
+			event.scrollTop < Math.min(request.originScrollTop, request.targetScrollTop)
+			|| event.scrollTop > Math.max(request.originScrollTop, request.targetScrollTop)
+		))) {
+			// A restored viewport or outer MultiDiff scroll supersedes this reveal.
+			// Its deferred text measurement must not move the new viewport later.
+			this.horizontalRevealRequest = undefined;
+		}
 		return event.scrollLeftChanged || event.scrollTopChanged;
 	}
 

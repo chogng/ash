@@ -2,6 +2,7 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type Event } from '../../../../base/common/event.js';
 import { mapScrollAnchor, type ICompressedVirtualizedItemRange } from './compressedVirtualizedScrollLayout.js';
 import { VirtualizedItemManager } from './virtualizedItemManager.js';
 
@@ -17,12 +18,14 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	public readonly domNode: HTMLDivElement;
 	public readonly contentDomNode: HTMLDivElement;
 	public readonly sections: VirtualizedItemManager<TItem>;
+	public readonly onDidScroll: Event<number>;
 	private readonly scrollable: ScrollableElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
 	private previousRanges: readonly ICompressedVirtualizedItemRange[] = [];
 	private logicalContentHeight = 0;
 	private physicalContentHeight = 0;
 	private viewportHeight = 0;
+	private changingLayout = false;
 
 	constructor(
 		container: HTMLElement,
@@ -31,6 +34,9 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	) {
 		super();
 		this.scrollable = this._register(new ScrollableElement(container, { tabIndex: -1 }));
+		this.onDidScroll = (listener, thisArgs, disposables) => this.scrollable.onDidScroll(event => {
+			if (!this.changingLayout) listener.call(thisArgs, this.logicalScrollTop(event.current.top));
+		}, undefined, disposables);
 		this.scrollable.element.classList.add('stanza-multi-diff-editor-scrollbar');
 		this.domNode = this.scrollable.scrollableElement;
 		this.domNode.classList.add('stanza-multi-diff-editor');
@@ -55,10 +61,14 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	}
 
 	public getLogicalScrollTop(): number {
-		if (!this.isCompressed) return this.domNode.scrollTop;
+		return this.logicalScrollTop(this.domNode.scrollTop);
+	}
+
+	private logicalScrollTop(physicalTop: number): number {
+		if (!this.isCompressed) return physicalTop;
 		const physicalMax = Math.max(0, this.physicalContentHeight - this.viewportHeight);
 		const logicalMax = Math.max(0, this.logicalContentHeight - this.viewportHeight);
-		return physicalMax > 0 ? this.domNode.scrollTop / physicalMax * logicalMax : 0;
+		return physicalMax > 0 ? physicalTop / physicalMax * logicalMax : 0;
 	}
 
 	public setLogicalScrollTop(scrollTop: number): void {
@@ -72,7 +82,7 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		this.domNode.scrollTop = logicalMax > 0 ? target / logicalMax * physicalMax : 0;
 	}
 
-	public setLayout(ranges: readonly ICompressedVirtualizedItemRange[], contentHeight: number, viewportHeight: number): void {
+	public setLayout(ranges: readonly ICompressedVirtualizedItemRange[], contentHeight: number, viewportHeight: number): number {
 		const previousScrollTop = this.getLogicalScrollTop();
 		this.logicalContentHeight = contentHeight;
 		this.physicalContentHeight = Math.min(contentHeight, MAX_SCROLL_HEIGHT);
@@ -84,11 +94,18 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 		}
 		this.setLogicalScrollTop(mappedScrollTop);
 		this.previousRanges = ranges.slice();
-		this.scrollable.layout();
+		// The caller projects once after its geometry transaction. Scrollbar layout
+		// can clamp the native position synchronously while these ranges change.
+		this.changingLayout = true;
+		try {
+			this.scrollable.layout();
+		} finally {
+			this.changingLayout = false;
+		}
+		return this.logicalScrollTop(this.scrollable.state.top);
 	}
 
-	public project(overscan: number): IVisibleItemRange {
-		const viewportTop = this.getLogicalScrollTop();
+	public project(overscan: number, viewportTop = this.getLogicalScrollTop()): IVisibleItemRange {
 		const viewportBottom = viewportTop + this.viewportHeight;
 		let start = 0;
 		let end = this.previousRanges.length;
@@ -105,12 +122,14 @@ export class CompressedVirtualizedScrollView<TItem extends IDisposable & { reado
 	}
 
 	/** Maps a visible logical file segment into the bounded browser scroll surface. */
-	public renderedRange(range: ICompressedVirtualizedItemRange, overscan: number): ICompressedVirtualizedItemRange {
+	public renderedRange(range: ICompressedVirtualizedItemRange, overscan: number, logicalTop = this.getLogicalScrollTop()): ICompressedVirtualizedItemRange {
 		if (!this.isCompressed) return range;
-		const logicalTop = this.getLogicalScrollTop();
 		const start = Math.max(range.top, logicalTop - overscan);
 		const end = Math.min(range.top + range.height, logicalTop + this.viewportHeight + overscan);
-		return { top: this.domNode.scrollTop + start - logicalTop, height: Math.max(0, end - start) };
+		const logicalMax = Math.max(0, this.logicalContentHeight - this.viewportHeight);
+		const physicalMax = Math.max(0, this.physicalContentHeight - this.viewportHeight);
+		const physicalTop = logicalMax > 0 ? logicalTop / logicalMax * physicalMax : 0;
+		return { top: physicalTop + start - logicalTop, height: Math.max(0, end - start) };
 	}
 
 	private handleWheel(event: WheelEvent): void {

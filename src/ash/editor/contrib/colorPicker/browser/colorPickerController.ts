@@ -1,5 +1,5 @@
 import './colorPicker.css';
-import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, isNode, stopEvent } from '../../../../base/browser/dom.js';
 import { trackFocus } from '../../../../base/browser/focus.js';
 import { Color, RGBA } from '../../../../base/common/color.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
@@ -28,7 +28,7 @@ import { TrackedRangeStickiness } from '../../../common/model.js';
 
 /** Coordinates color detection, picker requests, focus, and one atomic editor edit. */
 export class ColorPickerController extends Disposable {
-	private readonly widget: ColorPickerWidget;
+	private widget: ColorPickerWidget | undefined;
 	private readonly model = this._register(new MutableDisposable<ColorPickerModel>());
 	private readonly modelListeners = this._register(new DisposableStore());
 	private readonly colorRange: TextDecorationCollection<void>;
@@ -53,43 +53,23 @@ export class ColorPickerController extends Disposable {
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
 		private readonly onError: (error: unknown) => void,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-		@IContextKeyService contextKeyService: IContextKeyService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza color picker dependencies must share a text model');
-		this.widget = this._register(instantiationService.createInstance(ColorPickerWidget,
-			editor,
-			(color: Color) => this.refreshPresentations(color),
-			() => this.apply(),
-			() => this.close(true),
-		));
 		this.colorRange = this._register(new TextDecorationCollection<void>(viewport.textModel));
 		this.standaloneVisible = EditorContextKeys.standaloneColorPickerVisible.bindTo(contextKeyService);
 		this.standaloneFocused = EditorContextKeys.standaloneColorPickerFocused.bindTo(contextKeyService);
-		// Overflow widgets still inherit this editor's command context when mounted outside its DOM.
-		const widgetContext = this._register(contextKeyService.createScoped(this.widget.domNode));
-		const textInputFocus = EditorContextKeys.textInputFocus.bindTo(widgetContext);
-		this._register(addDisposableListener(this.widget.domNode, 'focusin', event => {
-			const target = event.target as HTMLInputElement;
-			textInputFocus.set(target.tagName === 'INPUT' && target.type !== 'range');
-		}));
-		const focusTracker = this._register(trackFocus(this.widget.domNode));
-		this._register(focusTracker.onDidFocus(() => {
-			this.standaloneFocused.set(this.mode === 'standalone');
-			if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ColorPicker)) {
-				this.viewport.announceAccessibilityStatus(localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'));
-			}
-		}));
-		this._register(focusTracker.onDidBlur(() => this.standaloneFocused.reset()));
 		this._register(addDisposableListener(editorInput, 'keydown', event => this.handleEditorKeyDown(event), true));
 		this._register(editor.onMouseDown(event => this.handleEditorMouseDown(event)));
 		this._register(addDisposableListener(viewport.domNode.domNode.ownerDocument, 'pointerdown', event => {
 			const target = event.target;
 			const targetNode = target && typeof (target as Node).nodeType === 'number' ? target as Node : undefined;
-			if (!this.widget.visible) return;
-			if (targetNode && this.widget.domNode.contains(targetNode)) { return; }
+			const widget = this.widget;
+			if (!widget?.visible) return;
+			if (targetNode && widget.domNode.contains(targetNode)) { return; }
 			if (targetNode && this.hoverContext?.container.contains(targetNode)) { return; }
 			if (colorSwatch(target)) return;
 			this.close(false);
@@ -100,7 +80,7 @@ export class ColorPickerController extends Disposable {
 		this._register(service.onDidChange(() => this.close(false)));
 		this._register(editor.onDidChangeConfiguration(event => {
 			if (event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.colorDecorators) || event.hasChanged(EditorOption.colorDecoratorsLimit) || event.hasChanged(EditorOption.defaultColorDecorators) || event.hasChanged(EditorOption.colorDecoratorsActivatedOn)) {
-				this.close(this.widget.domNode.contains(this.widget.domNode.ownerDocument.activeElement));
+				this.close(this.widget?.domNode.contains(this.widget.domNode.ownerDocument.activeElement) ?? false);
 			}
 		}));
 		this._register(editor.onDidChangeCursorPosition(() => { if (!this.updatingEditor) { this.close(false); } }));
@@ -108,7 +88,34 @@ export class ColorPickerController extends Disposable {
 		this._register(viewport.onDidChangeLayout(() => this.close(false)));
 	}
 
-	public get isStandaloneVisible(): boolean { return this.widget.visible && this.mode === 'standalone'; }
+	private getWidget(): ColorPickerWidget {
+		if (this.widget) return this.widget;
+		const widget = this.widget = this._register(this.instantiationService.createInstance(ColorPickerWidget,
+			this.editor,
+			(color: Color) => this.refreshPresentations(color),
+			() => this.apply(),
+			() => this.close(true),
+		));
+		// Overflow widgets inherit this editor's command context on their first show.
+		const widgetContext = this._register(this.contextKeyService.createScoped(widget.domNode));
+		const textInputFocus = EditorContextKeys.textInputFocus.bindTo(widgetContext);
+		this._register(addDisposableListener<FocusEvent>(widget.domNode, 'focusin', event => {
+			const target = event.target as HTMLInputElement;
+			textInputFocus.set(target.tagName === 'INPUT' && target.type !== 'range');
+			this.standaloneFocused.set(this.mode === 'standalone');
+			// Reopening a hover can precede the focus tracker's deferred blur.
+			// Announce actual entry without repeating the hint for internal Tab moves.
+			if ((!isNode(event.relatedTarget) || !widget.domNode.contains(event.relatedTarget))
+				&& this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ColorPicker)) {
+				this.viewport.announceAccessibilityStatus(localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'));
+			}
+		}));
+		const focusTracker = this._register(trackFocus(widget.domNode));
+		this._register(focusTracker.onDidBlur(() => this.standaloneFocused.reset()));
+		return widget;
+	}
+
+	public get isStandaloneVisible(): boolean { return this.widget?.visible === true && this.mode === 'standalone'; }
 	public getColorData(position: Position): ColorData | null { return this.detector.getColorData(position); }
 
 	public renderHover(context: IEditorHoverRenderContext, data: ColorData): IRenderedHoverParts {
@@ -117,7 +124,8 @@ export class ColorPickerController extends Disposable {
 		this.hoverContext = context;
 		this.initializeModel(data);
 		const model = this.model.value!;
-		this.widget.showHover(model, context.container);
+		const widget = this.getWidget();
+		widget.showHover(model, context.container);
 		this.colorRange.replaceAll([{ range: data.information.range, stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges, metadata: undefined }]);
 		this.modelListeners.add(model.onColorFlushed(color => { void this.commitHover(model, color); }));
 		this.pendingPresentations = this.loadPresentations(model, model.color);
@@ -125,7 +133,7 @@ export class ColorPickerController extends Disposable {
 		return {
 			dispose,
 			[Symbol.dispose]: dispose,
-			focus: () => this.widget.focus(),
+			focus: () => widget.focus(),
 			isUpdatingEditor: () => this.updatingEditor,
 		};
 	}
@@ -162,7 +170,7 @@ export class ColorPickerController extends Disposable {
 
 	public async showOrFocus(): Promise<void> {
 		if (this.isStandaloneVisible) {
-			this.widget.focus();
+			this.widget?.focus();
 			return;
 		}
 		await this.showAtPosition(Position.lift(this.editor.getPosition()!));
@@ -177,7 +185,7 @@ export class ColorPickerController extends Disposable {
 
 	private handleEditorKeyDown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
-		if (event.key === 'Escape' && this.widget.visible) {
+		if (event.key === 'Escape' && this.widget?.visible) {
 			stopEvent(event);
 			this.close(true);
 			return;
@@ -205,7 +213,7 @@ export class ColorPickerController extends Disposable {
 		this.initializeModel(data, insertionRanges);
 		const model = this.model.value!;
 		this.standaloneVisible.set(true);
-		this.widget.show(model, data.information.range.getStartPosition(), focus);
+		this.getWidget().show(model, data.information.range.getStartPosition(), focus);
 		this.pendingPresentations = this.loadPresentations(model, model.color);
 		await this.pendingPresentations;
 	}
@@ -220,7 +228,7 @@ export class ColorPickerController extends Disposable {
 		this.shouldGuessPresentation = true;
 		const color = toColor(data.information.color);
 		const model = new ColorPickerModel(color, [], 0);
-		this.widget.hide();
+		this.widget?.hide();
 		this.model.value = model;
 	}
 
@@ -307,7 +315,7 @@ export class ColorPickerController extends Disposable {
 		this.presentationRequest = undefined;
 		this.pendingPresentations = undefined;
 		this.modelListeners.clear();
-		this.widget.hide();
+		this.widget?.hide();
 		this.model.clear();
 		this.activeData = undefined;
 		this.insertionRanges = undefined;

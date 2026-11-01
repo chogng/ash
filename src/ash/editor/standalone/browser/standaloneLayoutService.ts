@@ -43,12 +43,12 @@ export class StandaloneLayoutService extends Disposable implements ILayoutServic
 	}
 
 	public get mainContainer(): HTMLElement {
-		return this.editors.listCodeEditors()[0]?.getContainerDomNode() ?? document.body;
+		return this.editors.listCodeEditors().find(editor => editor.hasModel())?.getContainerDomNode() ?? document.body;
 	}
 
 	public get activeContainer(): HTMLElement {
 		const editor = this.editors.getFocusedCodeEditor() ?? this.editors.getActiveCodeEditor();
-		return editor?.getContainerDomNode() ?? this.mainContainer;
+		return editor?.hasModel() ? editor.getContainerDomNode() : this.mainContainer;
 	}
 
 	public get mainContainerDimension(): IDimension {
@@ -60,7 +60,7 @@ export class StandaloneLayoutService extends Disposable implements ILayoutServic
 	}
 
 	public get containers(): Iterable<HTMLElement> {
-		return this.editors.listCodeEditors().map(editor => editor.getContainerDomNode());
+		return this.editors.listCodeEditors().filter(editor => editor.hasModel()).map(editor => editor.getContainerDomNode());
 	}
 
 	public getContainer(targetWindow: Window): HTMLElement {
@@ -82,6 +82,10 @@ export class StandaloneLayoutService extends Disposable implements ILayoutServic
 
 	private track(editor: ICodeEditor): void {
 		const listeners = this.editorListeners.set(editor, new DisposableStore());
+		listeners.add(editor.onDidChangeModel(() => {
+			this.publishActiveContainer();
+			this.layoutMain.fire(this.mainContainerDimension);
+		}));
 		listeners.add(editor.onDidLayoutChange(() => this.publishLayout(editor)));
 		listeners.add(editor.onDidFocusEditorText(() => this.publishActiveContainer()));
 		listeners.add(editor.onDidFocusEditorWidget(() => this.publishActiveContainer()));

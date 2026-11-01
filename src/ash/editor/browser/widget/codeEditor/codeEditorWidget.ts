@@ -415,6 +415,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				register: value => modelStore.add(value),
 			});
 			const ariaLabel = options.ariaLabel ?? editorLabel(model.uri);
+			const layoutInfo = this.getLayoutInfo();
 			const view = modelStore.add(new View({
 				container: options.container,
 				rootDomNode: this.rootDomNode,
@@ -430,7 +431,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				configuration: this.configuration,
 				theme: themeService.getColorTheme(),
 				ariaLabel,
-				dimension: options.dimension,
+				// Configuration retains the current viewport across model attachments.
+				// Construction dimensions can be stale, including a staged Diff's 0×0.
+				dimension: { width: layoutInfo.width, height: layoutInfo.height },
+				deferInitialRender: options.dimension?.width === 0 && options.dimension.height === 0,
 				semanticTokenSource,
 				configurationService: this.configurationService,
 				textDirection: options.textDirection,
@@ -585,6 +589,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	layout(dimension: IDimension = getClientArea(this.element)): void {
 		if (!this.currentModel) {
+			this.configuration.observeContainer(dimension);
 			this.rootDomNode.style.width = `${Math.max(0, dimension.width)}px`;
 			this.rootDomNode.style.height = `${Math.max(0, dimension.height)}px`;
 			return;
@@ -814,7 +819,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		if (!this.currentModel || !state || !('cursorState' in state)) return;
 		this.viewModel.restoreCursorState(state.cursorState);
 		const scroll = this.viewModel.reduceRestoreState(state.viewState);
-		this.view.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
+		// Restore geometry synchronously, then let both sides of a remounted diff
+		// share the next render instead of forcing two intermediate DOM passes.
+		this.setScrollPosition({ scrollLeft: scroll.scrollLeft, scrollTop: scroll.scrollTop }, ScrollType.Immediate);
 		this.contributions.restoreViewState(state.contributionsState ?? {});
 	}
 

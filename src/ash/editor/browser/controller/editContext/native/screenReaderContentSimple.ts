@@ -99,6 +99,11 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 	}
 
 	clear(): void {
+		// Inactive editors also prepare on scroll. An empty mirror needs no DOM
+		// writes or scrollTop reset, which can otherwise force pending layout.
+		if (!this.state) {
+			return;
+		}
 		this.state = undefined;
 		this.element.replaceChildren();
 		this.element.scrollTop = 0;

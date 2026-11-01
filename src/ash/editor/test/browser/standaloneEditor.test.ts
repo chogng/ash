@@ -959,8 +959,11 @@ suite('standalone browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
 		await page.mouse.move(900, 600);
 		await input.focus();
-		// Focus reveal can produce a final scroll event; expire activity after focus settles.
+		// Native scroll and focus reveal finish across frame callbacks before their
+		// activity timer can be expired by the virtual clock.
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		await page.clock.runFor(800);
+		await page.clock.resume();
 		await expect(track).toHaveCSS('opacity', '0');
 		await editor.hover();
 		const thumb = track.locator('.ash-scrollbar-thumb');
@@ -5147,6 +5150,7 @@ suite('standalone browser component', () => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
+		await expect(page.locator('.ash-editor-lightbulb')).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareEditorContextMenu(true));
 		const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
 		const lightbulb = page.getByRole('button', { name: 'Show code actions', exact: true });
@@ -6015,6 +6019,7 @@ suite('standalone browser component', () => {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+		await expect(page.locator('.stanza-editor-color-picker')).toHaveCount(0);
 		await page.keyboard.press('ControlOrMeta+Shift+c');
 		const picker = page.locator('.stanza-editor-color-picker').first();
 		await expect(picker).toBeVisible();

@@ -6,10 +6,13 @@ import { type DiffModel } from '../../../common/diff/diffModel.js';
 import type { IDiffEditorOptions, IEditorOptions } from '../../../common/config/editorOptions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { localize } from '../../../../nls.js';
+import type { IDimension } from '../../../common/core/2d/dimension.js';
 
 export interface DiffEditorWidgetOptions extends IDiffEditorOptions, Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
 	readonly container: HTMLElement;
 	readonly model: DiffModel;
+	/** An embedding host can supply its known viewport without a synchronous DOM measurement. */
+	readonly dimension?: IDimension;
 	readonly lineHeight?: number;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -138,6 +141,11 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 		throw new TypeError('Diff editor widget requires a browser container');
 	}
 	if (!options.model || typeof options.model !== 'object') throw new TypeError('Diff editor widget requires a diff model');
+	if (options.dimension !== undefined && (!options.dimension
+		|| !isFiniteNumber(options.dimension.width) || options.dimension.width < 0
+		|| !isFiniteNumber(options.dimension.height) || options.dimension.height < 0)) {
+		throw new RangeError('Diff editor widget layout size must be finite and non-negative');
+	}
 	if (options.lineHeight !== undefined && (!isFiniteNumber(options.lineHeight) || options.lineHeight < 0)) {
 		throw new RangeError(localize('diffEditor.lineHeight.invalid', 'Diff editor line height must be non-negative and finite.'));
 	}

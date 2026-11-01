@@ -21,9 +21,12 @@ export class DiffEditorEditors extends Disposable {
 		const shared: CodeEditorWidgetOptions = {
 			...options,
 			container: originalContainer,
-			model: options.model.original,
+			model: null,
 			isSimpleWidget: false,
 			inDiffEditor: true,
+			// DiffEditorWidget supplies the aligned dimensions after both sides and
+			// their view zones exist. Avoid measuring and painting an interim view.
+			dimension: { width: 0, height: 0 },
 			folding: false,
 			fixedOverflowWidgets: true,
 			minimap: { enabled: false },
@@ -35,14 +38,14 @@ export class DiffEditorEditors extends Disposable {
 		this.original = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			...shared,
 			container: originalContainer,
-			model: options.model.original,
+			model: null,
 			ariaLabel: options.originalAriaLabel,
 			readOnly: true,
 		}));
 		this.modified = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			...shared,
 			container: modifiedContainer,
-			model: options.model.modified,
+			model: null,
 			ariaLabel: options.modifiedAriaLabel,
 			readOnly: options.readOnly ?? false,
 			glyphMargin: options.glyphMargin,
