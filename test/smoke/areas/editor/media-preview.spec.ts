@@ -7,6 +7,79 @@ declare global {
 	interface Window { readonly mediaPreviewRevokedURLs: Set<string>; }
 }
 
+for (const kind of ['audio', 'video'] as const) {
+	test(`${kind} has independent playback in splits, follows rename and restores after restart`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
+		const page = workbench.page;
+		await createMediaPreviewFixture(page, target, testWorkspace.directory, workbench);
+		const name = kind === 'audio' ? 'retry.wav' : 'retry.webm';
+		const renamed = kind === 'audio' ? 'renamed.wav' : 'renamed.webm';
+		const explorer = page.locator('.ash-explorer');
+		await explorer.getByRole('treeitem', { name, exact: true }).dblclick();
+		const leftGroup = workbench.editors.groupAt(0);
+		const left = leftGroup.content.locator(`.ash-media-preview:visible ${kind}`);
+		await expect.poll(() => left.evaluate(element => (element as HTMLMediaElement).readyState)).toBeGreaterThanOrEqual(1);
+		await left.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			player.currentTime = 0.5; player.volume = 0.25; player.muted = true; player.playbackRate = 0.75; player.loop = true;
+		});
+		await left.focus();
+		await left.press('Space');
+		await expect.poll(() => left.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
+		const rightGroup = workbench.editors.groupAt(1);
+		const right = rightGroup.content.locator(`.ash-media-preview:visible ${kind}`);
+		await expect.poll(() => right.evaluate(element => (element as HTMLMediaElement).readyState)).toBeGreaterThanOrEqual(1);
+		await expect.poll(() => left.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+		await expect.poll(() => right.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			return [player.volume, player.muted, player.playbackRate, player.paused];
+		})).toEqual([0.25, true, 0.75, true]);
+		expect(await left.getAttribute('src')).not.toBe(await right.getAttribute('src'));
+		await left.evaluate(element => { const player = element as HTMLMediaElement; player.pause(); player.currentTime = 0.5; });
+		await right.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			player.currentTime = 1.25; player.volume = 0.8; player.muted = false; player.playbackRate = 1.5; player.loop = true;
+		});
+		await expect.poll(() => left.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			return [player.currentTime, player.volume, player.muted, player.playbackRate];
+		})).toEqual([0.5, 0.25, true, 0.75]);
+		await workbench.menus.select(application, () => explorer.getByRole('treeitem', { name, exact: true }).click({ button: 'right' }), ['Rename']);
+		const renameInput = page.getByRole('dialog', { name: 'Rename', exact: true }).getByRole('textbox');
+		await renameInput.fill(renamed);
+		await renameInput.press('Enter');
+		for (const group of [leftGroup, rightGroup]) {
+			await expect(group.tabs.getByText(renamed, { exact: true })).toBeVisible();
+			await expect(group.tabs.filter({ hasText: name })).toHaveCount(0);
+		}
+		await expect.poll(() => left.evaluate(element => (element as HTMLMediaElement).currentTime)).toBeCloseTo(0.5, 1);
+		await expect.poll(() => right.evaluate(element => (element as HTMLMediaElement).currentTime)).toBeCloseTo(1.25, 1);
+		await left.evaluate(element => { (element as HTMLMediaElement).loop = true; });
+		await right.evaluate(element => { (element as HTMLMediaElement).loop = true; });
+		await left.focus(); await left.press('Space');
+		await right.focus(); await right.press('Space');
+		await expect.poll(() => left.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+		await expect.poll(() => right.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+		await left.focus();
+		await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+		await expect.poll(() => right.evaluate(element => (element as HTMLMediaElement).paused)).toBe(false);
+		await right.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			player.pause(); player.currentTime = 0.9; player.volume = 0.65; player.muted = true; player.playbackRate = 1.25;
+		});
+		await right.focus();
+		await page.reload();
+		await expect(page.getByRole('tab', { name: renamed, exact: true })).toHaveAttribute('aria-selected', 'true');
+		const restored = page.locator(`.ash-media-preview:visible ${kind}`);
+		await expect.poll(() => restored.evaluate(element => (element as HTMLMediaElement).readyState)).toBeGreaterThanOrEqual(1);
+		await expect.poll(() => restored.evaluate(element => (element as HTMLMediaElement).currentTime)).toBeCloseTo(0.9, 1);
+		await expect.poll(() => restored.evaluate(element => {
+			const player = element as HTMLMediaElement;
+			return [player.volume, player.muted, player.playbackRate, player.paused];
+		})).toEqual([0.65, true, 1.25, true]);
+	});
+}
+
 test('Built-in audio and video previews play, pause on switching and release resources', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	// Two seconds of PCM silence and a small VP9 clip exercise actual decoders.

@@ -917,6 +917,44 @@ suite('FileService capability and watch ownership', () => {
 	});
 });
 
+test('File rename notifications publish the completed move and exclude failed operations', async () => {
+	using files = new FileService();
+	using provider = new TestFileProvider('rename');
+	using registration = files.registerProvider('file', provider);
+	const completed = new DeferredPromise<void>();
+	provider.rename = () => completed.p;
+	const source = URI.file('/project/old.wav');
+	const target = URI.file('/project/new.wav');
+	const events: { readonly source: URI; readonly target: URI; }[] = [];
+	using listener = files.onDidRenameFile(event => events.push(event));
+	const renaming = files.rename(source, target, 'error');
+	assert.deepEqual(events, []);
+	await completed.complete();
+	await renaming;
+	assert.deepEqual(events, [{ source, target }]);
+	provider.rename = async () => { throw new Error('Rename denied'); };
+	await assert.rejects(files.rename(target, source, 'error'), /Rename denied/);
+	assert.deepEqual(events, [{ source, target }]);
+});
+
+test('Ignored rename collisions do not redirect editors to an existing file', async () => {
+	using files = new FileService();
+	using provider = new InMemoryFileSystemProvider();
+	using registration = files.registerProvider('file', provider);
+	const source = URI.file('/source.wav');
+	const target = URI.file('/target.wav');
+	await files.writeFileBytes(source, new Uint8Array([1]));
+	await files.writeFileBytes(target, new Uint8Array([2]));
+	const events: unknown[] = [];
+	using listener = files.onDidRenameFile(event => events.push(event));
+	await files.rename(source, target, 'ignore');
+	assert.deepEqual(events, []);
+	assert.deepEqual((await files.readFileBytes(source)).bytes, new Uint8Array([1]));
+	const available = URI.file('/available.wav');
+	await files.rename(source, available, 'ignore');
+	assert.deepEqual(events, [{ source, target: available }]);
+});
+
 class TestFileProvider implements IFileSystemProvider {
 	public capabilities: FileSystemProviderCapabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	private readonly capabilitiesChanged = new Emitter<void>();

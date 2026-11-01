@@ -13,22 +13,87 @@ import { EditorPanes, registerBuiltinEditorPane } from '../../../browser/editor.
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { SideBySideEditor } from '../../../browser/parts/editor/sideBySideEditor.js';
 import { isResourceDiffEditorInput } from '../../../common/editor.js';
-import { IMAGE_PREVIEW_EDITOR_ID, ImagePreviewConfiguration, isImageResource } from '../common/mediaPreview.js';
+import { IMAGE_PREVIEW_EDITOR_ID, AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID, ImagePreviewConfiguration, isImageResource } from '../common/mediaPreview.js';
 import { ImagePreviewEditor } from './imagePreviewEditor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { CopyImageAction, SelectImageZoomLevelAction } from './mediaPreviewActions.js';
 import { MediaPreviewStatusBarContribution } from './mediaPreviewStatusBar.js';
-import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from './mediaPreview.js';
+import { MediaPreview } from './mediaPreview.js';
+import { ImagePreviewEditorInput } from './imagePreviewEditorInput.js';
+import { MediaPlayerEditorInput, isMediaPlayerKind } from './mediaPlayerEditorInput.js';
+import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from '../../../services/editor/common/editorInputSerializer.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { extUri } from '../../../../base/common/resources.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { IFileService, type IFileRenameEvent } from '../../../../platform/files/common/files.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { URI } from '../../../../base/common/uri.js';
+
+/** Media panes own decoding; this contribution follows successful filesystem resource moves. */
+class MediaPreviewResourceTracker extends Disposable {
+	private updating: Promise<void> = Promise.resolve();
+	constructor(
+		@IFileService files: IFileService,
+		@IEditorPartsService private readonly editors: IEditorPartsService,
+	) {
+		super();
+		this._register(files.onDidRenameFile(event => {
+			this.updating = this.updating.then(() => this.followRename(event)).catch(onUnexpectedError);
+		}));
+	}
+
+	private async followRename(event: IFileRenameEvent): Promise<void> {
+		if (this.isDisposed) { return; }
+		for (const group of this.editors.groups) {
+			for (const editor of group.editors) {
+				if (this.isDisposed) { return; }
+				const input = editor.input;
+				if (!(input instanceof ImagePreviewEditorInput) && !(input instanceof MediaPlayerEditorInput)) { continue; }
+				if (!extUri.isEqualOrParent(input.resource, event.source) || !group.inputs.includes(input)) { continue; }
+				const relative = input.resource.path.slice(event.source.path.length).replace(/^\//, '');
+				const resource = relative ? URI.joinPath(event.target, relative) : event.target;
+				await group.replaceEditor(input, input.rename(resource));
+			}
+		}
+	}
+}
 
 registerAction2(CopyImageAction);
 registerAction2(SelectImageZoomLevelAction);
 registerWorkbenchContribution('workbench.contrib.mediaPreviewStatusBar', WorkbenchPhase.AfterRestored,
 	accessor => accessor.get(IInstantiationService).createInstance(MediaPreviewStatusBarContribution));
+registerWorkbenchContribution('workbench.contrib.mediaPreviewResources', WorkbenchPhase.AfterRestored,
+	accessor => accessor.get(IInstantiationService).createInstance(MediaPreviewResourceTracker));
+
+EditorInputSerializers.registerStatic({
+	typeId: ImagePreviewEditorInput.ID,
+	canSerialize: input => input instanceof ImagePreviewEditorInput,
+	serialize: (input, registry) => {
+		if (!(input instanceof ImagePreviewEditorInput)) { throw new TypeError('Image serialization requires an image preview input'); }
+		return registry.serialize(input.toUntyped());
+	},
+	deserialize: (value, registry) => new ImagePreviewEditorInput(registry.deserialize(requireSerializedEditorInput(value, 'serialized image resource'))),
+});
+
+EditorInputSerializers.registerStatic({
+	typeId: MediaPlayerEditorInput.typeId,
+	canSerialize: input => input instanceof MediaPlayerEditorInput,
+	serialize: (input, registry) => {
+		if (!(input instanceof MediaPlayerEditorInput)) { throw new TypeError('Media serialization requires a media player input'); }
+		return { kind: input.kind, source: registry.serialize(input.toUntyped()) };
+	},
+	deserialize: (value, registry) => {
+		const record = requireRecord(value, 'serialized media player input');
+		if (!isMediaPlayerKind(record.kind)) { throw new TypeError('Invalid serialized media player kind'); }
+		return new MediaPlayerEditorInput(record.kind, registry.deserialize(requireSerializedEditorInput(record.source, 'serialized media resource')));
+	},
+});
 
 EditorPanes.registerStatic({
 	id: IMAGE_PREVIEW_EDITOR_ID,
 	get name(): string { return localize('media.image.preview', 'Image preview'); },
 	resourceEditor: true,
+	createInput: input => isResourceDiffEditorInput(input) || input instanceof ImagePreviewEditorInput ? input : new ImagePreviewEditorInput(input),
 	canOpen: input => {
 		const supported = isResourceDiffEditorInput(input)
 			? isImageResource(input.original) && isImageResource(input.modified)
@@ -47,10 +112,10 @@ EditorPanes.registerStatic({
 });
 
 for (const kind of ['audio', 'video'] as const) {
-	registerBuiltinEditorPane('ash.media-preview', kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID, (options, name) => {
+	registerBuiltinEditorPane('ash.media-preview', kind === 'audio' ? AUDIO_PREVIEW_EDITOR_ID : VIDEO_PREVIEW_EDITOR_ID, (options, name) => {
 		if (!options.instantiationService) { throw new Error('Media preview requires Workbench instantiation services'); }
 		return options.instantiationService.createInstance(MediaPreview, kind, name);
-	});
+	}, { createInput: input => input instanceof MediaPlayerEditorInput && input.kind === kind ? input : new MediaPlayerEditorInput(kind, input) });
 }
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -164,7 +229,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.MediaPreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. If loading fails, choose Retry to read the file again. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Video autoplay and looping can be configured in Settings under Media Preview. Audio starts only when you play it. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
+					? localize('media.playback.help', 'Audio and video preview\nPress Space on the player to play or pause. Use Tab to reach playback controls for seeking, volume and fullscreen where available. Use Save As to copy the original media bytes to another file. If loading fails, choose Retry to read the file again or Open as read-only text to inspect its contents. Git LFS pointers are reported without starting playback. <keybinding:editor.action.accessibleView> reads the filename, file size, duration and playback state; it does not transcribe audio or describe video. Video autoplay and looping can be configured in Settings under Media Preview. Audio starts only when you play it. Each split has an independent player, playback position, volume, mute setting and playback speed. Splitting, moving, saving a copy and restarting restore those settings. Renaming or moving a file in Explorer updates its open media tabs. Playback stops when you switch away from the preview. File changes reload the preview. Closing the tab stops playback and releases its resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.MediaPreview,
@@ -201,7 +266,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				AccessibleViewProviderId.ImagePreview,
 				{ type },
 				() => type === AccessibleViewType.Help
-					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Once focused, click the image to zoom in, use a modifier with the scroll wheel, or pinch on a trackpad. Choose Copy image or use the system copy shortcut to copy it. Right click or press Shift+F10 for the image menu. Activate the dimensions and file size in the status bar to view image information, copy dimensions or full information, or hide image information. Press Escape in the details to close and return to the status bar. The status bar has a separate image zoom button; activate it to select Fit to window or a zoom level. Show image information in Settings controls whether dimensions and file size are displayed beside it. Zoom and scroll position are restored when reopening the image. If loading fails, use Retry in the error message. Default zoom and fit area percentage can be configured in Settings under Features > Media Preview. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
+					? localize('media.image.help', 'Image preview\nPress Plus or Minus to zoom, 0 to fit the image to the window, or 1 to show its actual size. Once focused, click the image to zoom in, use a modifier with the scroll wheel, or pinch on a trackpad. Choose Copy image or use the system copy shortcut to copy it. Right click or press Shift+F10 for the image menu. Activate the dimensions and file size in the status bar to view image information, copy dimensions or full information, or hide image information. Press Escape in the details to close and return to the status bar. The status bar has a separate image zoom button; activate it to select Fit to window or a zoom level. Show image information in Settings controls whether dimensions and file size are displayed beside it. Zoom and scroll position are preserved when splitting or moving the image to another editor group, saving a copy, or reopening the image. Use Save As to copy the original image bytes to another file. If loading fails, use Retry or Open as read-only text in the error message. Git LFS pointers are reported without decoding them. Default zoom and fit area percentage can be configured in Settings under Features > Media Preview. Focus Image viewport and use arrow keys to scroll enlarged images. <keybinding:editor.action.accessibleView> reads the filename, dimensions, format and zoom; it does not describe the picture. File changes refresh this preview. Closing the tab releases its preview resources; the original file stays intact.')
 					: preview.getAccessibleContent(),
 				() => focused.focus(),
 				AccessibilityVerbositySettingId.ImagePreview,

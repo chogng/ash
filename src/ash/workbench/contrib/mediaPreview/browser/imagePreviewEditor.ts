@@ -15,15 +15,21 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ImageResource } from '../../../../base/browser/image.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
+import type { IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { getMediaMime } from '../../../../base/common/mime.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ImageViewer, type IImageViewerViewState } from './imageViewer.js';
-import { IMAGE_PREVIEW_EDITOR_ID } from '../common/mediaPreview.js';
+import { IMAGE_PREVIEW_EDITOR_ID, isGitLfsPointer } from '../common/mediaPreview.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { ImagePreviewEditorInput } from './imagePreviewEditorInput.js';
+import { reopenInTextEditor } from './mediaPreviewErrors.js';
 import './media/imagePreviewEditor.css';
 
-export class ImagePreviewEditor extends EditorPane implements IEditorPane {
+export class ImagePreviewEditor extends EditorPane implements IEditorPane, IEditorPaneWithViewState {
 	public readonly id = IMAGE_PREVIEW_EDITOR_ID;
+	public readonly viewStateTypeId = 'ash.imagePreview.viewState';
 	private static readonly instances = new WeakMap<HTMLElement, ImagePreviewEditor>();
 	private readonly resource = this._register(new MutableDisposable<ImageResource>());
 	private readonly loading = this._register(new MutableDisposable<IDisposable>());
@@ -32,7 +38,8 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 	private summaryDomNode!: HTMLElement;
 	private summaryTextDomNode!: HTMLElement;
 	private retryButton!: Button;
-	private input: IResourceEditorInput | undefined;
+	private textButton!: Button;
+	private input: ImagePreviewEditorInput | undefined;
 	private mediaType: string | undefined;
 	private readonly imageInfoChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeImageInfo = this.imageInfoChanged.event;
@@ -46,6 +53,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService private readonly imageStorage: IStorageService,
+		@IEditorService private readonly editors: IEditorService,
 	) {
 		super(IMAGE_PREVIEW_EDITOR_ID, themeService, imageStorage);
 	}
@@ -77,6 +85,11 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 			onClick: () => this.retry(),
 		}));
 		this.retryButton.domNode.classList.add('ash-image-preview-retry');
+		this.textButton = this._register(new Button(this.summaryDomNode, {
+			...defaultButtonStyles,
+			label: localize('mediaPreview.openAsText', 'Open as read-only text'),
+			onClick: () => this.openAsText(),
+		}));
 		this.domNode.append(content, this.summaryDomNode);
 		parent.append(this.domNode);
 		super.create(this.domNode);
@@ -103,22 +116,23 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		this.input = input;
+		const imageInput = input instanceof ImagePreviewEditorInput ? input : new ImagePreviewEditorInput(input);
+		this.input = imageInput;
 		const generation = this.generation + 1;
 		try {
-			await this.load(input, signal, true);
+			await this.load(imageInput, signal, true);
 		} catch (error) {
 			if (error instanceof CancellationError) {
-				if (this.generation === generation && this.input === input) { this.clearInput(); }
+				if (this.generation === generation && this.input === imageInput) { this.clearInput(); }
 				throw error;
 			}
-			if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
-			this.failLoad(input, error, generation);
+			if (this.isDisposed || this.generation !== generation || this.input !== imageInput) { return; }
+			this.failLoad(imageInput, error, generation);
 		}
 	}
 
 	public override clearInput(): void {
-		this.saveViewState();
+		this.storeViewState();
 		this.generation++;
 		this.loading.clear();
 		this.viewer.clear();
@@ -136,7 +150,12 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		this.domNode.classList.toggle('hidden', !!this.domNode.hidden);
 		this.imageInfoChanged.fire();
 	}
-	public override focus(): void { this.viewer.domNode.focus(); }
+	public override focus(): void { this.viewer.domNode.focus({ preventScroll: true }); }
+
+	public async saveAs(target: URI): Promise<void> {
+		if (!this.input) { throw new Error('Image preview has no input'); }
+		await this.input.saveAs(target, this.files);
+	}
 
 	public getAccessibleContent(): string {
 		const metadata = this.imageInfo;
@@ -146,13 +165,17 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		return localize('media.image.content', 'Image: {0}\nResource: {1}\nSize: {2} × {3} pixels\nFormat: {4}\nFile size: {5} bytes\nZoom: {6}', this.input.label ?? basename(this.input.resource), this.input.resource.toString(), metadata.width, metadata.height, metadata.mediaType, this.byteLength, this.zoomLabel());
 	}
 
-	private async load(input: IResourceEditorInput, signal: AbortSignal, resetScale: boolean): Promise<void> {
+	private async load(input: ImagePreviewEditorInput, signal: AbortSignal, resetScale: boolean): Promise<void> {
 		const generation = ++this.generation;
 		const cancellation = new AbortController();
 		this.loading.value = toDisposable(() => { cancellation.abort(); this.viewer.cancelPendingSource(); });
 		const combined = AbortSignal.any([signal, cancellation.signal]);
 		throwIfCancelled(combined);
 		const bytes = input.initialBytes ?? (await raceCancellationError(this.files.readFileBytes(input.resource), combined)).bytes;
+		throwIfCancelled(combined);
+		if (isGitLfsPointer(input.resource, bytes)) {
+			throw new Error(localize('mediaPreview.gitLfsPointer', 'This Git revision contains a Git LFS pointer instead of media content. Open it as text to inspect the pointer.'));
+		}
 		const mediaType = getMediaMime(input.resource.path) ?? input.contentType?.split(';', 1)[0].trim().toLowerCase() ?? '';
 		const resource = new ImageResource(bytes, mediaType);
 		let accepted = false;
@@ -179,7 +202,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		this.imageInfoChanged.fire();
 	}
 
-	private failLoad(input: IResourceEditorInput, error: unknown, generation: number): void {
+	private failLoad(input: ImagePreviewEditorInput, error: unknown, generation: number): void {
 		if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
 		this.clearInput();
 		// Retain the resource so the user can retry or see a later file-change recovery.
@@ -197,12 +220,28 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		});
 	}
 
+	private openAsText(): void {
+		const input = this.input;
+		const generation = this.generation;
+		if (!input || this.loadFailure === undefined) { return; }
+		const cancellation = new AbortController();
+		this.loading.value = toDisposable(() => cancellation.abort());
+		void reopenInTextEditor(input, this.files, this.editors, this.group, cancellation.signal).catch(error => {
+			if (cancellation.signal.aborted) { return; }
+			if (this.isDisposed || this.input !== input || this.generation !== generation) { return; }
+			this.loadFailure = localize('mediaPreview.openAsTextFailed', 'Could not open text preview: {0}', error instanceof Error ? error.message : String(error));
+			this.updateLabels();
+		});
+	}
+
 	private updateLabels(): void {
 		this.updateAriaLabel();
 		const failed = this.loadFailure !== undefined;
-		const restoreFocus = !failed && this.retryButton.domNode === this.domNode.ownerDocument.activeElement;
+		const focused = this.domNode.ownerDocument.activeElement;
+		const restoreFocus = !failed && (focused === this.retryButton.domNode || focused === this.textButton.domNode);
 		this.retryButton.domNode.hidden = !failed;
 		this.retryButton.domNode.classList.toggle('hidden', !failed);
+		this.textButton.hidden = !failed;
 		if (restoreFocus) this.viewer.domNode.focus();
 		this.summaryDomNode.setAttribute('role', this.loadFailure === undefined ? 'status' : 'alert');
 		this.updateSummary();
@@ -229,11 +268,22 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		return this.viewer.scale === 'fit' ? localize('media.image.fit', 'Fit to window') : `${Math.round(this.viewer.scale * 100)}%`;
 	}
 
-	protected override saveState(): void { this.saveViewState(); super.saveState(); }
+	public saveViewState(): IImageViewerViewState | null {
+		return this.viewer?.hasImage ? this.viewer.getViewState() : null;
+	}
 
-	protected override disposeCore(): void { this.saveViewState(); super.disposeCore(); }
+	public restoreViewState(state: unknown): void {
+		const viewState = parseImageViewState(state);
+		if (viewState && this.viewer.hasImage) {
+			this.viewer.restoreViewState(viewState);
+		}
+	}
 
-	private saveViewState(): void {
+	protected override saveState(): void { this.storeViewState(); super.saveState(); }
+
+	protected override disposeCore(): void { this.storeViewState(); super.disposeCore(); }
+
+	private storeViewState(): void {
 		if (!this.input || !this.viewer?.hasImage) return;
 		const states = this.readViewStates();
 		const key = `${this.group?.id ?? 'standalone'}:${this.input.resource}`;
@@ -245,10 +295,7 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 
 	private readViewState(input: IResourceEditorInput): IImageViewerViewState | undefined {
 		const saved = this.readViewStates();
-		const state = saved[`${this.group?.id ?? 'standalone'}:${input.resource}`] as IImageViewerViewState | undefined;
-		if (!state || typeof state !== 'object') return undefined;
-		if (state.scale !== 'fit' && (typeof state.scale !== 'number' || !Number.isFinite(state.scale) || state.scale < 0.1 || state.scale > 20)) return undefined;
-		return [state.scrollLeft, state.scrollTop].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) ? state : undefined;
+		return parseImageViewState(saved[`${this.group?.id ?? 'standalone'}:${input.resource}`]);
 	}
 
 	private readViewStates(): Record<string, unknown> {
@@ -267,4 +314,14 @@ export class ImagePreviewEditor extends EditorPane implements IEditorPane {
 		this.summaryTextDomNode.textContent = summary;
 		this.summaryDomNode.title = summary;
 	}
+}
+
+/** State can come from workspace storage or another editor host. */
+function parseImageViewState(value: unknown): IImageViewerViewState | undefined {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) { return undefined; }
+	const state = value as Partial<IImageViewerViewState>;
+	if (state.scale !== 'fit' && (typeof state.scale !== 'number' || !Number.isFinite(state.scale) || state.scale < 0.1 || state.scale > 20)) { return undefined; }
+	if (typeof state.scrollLeft !== 'number' || !Number.isFinite(state.scrollLeft) || state.scrollLeft < 0 ||
+		typeof state.scrollTop !== 'number' || !Number.isFinite(state.scrollTop) || state.scrollTop < 0) { return undefined; }
+	return { scale: state.scale, scrollLeft: state.scrollLeft, scrollTop: state.scrollTop };
 }

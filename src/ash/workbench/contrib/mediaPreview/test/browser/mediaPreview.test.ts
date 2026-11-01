@@ -23,9 +23,59 @@ import { EditorPaneMatch } from '../../../../browser/parts/editor/editorPane.js'
 import { AppServerExtensionService } from '../../../../services/extensions/browser/appServerExtensionService.js';
 import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, MediaPreview } from '../../browser/mediaPreview.js';
+import { MediaPreview } from '../../browser/mediaPreview.js';
+import { AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
 import { createTestFileService, registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import '../../browser/mediaPreview.contribution.js';
+import type { IResourceEditorInput } from '../../../../common/editor.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { ImagePreviewEditorInput } from '../../browser/imagePreviewEditorInput.js';
+import { MediaPlayerEditorInput } from '../../browser/mediaPlayerEditorInput.js';
+import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
+
+for (const kind of ['image', 'audio', 'video'] as const) {
+	test(`${kind} input preserves resource metadata, copies identity and restores its concrete type`, () => {
+		const source: IResourceEditorInput = {
+			resource: URI.parse(`git:/asset.${kind}`), preferredResource: URI.file(`/project/asset.${kind}`),
+			label: 'Revision', initialBytes: new Uint8Array([0, 255, 128]), contentType: `${kind}/test`,
+			getIcon: () => ({ id: 'file' }), canMove: () => 'Transfer blocked',
+		};
+		using input = kind === 'image' ? new ImagePreviewEditorInput(source) : new MediaPlayerEditorInput(kind, source);
+		using copy = input.copy();
+		assert.notEqual(copy, input);
+		assert.equal(copy.matches(input), true);
+		assert.equal(copy.initialBytes, source.initialBytes);
+		assert.equal(copy.canMove(1, 2), 'Transfer blocked');
+		assert.equal(input.readOnly, true);
+		assert.equal(input.label, 'Revision');
+		const untyped = input.toUntyped();
+		assert.equal(untyped.editorId, undefined);
+		assert.equal(untyped.readOnly, undefined);
+		assert.equal(untyped.canMove?.(1, 2), 'Transfer blocked');
+		const serialized = EditorInputSerializers.serialize(input);
+		assert.equal(serialized.typeId, kind === 'image' ? ImagePreviewEditorInput.ID : MediaPlayerEditorInput.typeId);
+		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(serialized)));
+		assert.ok(restored instanceof (kind === 'image' ? ImagePreviewEditorInput : MediaPlayerEditorInput));
+		assert.equal(input.matches(restored), true);
+		assert.equal(restored.preferredResource?.toString(), source.preferredResource!.toString());
+		assert.deepEqual(restored.initialBytes, source.initialBytes);
+		assert.deepEqual(restored.getIcon?.(), { id: 'file' });
+		assert.equal(restored.toUntyped?.().readOnly, undefined);
+		assert.deepEqual(input.rename(URI.file('/renamed.txt')), { resource: URI.file('/renamed.txt') });
+		restored.dispose();
+	});
+}
+
+test('Media input identity distinguishes player kind and validates persisted kind', () => {
+	const resource = URI.file('/media/asset');
+	using audio = new MediaPlayerEditorInput('audio', { resource, readOnly: true });
+	using video = new MediaPlayerEditorInput('video', { resource });
+	assert.equal(audio.matches(video), false);
+	assert.equal(audio.matches({ resource }), false);
+	assert.equal(audio.toUntyped().readOnly, true);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: MediaPlayerEditorInput.typeId, value: { kind: 'image' } }), /kind/);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: MediaPlayerEditorInput.typeId, value: { kind: 'audio', source: {} } }), /serialized media resource/);
+});
 
 test('Built-in media declarations activate from the package catalog, localize, refresh and revoke', async () => {
 	const manifestJson = await readFile('extensions/media-preview/package.json', 'utf8');
@@ -54,10 +104,18 @@ test('Built-in media declarations activate from the package catalog, localize, r
 	try {
 		await service.start();
 		const choices = ['PRODUCT.PNG', 'song.mp3', 'song.wav', 'song.ogg', 'movie.mp4', 'movie.webm'].map(name => EditorPanes.getEditorPane({ resource: URI.file('/media/' + name) })?.id);
-		assert.deepEqual(choices, ['ash.imagePreview', AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, AUDIO_PREVIEW_ID, VIDEO_PREVIEW_ID, VIDEO_PREVIEW_ID]);
+		assert.deepEqual(choices, ['ash.imagePreview', AUDIO_PREVIEW_EDITOR_ID, AUDIO_PREVIEW_EDITOR_ID, AUDIO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID, VIDEO_PREVIEW_EDITOR_ID]);
+		for (const [path, type] of [['/asset.png', ImagePreviewEditorInput], ['/song.wav', MediaPlayerEditorInput], ['/movie.webm', MediaPlayerEditorInput]] as const) {
+			const raw = { resource: URI.file(path) };
+			const declaration = EditorPanes.getEditorPane(raw)!;
+			const normalized = declaration.createInput!(raw);
+			assert.ok(normalized instanceof type);
+			assert.equal(declaration.createInput!(normalized), normalized);
+			normalized.dispose();
+		}
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'image/webp; charset=binary' })?.id, 'ash.imagePreview');
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/asset'), contentType: 'audio/wav' })?.canOpen({ resource: URI.file('/asset'), contentType: 'audio/wav' }), EditorPaneMatch.Default);
-		assert.equal(EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(pane => pane.id === AUDIO_PREVIEW_ID), false);
+		assert.equal(EditorPanes.getEditorPanesForInput({ resource: URI.file('/source.rs') }).some(pane => pane.id === AUDIO_PREVIEW_EDITOR_ID), false);
 		const oldAudio = EditorPanes.getEditorPane({ resource: URI.file('/song.mp3') });
 		generation++;
 		fail = true;
@@ -70,12 +128,12 @@ test('Built-in media declarations activate from the package catalog, localize, r
 		sourceKind = 'user';
 		generation++;
 		await service.reload();
-		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID), false);
+		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_EDITOR_ID), false);
 		assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/media/product.gif') })?.id, 'ash.imagePreview');
 		included = false;
 		generation++;
 		await service.reload();
-		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_ID), false);
+		assert.equal(EditorPanes.getEditorPanes().some(pane => pane.id === AUDIO_PREVIEW_EDITOR_ID), false);
 	} finally {
 		resetNlsResolver();
 	}
@@ -90,9 +148,12 @@ class MediaFixture extends Disposable {
 	public readonly revoked: string[] = [];
 	public readonly operations: string[] = [];
 	public readonly preview: MediaPreview;
+	public readonly opened: IResourceEditorInput[] = [];
+	public readonly saved: Uint8Array[] = [];
 	public read = async (): Promise<Uint8Array> => new Uint8Array([1, 2, 3]);
 	public pauseCount = 0;
 	public playing = false;
+	public metadataReady = false;
 	public get player(): HTMLMediaElement { return this.browser.window.document.querySelector(this.kind)!; }
 
 	constructor(kind: 'audio' | 'video' = 'audio') {
@@ -110,25 +171,110 @@ class MediaFixture extends Disposable {
 
 			onDidChangeFiles: this.changes.event,
 			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'media' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: 3, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected,
+			writeFile: async (target, bytes) => {
+				this.saved.push(bytes.slice());
+				return { stat: { resource: target, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: 'saved' };
+			},
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
+		this.services.registerInstance(IEditorService, {
+			onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
+			activeEditor: undefined, activeEditorPane: undefined, visibleEditors: [], visibleEditorPanes: [],
+			openEditor: async input => { this.opened.push(input); }, focusActiveEditor: () => { },
+			save: unexpected, saveAll: unexpected,
+		});
 		this.configuration = this._register(new InMemoryConfigurationService());
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }) });
-		const id = kind === 'audio' ? AUDIO_PREVIEW_ID : VIDEO_PREVIEW_ID;
+		const id = kind === 'audio' ? AUDIO_PREVIEW_EDITOR_ID : VIDEO_PREVIEW_EDITOR_ID;
 		this.preview = this._register(getBuiltinEditorPaneFactory('ash.media-preview', id)!.create({ instantiationService: this.services }, kind === 'audio' ? 'Audio preview' : 'Video preview') as MediaPreview);
 		this.preview.create(this.browser.window.document.body);
 		const mediaPrototype = this.browser.window.HTMLMediaElement.prototype;
 		const fixture = this;
-		Object.defineProperties(mediaPrototype, { paused: { get: () => !this.playing }, duration: { get: () => 2 } });
+		Object.defineProperties(mediaPrototype, { paused: { get: () => !this.playing }, duration: { get: () => 2 }, readyState: { get: () => this.metadataReady ? 1 : 0 } });
 		mediaPrototype.play = async () => { this.playing = true; };
 		mediaPrototype.pause = () => { this.operations.push('pause'); this.pauseCount++; this.playing = false; };
 		mediaPrototype.load = function (this: HTMLMediaElement): void { fixture.operations.push(this.hasAttribute('src') ? 'load-with-source' : 'load-cleared'); };
 	}
 }
+
+test('Media view state waits for metadata, clamps the seek and rejects invalid persisted values', async () => {
+	for (const kind of ['audio', 'video'] as const) {
+		using fixture = new MediaFixture(kind);
+		await fixture.preview.setInput({ resource: URI.file('/media/sample') }, new AbortController().signal);
+		const state = { currentTime: 0.75, volume: 0.4, muted: true, playbackRate: 1.5 };
+		fixture.preview.restoreViewState(state);
+		assert.equal(fixture.player.currentTime, 0);
+		assert.deepEqual(fixture.preview.saveViewState(), state);
+		fixture.metadataReady = true;
+		fixture.player.dispatchEvent(new fixture.browser.window.Event('loadedmetadata'));
+		assert.deepEqual(fixture.preview.saveViewState(), state);
+		for (const invalid of [null, {}, { ...state, currentTime: Infinity }, { ...state, volume: 2 }, { ...state, playbackRate: 100 }, { ...state, muted: 'true' }]) {
+			fixture.preview.restoreViewState(invalid);
+			assert.deepEqual(fixture.preview.saveViewState(), state);
+		}
+		fixture.preview.restoreViewState({ ...state, currentTime: 100 });
+		assert.equal(fixture.player.currentTime, 2);
+	}
+});
+
+test('Media reload and retry retain playback position while a superseded player cannot restore it', async () => {
+	using fixture = new MediaFixture();
+	const resource = URI.file('/song.wav');
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	fixture.metadataReady = true;
+	const state = { currentTime: 0.8, volume: 0.3, muted: false, playbackRate: 1.25 };
+	fixture.preview.restoreViewState(state);
+	const oldPlayer = fixture.player;
+	fixture.read = async () => { throw new Error('Temporarily unavailable'); };
+	fixture.changes.fire({ resources: [resource] });
+	await setImmediate();
+	assert.deepEqual(fixture.preview.saveViewState(), state);
+	fixture.metadataReady = false;
+	fixture.read = async () => new Uint8Array([1]);
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	oldPlayer.dispatchEvent(new fixture.browser.window.Event('loadedmetadata'));
+	assert.equal(fixture.player.currentTime, 0);
+	fixture.metadataReady = true;
+	fixture.player.dispatchEvent(new fixture.browser.window.Event('loadedmetadata'));
+	assert.deepEqual(fixture.preview.saveViewState(), state);
+	await fixture.preview.setInput({ resource: URI.file('/another.wav') }, new AbortController().signal);
+	assert.equal(fixture.player.currentTime, 0);
+});
+
+test('Audio and video Save As copy exact bytes and retain revision-backed content', async () => {
+	for (const kind of ['audio', 'video'] as const) {
+		using fixture = new MediaFixture(kind);
+		const resource = URI.file(`/media/original.${kind === 'audio' ? 'wav' : 'webm'}`);
+		await fixture.preview.setInput({ resource }, new AbortController().signal);
+		await fixture.preview.saveAs(resource);
+		assert.deepEqual(fixture.saved, []);
+		await fixture.preview.saveAs(URI.file('/media/copy.bin'));
+		assert.deepEqual(fixture.saved, [new Uint8Array([1, 2, 3])]);
+		const initialBytes = new Uint8Array([0, 128, 255, 42]);
+		fixture.read = async () => { throw new Error('No provider for the revision'); };
+		await fixture.preview.setInput({ resource: URI.parse('git:/media.webm'), initialBytes }, new AbortController().signal);
+		await fixture.preview.saveAs(URI.file('/media/revision.webm'));
+		assert.deepEqual(fixture.saved.at(-1), initialBytes);
+	}
+});
+
+test('Git LFS media opens as read-only text without allocating a playback URL', async () => {
+	for (const kind of ['audio', 'video'] as const) {
+		using fixture = new MediaFixture(kind);
+		const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 123\n';
+		await fixture.preview.setInput({ resource: URI.parse('git:/media.webm'), initialBytes: new TextEncoder().encode(pointer) }, new AbortController().signal);
+		assert.match(fixture.preview.getAccessibleContent(), /Git LFS pointer/);
+		assert.equal(fixture.player.hasAttribute('src'), false);
+		Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Open as read-only text')!.click();
+		await setImmediate();
+		assert.equal(fixture.opened[0]?.initialText, pointer);
+		assert.equal(fixture.opened[0]?.readOnly, true);
+	}
+});
 
 test('Audio and video use the registered renderer, keyboard playback and stop before releasing their URLs', async () => {
 	for (const kind of ['audio', 'video'] as const) {
@@ -256,12 +402,14 @@ test('Playback failure and accessible metadata are translated into Chinese', asy
 	using fixture = new MediaFixture();
 	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /文件大小：3 字节[\s\S]*时长：2 秒[\s\S]*已暂停/);
+	assert.match(fixture.preview.getAccessibleContent(), /位置：0 秒[\s\S]*音量：100%[\s\S]*播放速度：1×/);
 	fixture.player.dispatchEvent(new fixture.browser.window.Event('error'));
 	assert.match(fixture.browser.window.document.querySelector('[role="alert"]')!.textContent!, /无法播放此媒体文件/);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
 	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource: URI.file('/song.wav') }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载媒体：Error: Read denied/);
+	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '以只读文本打开' && !button.hidden), true);
 	assert.equal(fixture.browser.window.document.querySelector('button')!.textContent, '重试');
 });
 

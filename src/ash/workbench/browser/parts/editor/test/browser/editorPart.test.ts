@@ -163,7 +163,10 @@ import {
 
 import { EditorPaneMatch, EditorPane } from '../../../../../../workbench/browser/parts/editor/editorPane.js';
 import type { IEditorPaneWithViewState } from '../../../../../../workbench/browser/parts/editor/editorWithViewState.js';
-import { EditorPaneRegistry, EditorPanes, type IEditorPaneDescriptor } from '../../../../editor.js';
+import { EditorPaneRegistry, EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../../editor.js';
+import { ImagePreviewEditorInput } from '../../../../../contrib/mediaPreview/browser/imagePreviewEditorInput.js';
+import { MediaPlayerEditorInput } from '../../../../../contrib/mediaPreview/browser/mediaPlayerEditorInput.js';
+import '../../../../../contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { ActiveEditorContext } from '../../../../../../workbench/common/contextkeys.js';
 import { h, isHTMLElement } from '../../../../../../base/browser/dom.js';
 import type { IWorkingCopy } from '../../../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -2285,6 +2288,118 @@ for (const operation of ['split', 'move'] as const) {
 		}
 	});
 }
+
+for (const kind of ['image', 'audio', 'video'] as const) {
+	test(`EditorPart uses concrete ${kind} inputs for opening, splitting, restoring and replacing tabs`, async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using registry = new EditorPaneRegistry();
+			const raw = input(`/project/asset.${kind === 'image' ? 'png' : kind === 'audio' ? 'wav' : 'webm'}`);
+			const id = `ash.${kind === 'image' ? 'imagePreview' : kind === 'audio' ? 'audioPreview' : 'videoPreview'}`;
+			const createInput = kind === 'image' ? EditorPanes.getEditorPane(raw)!.createInput! : getBuiltinEditorPaneFactory('ash.media-preview', id)!.createInput!;
+			using registration = registry.registerEditorPane({
+				...descriptor(id, raw.resource.path.slice(raw.resource.path.lastIndexOf('.')), () => new TestViewStateEditorPane(id)), createInput,
+			});
+			using text = registry.registerEditorPane(descriptor('test.text', '.txt', () => new TestEditorPane('test.text')));
+			using editor = createEditorPart(dom.window.document.body, { registry });
+			const pane = await editor.openEditor(raw, { pinned: true }) as TestViewStateEditorPane;
+			const original = editor.activeInput!;
+			const type = kind === 'image' ? ImagePreviewEditorInput : MediaPlayerEditorInput;
+			assert.ok(original instanceof type);
+			assert.equal(await editor.openEditor(raw), pane);
+			assert.equal(editor.activeGroup.inputs.length, 1);
+			await editor.activeGroup.replaceEditor(original, original.rename!(original.resource));
+			assert.equal(editor.activePane, pane);
+			assert.equal(editor.activeGroup.inputs.length, 1);
+			pane.viewState = { scale: 2, currentTime: 0.9 };
+			await editor.splitActiveGroupHorizontal();
+			assert.ok(editor.activeInput instanceof type);
+			assert.notEqual(editor.activeInput, original);
+			assert.deepEqual((editor.activePane as TestViewStateEditorPane).restoredViewState, pane.viewState);
+			(editor.activePane as TestViewStateEditorPane).viewState = pane.viewState;
+			const saved = editor.saveWorkingSet('media');
+			assert.equal(saved.groups[0]!.editors[0]!.input.typeId, kind === 'image' ? ImagePreviewEditorInput.ID : MediaPlayerEditorInput.typeId);
+			await editor.applyWorkingSet(JSON.parse(JSON.stringify(saved)));
+			assert.ok(editor.activeInput instanceof type);
+			assert.deepEqual((editor.activePane as TestViewStateEditorPane).restoredViewState, pane.viewState);
+			// Older windows stored an ordinary resource plus the chosen pane ID.
+			const legacy = JSON.parse(JSON.stringify(saved));
+			legacy.groups[0].editors[0].input = { typeId: 'workbench.editorInput.resource', value: { resource: raw.resource.toString() } };
+			await editor.applyWorkingSet(legacy);
+			assert.ok(editor.groups[0]!.activeInput instanceof type);
+			assert.deepEqual((editor.groups[0]!.activePane as TestViewStateEditorPane).restoredViewState, pane.viewState);
+			const empty = editor.addGroup(editor.activeGroup.id, Direction.Right);
+			editor.activateGroup(empty.id);
+			await editor.openEditor(raw, { revealIfOpened: true });
+			assert.notEqual(editor.activeGroup, empty);
+			assert.ok(editor.activeInput instanceof type);
+			const beforeRename = editor.activeInput;
+			const renamed = raw.resource.with({ path: raw.resource.path.replace('asset', 'renamed') });
+			await editor.activeGroup.replaceEditor(beforeRename, beforeRename.rename!(renamed));
+			assert.ok(editor.activeInput instanceof type);
+			assert.equal(editor.activeInput.resource.toString(), renamed.toString());
+			const renamedInput = editor.activeInput;
+			const textResource = URI.file('/project/renamed.txt');
+			await editor.activeGroup.replaceEditor(renamedInput, renamedInput.rename!(textResource));
+			assert.equal(editor.activePane!.id, 'test.text');
+			assert.equal(editor.activeInput!.resource.toString(), textResource.toString());
+			await editor.openEditor({ resource: renamed }, { pinned: true });
+			await editor.openEditor(editor.activeInput, { preferredEditorId: 'test.text', pinned: true });
+			assert.equal(editor.activePane!.id, 'test.text');
+			const textInput = editor.activeInput as IResourceEditorInput;
+			assert.equal(textInput.editorId, undefined);
+			assert.equal(textInput.readOnly, undefined);
+			assert.equal(editor.activeGroup.inputs.some(candidate => candidate instanceof type), false);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
+test('Replacing a resource carries view state only to a compatible editor', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using sameType = registry.registerEditorPane(descriptor('test.image', '.png', () => new TestViewStateEditorPane('test.image')));
+		using otherType = registry.registerEditorPane(descriptor('test.text', '.txt', () => {
+			const pane = new TestViewStateEditorPane('test.text');
+			Object.defineProperty(pane, 'viewStateTypeId', { value: 'test.otherView' });
+			return pane;
+		}));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const source = input('/project/image.png');
+		const original = await editor.openEditor(source) as TestViewStateEditorPane;
+		original.viewState = { scale: 2, scrollTop: 120 };
+		const copy = input('/project/copy.png');
+		await editor.activeGroup.replaceEditor(source, copy);
+		const replacement = editor.activePane as TestViewStateEditorPane;
+		assert.deepEqual(replacement.restoredViewState, original.viewState);
+		replacement.viewState = original.viewState;
+		await editor.activeGroup.replaceEditor(copy, input('/project/image.txt'));
+		assert.equal((editor.activePane as TestViewStateEditorPane).restoredViewState, undefined);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Splitting captures native view state before rebuilding the editor layout', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.nativeView', '.png', () => new TestViewStateEditorPane('test.nativeView')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const pane = await editor.openEditor(input('/project/image.png')) as TestViewStateEditorPane;
+		const state = { scale: 2, scrollLeft: 200, scrollTop: 120 };
+		pane.viewState = state;
+		// Native DOM scrolling can be reset when the grid detaches and lays out its panes.
+		pane.layout = () => { pane.viewState = null; };
+		await editor.splitActiveGroupHorizontal();
+		assert.deepEqual((editor.activePane as TestViewStateEditorPane).restoredViewState, state);
+		assert.deepEqual(pane.restoredViewState, state);
+	} finally {
+		dom.window.close();
+	}
+});
 
 test('EditorPart closes the active editor using recent tab history or the current neighbor setting', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

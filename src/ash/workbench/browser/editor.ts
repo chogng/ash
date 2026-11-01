@@ -7,7 +7,7 @@ import { DocumentTypes, type DocumentType } from '../services/documentEditor/com
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
 import type { EditorProfile } from '../services/documentEditor/browser/documentEditorProfile.js';
 
-/** Resource matchers are pure; Workbench inputs are values rather than input classes. */
+/** Resource matchers are pure; an editor can normalize requests into its own input model. */
 export interface IEditorPaneDescriptor {
 	readonly id: string;
 	readonly name: string;
@@ -15,7 +15,7 @@ export interface IEditorPaneDescriptor {
 	/** Package-provided binary/resource views can also host read-only attachment previews. */
 	readonly resourceEditor?: boolean;
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
-	/** Creates a distinct tab identity when this editor opens beside the source. */
+	/** Create the editor's input, returning an already matching input unchanged. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
 	/** Resolves the live package's document semantics for host-owned creation and conversion. */
 	resolveDocumentProfile?(): Promise<EditorProfile>;
@@ -35,6 +35,7 @@ type BuiltinEditorPaneFactory = (options: EditorPaneCreationOptions, name: strin
 interface BuiltinEditorPane {
 	readonly create: BuiltinEditorPaneFactory;
 	readonly documentType?: Pick<DocumentType, 'id' | 'contentType'>;
+	readonly createInput?: IEditorPaneDescriptor['createInput'];
 }
 const builtinEditorPaneFactories = new Map<string, BuiltinEditorPane>();
 
@@ -42,12 +43,12 @@ export function getBuiltinEditorPaneFactory(extensionId: string, editorId: strin
 	return builtinEditorPaneFactories.get(`${extensionId}/${editorId}`);
 }
 
-export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory, documentType?: Pick<DocumentType, 'id' | 'contentType'>): void {
+export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory, options: Pick<BuiltinEditorPane, 'documentType' | 'createInput'> = {}): void {
 	const key = `${extensionId}/${editorId}`;
 	if (builtinEditorPaneFactories.has(key)) {
 		throw new Error(`Built-in editor factory is already registered: ${key}`);
 	}
-	builtinEditorPaneFactories.set(key, { create, documentType });
+	builtinEditorPaneFactories.set(key, { create, ...options });
 }
 
 /** Owns editor declarations and matching; editor groups own the created panes. */

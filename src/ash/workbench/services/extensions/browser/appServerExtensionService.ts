@@ -397,6 +397,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						}
 						editorPanes.push({
 							id: editor.viewType, name, create: options => factory.create(options, name),
+							createInput: factory.createInput,
 							...(factory.documentType ? {
 								documentType: {
 									...factory.documentType,

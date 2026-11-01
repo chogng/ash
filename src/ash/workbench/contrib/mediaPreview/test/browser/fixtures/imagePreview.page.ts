@@ -28,6 +28,8 @@ import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browse
 import { ImagePreviewEditor } from '../../../browser/imagePreviewEditor.js';
 import { MediaPreviewStatusBarContribution } from '../../../browser/mediaPreviewStatusBar.js';
 import { ImagePreviewConfiguration } from '../../../common/mediaPreview.js';
+import { IWebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import '../../../browser/mediaPreview.contribution.js';
 
 const resources = new DisposableStore();
@@ -37,6 +39,7 @@ services.registerInstance(IConfigurationService, configuration);
 const themes = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themes);
 registerTestComponentServices(services, document);
+services.registerInstance(IWebWorkerService, new WebWorkerService());
 resources.add(bindTestColorTheme(themes, document.body));
 services.registerInstance(IClipboardService, resources.add(new BrowserClipboardService(navigator.clipboard)));
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));

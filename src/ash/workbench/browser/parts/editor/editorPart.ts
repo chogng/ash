@@ -521,6 +521,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			throw error;
 		}
 		this.assertNotDisposed();
+		input = this._activeGroup.resolveEditorInput(input, options);
 		if (target === 'modalGroup') {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && !this.isSameEditor(modalInput, input) && !await this.closeEditor(modalInput)) {
@@ -797,20 +798,25 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const splittable = inputs.filter(input => !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton));
 		if (inputs.length > 0 && splittable.length === 0) return;
 		const source = this.groupHosts.get(groupId)!.group;
+		// Rebuilding the grid can reset native scroll containers before a pane is copied.
+		const viewStates = new Map(splittable.map(input => [input, source.saveEditorViewState(input)]));
 		const previousActive = this._activeGroup;
 		const created = this.insertGroup(source, direction);
 		this.setActiveGroup(created.group);
 		try {
 			for (const input of splittable) {
 				const preferredEditorId = source.editors.find(editor => editor.input === input)?.paneId;
-				const viewState = source.saveEditorViewState(input);
-				await created.group.openEditor(input, { pinned: true, preferredEditorId });
-				created.group.restoreEditorViewState(input, viewState);
+				const viewState = viewStates.get(input);
+				source.restoreEditorViewState(input, viewState);
+				const copied = input.copy?.() ?? input;
+				await created.group.openEditor(copied, { pinned: true, preferredEditorId });
+				created.group.restoreEditorViewState(copied, viewState);
 			}
 			created.group.focus();
 		} catch (error) {
 			this.removeGroupHost(created);
 			this.setActiveGroup(previousActive);
+			for (const [input, viewState] of viewStates) { source.restoreEditorViewState(input, viewState); }
 			throw error;
 		}
 	}
@@ -951,7 +957,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (!target || this.isDisposed || !group.inputs.includes(input)) return undefined;
 		await pane.saveAs(target);
 		if (this.isDisposed || !group.inputs.includes(input) || getEditorWorkingCopies(pane).some(copy => copy.isDirty)) return undefined;
-		const replacement: IResourceEditorInput = {
+		const replacement: IResourceEditorInput = input.rename?.(target) ?? {
 			resource: target,
 			label: editorInputLabel({ resource: target }),
 		};
@@ -1137,7 +1143,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.restoreMaximizedGroup();
 		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
-				try { return [{ editor, index, input: this.inputSerializers.deserialize(editor.input) }]; }
+				try { return [{ editor, index, input: this._activeGroup.resolveEditorInput(this.inputSerializers.deserialize(editor.input), { preferredEditorId: editor.paneId }) }]; }
 				catch (error) {
 					if (error instanceof UnknownEditorInputSerializerError) { return []; }
 					throw error;

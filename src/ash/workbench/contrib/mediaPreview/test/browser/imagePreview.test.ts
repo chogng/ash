@@ -19,6 +19,10 @@ import { productLanguagePackCatalogs } from '../../../../services/localization/c
 import { ImagePreviewEditor } from '../../browser/imagePreviewEditor.js';
 import { ImagePreviewInfo } from '../../browser/imagePreviewInfo.js';
 import { IMAGE_PREVIEW_EDITOR_ID } from '../../common/mediaPreview.js';
+import type { IResourceEditorInput } from '../../../../common/editor.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -35,6 +39,8 @@ class ImageFixture extends Disposable {
 	public readonly services = this._register(new InstantiationService());
 	public readonly revoked: string[] = [];
 	public readonly preview: ImagePreviewEditor;
+	public readonly opened: IResourceEditorInput[] = [];
+	public readonly saved: { resource: URI; bytes: Uint8Array; }[] = [];
 	public read = async (): Promise<Uint8Array> => png;
 	public decode = async (): Promise<ImageBitmap> => ({ width: 800, height: 600, close: () => { this.closedBitmaps++; } }) as ImageBitmap;
 	public closedBitmaps = 0;
@@ -63,10 +69,21 @@ class ImageFixture extends Disposable {
 
 			onDidChangeFiles: this.changes.event,
 			readFile: async target => ({ resource: target, bytes: await this.read(), revision: 'image' }),
-			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected, writeFile: unexpected,
+			stat: async target => ({ resource: target, kind: FileKind.File, sizeBytes: png.length, readonly: true, modifiedAtMillis: undefined }), readDirectory: unexpected,
+			writeFile: async (target, bytes) => {
+				this.saved.push({ resource: target, bytes: bytes.slice() });
+				return { stat: { resource: target, kind: FileKind.File, sizeBytes: bytes.length, readonly: false, modifiedAtMillis: undefined }, revision: 'saved' };
+			},
 			createFile: unexpected, createDirectory: unexpected, copy: unexpected, rename: unexpected, delete: unexpected,
 		}));
 		registerTestComponentServices(this.services, this.browser.window.document);
+		this.services.registerInstance(IWebWorkerService, new WebWorkerService());
+		this.services.registerInstance(IEditorService, {
+			onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None,
+			activeEditor: undefined, activeEditorPane: undefined, visibleEditors: [], visibleEditorPanes: [],
+			openEditor: async input => { this.opened.push(input); }, focusActiveEditor: () => { },
+			save: unexpected, saveAll: unexpected,
+		});
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 		this.services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose: () => { }, [Symbol.dispose]: () => { } });
@@ -195,6 +212,7 @@ test('Image preview initializes its visible and accessible text in Chinese', asy
 	fixture.read = async () => { throw new Error('Read denied'); };
 	await fixture.preview.setInput({ resource }, new AbortController().signal);
 	assert.match(fixture.preview.getAccessibleContent(), /无法加载图片：Read denied/);
+	assert.equal(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === '以只读文本打开' && !button.hidden), true);
 	assert.equal(Array.from(fixture.browser.window.document.querySelectorAll('button')).some(button => button.textContent?.trim() === '重试'), true);
 });
 
@@ -242,4 +260,65 @@ test('Image preview reports a failed refresh and loads the resource again on its
 	await setImmediate();
 	assert.equal(image.hasAttribute('src'), true);
 	assert.match(fixture.preview.getAccessibleContent(), /Image: product.png/);
+});
+
+test('Image preview Save As preserves binary bytes, skips the source and saves revision-backed data', async () => {
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	await fixture.preview.saveAs(resource);
+	assert.equal(fixture.saved.length, 0);
+	const target = URI.file('/images/saved.png');
+	await fixture.preview.saveAs(target);
+	assert.deepEqual(fixture.saved, [{ resource: target, bytes: png }]);
+	const initialBytes = new Uint8Array([0, 255, 128, 42]);
+	fixture.read = async () => { throw new Error('No provider for the revision'); };
+	await fixture.preview.setInput({ resource: URI.parse('git:/revision.png'), initialBytes }, new AbortController().signal);
+	await fixture.preview.saveAs(target);
+	assert.deepEqual(fixture.saved.at(-1), { resource: target, bytes: initialBytes });
+});
+
+test('Git LFS images explain the pointer and open read-only text without decoding it', async () => {
+	using fixture = new ImageFixture();
+	const pointer = 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 123\n';
+	await fixture.preview.setInput({ resource: URI.parse('git:/image.png'), initialBytes: new TextEncoder().encode(pointer) }, new AbortController().signal);
+	assert.match(fixture.preview.getAccessibleContent(), /Git LFS pointer/);
+	assert.equal(fixture.closedBitmaps, 0);
+	const button = Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Open as read-only text')!;
+	assert.equal(button.hidden, false);
+	button.click();
+	await setImmediate();
+	assert.equal(fixture.opened[0]?.initialText, pointer);
+	assert.equal(fixture.opened[0]?.readOnly, true);
+});
+
+test('Closing an image cancels a pending text recovery before it opens an editor', async () => {
+	using fixture = new ImageFixture();
+	fixture.read = async () => { throw new Error('Load failed'); };
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	const read = new DeferredPromise<Uint8Array>();
+	fixture.read = () => read.p;
+	Array.from(fixture.browser.window.document.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Open as read-only text')!.click();
+	fixture.preview.clearInput();
+	await read.complete(png);
+	await setImmediate();
+	assert.deepEqual(fixture.opened, []);
+});
+
+test('Image view state transfers to another resource and rejects malformed persisted state', async () => {
+	using fixture = new ImageFixture();
+	await fixture.preview.setInput({ resource }, new AbortController().signal);
+	fixture.preview.imageViewer.setScale(2);
+	fixture.preview.imageViewer.domNode.scrollLeft = 160;
+	fixture.preview.imageViewer.domNode.scrollTop = 120;
+	const state = fixture.preview.saveViewState();
+	assert.deepEqual(state, { scale: 2, scrollLeft: 160, scrollTop: 120 });
+	await fixture.preview.setInput({ resource: URI.file('/images/copy.png') }, new AbortController().signal);
+	fixture.preview.restoreViewState(state);
+	assert.deepEqual(fixture.preview.saveViewState(), state);
+	for (const invalid of [null, {}, [], { ...state, scale: 0 }, { ...state, scale: Infinity }, { ...state, scrollTop: -1 }, { ...state, scrollLeft: '160' }]) {
+		fixture.preview.restoreViewState(invalid);
+		assert.deepEqual(fixture.preview.saveViewState(), state);
+	}
+	fixture.preview.clearInput();
+	assert.equal(fixture.preview.saveViewState(), null);
 });

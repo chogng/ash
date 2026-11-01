@@ -9,6 +9,9 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ImagePreviewConfiguration } from '../common/mediaPreview.js';
+import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
+import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
+import type { ImageEncoderWorker } from './imageEncoderWorker.js';
 
 export type ImageViewerScale = number | 'fit';
 
@@ -44,6 +47,7 @@ export class ImageViewer extends Disposable {
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IWebWorkerService private readonly workers: IWebWorkerService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div', { className: 'ash-image-viewer' });
@@ -161,6 +165,12 @@ export class ImageViewer extends Disposable {
 		return { scale: this.scale, scrollLeft: this.domNode.scrollLeft, scrollTop: this.domNode.scrollTop };
 	}
 
+	public restoreViewState(state: IImageViewerViewState): void {
+		this.setScale(state.scale);
+		this.domNode.scrollLeft = state.scrollLeft;
+		this.domNode.scrollTop = state.scrollTop;
+	}
+
 	public setScale(scale: ImageViewerScale): void {
 		if (!this.size) return;
 		const previous = this.effectiveScale();
@@ -206,18 +216,9 @@ export class ImageViewer extends Disposable {
 		// Capture the source synchronously: switching tabs during encoding must copy the requested image.
 		const data = this.sourceData;
 		const image = this.imageDomNode.cloneNode() as HTMLImageElement;
-		const size = this.size;
 		const encode = async (): Promise<Uint8Array> => {
 			if (data.mimeType === 'image/png') return data.read();
-			await image.decode();
-			const canvas = this.domNode.ownerDocument.createElement('canvas');
-			canvas.width = size.width;
-			canvas.height = size.height;
-			const context = canvas.getContext('2d');
-			if (!context) throw new Error('Image encoding is unavailable');
-			context.drawImage(image, 0, 0, canvas.width, canvas.height);
-			const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Image encoding failed')), 'image/png'));
-			return new Uint8Array(await blob.arrayBuffer());
+			return encodeImageAsPng(image, this.workers);
 		};
 		await this.clipboard.writeImage(encode());
 	}
@@ -234,5 +235,24 @@ export class ImageViewer extends Disposable {
 
 	private defaultScale(): ImageViewerScale {
 		return this.configuration.getValue<'fit' | 'actualSize'>(ImagePreviewConfiguration.defaultZoom) === 'actualSize' ? 1 : 'fit';
+	}
+}
+
+/** Keep each copy independent of tab changes, and terminate its Worker when encoding settles. */
+async function encodeImageAsPng(image: HTMLImageElement, workers: IWebWorkerService): Promise<Uint8Array> {
+	try {
+		await image.decode();
+		const bitmap = await getWindow(image).createImageBitmap(image);
+		try {
+			using worker = workers.createWorkerClient<ImageEncoderWorker>(new WebWorkerDescriptor({
+				label: 'ash-image-encoder',
+				createWorker: () => new Worker(new URL('./imageEncoderWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-image-encoder' }),
+			}));
+			return new Uint8Array(await worker.proxy.$encodePng(bitmap));
+		} finally {
+			bitmap.close();
+		}
+	} catch (error) {
+		throw new Error(localize('media.image.encodingFailed', 'Could not encode the image as PNG: {0}', error instanceof Error ? error.message : String(error)), { cause: error });
 	}
 }
