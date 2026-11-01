@@ -1,3 +1,5 @@
+import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
+import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -102,6 +104,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
 	private readonly mcpAppDelegate: ChatListWidgetOptions['mcpAppDelegate'];
 	private readonly classPrefix: string;
+	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
 	private readonly advisorExpansion = new Map<string, boolean>();
 	private readonly contextExpansion = new Map<string, boolean>();
@@ -148,7 +151,7 @@ export class ChatListWidget extends DomWidget {
 		this.transcript.classList.add(`${this.classPrefix}-transcript`);
 		this.transcript.setAttribute('role', 'log');
 		this.transcript.tabIndex = -1;
-		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
+		this.transcript.setAttribute('aria-label', this.accessibilityProvider.getWidgetAriaLabel());
 		this.transcript.setAttribute('aria-live', 'polite');
 		const Observer = this.element.ownerDocument.defaultView?.IntersectionObserver;
 		if (Observer) {
@@ -168,23 +171,28 @@ export class ChatListWidget extends DomWidget {
 			this._register(addDisposableListener(this.element.ownerDocument, 'selectionchange', () => this.refreshViewport.schedule()));
 		}
 		const accessibilityId = createUuid();
-		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+		for (const type of [AccessibleViewType.Help]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 100, name: `chatTranscript-${type}-${accessibilityId}`,
 				getProvider: () => {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.');
-						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
-							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
-							: [itemLabel(row.item), row.item.text, row.item.contextText, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
+						return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.');
 					}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 					provider.onDidChangeContent = this._onDidChangeContent.event;
 					return provider;
 				},
 			}));
 		}
+		this._register(AccessibleViewRegistry.register(new ChatResponseAccessibleView({
+			getItems: () => this.items,
+			onDidChangeContent: this._onDidChangeContent.event,
+			getFocusedElement: () => {
+				const active = this.element.ownerDocument.activeElement;
+				return this.visible && !this.isDisposed && active instanceof this.element.ownerDocument.defaultView!.HTMLElement && this.transcript.contains(active) ? active : undefined;
+			},
+		})));
 		// Keep the position measured before an image, editor wrap or disclosure changes height.
 		const resize = new ResizeObserver(() => this.relayout.schedule());
 		resize.observe(this.transcript);
@@ -696,7 +704,7 @@ export class ChatListWidget extends DomWidget {
 		if (item.type === 'userContext' && item.contextText !== undefined) {
 			const label = h(article.ownerDocument, 'div');
 			label.className = `${this.classPrefix}-item-label`;
-			label.textContent = itemLabel(item);
+			label.textContent = this.accessibilityProvider.getAriaLabel(item);
 			const disclosure = h(article.ownerDocument, 'details');
 			disclosure.className = 'ash-chat-context';
 			const summary = h(article.ownerDocument, 'summary');
@@ -716,7 +724,7 @@ export class ChatListWidget extends DomWidget {
 		}
 		const label = h(this.element.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
 		label.className = `${this.classPrefix}-item-label`;
-		label.textContent = itemLabel(item);
+		label.textContent = this.accessibilityProvider.getAriaLabel(item);
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
 		body.append(label);
 		if (body !== article) {
@@ -804,33 +812,6 @@ function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorA
 	return left.type !== 'retry' || (right.type === 'retry' && left.turnId === right.turnId);
 }
 
-function itemLabel(item: IChatListItem): string {
-	if (item.label) return item.label;
-	switch (item.type) {
-		case 'voiceTranscript': return localize('chat.voice.transcript.label', 'Voice transcript');
-		case 'hook': return 'Hook';
-		case 'userMessage':
-		case 'userContext':
-		case 'userImage':
-		case 'userImageAttachment':
-		case 'userAudioAttachment':
-			return localize('chat.transcript.you', 'You');
-		case 'agentMessage':
-			return 'Ash';
-		case 'reasoning':
-			return localize('chat.transcript.reasoning', 'Reasoning');
-		case 'plan':
-			return localize('chat.transcript.plan', 'Plan');
-		case 'toolCall':
-			return localize('chat.transcript.toolCall', 'Tool call');
-		case 'toolResult':
-			return item.isError ? localize('chat.transcript.toolError', 'Tool error') : localize('chat.transcript.toolResult', 'Tool result');
-		case 'advisor':
-			return localize('advisor.settings.title', 'Advisor');
-		case 'turnError':
-			return localize('chat.transcript.error', 'Error');
-	}
-}
 
 
 function sameContent(left: IChatListItem['content'], right: IChatListItem['content']): boolean {

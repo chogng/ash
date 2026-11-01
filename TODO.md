@@ -160,3 +160,7 @@
 
 - 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再在现有 Sessions 列表 owner 内实现；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
 - 风险与验收：在 `src/ash/sessions/test/browser/sessions-list.test.ts` 和真实列表场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分组、焦点与清空查询行为保持可用。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
+
+## Chat accessibility · 缺失宿主入口
+
+- [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。

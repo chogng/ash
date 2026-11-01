@@ -6,7 +6,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ITaskService } from '../../tasks/common/taskService.js';
 import { ITerminalService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
-import { IChatService } from '../../../services/chat/common/chatService.js';
+import { ChatAccessibilityService } from '../../chat/browser/accessibility/chatAccessibilityService.js';
 import { SaveAccessibilitySignal } from './saveAccessibilitySignal.js';
 import { AccessibilitySignalDebuggerContribution } from './accessibilitySignalDebuggerContribution.js';
 import { EditorTextPropertySignalsContribution } from './editorTextPropertySignalsContribution.js';
@@ -71,34 +71,9 @@ class TerminalAccessibilityContribution extends Disposable {
 	}
 }
 
-class ChatAccessibilityContribution extends Disposable {
-	constructor(@IChatService chat: IChatService, @IAccessibilitySignalService signals: IAccessibilitySignalService) {
-		super();
-		// This is a bounded notification cursor, not a second copy of turn state.
-		const cursors = new Map<string, number>();
-		this._register(toDisposable(() => cursors.clear()));
-		this._register(chat.onDidBecomeReady(() => cursors.clear()));
-		this._register(chat.onDidUpdateThread(envelope => {
-			if (envelope.update.type !== 'committed') { return; }
-			const key = JSON.stringify([envelope.sessionId, envelope.threadId]);
-			if (envelope.durableSequence <= (cursors.get(key) ?? -1)) { return; }
-			cursors.delete(key);
-			cursors.set(key, envelope.durableSequence);
-			if (cursors.size > 100) { cursors.delete(cursors.keys().next().value!); }
-			const event = envelope.update.event;
-			if (event.type === 'turnAccepted') { void signals.playSignal(AccessibilitySignal.chatRequestSent); }
-			if (event.type === 'turnCompleted' || event.type === 'turnFailed') { void signals.playSignal(AccessibilitySignal.chatResponseReceived); }
-			if (event.type === 'interactionRequested' && event.interaction.request.type !== 'dynamicTool') {
-				void signals.playSignal(AccessibilitySignal.chatUserActionRequired);
-			}
-		}));
-	}
-}
-
-
 for (const [id, contribution] of [
 	['workbench.contrib.terminalAccessibilitySignals', TerminalAccessibilityContribution],
-	['workbench.contrib.chatAccessibilitySignals', ChatAccessibilityContribution],
+	['workbench.contrib.chatAccessibilitySignals', ChatAccessibilityService],
 	['workbench.contrib.saveAccessibilitySignals', SaveAccessibilitySignal],
 	['workbench.contrib.debugAccessibilitySignals', AccessibilitySignalDebuggerContribution],
 	['workbench.contrib.editorTextPropertySignals', EditorTextPropertySignalsContribution],

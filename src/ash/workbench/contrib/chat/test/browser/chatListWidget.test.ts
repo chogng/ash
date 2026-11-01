@@ -469,6 +469,23 @@ suite('chatRenderer browser component', () => {
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
 
+	test('accessible transcript follows streamed model text and restores the focused response', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const item: IChatListItem = { id: 'accessible-reply', type: 'agentMessage', text: '**Readable** [label](https://example.com).\n\n```ts\nconst exact = 1;\n```', transient: true };
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([item]), item);
+		const row = page.locator('[data-item-id="accessible-reply"]');
+		await row.focus();
+		assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(false)), true);
+		const view = page.locator('.ash-accessible-view-content');
+		await expect(view).toBeFocused();
+		await expect(view).toHaveValue('Ash\n\nReadable label.\nconst exact = 1;');
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([{ ...item, text: 'Completed **reply**', transient: false }]), item);
+		await expect(view).toHaveValue('Ash\n\nCompleted reply');
+		await view.press('Escape');
+		await expect(row).toBeFocused();
+	});
+
 	test('streaming a new response leaves unchanged history DOM untouched', async function () {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
