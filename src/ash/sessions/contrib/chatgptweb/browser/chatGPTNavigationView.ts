@@ -32,7 +32,6 @@ import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 
 interface ConversationGroup {
 	readonly key: string;
@@ -81,7 +80,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		list.classList.add('ash-chatgpt-navigation-list');
 		list.setAttribute('role', 'navigation');
 		list.setAttribute('aria-label', localize('sessions.chatgpt.conversations', 'Conversations'));
-		const loading = this._register(new LoadingSkeleton(list, localize('sessions.loadingHistory', 'Loading history…')));
 		this._register(addDisposableListener(list, 'click', event => {
 			const item = event.target instanceof Element ? event.target.closest<HTMLButtonElement>('.ash-chatgpt-conversation') : null;
 			if (item?.dataset.conversation) {
@@ -171,7 +169,6 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				if (pane instanceof ChatGPTNavigationView) { pane.render(group.conversations, state); }
 			}
 			const readingHistory = state.loading?.kind === 'history';
-			loading.setVisible(readingHistory && !state.conversations.length);
 			list.setAttribute('aria-busy', String(readingHistory));
 			scrollable.layout();
 			if (focusedId && hadFocus) { focusConversation(root, focusedId, true); }

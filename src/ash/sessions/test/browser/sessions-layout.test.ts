@@ -365,9 +365,12 @@ test('Sessions sidebar clamps at its minimum, snaps closed and restores from the
 		};
 		const visibility: boolean[] = [];
 		using changes = layout.onDidChangePartVisibility(event => { if (event.partId === 'sidebar') visibility.push(event.visible); });
+		const geometry: number[] = [];
+		using geometryListener = layout.onDidLayoutMainContainer(() => geometry.push(layout.getPartSize('sidebar').width));
 		drag(sidebar.minimumWidth - layout.getPartSize('sidebar').width - 20);
 		assert.equal(layout.isPartVisible('sidebar'), true);
 		assert.equal(layout.getPartSize('sidebar').width, sidebar.minimumWidth);
+		assert.equal(geometry.at(-1), sidebar.minimumWidth, 'Sash layout reaches shared geometry consumers without a window resize');
 		drag(-100);
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.equal(layout.state.sidebar.visible, false);

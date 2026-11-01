@@ -1,5 +1,4 @@
 import './searchDialog.css';
-import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -174,8 +173,6 @@ export class SessionsSearchDialog extends Disposable {
 		}));
 		const message = h(document, 'div', { className: 'ash-sessions-search-empty', attributes: { role: 'status' } });
 		body.append(resultsHost, message);
-		const loading = this._register(new LoadingSkeleton(body, localize('sessions.search.loading', 'Searching…')));
-		resultsHost.before(loading.element);
 		const footer = h(document, 'footer', { className: 'ash-sessions-search-footer' });
 		const hints = [
 			{ label: localize('sessions.search.close', 'Close'), keys: [{ key: 'Escape', label: 'Esc' }] },
@@ -290,8 +287,6 @@ export class SessionsSearchDialog extends Disposable {
 						? localize('sessions.search.loading', 'Searching…')
 						: localize('sessions.search.empty', 'No matching results'));
 				message.hidden = !state.error && state.results.length > 0;
-				loading.setVisible(state.loading && !state.error && !state.results.length);
-				if (!loading.element.hidden) message.hidden = true;
 				body.setAttribute('aria-busy', String(state.loading));
 			}),
 		);

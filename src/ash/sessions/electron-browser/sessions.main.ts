@@ -208,7 +208,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'terminalAutoReplies',
 					'terminalTelemetry',
 					'workbench.contrib.settingsChangeRelauncher',
-					'workbench.contrib.partsSplash',
+					'sessions.contrib.splash',
 					'workbench.contrib.preferences',
 					'workbench.contrib.extensionRecommendations',
 					'workbench.contrib.snippets',

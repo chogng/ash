@@ -522,6 +522,8 @@ export class DesktopWorkbenchLayout
 				this.updateTitlebarSurface();
 				this.publishPartVisibility();
 				this.saveState();
+				// Publish completed sash geometry to overlays and the shared startup cache.
+				super.layout(new Dimension(this.grid.width, this.grid.height));
 			}
 		}));
 		if (restoreFocus && focused.isConnected) focused.focus({ preventScroll: true });

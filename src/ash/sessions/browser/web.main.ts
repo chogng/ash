@@ -90,7 +90,7 @@ export class SessionsBrowserMain extends Disposable {
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',
 					'terminalTelemetry',
-					'workbench.contrib.partsSplash',
+					'sessions.contrib.splash',
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
 					'workbench.contrib.extensionRecommendations',

@@ -1,7 +1,7 @@
+import '../workbench/contrib/splash/electron-browser/nativeSplashStorageService.js';
 import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
 import '../workbench/services/imageEditor/electron-browser/nativeImageEditorService.js';
 import '../workbench/contrib/relauncher/browser/relauncher.contribution.js';
-import '../workbench/contrib/splash/electron-browser/splash.contribution.js';
 import { ElectronElevatedFileService } from '../workbench/services/files/electron-browser/elevatedFileService.js';
 import { IElevatedFileService } from '../workbench/services/files/common/elevatedFileService.js';
 import { localize2 } from '../nls.js';

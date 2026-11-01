@@ -205,7 +205,7 @@ suite('chatgptweb browser component', () => {
 			await expect(header).toHaveCSS('border-radius', '8px');
 		});
 
-		test(`ChatGPT history and conversation show independent skeletons (${locale})`, async () => {
+		test(`ChatGPT history and conversation keep independent loading states (${locale})`, async () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);
 			let releaseHistory!: () => void;
@@ -215,26 +215,26 @@ suite('chatgptweb browser component', () => {
 			const navigation = page.locator('.ash-chatgpt-navigation');
 			const editor = page.locator('.ash-chatgpt-widget');
 			try {
-				await expect(navigation.locator('.ash-sessions-loading')).toBeVisible();
-				await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'true');
+				await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'false');
 				await expect(editor.locator('.ash-chatgpt-welcome')).toBeVisible();
 			} finally { releaseHistory(); }
 			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			await expect(conversation).toBeVisible();
-			await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+			await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
 			let releaseConversation!: () => void;
 			const pending = new Promise<void>(resolve => { releaseConversation = resolve; });
 			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
 			try {
 				await conversation.click();
-				await expect(editor.locator('.ash-sessions-loading')).toBeVisible();
-				await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
+				await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'true');
+				await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
 				await expect(conversation).toBeEnabled();
 				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
 				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
 			} finally { releaseConversation(); }
 			await expect(editor.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
-			await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
+			await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'false');
 		});
 
 		test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async function () {

@@ -613,6 +613,34 @@ test('Workbench pane sashes snap closed and reopen their retained Parts', () => 
 	dom.window.close();
 });
 
+test('Workbench sash changes publish completed Part geometry and visibility without a window resize', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
+	try {
+		harness.layout.layout(new Dimension(1_200, 800));
+		const snapshot = () => ({
+			sidebar: harness.layout.getPartSize('sidebar').width,
+			panel: harness.layout.getPartSize('panel').height,
+			sidebarVisible: harness.layout.isPartVisible('sidebar'),
+			panelVisible: harness.layout.isPartVisible('panel'),
+		});
+		const geometry: ReturnType<typeof snapshot>[] = [];
+		harness.disposables.add(harness.layout.onDidLayoutMainContainer(() => geometry.push(snapshot())));
+		dragWorkbenchSash(dom.window, harness.container, 'sidebar', 0, -harness.layout.getPartSize('sidebar').width);
+		assert.equal(harness.layout.isPartVisible('sidebar'), false);
+		assert.deepEqual(geometry.at(-1), snapshot());
+		dragWorkbenchSash(dom.window, harness.container, 'sidebar', 0, 110);
+		assert.equal(harness.layout.isPartVisible('sidebar'), true);
+		assert.deepEqual(geometry.at(-1), snapshot());
+		dragWorkbenchSash(dom.window, harness.container, 'panel', 0, harness.layout.getPartSize('panel').height);
+		assert.equal(harness.layout.isPartVisible('panel'), false);
+		assert.deepEqual(geometry.at(-1), snapshot());
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
+});
+
 test('platform and Workbench dependencies resolve one owner and publish completed Part geometry', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document);

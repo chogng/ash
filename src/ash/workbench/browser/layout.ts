@@ -312,6 +312,8 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
+			// A sash changes Part geometry without resizing the window.
+			super.layout(new Dimension(this.grid.width, this.grid.height));
 		});
 		if (this.stateModel.shouldMaximizeAuxiliaryBar) {
 			this.setAuxiliaryBarMaximized(true);
@@ -438,6 +440,8 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		this.gridChangeHandle.value = this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
+			// A sash changes Part geometry without resizing the window.
+			super.layout(new Dimension(this.grid.width, this.grid.height));
 		});
 		this.layout(dimension);
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(true);

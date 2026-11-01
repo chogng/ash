@@ -8,7 +8,6 @@ import { Menus } from '../menus.js';
 import { localize2 } from '../../../nls.js';
 import { ISessionProviderScopeService } from '../agentHost/sessionProviderScopeService.js';
 import { ScopedSessionConversationPane } from './scopedSessionConversationPane.js';
-import { LoadingSkeleton } from '../ui/loadingSkeleton.js';
 import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
@@ -498,7 +497,6 @@ class SessionsChatEmptyView extends Disposable implements IView {
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
 	private readonly heading: HTMLHeadingElement;
 	private readonly description: HTMLParagraphElement;
-	private readonly loading: LoadingSkeleton;
 
 	constructor(
 		container: HTMLElement,
@@ -511,14 +509,6 @@ class SessionsChatEmptyView extends Disposable implements IView {
 		this.heading = h(ownerDocument, 'h2');
 		this.description = h(ownerDocument, 'p');
 		this.element.append(this.heading, this.description);
-		this.loading = this._register(
-			new LoadingSkeleton(
-				this.element,
-				localize('sessions.empty.restoring', 'Restoring your agent workspace…'),
-				'transcript',
-				3,
-			),
-		);
 		container.append(this.element);
 		this.update('ready', undefined);
 	}
@@ -526,10 +516,7 @@ class SessionsChatEmptyView extends Disposable implements IView {
 	layout(_bounds: IPositionedRectangle): void { }
 
 	update(state: ISessionsManagementService['state'], error: string | undefined): void {
-		this.loading.setVisible(state === 'loading' && !error);
-		this.element.classList.toggle('loading', !this.loading.element.hidden);
 		this.element.setAttribute('aria-busy', String(state === 'loading'));
-		this.heading.hidden = this.description.hidden = !this.loading.element.hidden;
 		if (state === 'loading') {
 			this.heading.textContent = localize('sessions.empty.loading', 'Loading sessions');
 			this.description.textContent = localize('sessions.empty.restoring', 'Restoring your agent workspace…');
