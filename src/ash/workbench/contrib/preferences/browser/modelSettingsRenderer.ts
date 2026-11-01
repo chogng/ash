@@ -68,13 +68,14 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.document = container.ownerDocument;
 		this.modelsWidget = this._register(instantiation.createInstance(ChatModelsWidget, this.document, {
 			matches: (entry: ModelCatalogEntry) => this.catalogQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] }),
+			isSearching: () => !this.catalogQuery.isEmpty,
 			onStorageError: (error: SecretStorageError) => {
 				this.connectionState = undefined;
 				this.updateStorageStatus({ status: error.status });
 			},
 			onConfigure: (connection: string, model?: string) => this.configure(connection, model),
 		}));
-		this.modelsWidget.element.hidden = true;
+		this.modelsWidget.setVisible(false);
 		this._register(this.modelsWidget.onDidChangeItemCount(() => this.changed.fire()));
 		this.providersStatus = h(this.document, 'p');
 		this.providersStatus.className = 'ash-models-settings-empty';
@@ -171,7 +172,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					const nodes = [this.providerTitle, this.subscriptionTitle, ...this.subscriptionElements, this.subscriptionStatus, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'The Model list card contains all models and their supported settings. Enabled models appear first; enabled and disabled models each keep the catalog order. The Subscription accounts card opens account management for sign-in and sign-out. The API access card manages keys and custom endpoints. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Delete provider removes its configuration and saved API key after confirmation. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'The Model list card contains all models and their supported settings. When you enter Models settings, enabled models appear first, with catalog order preserved within each group. The order stays fixed while you change switches, search, expand or collapse the list. Re-enter Models settings to sort by the current enabled state. The Subscription accounts card opens account management for sign-in and sign-out. The API access card manages keys and custom endpoints. Search models filters the full list by model name or ID. Clear the search to restore the list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Delete provider removes its configuration and saved API key after confirmation. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -215,7 +216,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	public setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
-		this.modelsWidget.element.hidden = !visible;
+		this.modelsWidget.setVisible(visible);
 		if (!visible) {
 			this.apiLoadVersion++;
 			return;

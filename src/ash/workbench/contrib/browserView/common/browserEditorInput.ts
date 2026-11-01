@@ -5,6 +5,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { IBrowserViewService, BrowserViewStorageScope, normalizeBrowserViewUrl, type IBrowserViewSessionOptions } from '../../../../platform/browserView/common/browserView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
 
 import { type EditorInputSerializer, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
@@ -63,6 +64,8 @@ export class BrowserEditorInput extends EditorInput {
 		if (url === 'about:blank') { return localize({ bundle: 'ash.workbench', key: 'browser.title' }, 'Browser'); }
 		return title.trim() || new URL(url).host;
 	}
+
+	public getIcon(): typeof Lxicon.browserWeb { return Lxicon.browserWeb; }
 
 	public resolve(): Promise<IBrowserViewModel> {
 		this.assertNotDisposed();

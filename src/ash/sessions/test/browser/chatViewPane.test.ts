@@ -24,6 +24,8 @@ import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSy
 import { PromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { toSkillSelectors } from '../../../workbench/contrib/chat/common/skillSelectors.js';
 import { KeybindingTestServices } from '../../../workbench/services/keybinding/test/browser/keybindingTestServices.js';
+import { AdvisorConfigurationPicker } from '../../../workbench/contrib/advisor/browser/advisor.js';
+import type { IOpenSettingsOptions } from '../../../workbench/services/preferences/common/preferences.js';
 import { ChatInputPart } from '../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditors } from '../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatInputDelegate } from '../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -447,6 +449,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.List);
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
+	let preferencesOptions: IOpenSettingsOptions | undefined;
 	using chat = createChatService(api);
 	let shownContextMenuActions: readonly IAction[] = [];
 	const contextMenuService = {
@@ -465,7 +468,10 @@ test('Chat title and history switching retain conversations and drafts', async (
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
 	using preferences: PreferencesService = new BrowserPreferencesService({
 		...emptyEditorServiceState,
-		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
+		openEditor: async (_input, options, target) => {
+			preferencesEditorTarget = target;
+			preferencesOptions = options as IOpenSettingsOptions;
+		},
 		focusActiveEditor() { },
 	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
 	services.registerInstance(IPreferencesService, preferences);
@@ -632,6 +638,13 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), false);
 	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector('button'));
 	assert.equal(layoutToolbar?.hidden, false);
+	const browserGroup = menuService.getMenuActions(MenuId.ChatTitle).filter(([group]) => group !== 'navigation')[0]!;
+	assert.equal(browserGroup[0], '0_browser');
+	assert.deepEqual(browserGroup[1].map(action => [action.id, action.label, action.enabled]), [[OPEN_CHAT_BROWSER_COMMAND_ID, 'Open Browser', false]]);
+	const nativeContext = contextKeys.createKey<boolean>('isNative', false);
+	nativeContext.set(true);
+	assert.equal(menuService.getMenuActions(MenuId.ChatTitle).filter(([group]) => group !== 'navigation')[0]![1][0]!.enabled, true);
+	nativeContext.set(false);
 	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
 		.filter(([group]) => group === 'chatActions')
 		.flatMap(([, actions]) => actions);
@@ -643,12 +656,6 @@ test('Chat title and history switching retain conversations and drafts', async (
 			icon: action.icon,
 		})),
 		[
-			{
-				id: OPEN_CHAT_BROWSER_COMMAND_ID,
-				label: 'Open Browser',
-				enabled: false,
-				icon: Lxicon.browserWeb,
-			},
 			{
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: 'Move Chat to Editor Area',
@@ -686,11 +693,11 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.deepEqual(layoutChoices().map(action => action.checked), [false, true]);
 	activeInput.value = '';
 	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-	await chatActions[3]?.run();
-	const settingsInput = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
-	assert.ok(settingsInput);
-	settingsInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	await chatActions.find(action => action.id === OPEN_CHAT_SETTINGS_COMMAND_ID)!.run();
+	assert.equal(dom.window.document.querySelector('.ash-quick-pick-input input'), null);
 	assert.equal(preferencesEditorTarget, 'modalGroup');
+	assert.equal(preferencesOptions?.section, 'chat-appearance');
+	assert.equal(preferencesOptions?.jsonEditor, false);
 	assert.ok(!chatTitleContent(pane).querySelector('[role=tab]') || chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-tabs')?.hidden);
 	const panel = pane.element.querySelector('[role=region]');
 	assert.equal(panel?.id, titleButton.getAttribute('aria-controls'));
@@ -722,7 +729,8 @@ test('Chat title and history switching retain conversations and drafts', async (
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.model.model);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), subscriptionModel.displayName);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -4236,7 +4244,7 @@ test('Advisor command selects a model and the off switch preserves its settings'
 	assert.equal(fake.consultRequests.length, 0);
 });
 
-test('Chat Settings toggles Advisor while keeping its selected model', async () => {
+test('Advisor picker toggles Advisor while keeping its selected model', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domCleanup = toDisposable(() => dom.window.close());
 	const selected = { model: { provider: 'openai', model: 'reviewer' }, enabled: true, maxCalls: 5, maxOutputTokens: 4096 };
@@ -4245,103 +4253,21 @@ test('Chat Settings toggles Advisor while keeping its selected model', async () 
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
 	using services = new InstantiationService();
-	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IQuickInputService, quickInput);
-	services.registerInstance(IDialogService, recordingDialogService([]));
-	using keybindingFiles = new KeybindingTestServices();
-	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
-	editorServices.registerInstance(IDialogService, recordingDialogService([]));
-	using preferences = new BrowserPreferencesService({
-		...emptyEditorServiceState,
-		openEditor: async () => undefined,
-		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
-	services.registerInstance(IPreferencesService, preferences);
-	using commands = new CommandService(services);
 	for (const enabled of [false, true]) {
-		await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+		using picker = services.createInstance(AdvisorConfigurationPicker);
+		await picker.show([]);
 		const labels = currentQuickPickItems(quickInput).map(item => item.label);
 		assert.ok(labels.includes(enabled ? 'Turn Advisor on' : 'Turn Advisor off'));
 		assert.ok(labels.includes('Clear saved Advisor model'));
 		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(input);
-		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
-		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
 		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
 	}
-});
-
-test('Chat Settings saves a masked provider key through the model API and refreshes the catalog', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>');
-	using domCleanup = toDisposable(() => dom.window.close());
-	const fake = fakeApi({
-		providers: [
-			{ provider: 'ollama', connection: 'ollama', access: 'apiKey', active: false, configured: false, ready: true, displayName: 'Ollama', apiKeyPolicy: 'unsupported', apiKeyConfigured: false },
-			{ provider: 'openai', connection: 'openai', access: 'apiKey', active: false, configured: false, ready: false, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: false },
-		]
-	});
-	using chat = createChatService(fake.api);
-	using contextKeys = new ContextKeyService();
-	using quickInput = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contextKeys });
-	const messages: IMessageDialogOptions[] = [];
-	using services = new InstantiationService();
-	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
-	services.registerInstance(IChatService, chat);
-	services.registerInstance(ILanguageModelsService, modelsFor(chat));
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
-	services.registerInstance(IQuickInputService, quickInput);
-	services.registerInstance(IDialogService, recordingDialogService(messages));
-	using keybindingFiles = new KeybindingTestServices();
-	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
-	editorServices.registerInstance(IDialogService, recordingDialogService([]));
-	using preferences = new BrowserPreferencesService({
-		...emptyEditorServiceState,
-		openEditor: async () => undefined,
-		focusActiveEditor() { },
-	}, editorServices.get(IFileTextModelService), keybindingFiles.files, keybindingFiles.profiles, editorServices, editorServices.get(IConfigurationService), editorServices.get(IWorkspaceContextService), emptyEditorGroupsService);
-	services.registerInstance(IPreferencesService, preferences);
-	using commands = new CommandService(services);
-
-	const choose = (value: string): void => {
-		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
-		assert.ok(input);
-		input.value = value;
-		input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
-	};
-	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
-	choose('Manage Model Connections');
-	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
-	const labels = currentQuickPickItems(quickInput).map(item => item.label);
-	assert.deepEqual(labels, ['Save key for OpenAI']);
-	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key required');
-	choose('OpenAI');
-	await waitFor(() => dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]') !== null);
-	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input[type="password"]');
-	assert.ok(input);
-	input.value = '  test-secret  ';
-	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-	assert.equal(dom.window.document.body.textContent?.includes('test-secret'), false);
-	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
-	await waitFor(() => messages.length === 1);
-	assert.deepEqual(fake.providerKeyRequests, [{ connection: 'openai', apiKey: 'test-secret' }]);
-	assert.equal(fake.modelListRequests.length, 2);
-	assert.equal(messages[0]?.message, 'API key saved for OpenAI');
-	assert.equal(input.value, '');
-
-	await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
-	choose('Manage Model Connections');
-	await waitFor(() => dom.window.document.querySelector('[role="dialog"][aria-label="Model connections"]') !== null);
-	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key saved');
 });
 
 test('Advisor choices come from recommended catalog rows before connection setup', async () => {

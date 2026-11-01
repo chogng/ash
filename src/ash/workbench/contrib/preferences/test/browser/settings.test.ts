@@ -2571,7 +2571,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	assert.equal(refreshes, 1, 'Connection metadata changes still update their Settings section');
 });
 
-test('Models Settings orders enabled models first in a unified list', async () => {
+test('Models Settings sorts enabled models on entry and keeps their order until the next visit', async () => {
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
@@ -2582,7 +2582,7 @@ test('Models Settings orders enabled models first in a unified list', async () =
 		{ model: { provider: 'second', model: 'newest' }, displayName: 'Second', longContext: null },
 		{ model: { provider: 'third', model: 'newest' }, displayName: 'Third', longContext: null },
 	];
-	const enabled = new Set<string>();
+	const enabled = new Set<string>(['Third']);
 	const changed = resources.add(new Emitter<void>());
 	const models: ILanguageModelsService = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
@@ -2673,25 +2673,30 @@ test('Models Settings orders enabled models first in a unified list', async () =
 		content.getNodes(query);
 		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
-	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
-	// Enable in reverse order so activation order cannot masquerade as catalog order.
-	await models.setModelVisible(catalog[3].model, true);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[2].model, true);
-	assert.deepEqual(names(), ['Second', 'Third', 'First newest', 'First older']);
-	await models.setModelVisible(catalog[2].model, false);
 	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[3].model, false);
-	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second'], 'Rerendering the same visit does not reset its order');
+	content.setVisible(false);
 	await models.setModelVisible(catalog[1].model, true);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['First older', 'Second', 'First newest', 'Third']);
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
 	search.value = 'first';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(), ['First older', 'First newest']);
 	await models.setModelVisible(catalog[1].model, false);
-	assert.deepEqual(names(), ['First newest', 'First older']);
+	assert.deepEqual(names(), ['First older', 'First newest']);
 	search.value = '';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(new SettingsSearchQuery('older')), ['First older']);
+	assert.deepEqual(names(new SettingsSearchQuery('')), ['First older', 'Second', 'First newest', 'Third']);
+	content.setVisible(false);
+	content.setVisible(true);
+	assert.deepEqual(names(), ['Second', 'First newest', 'First older', 'Third']);
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {

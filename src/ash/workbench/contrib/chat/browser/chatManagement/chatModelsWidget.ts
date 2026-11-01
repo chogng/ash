@@ -100,6 +100,8 @@ export class ChatModelsWidget extends Disposable {
 	public readonly onDidChangeItemCount = this.changed.event;
 	private readonly searchInput: InputBox;
 	private readonly list: HTMLElement;
+	private readonly expansionButton: Button;
+	private isExpanded = false;
 	private readonly message: HTMLElement;
 	private readonly status: HTMLElement;
 	private readonly viewModel: ChatModelsViewModel;
@@ -118,6 +120,7 @@ export class ChatModelsWidget extends Disposable {
 		document: Document,
 		private readonly host: {
 			readonly matches?: (entry: ModelCatalogEntry) => boolean;
+			readonly isSearching?: () => boolean;
 			readonly onStorageError?: (error: SecretStorageError) => void;
 			readonly onConfigure?: (connection: string, model?: string) => Promise<void>;
 		},
@@ -186,6 +189,19 @@ export class ChatModelsWidget extends Disposable {
 		}));
 		this.list = h(document, 'div');
 		this.list.className = 'ash-chat-models-list ash-settings-card';
+		this.list.id = `model-list-${createUuid()}`;
+		this.expansionButton = this._register(new Button(this.list, {
+			...defaultButtonStyles,
+			label: localize('models.catalog.viewAll', 'View all'),
+			presentation: 'quiet',
+		}));
+		this.expansionButton.domNode.classList.add('ash-models-settings-expand');
+		this.expansionButton.domNode.setAttribute('aria-controls', this.list.id);
+		this.expansionButton.domNode.setAttribute('aria-expanded', 'false');
+		this._register(this.expansionButton.onDidClick(() => {
+			this.isExpanded = !this.isExpanded;
+			this.updateRows();
+		}));
 		this.message = h(document, 'p');
 		this.message.className = 'ash-models-settings-empty';
 		this.message.setAttribute('role', 'status');
@@ -221,7 +237,7 @@ export class ChatModelsWidget extends Disposable {
 					if (this.element.hidden || !this.element.isConnected || !isHTMLElement(focused) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
-							? localize('models.catalog.managementHelp', 'The Model list card contains all models. Enabled models appear first; enabled and disabled models each keep the catalog order. Search matches names and IDs, including word prefixes and camel-case initials. Use @provider: followed by a connection ID or quoted provider name to filter providers, and @capability:vision, @capability:tools or @capability:agent to require explicitly supported capabilities. Type @ for suggestions; use Up and Down then Enter to insert a filter. Escape dismisses suggestions before clearing the search. Model switches control individual picker visibility; Space toggles the focused switch. Models that support context switching show a capacity text button beside their name. It shows the usable input capacity after output and safety reservations, independently of the compaction threshold. Context size saves automatically for this model. Use Enter or Space to switch between default and extended context; the value updates after saving. Use Tab to reach the controls. Configure model reveals the custom model editor. The separate Subscription accounts card manages account sign-in. The API access card manages credentials and custom endpoints. Hover a model switch or focus it and use <keybinding:workbench.action.showHover> for its full description, capabilities, source and reference prices; Accessible View also includes this information. Tool calling and Agent mode are independent; unknown is not unsupported. Reference prices retain currency, tier, region, input interval and review date; they do not describe subscription bills. Use Tab and Shift+Tab to move between controls. The API key section configures provider credentials and custom models.')
+							? localize('models.catalog.managementHelp', 'The Model list card initially shows the first five models. Use View all to expand the list and View less to collapse it. Search always shows all matching models. When you enter Models settings, enabled models appear first, with catalog order preserved within each group. The order stays fixed while you change switches, search, expand or collapse the list. Re-enter Models settings to sort by the current enabled state. Search matches names and IDs, including word prefixes and camel-case initials. Use @provider: followed by a connection ID or quoted provider name to filter providers, and @capability:vision, @capability:tools or @capability:agent to require explicitly supported capabilities. Type @ for suggestions; use Up and Down then Enter to insert a filter. Escape dismisses suggestions before clearing the search. Model switches control individual picker visibility; Space toggles the focused switch. Models that support context switching show a capacity text button beside their name. It shows the usable input capacity after output and safety reservations, independently of the compaction threshold. Context size saves automatically for this model. Use Enter or Space to switch between default and extended context; the value updates after saving. Use Tab to reach the controls. Configure model reveals the custom model editor. The separate Subscription accounts card manages account sign-in. The API access card manages credentials and custom endpoints. Hover a model switch or focus it and use <keybinding:workbench.action.showHover> for its full description, capabilities, source and reference prices; Accessible View also includes this information. Tool calling and Agent mode are independent; unknown is not unsupported. Reference prices retain currency, tier, region, input interval and review date; they do not describe subscription bills. Use Tab and Shift+Tab to move between controls. The API key section configures provider credentials and custom models.')
 							: this.accessibleContent(),
 						() => { if (focused.isConnected) { focused.focus(); } else { this.focusSearch(); } },
 						AccessibilityVerbositySettingId.ChatModelConfiguration);
@@ -237,6 +253,11 @@ export class ChatModelsWidget extends Disposable {
 	public focusSearch(): void { this.searchInput.focus(); }
 	public search(filter: string, options: { readonly focus?: boolean; } = {}): void { if (options.focus !== false) { this.focusSearch(); } this.searchInput.value = filter; }
 	public clearSearch(): void { this.search(''); }
+	public setVisible(visible: boolean): void {
+		if (this.element.hidden === !visible) { return; }
+		this.element.hidden = !visible;
+		if (visible) { this.viewModel.resetModelOrder(); }
+	}
 
 	private fireItemCount(): void {
 		if (this.reportedCount === this.count) { return; }
@@ -308,14 +329,28 @@ export class ChatModelsWidget extends Disposable {
 			return row;
 		});
 		const shown = this.rows.filter(row => this.host.matches?.(row.entry.model) ?? true)
-			.sort((a, b) => Number(a.entry.model.hidden) - Number(b.entry.model.hidden));
-		const desired = shown.map(row => row.element);
+			.sort((a, b) => a.entry.order - b.entry.order);
+		const isSearching = !!this.searchInput.value.trim() || this.host.isSearching?.() === true;
+		const canExpand = !isSearching && shown.length > 5;
+		const visible = canExpand && !this.isExpanded ? shown.slice(0, 5) : shown;
+		const desired = visible.map(row => row.element);
+		if (canExpand) {
+			const label = this.isExpanded ? localize('models.catalog.viewLess', 'View less') : localize('models.catalog.viewAll', 'View all');
+			if (this.expansionButton.label !== label) { this.expansionButton.label = label; }
+			this.expansionButton.domNode.setAttribute('aria-expanded', String(this.isExpanded));
+			desired.push(this.expansionButton.domNode);
+		}
 		const focused = this.element.ownerDocument.activeElement;
+		const hadListFocus = this.list.contains(focused);
 		for (const child of [...this.list.children]) { if (!desired.includes(child as HTMLElement)) { child.remove(); } }
 		for (const [index, node] of desired.entries()) {
 			if (this.list.children[index] !== node) { this.list.insertBefore(node, this.list.children[index] ?? null); }
 		}
 		if (isHTMLElement(focused) && this.list.contains(focused) && focused.ownerDocument.activeElement === focused.ownerDocument.body) { focused.focus(); }
+		else if (hadListFocus && !this.list.contains(focused)) {
+			if (canExpand) { this.expansionButton.focus(); }
+			else { this.focusSearch(); }
+		}
 		this.count = shown.length;
 		if (this.list.hidden !== (shown.length === 0)) { this.list.hidden = shown.length === 0; }
 		const failure = entries.find((entry): entry is IStatusEntry => isStatusEntry(entry) && !entry.provider);
