@@ -14,6 +14,7 @@ export type EditorTabDropPosition = 'before' | 'after';
  */
 export interface IEditorTabDragAndDrop {
 	start(source: EditorGroupView, input: IResourceEditorInput): void;
+	startGroup(source: EditorGroupView): void;
 	isDragging(): boolean;
 	drop(target: EditorGroupView, targetInput: IResourceEditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void;
 	end(): void;
@@ -24,6 +25,7 @@ export class DraggedEditorIdentifier {
 	constructor(
 		readonly source: EditorGroupView,
 		readonly input: IResourceEditorInput,
+		readonly wholeGroup = false,
 	) { }
 }
 
@@ -35,6 +37,7 @@ export interface EditorTabDropEvent {
 	readonly targetInput: IResourceEditorInput | undefined;
 	readonly position: EditorTabDropPosition;
 	readonly splitDirection?: Direction;
+	readonly wholeGroup?: boolean;
 }
 
 /**
@@ -55,6 +58,11 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 		);
 	}
 
+	startGroup(source: EditorGroupView): void {
+		if (!source.activeInput) return;
+		this.transfer.setData([new DraggedEditorIdentifier(source, source.activeInput, true)], DraggedEditorIdentifier.prototype);
+	}
+
 	isDragging(): boolean {
 		return this.transfer.hasData(DraggedEditorIdentifier.prototype);
 	}
@@ -69,6 +77,7 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 			target,
 			targetInput,
 			position,
+			wholeGroup: dragged.wholeGroup,
 			...(splitDirection !== undefined ? { splitDirection } : {}),
 		});
 	}

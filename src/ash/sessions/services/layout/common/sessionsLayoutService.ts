@@ -34,6 +34,7 @@ export interface ISessionsLayoutService extends IDisposable {
 	readonly editorWorkingSetState: IObservable<ISessionEditorWorkingSetState>;
 	retainEditor(input: IResourceEditorInput): IDisposable;
 	suppressEditorAutoVisibility(): IDisposable;
+	checkpointEditorLayout(): Promise<void>;
 	readonly newSessionCommand?: string;
 	readonly conversationVisible: boolean;
 	readonly onDidChangeConversationVisibility: Event<void>;

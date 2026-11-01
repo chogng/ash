@@ -1,11 +1,7 @@
 import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
 import { Menus } from './menus.js';
-import type { ICodeCardLayout } from './codeCardLayout.js';
-import { Button } from '../../base/browser/ui/button/button.js';
-import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../base/common/lxicons.js';
-import { DisposableStore } from '../../base/common/lifecycle.js';
 import { StatusbarService } from '../../workbench/browser/parts/statusbar/statusbarPart.js';
 import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
@@ -148,11 +144,8 @@ import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
-import { addDisposableListener, Dimension, h, type IDimension } from '../../base/browser/dom.js';
+import { addDisposableListener, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
-import { TaskQueue } from '../../base/common/async.js';
-import { URI } from '../../base/common/uri.js';
-import { SessionChangesEditorInput } from '../contrib/changes/browser/sessionChangesEditorInput.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -208,7 +201,7 @@ import { IAgentHostConnectionsService } from '../../platform/agentHost/common/ag
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
-import { IStorageService, WillSaveStateReason, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import { IStorageService, WillSaveStateReason, StorageScope } from '../../platform/storage/common/storage.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from '../../platform/workspace/common/workspace.js';
 import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
@@ -248,7 +241,7 @@ import { DiffService } from '../../workbench/services/diff/browser/diffService.j
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
 import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
-import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
+import { type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
 import { EditorParts, IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
 import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
@@ -281,7 +274,6 @@ import { HoverService, IHoverService } from '../../platform/hover/browser/hoverS
 import { IKeybindingService } from '../../platform/keybinding/common/keybinding.js';
 import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from '../../platform/keyboardLayout/common/keyboardLayout.js';
 import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService, type IUserKeyboardLayoutApi } from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
-import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
@@ -330,8 +322,9 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import { registerLayoutActions } from './layoutActions.js';
-import { PanelPart } from './parts/panelPart.js';
-import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalLocation } from '../../platform/terminal/common/terminal.js';
+import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalService } from '../../workbench/contrib/terminal/browser/terminalService.js';
 import { installWorkbenchServiceContributions } from '../../workbench/browser/workbenchServiceContributions.js';
 import { AuxiliaryBarPart } from './parts/auxiliaryBarPart.js';
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
@@ -374,6 +367,11 @@ export interface IWorkbenchOptions {
 	readonly container: HTMLElement;
 }
 
+/** New Sessions terminals use the same Editor Groups as the other Code tools. */
+class SessionsTerminalService extends TerminalService {
+	protected override getDefaultLocation(): TerminalLocation { return TerminalLocation.Editor; }
+}
+
 /** Owns the dedicated Sessions window's services, Parts, layout, and disposal. */
 export abstract class Workbench extends Disposable {
 	readonly domNode: HTMLElement;
@@ -398,6 +396,9 @@ export abstract class Workbench extends Disposable {
 		if (!ownerWindow) throw new Error('Sessions renderer requires an owner window');
 
 		const serviceCollection = options.serviceCollection ?? new ServiceCollection();
+		if (!serviceCollection.has(ITerminalService)) {
+			serviceCollection.set(ITerminalService, new SyncDescriptor(SessionsTerminalService, [], true));
+		}
 		if (!serviceCollection.has(IExtensionRecommendationsService)) {
 			serviceCollection.set(IExtensionRecommendationsService, new SyncDescriptor(ExtensionRecommendationsService, [ExtensionUiTarget.Agents], true));
 		}
@@ -809,7 +810,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. The list below contains Pinned, Projects and Chats; Code uses Recents in place of Chats. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear below the message input.') + ' ' + localize('sessions.list.menuHelp', 'Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.search.navigationHelp', 'Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. Creating an Agent session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in Details. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
+					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. The list below contains Pinned, Projects and Chats; Code uses Recents in place of Chats. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear below the message input.') + ' ' + localize('sessions.list.menuHelp', 'Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.search.navigationHelp', 'Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. Creating an Agent session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -823,7 +824,6 @@ export abstract class Workbench extends Disposable {
 		const cowork = this._register(services.createInstance(CoworkPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(
 			services.createInstance(SessionsPart, this.domNode, {
-				codeCards: layout.codeCards,
 				sessionService: sessions,
 				chatService: routedChat,
 				contextMenuService: contextMenus,
@@ -929,25 +929,8 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(ISessionsLayoutService)) {
 			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
 		}
-		const changesHost = h(ownerWindow.document, 'div');
-		const changesScope = this._register(services.createChild());
-		const changesContext = this._register(contextKeys.createScoped(changesHost));
-		changesScope.registerInstance(IContextKeyService, changesContext);
-		const changesEditor = this._register(changesScope.createInstance(WorkbenchEditorPart, changesHost, {
-			...editorOptions, editorLimit: 1, contextKeyService: changesContext,
-		}));
-		changesEditor.activeGroup.setTitleVisible(false);
-		const browserHost = h(ownerWindow.document, 'div');
-		const browserScope = this._register(services.createChild());
-		const browserContext = this._register(contextKeys.createScoped(browserHost));
-		browserScope.registerInstance(IContextKeyService, browserContext);
-		const browserEditor = this._register(browserScope.createInstance(WorkbenchEditorPart, browserHost, {
-			...editorOptions, contextKeyService: browserContext,
-		}));
 		const editorParts = this._register(services.createInstance(EditorParts, editor,
 			services.get(IAuxiliaryWindowService), undefined, services.get(IAccessibilityService), storage));
-		this._register(editorParts.registerEditorPart(changesEditor, input => input.resource.scheme === 'ash-session-changes', () => layout.codeCards?.setChangesVisible(true)));
-		this._register(editorParts.registerEditorPart(browserEditor, input => input.resource.scheme === BrowserViewUri.scheme, () => layout.codeCards?.setBrowserVisible(true)));
 		services.registerInstance(IEditorPartsService, editorParts);
 		services.registerInstance(IEditorPart, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
@@ -965,12 +948,10 @@ export abstract class Workbench extends Disposable {
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
-		auxiliarybar = editor.auxiliaryBar;
+		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
 		services.registerInstance(ITerminalProcessService, options.api.terminal);
-		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
-			[ViewContainerLocation.Panel, panel],
 			[ViewContainerLocation.AuxiliaryBar, auxiliarybar],
 		])));
 		services.registerInstance(IPaneCompositePartService, panes);
@@ -987,75 +968,32 @@ export abstract class Workbench extends Disposable {
 			['sessions', sessionsPart],
 			['editor', editor],
 			['auxiliarybar', auxiliarybar],
-			['panel', panel],
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
-		if (layout.codeCards) {
-			const cards = layout.codeCards;
-			cards.setChangesPart(changesEditor);
-			cards.setBrowserPart(browserEditor);
-			if (options.createBrowserHost) {
-				const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
-				this._register(toDisposable(() => browserVisible.reset()));
-				this._register(cards.onDidChangeCards(() => browserVisible.set(cards.isCardVisible('browser'))));
-				this._register(CommandsRegistry.register('ash.sessions.toggleBrowser', async () => {
-					await commandService.executeCommand('sessions.open.code');
-					if (cards.isCardVisible('browser')) cards.closeCard('browser');
-					else if (browserEditor.activeInput) {
-						cards.setBrowserVisible(true);
-						browserEditor.focus();
-					} else await services.get(IBrowserViewWorkbenchService).createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
-				}));
-				this._register(MenusRegistry.appendMenuItems([Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
-					id, item: {
-						command: {
-							id: 'ash.sessions.toggleBrowser',
-							title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
-							icon: Lxicon.browserExplore,
-							toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-						},
-						when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 1.5,
-					},
-				}))));
-			}
-			// Projected headers keep window commands targeted at the card receiving focus.
-			for (const [header, part] of [[cards.files.header, editor], [cards.changes.header, changesEditor], [cards.browser.header, browserEditor]] as const) {
-				for (const event of ['focusin', 'pointerdown'] as const) {
-					this._register(addDisposableListener(header, event, () => editorParts.activateGroup(part.activeGroup.id)));
+		if (options.createBrowserHost) {
+			const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
+			const updateBrowserContext = (): void => browserVisible.set(editors.visibleEditors.some(input => input.resource.scheme === BrowserViewUri.scheme));
+			this._register(toDisposable(() => browserVisible.reset()));
+			this._register(editor.onDidChangeEditors(updateBrowserContext));
+			this._register(CommandsRegistry.register('ash.sessions.toggleBrowser', async () => {
+				await commandService.executeCommand('sessions.open.code');
+				if (!await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme)) {
+					const browsers = services.get(IBrowserViewWorkbenchService);
+					const retained = browsers.getKnownBrowserViews().values().next().value;
+					if (retained) await editors.openEditor(retained, { pinned: true });
+					else await browsers.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
 				}
-			}
-			this._register(changesEditor.onDidChangeEditors(event => {
-				if (event.kind !== 'groupChanged') { return; }
-				if (event.event.kind === 'activeEditorChanged') {
-					for (const group of changesEditor.groups) group.setTitleVisible(false);
-				}
-				if (event.event.kind === 'editorClosed' && event.event.reason !== 'replace' && event.event.reason !== 'previewReplace'
-					&& changesEditor.groups.every(group => group.inputs.length === 0)) {
-					cards.setChangesVisible(false);
-				}
+				updateBrowserContext();
 			}));
-			this._register(browserEditor.onDidChangeEditors(event => {
-				if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed'
-					&& event.event.reason !== 'replace' && event.event.reason !== 'previewReplace'
-					&& browserEditor.groups.every(group => group.inputs.length === 0)) cards.setBrowserVisible(false);
-			}));
-			const changesUpdates = new TaskQueue();
-			this._register(toDisposable(() => changesUpdates.clearPending()));
-			this._register(view.onDidChange(() => {
-				void changesUpdates.scheduleSkipIfCleared(async () => {
-					if (this.isDisposed || !changesEditor.activeInput) { return; }
-					const input = new SessionChangesEditorInput(view.activeSelection ?? URI.parse('ash-session:/draft/empty'));
-					if (changesEditor.activeInput.resource.toString() === input.resource.toString()) { return; }
-					// Updating the retained review follows selection without reopening its closed card.
-					const activePart = editorParts.activePart;
-					await changesEditor.openEditor(input, { pinned: true, preserveFocus: true });
-					if (!changesEditor.domNode.contains(changesEditor.domNode.ownerDocument.activeElement)) {
-						editorParts.activateGroup(activePart.activeGroup.id);
-					}
-				}).catch(error => { if (!this.isDisposed) notificationService.error(getErrorMessage(error)); });
-			}));
-
+			this._register(MenusRegistry.appendMenuItems([Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
+				id, item: {
+					command: {
+						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
+						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
+					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 1.5
+				},
+			}))));
 		}
 		setActivityBarLocation(activityBarLocation);
 		const customViews = services.get(ICustomViewService);
@@ -1082,39 +1020,14 @@ export abstract class Workbench extends Disposable {
 				layout.setActivityBarLocation(location);
 			}
 		}));
+		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
-		this._register(registerLayoutActions(layout, view, contextKeys));
+		this._register(registerLayoutActions(layout, view, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
-		if (options.createBrowserHost && layout.codeCards) {
-			// Embedded editor hosts own their working sets; the document coordinator deliberately excludes them.
-			const browserStateKey = 'sessions.browser.editorState';
-			const browserViews = services.get(IBrowserViewWorkbenchService);
-			let restoringBrowser = true;
-			const saveBrowser = (): void => {
-				if (!restoringBrowser) storage.store(browserStateKey, JSON.stringify(browserEditor.saveWorkingSet(browserStateKey)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-			};
-			this._register(storage.onWillSaveState(saveBrowser));
-			this._register(browserEditor.onDidChangeEditors(saveBrowser));
-			this._register(this.lifecycleService.onWillShutdown(event => {
-				event.join(Promise.resolve().then(saveBrowser), 'browser pane editors');
-			}));
-			this._register(this.lifecycleService.onDidShutdown(() => { restoringBrowser = true; }));
-			serviceContributionReady.push((async () => {
-				try {
-					await browserViews.initialize();
-					const saved = storage.get(browserStateKey, StorageScope.WORKSPACE);
-					if (saved && !this.isDisposed) {
-						// EditorPart validates the complete serialized working set before opening its inputs.
-						await browserEditor.applyWorkingSet(JSON.parse(saved) as EditorWorkingSet, { preserveFocus: true });
-					}
-				} catch (error) {
-					if (!this.isDisposed) notificationService.error(localize('sessions.cards.browserRestoreFailed', 'Could not restore browser panes: {0}', getErrorMessage(error)));
-				} finally { restoringBrowser = false; }
-			})());
-		}
+		if (options.createBrowserHost) serviceContributionReady.push(services.get(IBrowserViewWorkbenchService).initialize());
 		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
@@ -1122,7 +1035,31 @@ export abstract class Workbench extends Disposable {
 		this.lifecycleService.phase = LifecyclePhase.Ready;
 		// Configuration initialization above owns its first load and reports unavailable workspace settings.
 		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
-		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(() => this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts));
+		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(async () => {
+			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts);
+			if (this.isDisposed) return;
+			using suppression = entryLayout.suppressEditorAutoVisibility();
+			const previousGroups = new Set(editor.groups.map(group => group.id));
+			const previousActive = editor.activeGroup;
+			const legacyBrowser = options.createBrowserHost && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
+			try {
+				if (legacyBrowser && !editor.groups.some(group => group.inputs.some(input => input.resource.scheme === BrowserViewUri.scheme))) {
+					await editor.applyWorkingSet(JSON.parse(legacyBrowser) as EditorWorkingSet, { preserveFocus: true, preserveGroups: [...previousGroups] });
+				}
+				if (options.api.hasAppServer) {
+					const terminals = services.get(ITerminalService);
+					await terminals.whenConnected;
+					for (const instance of terminals.instances) {
+						if (instance.target === TerminalLocation.Panel) await services.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+					}
+				}
+				await entryLayout.checkpointEditorLayout();
+			} catch (error) { notificationService.error(getErrorMessage(error)); }
+			if (!contextKeys.getValue('sessions.desktopCode')) {
+				for (const group of editor.groups) if (!previousGroups.has(group.id)) editor.setGroupVisible(group.id, false);
+			}
+			if (editor.groups.includes(previousActive)) editor.activateGroup(previousActive.id);
+		});
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -1183,13 +1120,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
-	readonly codeCards?: ICodeCardLayout;
 	getSideBarPosition(): Position;
-	getPanelPosition(): Position;
-	setPanelPosition(position: Position): void;
-	readonly onDidChangePanelPosition: Event<string>;
-	isPanelMaximized(): boolean;
-	toggleMaximizedPanel(): void;
 	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
 	setActivityBarLocation(location: ActivityBarPosition): void;
 	layout(dimension?: IDimension): void;
@@ -1200,7 +1131,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setCustomViewVisible(visible: boolean): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
-	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor' | 'panel', available: boolean): void;
+	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void;
 	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;
 	hidePart(partId: SessionsPartId): void;

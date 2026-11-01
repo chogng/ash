@@ -251,7 +251,8 @@ export class ChatListWidget extends DomWidget {
 			},
 		}));
 		this._register(AccessibleViewRegistry.register(new ChatResponseAccessibleView({
-			getItems: () => this.items,
+			// Retained rows own the current items; DOM order also reflects message reordering.
+			getItems: () => Array.from(this.transcript.children, element => this.renderedItems.get((element as HTMLElement).dataset.itemId!)!.item),
 			onDidChangeContent: this._onDidChangeContent.event,
 			getFocusedElement: () => {
 				const active = this.element.ownerDocument.activeElement;
@@ -788,6 +789,8 @@ export class ChatListWidget extends DomWidget {
 		const disposables = new DisposableStore();
 		const article = h(this.element.ownerDocument, 'article');
 		article.className = `${this.classPrefix}-item ${this.classPrefix}-item-${item.type}`;
+		// Accessible View can restore focus to the message without adding a Tab stop.
+		article.tabIndex = -1;
 		article.dataset.itemId = item.id;
 		article.tabIndex = -1;
 		if (item.transient) article.dataset.transient = 'true';

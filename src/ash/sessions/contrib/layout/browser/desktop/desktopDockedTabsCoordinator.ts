@@ -7,13 +7,11 @@ import { SessionChangesEditorInput } from '../../../changes/browser/sessionChang
 import { DockedEditorInput } from '../../../../common/dockedEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
-import { BrowserViewUri } from '../../../../../platform/browserView/common/browserViewUri.js';
-import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
-import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
+import type { IEditorGroupView } from '../../../../../workbench/browser/parts/editor/editor.js';
 
 /** Reconciles retained Changes tabs without creating editors for empty sessions. */
 export class DesktopDockedTabsCoordinator extends Disposable {
-	constructor(private readonly pageGroupId: number, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService, @ILayoutService private readonly layout: IAgentWorkbenchLayoutService) { super(); }
+	constructor(private readonly pageGroupId: number, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService) { super(); }
 
 	private get documentGroups() { return this.editor.groups.filter(group => group.id !== this.pageGroupId); }
 
@@ -25,10 +23,10 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 			: active?.kind === 'untitled' && selection.kind === 'untitled' && active.session.untitledSessionId === selection.session.untitledSessionId;
 	}
 
-	public async reconcile(selection: SessionsViewSelection, detailsOnly: boolean): Promise<void> {
+	public async reconcile(selection: SessionsViewSelection, _detailsOnly: boolean, groups: readonly IEditorGroupView[] = this.documentGroups): Promise<void> {
 		if (!this.isCurrent(selection)) { return; }
 		const changes = new SessionChangesEditorInput(selection);
-		for (const group of this.documentGroups) {
+		for (const group of groups) {
 			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-session-changes' && input.resource.toString() !== changes.resource.toString())) {
 				try { await group.replaceEditor(input, changes); }
 				catch (error) {
@@ -38,36 +36,13 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 				if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
 			}
 		}
-		for (const group of this.documentGroups) {
+		for (const group of groups) {
 			for (const input of group.inputs) {
 				if (input instanceof DockedEditorInput) {
-					input.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
+					input.capabilities = EditorInputCapabilities.None;
 					await this.editors.openEditor(input, { pinned: true, preserveFocus: true, inactive: true }, { groupId: group.id });
 					if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
 				}
-			}
-		}
-	}
-
-	public async removeRestoredDetailTabs(): Promise<void> {
-		if (this.isDisposed) { return; }
-		for (const group of this.documentGroups) {
-			// Retired Files tabs disappear; compatible Changes inputs migrate to their independent host.
-			const hasConversation = this.sessions.activeSelection?.kind === 'session';
-			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files' || input.resource.scheme === 'ash-session-changes' || input.resource.scheme === BrowserViewUri.scheme)) {
-				if (input.resource.scheme === BrowserViewUri.scheme) {
-					// Route the same input to the browser host before releasing its legacy document slot.
-					const browser = this.layout.codeCards?.browser;
-					if (!browser) continue;
-					await browser.openEditor(input);
-					if (this.isDisposed) return;
-				}
-				if (hasConversation && input instanceof SessionChangesEditorInput) {
-					await this.changes.openChangesEditor(input.sessionResource, { changesetSelection: input.changesetSelection, preserveFocus: true });
-					if (this.isDisposed) { return; }
-				}
-				await group.closeEditor(input, { skipConfirmation: true, reason: input.resource.scheme === BrowserViewUri.scheme ? 'move' : 'reset' });
-				if (this.isDisposed) { return; }
 			}
 		}
 	}

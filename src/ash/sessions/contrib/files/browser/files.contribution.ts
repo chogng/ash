@@ -1,13 +1,11 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { localize2, localize } from '../../../../nls.js';
 import '../../../../workbench/contrib/files/browser/files.contribution.js';
 import '../../../../workbench/contrib/files/browser/media/explorerviewlet.css';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
@@ -22,38 +20,18 @@ import { resolveCommandsContext } from '../../../../workbench/browser/parts/edit
 import { FileDownload } from '../../../../workbench/contrib/files/browser/fileImportExport.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
-import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID, SessionsExplorerEmptyView, SessionsExplorerView } from './filesView.js';
+import { SESSIONS_FILES_VIEW_ID, SessionsExplorerView } from './filesView.js';
 
 export const SESSIONS_FILES_CONTAINER_ID = 'workbench.sessions.auxiliaryBar.filesContainer';
 
-SessionsViewRegistry.registerStaticViewContainer({
-	id: SESSIONS_FILES_CONTAINER_ID,
-	title: 'Files',
-	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-	location: ViewContainerLocation.AuxiliaryBar,
-	mergeViewWithContainerWhenSingleView: false,
-	icon: Lxicon.files,
-	order: 0,
-	isDefault: true,
+registerAction2(class extends Action2 {
+	constructor() { super({ id: SESSIONS_FILES_CONTAINER_ID, title: localize2('sessions.files.title', 'Files') }); }
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand(NEW_FILE_TAB_COMMAND_ID);
+	}
 });
-SessionsViewRegistry.registerStaticViews(SESSIONS_FILES_CONTAINER_ID, [{
-	id: SESSIONS_FILES_VIEW_ID,
-	title: 'Files',
-	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-	ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
-	when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-	canToggleVisibility: false,
-}, {
-	id: SESSIONS_FILES_EMPTY_VIEW_ID,
-	title: 'Files',
-	localizationKey: { bundle: 'ash', key: 'sessions.files.title' },
-	ctorDescriptor: new SyncDescriptor(SessionsExplorerEmptyView),
-	when: WorkspaceFolderCountContext.isEqualTo(0),
-	canToggleVisibility: false,
-}]);
 
-// The container registry owns its open/focus command; contribute only the
-// Sessions shortcut so loading this contribution cannot register it twice.
+// Keep the existing Files shortcut while its View is hosted by an editor group.
 KeybindingsRegistry.registerKeybindingRule({
 	command: SESSIONS_FILES_CONTAINER_ID,
 	keybinding: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })),
@@ -117,16 +95,15 @@ AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
 	name: 'sessionsFilesHelp',
 	priority: 110,
-	when: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.or(FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID), FocusedViewContext.isEqualTo(SESSIONS_FILES_EMPTY_VIEW_ID))),
+	when: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.or(FocusedViewContext.isEqualTo(SESSIONS_FILES_VIEW_ID), ContextKeyExpr.has('sessionsFilesNavigationFocused'))),
 	getProvider: accessor => {
-		const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-		const view = accessor.get(IViewsService).getViewWithId(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
-		if (!(view instanceof SessionsExplorerView || view instanceof SessionsExplorerEmptyView)) { return undefined; }
+		const view = accessor.get(IViewsService).getViewWithId(SESSIONS_FILES_VIEW_ID);
+		if (!(view instanceof SessionsExplorerView)) { return undefined; }
 		const focused = view.element.ownerDocument.activeElement;
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.help', 'Files\nThe Files card contains the file tree, document tabs and editor. Opening a file shows its editor on the left and the file tree on the right. Document tabs share the card header. Toggle details shows or hides only the file tree; Hide editor keeps the tree visible. Closing the card hides both areas and retains their layout. Press Ctrl or Command+F in the tree to find files; Escape closes Find, clears the filter and returns focus to the tree. Changes opens in a separate card. Drag the card header to move the whole card; drag its internal separator to resize the tree and editor. Closing the card keeps open documents and unsaved edits for reopening. Files follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.'),
+			() => localize('sessions.files.help', "Files\nThe file tree belongs to an editor group beside its open documents. Files, Changes, Browser and Terminal share one EditorPart. Drag a tab to move its editor, or drag empty group title space to move the whole group. Drop at a group edge to split, or in its center to combine tabs. With a header action focused, Alt+Shift+Arrow moves the group beside its neighbor. Separators resize groups. Toggle details hides or shows the file tree without closing documents. Toggle Files retains the tree, selection and unsaved edits. Use Ctrl or Command+Shift+E to focus Files, arrow keys to navigate, Enter to open a file, and Shift+F10 for file actions. Ctrl or Command+F searches the tree; Escape clears Find and restores focus. Alt+F2 reads the visible files. Files follows the selected session directory. Run Collapse folders in the Command Palette to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read."),
 			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,
 		);

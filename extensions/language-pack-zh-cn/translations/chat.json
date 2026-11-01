@@ -1015,7 +1015,7 @@
     "agentTrace.navigationTitle": "Agent 调试日志",
     "agentTrace.resume": "恢复 Agent 调试日志",
     "agentTrace.offline": "打开离线捕获",
-    "agentTrace.activityHelp": "从对话菜单或命令面板运行“查看执行 Trace”，可打开已保存的执行记录。“显示 Agent 输出”会在输出面板中打开有界的实时摘要，通道名称标明正在查看的会话。切换对话不会替换正在查看的日志，需再次运行“显示 Agent 输出”才会切换。输出中的链接可打开对应执行事件。清空输出只清理文本视图，自动滚动只控制是否跟随新输出。",
+    "agentTrace.activityHelp": "从对话菜单或命令面板运行“查看执行 Trace”，可打开已保存的执行记录。",
     "agentOutput.openTrace": "打开执行 Trace",
     "agentOutput.namedChannel": "Agent · {0}（{1}）",
     "agentOutput.channel": "Agent",

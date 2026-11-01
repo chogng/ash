@@ -44,6 +44,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	using resources = new DisposableStore();
 	using changed = new Emitter<void>();
 	using contextKeys = new ContextKeyService();
+	contextKeys.setContext('sessions.desktopCode', true);
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
@@ -70,16 +71,14 @@ test('Sessions layout commands update menu state from their owners and release w
 		navigateBack() { historyIndex = 0; changed.fire(); },
 		navigateForward() { historyIndex = 1; changed.fire(); },
 	};
-	using actions = registerLayoutActions(layout, sessions, contextKeys);
+	using actions = registerLayoutActions(layout, sessions, contextKeys, parts.get('editor') as DesktopMainEditorPart);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
+		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(navigationState(), [true, false]);
-		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'right');
-		layout.setPanelPosition(Position.LEFT);
-		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		using goMenu = new MenuService(commands, contextKeys).createMenu(MenuId.MenubarGoMenu);
@@ -108,15 +107,9 @@ test('Sessions layout commands update menu state from their owners and release w
 		await commands.executeCommand('ash.sessions.forward');
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
-		layout.toggleMaximizedPanel();
-		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), true);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
-		layout.toggleMaximizedPanel();
-		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
 		actions.dispose();
 		assert.deepEqual(navigationState(), [false, false]);
-		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
-		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
 		assert.deepEqual(menu.getActions(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.toggleSidebar'), undefined);
 		assert.equal(changed.hasListeners(), false);

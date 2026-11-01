@@ -779,6 +779,7 @@ function registerView(services: InstantiationService, view: SearchView): void {
 	view.element.ownerDocument.body.append(view.element);
 	services.registerInstance(IViewsService, {
 		getViewProgressIndicator: () => view.getProgressIndicator(),
+		registerView() { throw new Error('This fixture does not host an editor view'); },
 		onDidChangeViewContainerVisibility: Event.None,
 		onDidChangeViewVisibility: Event.None,
 		onDidChangeFocusedView: Event.None,

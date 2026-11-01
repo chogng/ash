@@ -17,7 +17,6 @@ import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
-import type { CodeCardId, ICodeCardLayout } from '../../../../browser/codeCardLayout.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
 
@@ -29,27 +28,9 @@ test('editor contributions follow layout state, serialize open commands without 
 	using commands = new CommandService(services);
 	using layoutChanged = new Emitter<void>();
 	using editorChanged = new Emitter<void>();
-	using cardsChanged = new Emitter<void>();
 	const documentContent = observableValue('document content', true);
 	const parts = { editor: false, auxiliarybar: true };
-	let expandedCard: CodeCardId | undefined;
-	const cardCalls: string[] = [];
-	const cards = {
-		active: true,
-		onDidChangeCards: cardsChanged.event,
-		get expandedCard() { return expandedCard; },
-		expandCard(id: CodeCardId) {
-			cardCalls.push('expand:' + id);
-			expandedCard = expandedCard === id ? undefined : id;
-			cardsChanged.fire();
-		},
-		closeCard(id: CodeCardId) {
-			cardCalls.push('close:' + id);
-			parts.editor = false;
-			parts.auxiliarybar = false;
-			cardsChanged.fire();
-		},
-	} as unknown as ICodeCardLayout;
+	const fileNavigation = { editorVisible: false };
 	const effects: string[] = [];
 	const pending = new DeferredPromise<void>();
 	const started = new DeferredPromise<void>();
@@ -73,17 +54,16 @@ test('editor contributions follow layout state, serialize open commands without 
 			effects.push('files');
 		},
 		async openChanges() { effects.push('changes'); },
-		async hideEditor() { parts.editor = false; parts.auxiliarybar = true; },
-		async showEditor() { parts.editor = true; },
+		async hideEditor() { fileNavigation.editorVisible = false; parts.auxiliarybar = true; },
+		async showEditor() { parts.editor = true; fileNavigation.editorVisible = true; },
 		async toggleDetails() { parts.auxiliarybar = !parts.auxiliarybar; },
 		async toggleSidePane() { parts.editor = false; parts.auxiliarybar = false; },
 	} as unknown as DesktopLayoutController;
 	services.registerInstance(ILayoutService, {
-		codeCards: cards,
 		isPartVisible: (part: keyof typeof parts) => parts[part],
 		onDidLayoutMainContainer: layoutChanged.event,
 	} as unknown as IAgentWorkbenchLayoutService);
-	services.registerInstance(IEditorPart, { onDidChangeEditors: editorChanged.event } as unknown as IEditorPart);
+	services.registerInstance(IEditorPart, { onDidChangeEditors: editorChanged.event, fileNavigation, get filesVisible() { return parts.auxiliarybar; } } as unknown as IEditorPart);
 	services.registerInstance(IContextKeyService, contextKeys);
 	const menus = new MenuService(commands, contextKeys);
 	using title = menus.createMenu(MenuId.EditorTitle);
@@ -96,8 +76,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
 	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'sessions.cards.files.expand', 'sessions.cards.files.close']);
-	assert.equal(headerActions()[1]!.checked, false);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -136,14 +115,6 @@ test('editor contributions follow layout state, serialize open commands without 
 	await pending.complete();
 	await Promise.all([files, changes]);
 	assert.deepEqual(effects, ['files', 'changes']);
-	await commands.executeCommand('sessions.cards.files.expand');
-	assert.equal(headerActions()[1]!.checked, true);
-	assert.equal(headerActions()[1]!.label, 'Restore card size');
-	await commands.executeCommand('sessions.cards.files.expand');
-	assert.equal(headerActions()[1]!.checked, false);
-	await commands.executeCommand('sessions.cards.files.close');
-	assert.deepEqual(cardCalls, ['expand:files', 'expand:files', 'close:files']);
-	assert.deepEqual(parts, { editor: false, auxiliarybar: false });
 	documentContent.set(false, undefined);
 	assert.deepEqual(headerActions(), []);
 	assert.deepEqual(title.getActions(), []);
@@ -164,11 +135,8 @@ test('editor contributions follow layout state, serialize open commands without 
 	}
 	assert.equal(layoutChanged.hasListeners(), false);
 	assert.equal(editorChanged.hasListeners(), false);
-	assert.equal(cardsChanged.hasListeners(), false);
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.supportedDetails'), false);
-	assert.equal(contextKeys.getValue('sessions.filesCardLayoutActive'), false);
-	assert.equal(contextKeys.getValue('sessions.filesCardExpanded'), false);
 
 	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
 	try {
@@ -176,7 +144,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '展开卡片', '关闭卡片']);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 	} finally {

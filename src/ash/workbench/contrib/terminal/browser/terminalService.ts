@@ -114,7 +114,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (!this.connected) {
 			await this.whenConnected;
 		}
-		const location = options.location;
+		const location = options.location ?? this.getDefaultLocation();
 		const preserveFocus = options.preserveFocus ?? (isEditorLocation(location) && typeof location === 'object' && location.preserveFocus);
 		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
 			: typeof location === 'object' && 'splitActiveTerminal' in location && location.splitActiveTerminal ? this.activeInstance : undefined;
@@ -246,6 +246,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 			throw error;
 		}
 	}
+
+	/** The product host chooses initial placement; terminal instances retain their service ownership. */
+	protected getDefaultLocation(): TerminalLocation { return TerminalLocation.Panel; }
 
 	private async restoreTerminals(): Promise<void> {
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);

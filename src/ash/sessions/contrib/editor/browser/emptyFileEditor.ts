@@ -10,7 +10,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
-/** The file tree remains in Details; the landing tab explains where to open a document. */
+/** A Files landing tab keeps its group's navigation available before a document is opened. */
 export class EmptyFileEditor extends EditorPane implements IEditorPane {
 	public readonly id = 'ash.sessions.emptyFileEditor';
 	private domNode!: HTMLElement;
@@ -27,7 +27,7 @@ export class EmptyFileEditor extends EditorPane implements IEditorPane {
 		this.domNode = h(parent.ownerDocument, 'p');
 		this.domNode.className = 'ash-sessions-editor-message';
 		this.domNode.tabIndex = 0;
-		this.domNode.textContent = localize('sessions.layout.chooseFile', 'Choose a file in Details to open it here.');
+		this.domNode.textContent = localize('sessions.layout.chooseFile', "Choose a file in Files to open it here.");
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));

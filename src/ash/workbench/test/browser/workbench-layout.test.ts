@@ -3209,6 +3209,13 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	);
 	assert.equal(await views.openView('missing'), null);
 	assert.equal(await panes.openPaneComposite('missing', ViewContainerLocation.Panel), undefined);
+	// A product host may omit a region entirely; its registered views cannot create a fallback host.
+	using withoutPanel = services.createInstance(PaneCompositePartService, new Map());
+	assert.equal(await withoutPanel.openPaneComposite('test.panel.first', ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getActivePaneComposite(ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getLastActivePaneCompositeId(ViewContainerLocation.Panel), undefined);
+	assert.equal(withoutPanel.getProgressIndicator('test.panel.first', ViewContainerLocation.Panel), undefined);
+
 	using incomplete = new InstantiationService();
 	assert.throws(() => incomplete.createInstance(PaneCompositePartService, parts), /service/i);
 	assert.throws(() => incomplete.createInstance(ViewDescriptorService, { registry }), /service/i);

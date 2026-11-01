@@ -302,6 +302,22 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this._register(options.keybindingService.onDidUpdateKeybindings(() => this.renderChrome()));
 		}
 		this.domNode.append(this.titleControl.domNode, this.contentDomNode);
+		// Tabs keep their own drag payload. Empty title space moves the retained group,
+		// including every pane, rather than reopening each editor in another host.
+		if (options.dragAndDrop) {
+			const title = this.titleControl.domNode;
+			title.draggable = true;
+			this._register(addDisposableListener(title, 'dragstart', event => {
+				if (!(event.target instanceof title.ownerDocument.defaultView!.Element) || event.target.closest('.ash-tab, [role="tab"], button, input, a')) return;
+				if (!this.activeInput) { event.preventDefault(); return; }
+				options.onDidActivate?.();
+				options.dragAndDrop!.startGroup(this);
+				event.dataTransfer?.setData('text/plain', String(this.id));
+				if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+				event.stopPropagation();
+			}));
+			this._register(addDisposableListener(title, 'dragend', () => options.dragAndDrop!.end()));
+		}
 		if (this.scopedContextKeyService) {
 			this._register(new EditorGroupContextKeyController(
 				this.scopedContextKeyService,

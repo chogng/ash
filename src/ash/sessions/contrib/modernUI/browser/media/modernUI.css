@@ -1,4 +1,4 @@
-.ash-sessions-window.modern-ui .ash-sessions-content-card {
+.ash-sessions-window.modern-ui .ash-sessions-content-frame {
 	display: block;
 	border: var(--ash-strokeThickness) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-xLarge);
@@ -63,7 +63,7 @@
 }
 
 .ash-sessions-window.modern-ui:is(.hc-black, .hc-light)
-	.ash-sessions-content-card {
+	.ash-sessions-content-frame {
 	border-color: var(--ash-contrastBorder);
 	box-shadow: none;
 }

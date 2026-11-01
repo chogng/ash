@@ -1073,6 +1073,34 @@ test('external attachment URI drop opens its source range without treating the s
 	}
 });
 
+test('dragging a group title moves every retained pane without reopening editors', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		const panes: TestEditorPane[] = [];
+		using registration = registry.registerEditorPane(descriptor('test.groupDrop', '.ts', () => trackPane(panes, 'test.groupDrop')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		editor.layout({ width: 1000, height: 700 });
+		const source = editor.activeGroup;
+		const first = input('/project/first.ts'), second = input('/project/second.ts');
+		await source.openEditor(first, { pinned: true });
+		await source.openEditor(second, { pinned: true });
+		const activePane = source.activePane;
+		const target = editor.addGroup(source.id, Direction.Right);
+		await target.openEditor(input('/project/target.ts'));
+		target.domNode.getBoundingClientRect = () => new dom.window.DOMRect(500, 0, 500, 700);
+		source.domNode.querySelector('.ash-editor-title-control')!.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+		target.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 750, clientY: 5 }));
+		target.domNode.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
+		assert.equal(editor.groups.length, 2);
+		assert.deepEqual(source.inputs, [first, second]);
+		assert.equal(source.activePane, activePane);
+		assert.equal(editor.activeGroup, source);
+		assert.equal(panes.length, 3);
+		assert.equal(editor.serializeLayout().type, 'branch');
+	} finally { dom.window.close(); }
+});
+
 test('dropping a tab above its group preserves the zero-valued Up direction and creates a vertical split', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

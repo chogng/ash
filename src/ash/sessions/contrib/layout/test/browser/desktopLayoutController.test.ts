@@ -41,38 +41,6 @@ const storageKey = 'sessions.singlePane.layoutState';
 suite('DesktopLayoutController', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('legacy browser inputs reach their retained host before the document slot is released', async () => {
-		const { DesktopDockedTabsCoordinator } = await import('../../browser/desktop/desktopDockedTabsCoordinator.js');
-		using fixture = await createFixture();
-		const input = { resource: URI.parse('ash-browser:/browser_target_00000000-0000-0000-0000-000000000001') };
-		fixture.services.registerInstance(ISessionChangesService, {
-			openChangesEditor: async () => { throw new Error('Browser migration must not open Changes'); },
-		} as unknown as ISessionChangesService);
-		const operations: string[] = [];
-		const group = {
-			id: 1, inputs: [input],
-			closeEditor: async (candidate: typeof input, options: { reason: string; }) => {
-				assert.equal(candidate, input);
-				operations.push(options.reason);
-				return true;
-			},
-		};
-		fixture.editor.groups = [group];
-		Object.assign(fixture.services.get(ILayoutService), {
-			codeCards: {
-				browser: {
-					openEditor: async (candidate: typeof input) => {
-						assert.equal(candidate, input);
-						operations.push('opened');
-					}
-				}
-			},
-		});
-		using coordinator = fixture.services.createInstance(DesktopDockedTabsCoordinator, 2);
-		await coordinator.removeRestoredDetailTabs();
-		assert.deepEqual(operations, ['opened', 'move']);
-	});
-
 	test('hidden Canvas retention preserves split geometry while still capturing new tabs', async () => {
 		using fixture = await createFixture();
 		const initial = {
@@ -154,27 +122,7 @@ suite('DesktopLayoutController', () => {
 		assert.deepEqual(persisted.find((entry: { sessionResource: string; }) => entry.sessionResource === 'session:b').editorWorkingSet, saved);
 	});
 
-	test('Code restores each session panel view only while the panel is visible', async () => {
-		using fixture = await createFixture([{ sessionResource: 'session:b', panelViewContainerId: 'tools.b' }]);
-		await fixture.open('b');
-		assert.equal(fixture.panelView, undefined);
-		fixture.panelVisible = true;
-		fixture.partsChanged.fire();
-		assert.equal(fixture.panelView, 'tools.b');
-		fixture.panelView = 'tools.a';
-		fixture.panelOpened.fire('tools.a');
-		await fixture.open('a');
-		assert.equal(fixture.panelView, 'ash.panel.terminal');
-		await fixture.open('b');
-		assert.equal(fixture.panelView, 'tools.a');
-		fixture.panelVisible = false;
-		fixture.partsChanged.fire();
-		await fixture.open('a');
-		assert.equal(fixture.panelView, 'tools.a');
-		await fixture.storage.flush();
-		const saved = JSON.parse(fixture.storage.get(storageKey, StorageScope.WORKSPACE)!) as { sessionResource: string; panelViewContainerId: string; }[];
-		assert.equal(saved.find(entry => entry.sessionResource === 'session:b')?.panelViewContainerId, 'tools.a');
-	});
+
 	test('switching sessions restores their editors and layout visibility does not change selection', async () => {
 		using fixture = await createFixture();
 		fixture.editor.set(workingSet('a', 'a.ts'));
@@ -433,46 +381,8 @@ suite('DesktopLayoutController', () => {
 
 	test('required controller services are resolved by the production creation path', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /paneCompositePartService/);
+		assert.throws(() => services.createInstance(DesktopLayoutController, 'pages', { isSessionContent: true, isDocumentContent: true, documentContent: observableValue('documents', true), isChangingContent: false, runOperation: async (operation: () => Promise<void>) => operation() }), /sessionsService/);
 	});
-
-	for (const hasDocument of [false, true]) {
-		test(`reopening Files ${hasDocument ? 'retains the document editor' : 'replaces an empty editor with the tree'}`, async () => {
-			using fixture = new LayoutFixture();
-			const opened: string[] = [];
-			fixture.services.registerInstance(IViewsService, {
-				isViewContainerActive: () => false,
-				openViewContainer: async (id: string) => { opened.push(id); },
-			} as unknown as IViewsService);
-			fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
-			const inputs = hasDocument ? [{ resource: URI.file('/retained.txt') }] : [];
-			const groups = [{ id: 1, inputs }, { id: 2, inputs: [{ resource: URI.parse('ash-chatgpt:/retained') }] }];
-			fixture.editor.groups = groups;
-			Object.assign(fixture.editor, { focus: () => { } });
-			fixture.editorVisible = true;
-			let filesVisible = false;
-			Object.assign(fixture.services.get(ILayoutService), {
-				codeCards: {
-					isCardVisible: () => filesVisible,
-					setFilesVisible: (visible: boolean) => { filesVisible = visible; },
-				},
-				updateParts: (operation: () => void) => operation(),
-				focus: () => { },
-			});
-			using controller = fixture.services.createInstance(DesktopLayoutController, 2, {
-				isSessionContent: true, isDocumentContent: true,
-				documentContent: observableValue('documents', true), isChangingContent: false,
-				runOperation: async (operation: () => Promise<void>) => operation(),
-			});
-			await controller.toggleFiles();
-			assert.equal(filesVisible, true);
-			assert.equal(fixture.editorVisible, hasDocument);
-			assert.equal(fixture.auxiliaryVisible, !hasDocument);
-			assert.equal(opened.length, hasDocument ? 0 : 1);
-			assert.equal(fixture.editor.groups, groups, 'Reopening the card retains document and product groups');
-			assert.equal(fixture.editor.groups[0]!.inputs, inputs);
-		});
-	}
 });
 
 class TestEditors extends Disposable {

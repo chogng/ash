@@ -1,3 +1,11 @@
+.ash-editor-drop-overlay {
+	position: absolute;
+	z-index: 19;
+	right: 0;
+	bottom: 0;
+	left: 0;
+}
+
 .ash-editor-group[data-editor-drop-direction]::after {
 	position: absolute;
 	z-index: 20;

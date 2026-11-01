@@ -217,6 +217,26 @@ test('tool evidence is Turn-scoped and keeps result-before-call and orphan outpu
 	assert.equal(stopped[0].transient, false);
 });
 
+test('accessible transcript reads current retained messages in display order after updates and removals', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const container = document.createElement('main'); document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	using widget = services.createInstance(ChatListWidget, container, {});
+	const first: IChatListItem = { id: 'first', type: 'agentMessage', text: 'First response', transient: true };
+	const second: IChatListItem = { id: 'second', type: 'agentMessage', text: 'Second response', transient: false };
+	widget.render([first, second]);
+	widget.element.querySelector<HTMLElement>('[data-item-id="first"]')!.focus();
+	using provider = services.invokeFunction(accessor => AccessibleViewRegistry.getImplementations().filter(item => item.type === AccessibleViewType.View && item.name.startsWith('chatTranscript-')).map(item => item.getProvider(accessor)).find(item => item !== undefined)!);
+	assert.match(provider.provideContent(), /First response[\s\S]*Second response/);
+	widget.render([second, { ...first, text: 'Updated response', transient: false }]);
+	assert.match(provider.provideContent(), /Second response[\s\S]*Updated response/);
+	assert.doesNotMatch(provider.provideContent(), /First response/);
+	widget.render([second]);
+	assert.match(provider.provideContent(), /Second response/);
+	assert.doesNotMatch(provider.provideContent(), /Updated response/);
+});
+
 test('streaming tool content preserves disclosure focus, failure state and restored expansion', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

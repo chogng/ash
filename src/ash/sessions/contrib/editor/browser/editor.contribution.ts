@@ -1,5 +1,3 @@
-import { ActiveAuxiliaryContext } from '../../../../workbench/common/contextkeys.js';
-import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -8,6 +6,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import type { DesktopMainEditorPart } from '../../../browser/parts/desktopEditorPart.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
@@ -19,9 +18,6 @@ const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentV
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
-const filesLayoutContext = new RawContextKey<boolean>('sessions.filesCardLayoutActive', false);
-const filesExpandedContext = new RawContextKey<boolean>('sessions.filesCardExpanded', false);
-
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
 	constructor(
@@ -53,28 +49,23 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
-		const filesLayout = filesLayoutContext.bindTo(contextKeys);
-		const filesExpanded = filesExpandedContext.bindTo(contextKeys);
-		const cards = layout.codeCards;
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
-				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor'));
-				detailsVisible.set(layout.isPartVisible('auxiliarybar'));
+				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor') &&
+					(!(editor as DesktopMainEditorPart).filesVisible || (editor as DesktopMainEditorPart).fileNavigation.editorVisible));
+				detailsVisible.set((editor as DesktopMainEditorPart).filesVisible);
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
-				filesLayout.set(context.isDocumentContent && cards?.active === true);
-				filesExpanded.set(cards?.expandedCard === 'files');
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, code, supportedDetails, filesLayout, filesExpanded]) {
+				for (const key of [editorVisible, detailsVisible, code, supportedDetails]) {
 					key.reset();
 				}
 			}),
 		);
 		this._register(layout.onDidLayoutMainContainer(updateContext));
 		this._register(editor.onDidChangeEditors(updateContext));
-		if (cards) { this._register(cards.onDidChangeCards(updateContext)); }
 		this._register(
 			autorun(reader => {
 				context.documentContent.read(reader);
@@ -93,14 +84,12 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					if (layout.isPartVisible('auxiliarybar')) { await controller.toggleDetails(); }
+					if ((editor as DesktopMainEditorPart).filesVisible) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
 			['ash.sessions.showEditor', () => controller.showEditor()],
 			['ash.sessions.toggleSidePane', () => controller.toggleSidePane()],
-			['sessions.cards.files.expand', async () => { if (cards?.active) { cards.expandCard('files'); } }],
-			['sessions.cards.files.close', async () => { if (cards?.active) { cards.closeCard('files'); } }],
 		] as const) {
 			this._register(CommandsRegistry.register(id, () => run(operation)));
 		}
@@ -138,33 +127,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: Menus.SessionsEditorHeaderLayout,
 					item: {
-						command: {
-							id: 'sessions.cards.files.expand',
-							title: localize2({ bundle: 'ash', key: 'sessions.cards.expand' }, 'Expand card'),
-							icon: Lxicon.screenFull,
-							toggled: {
-								condition: filesExpandedContext.isEqualTo(true),
-								icon: Lxicon.screenNormal,
-								title: localize2({ bundle: 'ash', key: 'sessions.cards.restore' }, 'Restore card size'),
-							},
-						},
-						when: filesLayoutContext.isEqualTo(true), group: 'navigation', order: 0,
-					},
-				},
-				{
-					id: Menus.SessionsEditorHeaderLayout,
-					item: {
-						command: {
-							id: 'sessions.cards.files.close',
-							title: localize2({ bundle: 'ash', key: 'sessions.cards.close' }, 'Close card'),
-							icon: Lxicon.close,
-						},
-						when: filesLayoutContext.isEqualTo(true), group: 'navigation', order: 1,
-					},
-				},
-				{
-					id: Menus.SessionsEditorHeaderLayout,
-					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
 						when: codeWhen,
 						group: 'navigation',
@@ -191,10 +153,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							id: 'ash.sessions.toggleFiles',
 							title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
 							icon: Lxicon.folder,
-							toggled: ContextKeyExpr.and(
-								ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)),
-								ActiveAuxiliaryContext.isEqualTo(SESSIONS_FILES_CONTAINER_ID),
-							),
+							toggled: detailsVisibleContext.isEqualTo(true),
 						},
 						when: codeWhen,
 						group: 'navigation',

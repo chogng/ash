@@ -27,7 +27,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.landingHelp', 'Files tab\nChoose a file in Details to open it in the editor. Use the Files command to focus the file tree. Toggle details shows or hides the tree. Hide editor keeps the shared Changes and Files tabs above Details; Show editor restores the open files. The Files landing tab has no document to save.'),
+			() => localize('sessions.files.landingHelp', "Files\nChoose a file in the group navigation to open it as an editor tab. Toggle details shows or hides this group navigation. Hide editor keeps the file tree visible; Show editor restores document content. Drag the group title to move the tree with its documents. Alt+Shift+Arrow from a header action moves the group. The Files landing tab has no document to save."),
 			() => pane.focus(),
 			AccessibilityVerbositySettingId.Explorer,
 		);

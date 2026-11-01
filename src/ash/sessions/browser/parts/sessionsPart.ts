@@ -1,4 +1,3 @@
-import type { ICodeCardLayout } from '../codeCardLayout.js';
 import { SessionInfoRail } from './sessionInfoRail.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { MenusRegistry, MenuId } from '../../../platform/actions/common/actions.js';
@@ -51,7 +50,6 @@ import type {
 } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
-	readonly codeCards?: ICodeCardLayout;
 	readonly sessionService: ISessionsManagementService;
 	readonly chatService: IChatService;
 	readonly contextMenuService: IContextMenuService;
@@ -109,7 +107,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		super(container, 'sessions', themeService, storageService);
 		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
 		this._register(toDisposable(() => this.infoVisible.reset()));
-		if (options.codeCards) this._register(options.codeCards.onDidChangeCards(() => this.updateInfoContext()));
 		this._register(
 			CommandsRegistry.register('ash.sessions.toggleInfo', () => {
 				const pane = this.activeView?.activeChat;
@@ -439,9 +436,6 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 
 	private updateInfoContext(): void {
 		const pane = this.activeView?.activeChat;
-		this.options.codeCards?.setInformation(
-			pane instanceof CodeSessionConversationPane ? pane.info.element : undefined,
-		);
 		this.infoVisible.set(pane instanceof CodeSessionConversationPane && pane.info.visible);
 	}
 
@@ -486,7 +480,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				(inputContainer: HTMLElement, delegate: ChatInputDelegate) =>
 					options.createInputPart(inputContainer, delegate, model, scope),
 			);
-			return new CodeSessionConversationPane(pane, scope, model, host, options.codeCards, () =>
+			return new CodeSessionConversationPane(pane, scope, model, host, () =>
 				this.updateInfoContext(),
 			);
 		} catch (error) {
@@ -573,11 +567,10 @@ class CodeSessionConversationPane extends ScopedSessionConversationPane {
 		scope: IInstantiationService,
 		model: ChatWidgetModel,
 		private readonly host: HTMLElement,
-		cards: ICodeCardLayout | undefined,
 		changed: () => void,
 	) {
 		super(pane, scope, model);
-		this.info = this._register(scope.createInstance(SessionInfoRail, host, model, () => pane.focus(), cards));
+		this.info = this._register(scope.createInstance(SessionInfoRail, host, model, () => pane.focus()));
 		this._register(this.info.onDidChange(changed));
 		this._register(toDisposable(() => host.remove()));
 	}

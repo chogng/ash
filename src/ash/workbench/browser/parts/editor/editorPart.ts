@@ -17,7 +17,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
-import { computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
 import { DisposableMap, Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -199,6 +199,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	private readonly beforeCloseEditor: IEditorPartOptions['beforeCloseEditor'];
 	private readonly editorsObserver: EditorsObserver;
 	private readonly openingIdentities = new Map<string | EditorGroupId, AbortController>();
+	private readonly dragOverlays = this._register(new DisposableStore());
 
 	override get minimumWidth(): number { return Math.max(120, this.editorGrid.minimumWidth); }
 	override get minimumHeight(): number { return 119; }
@@ -260,6 +261,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.dialogService = options.dialogService;
 		this.fileDialogService = options.fileDialogService;
 		this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
+			this.dragOverlays.clear();
 			this.dropEditor(event);
 		});
 		const initial = this.createGroup();
@@ -463,6 +465,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const previous = this.maximizedGroup;
 		if (!previous) return;
 		this.maximizedGroup = undefined;
+		this.restoreLayout(previous.layout, new Map(this._groups.map(host => [host.group.id, host.group.id])));
 		for (const host of this._groups) this.setGroupVisible(host.group.id, previous.visible.includes(host.group.id));
 		this.layoutEditorContent();
 	}
@@ -969,6 +972,21 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return {};
 	}
 
+	/** Expose renderer drop targets above native editor content for the drag's lifetime. */
+	private showDragOverlays(): void {
+		this.dragOverlays.clear();
+		for (const { group } of this._groups) {
+			if (!this.isGroupVisible(group.id)) continue;
+			const overlay = group.domNode.ownerDocument.createElement('div');
+			overlay.className = 'ash-editor-drop-overlay';
+			overlay.setAttribute('data-browser-overlay', 'editor-drop');
+			overlay.setAttribute('aria-hidden', 'true');
+			overlay.style.top = `${group.titleHeight.total}px`;
+			group.domNode.append(overlay);
+			this.dragOverlays.add(toDisposable(() => overlay.remove()));
+		}
+	}
+
 	private createGroup(id?: EditorGroupId): EditorGroupHost {
 		let group: EditorGroupView;
 		group = this.instantiationService.createInstance(EditorGroupView, this.contentDomNode, {
@@ -980,13 +998,25 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			},
 			onDidFinishOpenEditor: () => queueMicrotask(() => this.removeEmptyGroup(group)),
 			dragAndDrop: {
-				start: (source, input) => this.tabDragAndDrop.start(source, input),
+				start: (source, input) => { this.tabDragAndDrop.start(source, input); this.showDragOverlays(); },
+				startGroup: source => { this.tabDragAndDrop.startGroup(source); this.showDragOverlays(); },
 				isDragging: () => this.tabDragAndDrop.isDragging(),
 				drop: (target, targetInput, position, splitDirection) => this.tabDragAndDrop.drop(target, targetInput, position, splitDirection),
-				end: () => this.tabDragAndDrop.end(),
+				end: () => { this.tabDragAndDrop.end(); this.dragOverlays.clear(); },
 			},
 		} satisfies EditorGroupOptions);
 		const listeners = new DisposableStore();
+		listeners.add(addDisposableListener(group.domNode, 'keydown', event => {
+			if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey ||
+				!(event.target instanceof group.domNode.ownerDocument.defaultView!.Element) || !event.target.closest('.ash-editor-title-control')) return;
+			const direction = ({ ArrowLeft: GroupDirection.LEFT, ArrowRight: GroupDirection.RIGHT, ArrowUp: GroupDirection.UP, ArrowDown: GroupDirection.DOWN } as Record<string, GroupDirection | undefined>)[event.key];
+			if (direction === undefined) return;
+			const neighbor = this.findGroup({ direction }, group);
+			if (!neighbor) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.moveGroup(group, neighbor.id, direction);
+		}));
 		listeners.add(group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));
@@ -1060,6 +1090,24 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private dropEditor(event: EditorTabDropEvent): void {
+		if (event.wholeGroup && this.groupHosts.get(event.source.id)?.group === event.source) {
+			if (event.source === event.target) return;
+			if (event.splitDirection !== undefined) {
+				const directions = { [Direction.Left]: GroupDirection.LEFT, [Direction.Right]: GroupDirection.RIGHT, [Direction.Up]: GroupDirection.UP, [Direction.Down]: GroupDirection.DOWN };
+				this.moveGroup(event.source, event.target, directions[event.splitDirection]);
+				this.setActiveGroup(event.source);
+				event.source.focus();
+			} else {
+				void (async () => {
+					for (const input of [...event.source.inputs]) {
+						await event.source.moveEditorTo(input, event.target, event.target.inputs.length);
+					}
+					this.setActiveGroup(event.target);
+					event.target.focus();
+				})().catch(error => console.error('Failed to merge editor groups', error));
+			}
+			return;
+		}
 		// Independent editor hosts can have different pane registries. Reject a transfer
 		// the receiving host cannot render before moving or closing its source input.
 		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;

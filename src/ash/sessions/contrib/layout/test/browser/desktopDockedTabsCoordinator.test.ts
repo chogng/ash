@@ -28,40 +28,26 @@ suite('DesktopDockedTabsCoordinator', () => {
 		assert.deepEqual(fixture.opened, []);
 	});
 
-	test('removes restored Files landing tabs while retaining documents and product pages', async () => {
+	test('retains Files navigation tabs beside documents and product pages', async () => {
 		using fixture = new TabsFixture();
 		const file = { resource: URI.file('/sample.ts'), label: 'sample.ts' };
 		fixture.documents.inputs.push(new EmptyFileEditorInput(), file);
-		await fixture.coordinator.removeRestoredDetailTabs();
 		await fixture.coordinator.reconcile(fixture.selection, true);
-		assert.deepEqual(fixture.documents.inputs, [file]);
+		assert.equal(fixture.documents.inputs.length, 2);
+		assert.equal(fixture.documents.inputs[1], file);
 		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
-		assert.deepEqual(fixture.opened, []);
+		assert.deepEqual(fixture.opened.map(open => open.input), [fixture.documents.inputs[0]]);
 	});
 
 	test('retained Changes tabs still follow the selected session and editor presentation', async () => {
 		using fixture = new TabsFixture();
 		fixture.documents.inputs.push(new SessionChangesEditorInput(selection('outgoing')));
-		await fixture.coordinator.removeRestoredDetailTabs();
 		await fixture.coordinator.reconcile(fixture.selection, true);
 		assert.equal(fixture.documents.inputs[0]?.resource.path, '/current');
-		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit);
+		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.ExcludeFromEditorLimit);
 		await fixture.coordinator.reconcile(fixture.selection, false);
 		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.ExcludeFromEditorLimit);
 		assert.ok(fixture.opened.every(open => open.target === fixture.documents.id));
-	});
-
-	test('disposal during a landing tab close stops further cleanup', async () => {
-		using fixture = new TabsFixture();
-		fixture.documents.inputs.push(new EmptyFileEditorInput(), new EmptyFileEditorInput());
-		const gate = new DeferredPromise<void>();
-		fixture.closeGate = gate.p;
-		const pending = fixture.coordinator.removeRestoredDetailTabs();
-		await fixture.closeStarted.p;
-		fixture.coordinator.dispose();
-		await gate.complete();
-		await pending;
-		assert.equal(fixture.documents.inputs.length, 1);
 	});
 
 	test('a session switch during replacement stops outgoing tab updates', async () => {

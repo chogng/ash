@@ -1,181 +1,159 @@
-import { Dimension, h, type IDimension } from '../../base/browser/dom.js';
-import { Orientation, Sash, SashState } from '../../base/browser/ui/sash/sash.js';
-import type { ISerializableView } from '../../base/browser/ui/grid/grid.js';
-import { Emitter, Event } from '../../base/common/event.js';
-import { Disposable } from '../../base/common/lifecycle.js';
+import { h, type IDimension } from '../../base/browser/dom.js';
+import { Sash, SashState, Orientation } from '../../base/browser/ui/sash/sash.js';
+import { Disposable, MutableDisposable } from '../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
-import type { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
-import type { SessionsPartId } from '../common/layoutConstants.js';
-import { AGENTS_FLOATING_PANEL_GAP } from '../common/sizes.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
+import { localize } from '../../nls.js';
+import type { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
+import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import type { EditorGroupView } from '../../workbench/browser/parts/editor/editorGroupView.js';
+import { SessionsExplorerView, SESSIONS_FILES_VIEW_ID } from '../contrib/files/browser/filesView.js';
 
-/** The editor owns its groups; docking only reserves their content area below the title. */
-export interface IDockedEditorLayout {
-	readonly domNode: HTMLElement;
-	readonly minimumWidth: number;
-	readonly minimumHeight: number;
-	readonly onDidChangeConstraints: Event<void>;
-	getTabsHeight(): number;
-	setContentRightInset(width: number): void;
-	setEditorContentVisible(visible: boolean): void;
-	layoutEditor(dimension: IDimension): void;
-	setVisible(visible: boolean): void;
-}
-
-/** Retains the auxiliary bar inside its editor without relocating group titles or actions. */
-export class DockedAuxiliaryBarController extends Disposable implements ISerializableView {
-	public readonly element: HTMLElement;
-	public readonly card: HTMLElement;
-	public readonly header: HTMLElement;
-	public readonly maximumWidth = Infinity;
-	public readonly maximumHeight = Infinity;
-	private readonly changed = this._register(new Emitter<void>());
-	public readonly onDidChange: Event<void>;
-	private readonly sash: Sash;
-	private auxiliary: WorkbenchPartView<SessionsPartId> | undefined;
-	private editorFrame: HTMLElement | undefined;
-	private isDetached: () => boolean = () => false;
-	private dimension: IDimension = Dimension.Zero;
-	private preferredTreeWidth: number;
-	private treeWidth = 0;
-	private dragWidth = 0;
-	private visible = true;
-	public editorVisible = false;
-	public auxiliaryBarVisible = true;
+/** Owns one retained Explorer View attached to a document group, never an outer Workbench Part. */
+export class DockedAuxiliaryBarController extends Disposable {
+	private group: EditorGroupView | undefined;
+	private retainedGroupId: number | undefined;
+	private readonly sash = this._register(new MutableDisposable<Sash>());
+	private readonly tree: SessionsExplorerView;
+	private readonly element: HTMLElement;
+	private readonly empty: HTMLElement;
+	private preferredWidth: number;
+	private width = 0;
+	private dimension: IDimension = { width: 0, height: 0 };
+	private hostVisible = true;
+	public visible = false;
+	public editorVisible = true;
 
 	constructor(
-		private readonly editor: IDockedEditorLayout,
+		private readonly editor: DesktopMainEditorPart,
+		@IInstantiationService services: IInstantiationService,
 		@IStorageService private readonly storage: IStorageService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IViewsService views: IViewsService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		this.card = this.header = editor.domNode;
-		this.element = h(editor.domNode.ownerDocument, 'div', { className: 'ash-workbench-part-frame ash-desktop-editor-frame' });
+		this.element = h(editor.domNode.ownerDocument, 'aside', { className: 'ash-editor-group-files' });
+		this.element.setAttribute('aria-label', localize('sessions.files.title', 'Files'));
+		const context = this._register(contextKeys.createScoped(this.element));
+		context.createKey('sessionsFilesNavigationFocused', true);
+		this.tree = this._register(services.createInstance(SessionsExplorerView, this.element, {
+			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), canMoveView: false,
+		}));
+		this.tree.setHeaderVisible(false);
+		this._register(views.registerView(this.tree, {
+			id: SESSIONS_FILES_VIEW_ID, title: localize('sessions.files.title', 'Files'), ctorDescriptor: new SyncDescriptor(SessionsExplorerView),
+		}, () => editor.openFiles(), () => this.hide()));
+		this.empty = h(editor.domNode.ownerDocument, 'p');
+		this.empty.className = 'ash-sessions-files-empty-message';
+		this.empty.tabIndex = 0;
+		this.empty.textContent = localize('sessions.files.noFiles', 'Folders and files will appear here.');
+		this.empty.setAttribute('role', 'status');
+		this.element.append(this.empty);
 		const width = storage.getNumber('sessions.code.filesTreeWidth', StorageScope.PROFILE, 220);
-		this.preferredTreeWidth = Number.isFinite(width) && width >= 160 && width <= 800 ? width : 220;
-		this.onDidChange = Event.any(this.changed.event, editor.onDidChangeConstraints);
-		this.sash = this._register(new Sash(editor.domNode, {
-			getVerticalSashLeft: () => this.dimension.width - this.treeWidth,
-			getVerticalSashTop: () => editor.getTabsHeight(),
-			getVerticalSashHeight: () => Math.max(0, this.dimension.height - editor.getTabsHeight()),
-		}, { orientation: Orientation.VERTICAL }));
-		this.sash.state = SashState.Disabled;
-		this._register(this.sash.onDidStart(() => { this.dragWidth = this.treeWidth; }));
-		this._register(this.sash.onDidChange(event => {
-			this.preferredTreeWidth = this.dragWidth + event.startX - event.currentX;
-			this.layoutCard(this.dimension);
-			this.preferredTreeWidth = this.treeWidth;
+		this.preferredWidth = Number.isFinite(width) && width >= 160 && width <= 800 ? width : 220;
+		this.retainedGroupId = storage.getNumber('sessions.code.filesGroup', StorageScope.WORKSPACE);
+		this._register(editor.onDidLayout(() => this.layout()));
+		this._register(editor.onDidChangeEditors(event => {
+			if (event.kind === 'groupChanged' && event.groupId === this.group?.id && event.event.kind === 'activeEditorChanged' && this.group.activeInput?.resource.scheme !== 'ash-sessions-files') this.editorVisible = true;
+			if (this.group && !editor.groups.includes(this.group)) {
+				const replacement = editor.groups.find(group => editor.isGroupVisible(group.id) && group.inputs.some(input => input.resource.scheme === 'ash-sessions-files'));
+				if (replacement) this.attach(replacement as EditorGroupView);
+				else this.hide();
+			}
+			this.layout();
 		}));
-		this._register(this.sash.onDidEnd(() => this.rememberTreeWidth()));
-		this._register(this.sash.onDidReset(() => {
-			this.preferredTreeWidth = 220;
-			this.layoutCard(this.dimension);
-			this.rememberTreeWidth();
-		}));
+		this._register(workspace.onDidChangeWorkspaceFolders(() => this.layout()));
 	}
 
-	public get isMounted(): boolean { return !!this.auxiliary; }
-	public get minimumWidth(): number {
-		return Math.max(300, (this.editorVisible ? this.editor.minimumWidth : 0) + (this.auxiliaryBarVisible ? (this.auxiliary?.minimumWidth ?? 180) : 0) + 2 * AGENTS_FLOATING_PANEL_GAP);
-	}
-	public get minimumHeight(): number { return Math.max(240, this.editor.minimumHeight); }
-	public get editorSize(): IDimension {
-		return new Dimension(Math.max(0, this.dimension.width - this.treeWidth), this.dimension.height);
+	public get view(): SessionsExplorerView { return this.tree; }
+	public get groupId(): number | undefined { return this.group?.id ?? this.retainedGroupId; }
+
+	public show(group: EditorGroupView): void {
+		this.attach(group);
+		this.visible = true;
+		this.editorVisible = group.activeInput?.resource.scheme !== 'ash-sessions-files';
+		this.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		this.layout();
 	}
 
-	public mount(editorFrame: HTMLElement, auxiliary: WorkbenchPartView<SessionsPartId>, editorVisible: boolean, isDetached: () => boolean): void {
-		if (this.isMounted) { return; }
-		this.editorFrame = editorFrame;
-		this.auxiliary = auxiliary;
-		this.isDetached = isDetached;
-		this.editorVisible = editorVisible;
-		this.element.append(this.card);
-		this.card.append(auxiliary.part.domNode);
-		this.card.classList.add('ash-desktop-editor-docked');
-		auxiliary.part.domNode.classList.add('ash-desktop-editor-auxiliary');
+	private attach(group: EditorGroupView): void {
+		if (this.group === group) return;
+		this.releaseGroup();
+		this.group = group;
+		this.retainedGroupId = group.id;
+		this.storage.store('sessions.code.filesGroup', group.id, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		group.domNode.append(this.element);
+		const sash = new Sash(group.domNode, {
+			getVerticalSashLeft: () => this.dimension.width - this.width,
+			getVerticalSashTop: () => group.titleHeight.offset,
+			getVerticalSashHeight: () => Math.max(0, this.dimension.height - group.titleHeight.offset),
+		}, { orientation: Orientation.VERTICAL });
+		this.sash.value = sash;
+		let startWidth = 0;
+		sash.onDidStart(() => { startWidth = this.width; });
+		sash.onDidChange(event => {
+			this.preferredWidth = startWidth + event.startX - event.currentX;
+			this.layout();
+		});
+		sash.onDidEnd(() => this.storage.store('sessions.code.filesTreeWidth', this.width, StorageScope.PROFILE, StorageTarget.MACHINE));
+		sash.onDidReset(() => { this.preferredWidth = 220; this.layout(); });
 	}
 
-	public unmount(): void {
-		if (!this.auxiliary) { return; }
-		this.auxiliary.part.domNode.classList.remove('ash-desktop-editor-auxiliary');
-		for (const property of ['top', 'right', 'width', 'height']) {
-			this.auxiliary.part.domNode.style.removeProperty(property);
+	public hide(): void {
+		this.visible = false;
+		this.storage.store('sessions.code.filesVisible', false, StorageScope.PROFILE, StorageTarget.MACHINE);
+		this.releaseGroup();
+		this.element.remove();
+		this.tree.setVisible(false);
+	}
+
+	private releaseGroup(): void {
+		this.sash.clear();
+		if (this.group && this.editor.groups.includes(this.group)) {
+			this.group.setContentRightInset(0);
+			this.group.setEditorContentVisible(true);
+			this.group.layout(this.editor.getSize(this.group));
 		}
-		this.auxiliary.frame.append(this.auxiliary.part.domNode);
-		this.editorFrame!.append(this.card);
-		this.card.classList.remove('ash-desktop-editor-docked');
-		this.sash.state = SashState.Disabled;
-		this.auxiliary = undefined;
-		this.editor.setContentRightInset(0);
-		this.editor.setEditorContentVisible(true);
+		this.group = undefined;
 	}
 
-	public setEditorVisible(visible: boolean): void {
-		if (this.editorVisible === visible) { return; }
-		this.editorVisible = visible;
-		this.layoutCard(this.dimension);
-		this.changed.fire();
+	public setVisible(visible: boolean): void { this.hostVisible = visible; this.layout(); }
+	public focus(): void {
+		if (this.workspace.getWorkspace().folders.length) this.tree.focus();
+		else this.empty.focus();
 	}
 
-	public setAuxiliaryBarVisible(visible: boolean): void {
-		if (this.auxiliaryBarVisible === visible) { return; }
-		this.auxiliaryBarVisible = visible;
-		this.auxiliary?.part.setVisible(this.visible && visible);
-		this.layoutCard(this.dimension);
-		this.changed.fire();
+	public layout(): void {
+		const group = this.group;
+		if (!group || !this.editor.groups.includes(group)) return;
+		this.dimension = this.editor.getSize(group);
+		const landing = group.activeInput?.resource.scheme === 'ash-sessions-files';
+		const contentVisible = !landing && this.editorVisible;
+		this.width = contentVisible ? Math.min(Math.max(160, this.preferredWidth), Math.max(0, this.dimension.width - 160)) : this.dimension.width;
+		const top = group.titleHeight.offset;
+		const height = Math.max(0, this.dimension.height - top);
+		Object.assign(this.element.style, { top: top + 'px', right: '0px', width: this.width + 'px', height: height + 'px' });
+		const visible = this.visible && this.hostVisible && this.editor.isGroupVisible(group.id);
+		this.element.hidden = !visible;
+		const hasFolders = this.workspace.getWorkspace().folders.length > 0;
+		this.empty.hidden = hasFolders;
+		this.tree.element.hidden = !hasFolders;
+		this.tree.setVisible(visible && hasFolders);
+		this.tree.layout(height, 0, this.width);
+		group.setContentRightInset(this.visible ? this.width : 0);
+		group.setEditorContentVisible(contentVisible);
+		group.layout(this.dimension);
+		if (this.sash.value) this.sash.value.state = contentVisible && visible ? SashState.Enabled : SashState.Disabled;
+		this.sash.value?.layout();
 	}
 
-	public setVisible(visible: boolean): void {
-		this.visible = visible || this.isDetached();
-		this.editor.setVisible(this.visible);
-		this.editor.setEditorContentVisible(this.visible && this.editorVisible);
-		this.auxiliary?.part.setVisible(this.visible && this.auxiliaryBarVisible);
+	protected override disposeCore(): void {
+		this.releaseGroup();
+		this.element.remove();
+		super.disposeCore();
 	}
-
-	public layout(dimension: IDimension): void {
-		if (this.isDetached()) { return; }
-		this.layoutCard(new Dimension(Math.max(0, dimension.width - 2 * AGENTS_FLOATING_PANEL_GAP), Math.max(0, dimension.height - 2 * AGENTS_FLOATING_PANEL_GAP)));
-	}
-
-	public layoutCard(dimension: IDimension): void {
-		if (!this.auxiliary) { return; }
-		this.dimension = dimension;
-		const available = Math.max(0, dimension.width - 2);
-		if (!this.auxiliaryBarVisible) { this.treeWidth = 0; }
-		else if (this.editorVisible) {
-			this.treeWidth = Math.max(this.auxiliary.minimumWidth, Math.min(this.preferredTreeWidth, available - this.editor.minimumWidth));
-		} else { this.treeWidth = available; }
-		this.editor.setContentRightInset(this.treeWidth);
-		this.editor.layoutEditor(new Dimension(available, Math.max(0, dimension.height - 2)));
-		this.editor.setEditorContentVisible(this.visible && this.editorVisible);
-		this.layoutAuxiliaryBar();
-	}
-
-	public layoutAuxiliaryBar(): void {
-		if (!this.auxiliary) { return; }
-		const top = this.editor.getTabsHeight();
-		const height = Math.max(0, this.dimension.height - top - 2);
-		Object.assign(this.auxiliary.part.domNode.style, { top: `${top}px`, right: '0px', width: `${this.treeWidth}px`, height: `${height}px` });
-		this.auxiliary.part.layout(new Dimension(this.treeWidth, height));
-		this.sash.state = this.editorVisible && this.auxiliaryBarVisible ? SashState.Enabled : SashState.Disabled;
-		if (this.editorVisible && this.auxiliaryBarVisible) {
-			this.sash.element.setAttribute('aria-valuemin', String(this.editor.minimumWidth));
-			this.sash.element.setAttribute('aria-valuemax', String(this.dimension.width - this.auxiliary.minimumWidth));
-			this.sash.element.setAttribute('aria-valuenow', String(this.editorSize.width));
-		}
-		this.sash.layout();
-	}
-
-	public resizeEditor(dimension: IDimension): void {
-		if (!this.auxiliaryBarVisible) { return; }
-		this.preferredTreeWidth = Math.max(0, this.dimension.width - dimension.width);
-		this.layoutCard(this.dimension);
-		this.rememberTreeWidth();
-	}
-
-	public rememberTreeWidth(): void {
-		if (!this.editorVisible || !this.auxiliaryBarVisible) { return; }
-		this.preferredTreeWidth = this.treeWidth;
-		this.storage.store('sessions.code.filesTreeWidth', this.preferredTreeWidth, StorageScope.PROFILE, StorageTarget.MACHINE);
-	}
-
-	public toJSON(): string { return 'files'; }
 }
