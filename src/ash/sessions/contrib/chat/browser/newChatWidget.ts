@@ -1,0 +1,106 @@
+import { h } from '../../../../base/browser/dom.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
+import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
+import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { NewChatInputWidget } from './newChatInput.js';
+import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
+import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
+import './media/chatInput.css';
+import '../../../common/theme.js';
+
+/** Owns the Code chat surface and its input while retaining the shared transcript and send pipeline. */
+export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
+	declare readonly input: NewChatInputWidget;
+	private readonly tips: ChatInputTipPresenter;
+	private submittedInput = false;
+	private composerThreadId: string | undefined;
+
+	constructor(
+		container: HTMLElement,
+		panelId: string,
+		model: ChatWidgetModel,
+		createNewSession: () => void,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IContextMenuService contextMenus: IContextMenuService,
+		@IContextViewService contextViews: IContextViewService,
+		@ICommandService commands: ICommandService,
+		@IAccessibleViewService accessibleViews: IAccessibleViewService,
+		@INotificationService notifications: INotificationService,
+		@IDialogService dialogs: IDialogService,
+		@IQuickInputService quickInput: IQuickInputService,
+		@IChatWidgetService widgets: IChatWidgetService,
+		@IContextKeyService contextKeys: IContextKeyService,
+	) {
+		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
+			undefined, undefined, undefined,
+			(inputContainer, delegate) => instantiationService.createInstance(NewChatInputWidget, inputContainer, {
+				...delegate,
+				send: async (...args: Parameters<ChatInputDelegate['send']>) => {
+					const submissionSignal = args[4];
+					if (this.isDisposed || submissionSignal?.aborted) {
+						return;
+					}
+					this.submittedInput = true;
+					this.updateComposer();
+					try {
+						await delegate.send(...args);
+					} catch (error) {
+						// A retired send must not change the welcome state of the newly selected conversation.
+						if (!this.isDisposed && !submissionSignal?.aborted) {
+							if (model.items.length === 0) {
+								this.submittedInput = false;
+							}
+							this.updateComposer();
+						}
+						throw error;
+					}
+				},
+			}, model), instantiationService, dialogs, quickInput, widgets, contextKeys);
+		const parent = this.input.element;
+		const inputContainer = this.input.inputContainerElement;
+		const footer = this.input.inputFooterElement;
+		parent.classList.add('ash-sessions-chat-input', 'floating-card', 'chat-composer');
+		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, model));
+		parent.insertBefore(pullRequests.domNode, inputContainer);
+		pullRequests.render();
+		const tipContainer = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-slot' });
+		parent.insertBefore(tipContainer, inputContainer);
+		this._register(toDisposable(() => tipContainer.remove()));
+		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
+			container: tipContainer,
+			isEligible: () => !this.submittedInput && this.model.items.length === 0
+				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
+				&& !this.model.inputState.interaction,
+			focusInput: () => this.input.focus(),
+		}));
+		footer.classList.add('ash-sessions-chat-input-footer');
+		this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
+		parent.append(footer);
+		this.composerThreadId = model.threadId;
+		this._register(model.onDidChange(() => {
+			if (this.composerThreadId !== model.threadId && this.composerThreadId !== undefined) {
+				this.submittedInput = false;
+			}
+			this.composerThreadId = model.threadId;
+			this.updateComposer();
+		}));
+		this.updateComposer();
+	}
+
+	private updateComposer(): void {
+		this.input.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
+		this.input.element.classList.toggle('has-conversation', this.submittedInput || this.model.items.length > 0);
+		this.tips.update();
+	}
+}

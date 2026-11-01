@@ -59,6 +59,7 @@ import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -77,7 +78,7 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
-const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
 const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
@@ -312,13 +313,12 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const customViews = resources.add(services.createInstance(CustomViewService));
 	services.registerInstance(ICustomViewService, customViews);
-	const viewService = services.createInstance(SessionsService);
+	using viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	services.registerInstance(ILifecycleService, resources.add(services.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
-	const inputs: InstanceType<typeof NewChatInputWidget>[] = [];
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
@@ -335,19 +335,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	});
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
-	const part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
+	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		sessionService,
-		chatService,
-		contextMenuService,
-		contextViewService,
-		accessibleViewService: { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
 		notifications,
-		commandService,
-		createInputPart: (container, delegate, model) => {
-			const input = paneServices.createInstance(NewChatInputWidget, container, delegate, model);
-			inputs.push(input);
-			return input;
-		},
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
@@ -370,6 +360,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 2);
 	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
 	assert.ok(firstTip);
+	const initialWidgets = paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget);
+	assert.equal(initialWidgets.length, 2);
 	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
 	const retainedTip = part.domNode.querySelector('.ash-chat-input-tip');
 	viewService.activateSelection(viewService.activeSelection!);
@@ -393,7 +385,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	part.setVisible(false);
 	part.setVisible(true);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedInput);
-	assert.equal(inputs.length, 2);
+	assert.equal(paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget).length, 1);
+	assert.equal(initialWidgets.filter(widget => widget.isDisposed).length, 1);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };

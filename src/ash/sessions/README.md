@@ -61,6 +61,14 @@ implementations. IDE history commands and `AgentSessionsPicker` belong to Workbe
 Session-backed history enters through `IAgentSessionsService`; shared archive, restore, rename, delete and Changes commands use `IAgentSessionActionsService`. Workbench owns their prompts and editor presentation; Sessions owns target resolution, draft materialization and mutations.
 The Sessions adapter owns no picker DOM, focus, popup lifetime, or additional catalog.
 
+`contrib/chat/browser/chatView.ts` owns the retained Code `NewChatView`, its
+provider scope, model binding and information rail. It creates `NewChatWidget`,
+which specializes the shared `ChatWidget` and owns its `NewChatInputWidget`,
+session toolbar, Tip above the input and footer workspace picker. The view and
+input survive draft materialization; the existing model remains the only owner
+of the Session identity and first-send operation. `NewChatInputWidget` retains
+editor, attachment, permission and draft policy without constructing its parent.
+
 Quick Chat borrows a distinct retained conversation from `SessionChatViewPane`.
 Its background draft leaves foreground selection unchanged; hiding the overlay
 retains the composer and live response. Opening in Chat View reparents that same

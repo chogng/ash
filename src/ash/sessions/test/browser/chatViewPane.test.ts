@@ -145,6 +145,9 @@ import { ChatTipService as CoworkChatTipService, IChatTipService as ICoworkChatT
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
+import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
+import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
 
 const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
@@ -246,6 +249,8 @@ const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
 const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
+const { NewChatView } = await import('../../contrib/chat/browser/chatView.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
@@ -1106,6 +1111,18 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 	} catch (error) { resources.dispose(); throw error; }
 }
 
+async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) => Promise<void> = async () => { }, interrupt: () => Promise<void> = async () => { }) {
+	const fixture = await sessionsInputFixture();
+	try {
+		fixture.input.dispose();
+		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
+		fixture.model.interrupt = interrupt;
+		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
+		widget.setVisible(true);
+		return { ...fixture, input: widget.input, widget, [Symbol.dispose]() { widget.dispose(); fixture[Symbol.dispose](); } };
+	} catch (error) { fixture[Symbol.dispose](); throw error; }
+}
+
 for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} receives source drops through shared snapshot and undo owners`, async () => {
 	using fixture = await sessionsInputFixture();
 	fixture.input.dispose();
@@ -1164,7 +1181,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 	try {
 		const sent: string[] = [];
 		let interrupted = 0;
-		using fixture = await sessionsInputFixture(async text => { sent.push(text); }, undefined, async () => { interrupted++; });
+		using fixture = await sessionsWidgetFixture(async text => { sent.push(text); }, async () => { interrupted++; });
 		const form = fixture.input.element.querySelector('.ash-chat-input-container')!;
 		const footer = fixture.input.element.querySelector('.ash-sessions-chat-input-footer')!;
 		assert.ok(form.querySelector('[data-action-id="ash.chat.input.attach"]'));
@@ -1213,7 +1230,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 
 test('Sessions custom composer context ring opens details without sending and stays visible when usage clears', async () => {
 	const sent: string[] = [];
-	using fixture = await sessionsInputFixture(async text => { sent.push(text); });
+	using fixture = await sessionsWidgetFixture(async text => { sent.push(text); });
 	fixture.input.appendToDraft('Keep the draft while inspecting context');
 	const state = fixture.model.inputState;
 	fixture.input.render({
@@ -1268,7 +1285,7 @@ test('an old Sessions submission failure cannot hide the new submission or repla
 	const oldResult = new DeferredPromise<void>();
 	const newResult = new DeferredPromise<void>();
 	let sends = 0;
-	using fixture = await sessionsInputFixture(async () => (++sends === 1 ? oldResult.p : newResult.p));
+	using fixture = await sessionsWidgetFixture(async () => (++sends === 1 ? oldResult.p : newResult.p));
 	const oldSending = fixture.input.acceptInput('Old request');
 	await waitFor(() => sends === 1);
 	fixture.input.invalidatePendingInput();
@@ -1400,6 +1417,7 @@ test('Sessions composer cancellation keeps the text and prevents a late file fro
 test('sending from one session preserves a later draft during first-session creation', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using domLifetime = toDisposable(() => dom.window.close());
+	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
@@ -1447,47 +1465,45 @@ test('sending from one session preserves a later draft during first-session crea
 	using chat = createChatService(fake.api);
 	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
 	editorServices.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	const widgetModel = createWidgetModel(chat, { kind: 'untitled', session: draft.session }, sessions);
-	using widget = new ChatWidget(
-		dom.window.document.body,
-		'centered-chat',
-		widgetModel,
-		() => sessions.createUntitledSession(),
-		{ showContextMenu: () => undefined } as unknown as IContextMenuService,
-		contextViewService,
-		commands,
-		unavailableAccessibleViewService,
-		notifications,
-		undefined,
-		undefined,
-		undefined,
-		(container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, widgetModel),
-		editorServices,
-		recordingDialogService([]),
-		editorServices.get(IQuickInputService),
-		editorServices.get(IChatWidgetService),
-		editorServices.get(IContextKeyService),
-	);
-	widget.setVisible(true);
+	editorServices.registerInstance(IContextMenuService, { showContextMenu: () => undefined } as unknown as IContextMenuService);
+	editorServices.registerInstance(IDialogService, recordingDialogService([]));
+	editorServices.registerInstance(IChatService, chat);
+	editorServices.registerInstance(IConfigurationService, configurationServices.get(chat)!);
+	editorServices.registerSingleton(IPromptsService, () => editorServices.createInstance(PromptsService));
+	editorServices.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read'); } });
+	editorServices.registerInstance(IAppServerSkillApi, fake.api.skills);
+	editorServices.registerSingleton(ISCMService, () => editorServices.createInstance(SCMService));
+	editorServices.registerInstance(ISessionProviderScopeService, {
+		onDidChange: Event.None, onDidChangeScopes: Event.None,
+		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
+		createScope: () => editorServices.createChild(),
+	});
+	using codeView = editorServices.createInstance(NewChatView, dom.window.document, 'centered-chat', draft, () => { view.openNewSession(); }, () => { });
+	codeView.render(dom.window.document.body);
+	codeView.setVisible(true);
+	const widgetModel = codeView.model;
+	const widget = editorServices.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode.id === 'centered-chat');
+	assert.ok(widget instanceof NewChatWidget);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
 	assert.equal(input?.classList.contains('has-conversation'), false);
 	assert.equal(input?.classList.contains('chat-composer'), true);
 	const welcomeTip = input?.querySelector('.ash-chat-input-tip');
 	assert.ok(welcomeTip);
+	const tipSlot = welcomeTip.parentElement;
+	assert.equal(tipSlot?.nextElementSibling, input?.querySelector('.ash-chat-input-container'));
+	assert.equal(input?.lastElementChild, input?.querySelector('.ash-sessions-chat-input-footer'));
 	assert.deepEqual([input?.getAttribute('aria-busy'), input?.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent], ['true', '']);
 	await widgetModel.initialize();
 	assert.equal(input?.getAttribute('aria-busy'), 'false');
 	assert.equal(input?.querySelector('.ash-chat-input-tip'), welcomeTip);
 	const attachment = new DeferredPromise<{ name: string; content: string; }>();
-	widget.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
+	codeView.addContext({ id: 'code-file', kind: 'file', name: 'code.ts', resolve: () => attachment.p });
 	const sending = widget.acceptInput('Start this work');
 	view.openNewSession();
 	const chatSelection = view.activeSelection;
 	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
-	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
-	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
-		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService), editorServices.get(IChatWidgetService), editorServices.get(IContextKeyService));
+	using chatWidget = editorServices.createInstance(NewChatView, dom.window.document, 'separate-chat', chatSelection, () => { view.openNewSession(); }, () => { });
+	chatWidget.render(dom.window.document.body);
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -1495,11 +1511,18 @@ test('sending from one session preserves a later draft during first-session crea
 	await attachment.complete({ name: 'code.ts', content: 'Code context' });
 	await sending;
 	assert.equal(input?.classList.contains('has-conversation'), true);
+	assert.equal(tipSlot?.childElementCount, 0);
 	assert.equal(widget.element.querySelector('.ash-chat-input-part'), input);
 	assert.equal(widget.sessionId, 'session-1');
+	assert.equal(codeView.model, widgetModel);
 	assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
 	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), restoredChatDraft);
 	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
+	codeView.dispose();
+	assert.equal(widget.isDisposed, true);
+	assert.equal(widgetModel.isDisposed, true);
+	assert.equal(widget.input.isDisposed, true);
+	assert.equal(editorServices.get(IChatWidgetService).getAllWidgets().includes(widget), false);
 	assert.equal(view.activeSelection?.kind, 'untitled');
 	assert.equal(chatWidget.sessionId, undefined);
 	view.openSession('session-1', 'thread-1');
