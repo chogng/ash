@@ -1,5 +1,6 @@
 .ash-workbench-titlebar.ash-sessions-titlebar {
-	padding: 0;
+	padding: 0 var(--ash-titlebar-controls-rightInset, 0px) 0
+		var(--ash-titlebar-controls-leftInset, 0px);
 	background: linear-gradient(
 		to right,
 		var(--ash-sideBar-background) 0
@@ -40,7 +41,8 @@
 	padding-right: calc(var(--ash-spacing-size80) + var(--ash-strokeThickness));
 	width: calc(
 		var(--ash-sessions-titlebar-sidebar-width, 0px) -
-			var(--ash-spacing-size80)
+			var(--ash-spacing-size80) -
+			var(--ash-titlebar-controls-leftInset, 0px)
 	);
 	flex: 0 0 auto;
 	gap: var(--ash-spacing-size80);
@@ -75,11 +77,8 @@
 	-webkit-app-region: drag;
 }
 
-.ash-sessions-window-controls-spacer {
-	flex: 0 0 max(70px, calc(70px * var(--ash-sessions-inverse-zoom-factor)));
-	align-self: stretch;
-}
-
-.ash-workbench.ash-sessions-fullscreen .ash-sessions-window-controls-spacer {
-	display: none;
+.ash-sessions-fullscreen .ash-sessions-titlebar {
+	/* Electron can retain the previous overlay geometry after entering fullscreen. */
+	--ash-titlebar-controls-leftInset: 0px;
+	--ash-titlebar-controls-rightInset: 0px;
 }

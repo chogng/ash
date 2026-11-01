@@ -299,11 +299,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
 						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
 					}
-					return services.createInstance(
+					const titlebar = services.createInstance(
 						TitlebarPart,
 						titlebarContainer,
 						isMacintosh ? 'actions-only' : 'application-menu',
 					);
+					titlebar.domNode.classList.add('ash-electron-titlebar');
+					return titlebar;
 				},
 				container,
 			}),

@@ -429,6 +429,8 @@
 		"--ash-terminal-command-gutter-width",
 		"--ash-terminal-host-background",
 		"--ash-terminal-surface-background",
+		"--ash-titlebar-controls-leftInset",
+		"--ash-titlebar-controls-rightInset",
 		"--ash-toggle-active-background",
 		"--ash-toggle-active-border",
 		"--ash-toggle-active-foreground",
