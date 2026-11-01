@@ -103,7 +103,7 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
  * Workbench composes domain adapters; the supplied client remains the connection owner.
  * For a host-bound SSH client, domain paths retain that host while the wire uses server-local paths.
  */
-export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], sshHost?: string, recovery?: IAppServerConnectionRecovery): IRendererHost {
+export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], remoteHost?: string | { readonly authority: string; }, recovery?: IAppServerConnectionRecovery): IRendererHost {
 	const contextResourceHost = connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
 	const snapshots = contextResourceHost?.add(new AgentHostResourceService());
 	try {
@@ -118,11 +118,11 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 			approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 			accounts: createAppServerAccountApi(connection, connectorHostServices),
-			session: createAppServerAgentSessionService(connection, sshHost),
+			session: createAppServerAgentSessionService(connection, remoteHost),
 			teams: createAppServerTeamApi(connection),
 			model: createAppServerAgentModelsService(connection),
 			secretStorage: createAppServerSecretStorageStatusService(connection),
-			thread: createAppServerAgentThreadService(connection, sshHost, snapshots),
+			thread: createAppServerAgentThreadService(connection, remoteHost, snapshots),
 			turn: createAppServerAgentTurnService(connection, snapshots),
 			turnChanges: createAppServerTurnChangesApi(connection),
 			skills: createAppServerSkillOperations(connection),

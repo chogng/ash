@@ -1,6 +1,7 @@
+import type { IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { IProjectService } from '../../projects/common/projectService.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
-import type { RemoteConnectionDefinition } from '../../remote/common/remoteConnectionService.js';
+import type { RemoteAgentHostConnection } from '../../agentHost/common/remoteAgentHostService.js';
 import type { ISecretStorageStatusService } from '../../secrets/common/secrets.js';
 import type { IMessageHistoryService } from '../../messageHistory/common/messageHistory.js';
 import type { IExtensionBackendApi } from '../../agentHost/common/extensionBackendApi.js';
@@ -85,14 +86,15 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 /** One independent backend connection. Disposing it releases its carrier, never its shared daemon. */
 export interface IRendererAgentHost extends IDisposable {
 	readonly id: string;
-	readonly connection: RemoteConnectionDefinition;
+	readonly connection: RemoteAgentHostConnection;
 	readonly api: IRendererHost;
+	readonly directory: IFileSystemDirectory;
 }
 
 /** A runtime-owned endpoint. Domain ports are borrowed and retain their original connection scope. */
 export interface IRendererAgentHostConnection {
 	readonly id: string;
-	readonly connection: RemoteConnectionDefinition;
+	readonly connection: RemoteAgentHostConnection;
 	readonly state: AppServerConnectionState;
 	readonly host: IRendererAgentHost | undefined;
 }
@@ -100,7 +102,8 @@ export interface IRendererAgentHostConnection {
 export interface IRendererAgentHostService {
 	readonly connections: readonly IRendererAgentHostConnection[];
 	readonly onDidChangeConnections: Event<void>;
-	connect(connection: RemoteConnectionDefinition, signal: AbortSignal): Promise<IRendererAgentHost>;
+	connect(connection: RemoteAgentHostConnection, signal: AbortSignal, ticket?: string): Promise<IRendererAgentHost>;
+	listWSLDistros(): Promise<readonly string[]>;
 	disconnect(id: string): void;
 	reconnect(id: string): Promise<void>;
 }

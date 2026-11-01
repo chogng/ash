@@ -370,7 +370,9 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get canInterrupt(): boolean {
-		return activeTurn(this._thread) !== undefined;
+		if (activeTurn(this._thread)) return true;
+		return this.selection.kind === 'untitled' && this._state === 'submitting'
+			&& this.sessionService.untitledSessions.some(draft => draft.untitledSessionId === this.untitledSessionId && draft.devContainer);
 	}
 
 	async initialize(): Promise<void> {
@@ -510,7 +512,7 @@ export class ChatWidgetModel extends Disposable {
 			this.assertAIEnabled();
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
-			const active = await this.ensureActiveSession();
+			const active = await this.ensureActiveSession(operation.signal);
 			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			// Materializing this composer changes its identity from draft to durable Thread.
 			operation.identity = active.threadId;
@@ -579,7 +581,7 @@ export class ChatWidgetModel extends Disposable {
 		await this.waitForModelSelection(operation);
 		await this.awaitOperationPreparation(this.initialize(), operation);
 		this.requireCurrentOperation(operation);
-		const active = await this.ensureActiveSession();
+		const active = await this.ensureActiveSession(signal);
 		if (this.isDisposed || signal?.aborted || operation.generation !== this.composerGeneration || active.threadId !== this.threadId || active.session.sessionId !== this.sessionId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
@@ -634,7 +636,7 @@ export class ChatWidgetModel extends Disposable {
 			if (name === 'advisor' && this.selection.kind === 'untitled' && (!advisorDefault || !advisorDefault.enabled)) {
 				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
 			}
-			const active = await this.ensureActiveSession();
+			const active = await this.ensureActiveSession(operation.signal);
 			if (this.isDisposed || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
@@ -691,6 +693,10 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async interrupt(): Promise<void> {
+		if (this.selection.kind === 'untitled' && this._state === 'submitting') {
+			this.sessionService.cancelUntitledSessionPreparation(this.selection.session.untitledSessionId);
+			return;
+		}
 		const thread = this._thread;
 		const turn = activeTurn(thread);
 		if (!thread || !turn) return;
@@ -1326,12 +1332,12 @@ export class ChatWidgetModel extends Disposable {
 		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
-	private async ensureActiveSession(): Promise<IActiveSessionThread> {
+	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
 		const generation = this.composerGeneration;
 		return commitChatSession({
-			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId),
+			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal),
 			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
 			adopt: created => {
 				// Catalog notifications may create a durable pane before the create response.

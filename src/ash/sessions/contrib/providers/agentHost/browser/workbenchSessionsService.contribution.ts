@@ -10,17 +10,19 @@ import { AppServerSessionsProvider, type AppServerSessionsProviderHost } from '.
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { WorkspaceSelection, selectionFromWorkspace } from '../../../../browser/workspaceSelection.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
-import { DevContainerAgentHostService } from '../../../../browser/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
 	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService, @ISessionsProvidersService providers: ISessionsProvidersService) {
-		super(instantiationService.createInstance(AppServerSessionsProvider, {
+		const provider = instantiationService.createInstance(AppServerSessionsProvider, {
 			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
 			selectWorkspace: async folders => {
 				using selection = instantiationService.createInstance(WorkspaceSelection);
 				return await selection.pick(folders);
 			},
-		} satisfies AppServerSessionsProviderHost), providers);
+		} satisfies AppServerSessionsProviderHost);
+		super(provider, providers);
+		this._register(providers.registerProvider(provider));
 	}
 }
 

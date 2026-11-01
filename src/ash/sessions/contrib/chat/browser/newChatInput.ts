@@ -30,9 +30,7 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChat
 import { status as announceStatus } from '../../../../base/browser/ui/aria/aria.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
+import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations.
  *
@@ -43,7 +41,6 @@ export class NewChatInputWidget extends ChatInputPart {
 	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
 	private readonly permissionButton: HTMLButtonElement;
-	private readonly workspaceLabel: HTMLSpanElement;
 
 	constructor(
 		container: HTMLElement,
@@ -61,8 +58,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
-		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
-		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 	) {
 		super(container, {
 			...delegate,
@@ -118,15 +113,12 @@ export class NewChatInputWidget extends ChatInputPart {
 		}));
 		const footer = this.inputFooter!;
 		footer.classList.add('ash-sessions-chat-input-footer');
-		const workspace = h(container.ownerDocument, 'span', { className: 'ash-sessions-chat-input-workspace' });
-		appendLabelIcon(workspace, Lxicon.folder);
-		this.workspaceLabel = h(container.ownerDocument, 'span');
-		workspace.append(this.workspaceLabel);
 		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
 		this.permissionButton.type = 'button';
 		this.permissionButton.setAttribute('aria-haspopup', 'menu');
 		this.permissionButton.setAttribute('aria-expanded', 'false');
-		footer.prepend(workspace, this.permissionButton);
+		footer.prepend(this.permissionButton);
+		this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
 		this.createContextUsageToolbar(footer, contextMenus);
 		this.element.append(footer);
 		this.element.append(tipContainer);
@@ -148,7 +140,6 @@ export class NewChatInputWidget extends ChatInputPart {
 			this.displayedThreadId = model.threadId;
 			this.updateConversation();
 		}));
-		this._register(workspaceContext.onDidChangeWorkspaceFolders(() => this.updateWorkspace()));
 		this.updateConversation();
 	}
 
@@ -165,7 +156,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.element.classList.toggle('has-conversation', hasConversation);
 		this.tips.update();
-		this.updateWorkspace();
 		const permission = this.model.inputState.approvalMode;
 		const definition = approvalModeDefinition(permission);
 		const label = localize(definition.label.key, definition.label.text);
@@ -174,17 +164,4 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';
 	}
 
-	private updateWorkspace(): void {
-		// Resolve this composer's target rather than the foreground chat in another visible pane.
-		const draft = this.sessions.untitledSessions.find(session => session.untitledSessionId === this.model.untitledSessionId);
-		const session = this.sessions.sessions.find(session => session.sessionId === this.model.sessionId);
-		const target = draft?.workspace;
-		const root = target && 'root' in target ? target.root : session?.workspace?.root;
-		const labels = root ? [root.replace(/[/\\]+$/, '').split(/[/\\]/).pop() || root]
-			: target?.type === 'multiple' ? target.folders.map(folder => folder.label)
-				: this.workspaceContext.getWorkspace().folders.map(folder => folder.name);
-		this.workspaceLabel.textContent = labels.join(', ');
-		this.workspaceLabel.title = root ?? labels.join(', ');
-		this.workspaceLabel.parentElement!.hidden = labels.length === 0;
-	}
 }

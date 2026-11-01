@@ -1,3 +1,7 @@
+import { WSLRemoteAgentHostService } from '../../platform/agentHost/node/wslRemoteAgentHostService.js';
+import { TunnelAgentHostService } from '../../platform/agentHost/node/tunnelAgentHostService.js';
+import { isSSHAgentHost, remoteAgentHostRoot, canonicalAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
+import { REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { TerminalWindowLifetimeHost } from '../../platform/terminal/electron-main/terminalWindowLifetimeHost.js';
 import { parseJsonc } from '../../base/common/jsonc.js';
 import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
@@ -2058,13 +2062,21 @@ export class AshApplication extends Disposable {
 						webContents: window.webContents,
 						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
 					};
-					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, (target, id) => {
+					const wslHosts = new WSLRemoteAgentHostService();
+					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, async (target, id, signal, ticket) => {
 						const resources = new DisposableStore();
 						try {
-							const workspace = { id: `agent-host:${id}`, uri: createSshRemoteWorkspaceUri(target.host, target.workspace) };
-							const relay = resources.add(this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id }));
+							let tunnel: TunnelAgentHostService | undefined;
+							if (!isSSHAgentHost(target) && target.type === 'tunnel') {
+								tunnel = resources.add(new TunnelAgentHostService(target.endpoint, ticket));
+								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
+							}
+							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
+							const relay = resources.add(isSSHAgentHost(target)
+								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id })
+								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
 							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
-							return resources;
+							return Object.assign(resources, { connection: target });
 						} catch (error) {
 							resources.dispose();
 							throw error;
@@ -2081,6 +2093,7 @@ export class AshApplication extends Disposable {
 						...this.mainProcessIpcRoutes(window),
 						...this.terminalLifetimeRoutes(windowDisposables),
 						...agentHosts.routes(),
+						{ channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL, validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters'); return undefined; }, invoke: () => wslHosts.listDistros() },
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),

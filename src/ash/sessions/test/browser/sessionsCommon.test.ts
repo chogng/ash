@@ -5,7 +5,7 @@ import { observableValue } from '../../../base/common/observable.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { getRemoteAuthority, getRemoteWorkspacePath } from '../../../platform/remote/common/remote.js';
+import { getProviderRemoteWorkspace, getRemoteAuthority, getRemoteWorkspacePath } from '../../../platform/remote/common/remote.js';
 import { TelemetryLevel, type ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { ChatLayoutContext, ChatLayoutPresentation, SESSIONS_LAYOUT_SCOPE_SETTING, type IChatLayoutOwner } from '../../common/chatLayout.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
@@ -50,6 +50,16 @@ test('runtime workspace identities separate containers, hosts and ambiguous path
 	assert.notEqual(sessionWorkspaceUri(first).toString(), sessionWorkspaceUri(second).toString());
 	assert.equal(URI.parse(sessionWorkspaceUri(first).toString()).path, '/workspace');
 	assert.equal(buildAgentHostSessionWorkspace(null), null);
+});
+
+test('host-scoped runtime paths survive case-insensitive URI authorities without colliding', () => {
+	const resource = (hostAuthority: string, workspace: string) => sessionWorkspaceUri(buildAgentHostSessionWorkspace({ type: 'provider', hostAuthority, providerId: 'ash.dev-containers', workspace, root: '/workspace' })!);
+	const first = resource('ssh+build-a', '/Source');
+	const second = resource('ssh+build-b', '/Source');
+	const lower = resource('ssh+build-a', '/source');
+	assert.equal(new Set([first, second, lower].map(uri => uri.authority.toLowerCase())).size, 3);
+	assert.deepEqual(getProviderRemoteWorkspace(URI.parse(first.toString())), { hostAuthority: 'ssh+build-a', providerId: 'ash.dev-containers', workspace: '/Source' });
+	assert.equal(getRemoteWorkspacePath(first), '/workspace');
 });
 
 test('an SSH host named local retains its remote directory identity', () => {

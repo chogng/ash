@@ -7,6 +7,7 @@ export interface IDevContainerAgentHostService {
 	readonly _serviceBrand: undefined;
 	getTargets(token: CancellationToken): Promise<readonly SessionExecutionTarget[]>;
 	isAvailable(workspace: string, token: CancellationToken): Promise<boolean>;
+	/** Shares preparation within this host scope; cancelling one caller never cancels another. */
 	connect(workspace: string, token: CancellationToken): Promise<SessionExecutionTarget>;
 	stopContainer(workspace: string, token: CancellationToken): Promise<void>;
 	removeContainer(workspace: string, token: CancellationToken): Promise<void>;

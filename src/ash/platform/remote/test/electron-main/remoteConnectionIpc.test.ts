@@ -99,6 +99,24 @@ function invokeLease(pool: RemoteAgentHostConnectionPool, channel: string, value
 	return handler.invoke(handler.validate(value));
 }
 
+test('Tunnel acquisition returns the authorized workspace and late cancelled acquisitions release their resources', async () => {
+	const target = { type: 'tunnel' as const, name: 'Tunnel', endpoint: 'http://127.0.0.1:5174/', workspace: '/' };
+	const acquired = new DeferredPromise<ReturnType<typeof toDisposable> & { connection: typeof target; }>();
+	let closed = 0;
+	let signal: AbortSignal | undefined;
+	using pool = new RemoteAgentHostConnectionPool({ list: async () => { throw new Error('Tunnel must not consult the SSH catalog'); } }, (_target, _id, cancellation, ticket) => {
+		assert.equal(ticket, 'a'.repeat(64)); signal = cancellation; return acquired.p;
+	});
+	const pending = invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: target, ticket: 'a'.repeat(64) }) as Promise<unknown>;
+	const rejected = assert.rejects(pending, isCancellationError);
+	pool.reset();
+	await rejected;
+	assert.equal(signal?.aborted, true);
+	await acquired.complete(Object.assign(toDisposable(() => closed++), { connection: { ...target, workspace: '/authorized' } }));
+	await acquired.p;
+	assert.equal(closed, 1);
+});
+
 test('Agent host leases retain independent carriers and close only the selected host', async () => {
 	const opened: unknown[] = [];
 	const closed: string[] = [];

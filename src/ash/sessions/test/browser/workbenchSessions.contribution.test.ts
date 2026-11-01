@@ -12,6 +12,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -114,7 +115,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IViewsService, { openView: async () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-		if (id === ISessionsManagementService || id === IChatSessionNavigationService) {
+		if (id === ISessionsManagementService || id === IChatSessionNavigationService || id === IDevContainerAgentHostService) {
 			services.registerSingleton(id, () => services.createInstance(descriptor));
 		}
 	}

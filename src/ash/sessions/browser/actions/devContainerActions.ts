@@ -14,6 +14,9 @@ import { ISessionsManagementService } from '../../services/sessions/common/sessi
 import { WorkspaceSelection, selectionFromWorkspace } from '../workspaceSelection.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { CHAT_VIEW_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../common/agentHostSessionsProvider.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 registerAction2(class NewDevContainerSession extends Action2 {
 	constructor() {
@@ -34,13 +37,17 @@ registerAction2(class NewDevContainerSession extends Action2 {
 		const containers = accessor.get(IDevContainerAgentHostService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const views = accessor.get(IViewsService);
-		await withOperation(accessor.get(IProgressService), localize('sessions.devContainer.connecting', 'Starting Dev Container...'), async token => {
+		const commands = accessor.get(ICommandService);
+		const sessionViews = accessor.get(ISessionsService);
+		await withOperation(accessor.get(IProgressService), localize('sessions.devContainer.connecting', 'Checking Dev Container...'), async token => {
 			if (!await containers.isAvailable(source.root, token)) {
 				throw new Error(localize('sessions.devContainer.requirements', 'Dev Containers require Docker, the Dev Container CLI, and a workspace with devcontainer.json.'));
 			}
-			const target = await containers.connect(source.root, token);
 			if (token.isCancellationRequested) { throw canceled(); }
-			sessions.createUntitledSession(localize('sessions.devContainer.draft', 'Dev Container Chat'), target);
+			const draft = sessions.createUntitledSession(localize('sessions.devContainer.draft', 'Dev Container Chat'), source, LOCAL_AGENT_HOST_PROVIDER_ID);
+			sessions.setUntitledSessionWorkspace(draft.untitledSessionId, source, { devContainer: true });
+			await commands.executeCommand('sessions.open.code');
+			sessionViews.openUntitledSession(draft.untitledSessionId);
 			await views.focusView(CHAT_VIEW_ID);
 		});
 	}

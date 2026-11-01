@@ -16,6 +16,8 @@ import { PromptsService } from '../../../../../workbench/contrib/chat/common/pro
 import { AppServerAccountService } from '../../../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { ChatService } from '../../../../../workbench/services/chat/browser/chatService.js';
 import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
 
 /** The host scope borrows UI services and owns every service that retains backend subscriptions. */
 export function createAgentHostSessionScope(parent: IInstantiationService, api: IRendererHost, lifetime: DisposableStore): IInstantiationService {
@@ -24,6 +26,7 @@ export function createAgentHostSessionScope(parent: IInstantiationService, api: 
 	scope.registerInstance(IAppServerApi, api.appServer);
 	scope.registerInstance(IServerEventApi, api.events);
 	scope.registerInstance(IAgentSessionService, api.session);
+	scope.registerSingleton(IDevContainerAgentHostService, () => scope.createInstance(DevContainerAgentHostService));
 	scope.registerInstance(IAgentModelsService, api.model);
 	scope.registerInstance(IAgentThreadService, api.thread);
 	scope.registerInstance(IAgentTurnService, api.turn);

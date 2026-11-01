@@ -35,6 +35,32 @@ test('Agent role catalog maps source paths to the owning local or SSH editor res
 suite('Session runtime connection ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	for (const source of ['build-host', { authority: 'wsl+5562756e7475' }, { authority: 'tunnel+68747470' }]) {
+		test(`qualifies runtime targets and removes frontend host identity on create for ${JSON.stringify(source)}`, async () => {
+			using changed = new Emitter<AppServerConnectionState>();
+			const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: '/Source', root: '/workspace' };
+			let created: unknown;
+			const connection = {
+				generation: 1, state: 'ready', capabilities: { contracts: { sessionRuntimes: { version: 1 } } }, onStateChange: changed.event,
+				request: async (method: { method: string; }, params: unknown) => {
+					if (method.method === 'session/runtime/invoke') return { type: 'target', target };
+					created = params;
+					return { session: { sessionId: 'one', title: 'One', status: 'active', executionTarget: target, threads: [], manager: { status: 'idle', statusChangedAtUnixMs: 0 } }, agentTree: { roots: [] } };
+				},
+			};
+			const api = createAppServerAgentSessionService(connection as unknown as AppServerProtocolClient, source);
+			const runtime = await api.invokeRuntime!('ash.dev-containers', { operation: 'prepare', workspace: '/Source' }, new AbortController().signal);
+			assert.equal(runtime.type, 'target');
+			if (runtime.type !== 'target') throw new Error('Missing runtime');
+			const authority = typeof source === 'string' ? 'ssh+build-host' : source.authority;
+			assert.deepEqual(runtime.target, { ...target, hostAuthority: authority });
+			const params = { commandId: 'create', title: 'One', executionTarget: runtime.target, agent: { type: 'default' as const } };
+			await api.create(params);
+			assert.deepEqual(created, { ...params, executionTarget: target });
+			assert.throws(() => api.create({ ...params, executionTarget: { ...target, hostAuthority: 'ssh+another-host' } }), /another host/);
+		});
+	}
+
 	for (const replacement of [false, true]) {
 		for (const abort of [false, true]) {
 			test(`retires a runtime result after ${replacement ? 'replacement' : 'close'} with cancellation ${abort}`, async () => {

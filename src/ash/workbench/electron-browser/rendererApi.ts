@@ -1,3 +1,6 @@
+import type { IFileSystemDirectory } from '../../platform/files/common/fileApi.js';
+import { canonicalAgentHostConnection, isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
+import { REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { APP_SERVER_METHODS, type EnvDirSetEntry } from '../../../../.build/protocol/typescript/index.js';
 import { TERMINAL_WINDOW_LIFETIME_CHANNEL } from '../../platform/terminal/common/terminal.js';
 import { localize } from '../../nls.js';
@@ -235,10 +238,11 @@ export async function createElectronRendererApi(contributions: readonly Electron
 
 		interface HostScope {
 			readonly id: string;
-			readonly target: RemoteConnectionDefinition;
+			target: RemoteAgentHostConnection;
 			readonly resources: DisposableStore;
 			readonly controller: AbortController;
 			readonly ready: Promise<IRendererAgentHost>;
+			directory?: IFileSystemDirectory;
 			lease?: LocalAgentHostServiceClient;
 			host?: IRendererAgentHost;
 			initialization?: Promise<void>;
@@ -262,18 +266,19 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			hostChanges.fire();
 		};
 		resources.add(toDisposable(() => { for (const scope of [...hostScopes.values()]) releaseScope(scope); }));
-		const openHostScope = async (scope: HostScope): Promise<IRendererAgentHost> => {
-			const { id, target, resources: hostResources, controller } = scope;
+		const openHostScope = async (scope: HostScope, ticket?: string): Promise<IRendererAgentHost> => {
+			const { id, resources: hostResources, controller } = scope;
 			const signal = controller.signal;
 			const release = (): void => releaseScope(scope);
 			try {
 				throwIfCancelled(signal);
-				await raceCancellationError(invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: target }), signal);
+				const target = canonicalAgentHostConnection(await raceCancellationError(invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: scope.target, ...(ticket ? { ticket } : {}) }), signal));
+				scope.target = target;
 				throwIfCancelled(signal);
 				if (hostResources.isDisposed) { throw new CancellationError(); }
 				const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
 					clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-					capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, directoryGrantsHost: { version: 1 } },
+					capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
 				}));
 				scope.lease = lease;
 				hostResources.add(lease.client.onStateChange(state => {
@@ -297,7 +302,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						close: id => invoke('ash:oauth-callback:close', { id })
 					},
 					clipboardService: new ElectronRendererClipboardService(),
-				}, [], target.host, lease.recovery);
+				}, [], isSSHAgentHost(target) ? target.host : { authority: remoteAgentHostRoot(target, id).authority }, lease.recovery);
 				hostResources.add(api.mcpServerManagement);
 				if (api.contextResourceHost) { hostResources.add(api.contextResourceHost); }
 				if (lease.client.capabilities?.contracts.automation?.version === 1) {
@@ -336,9 +341,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						},
 					}
 				};
-				const initialize = (): Promise<void> => initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [
-					{ id: `agent-host:${id}`, path: target.workspace, label: createSshRemoteWorkspaceUri(target.host, target.workspace).toString() },
-				]);
+				const initialize = async (): Promise<void> => {
+					const root = remoteAgentHostRoot(target, id);
+					if (isSSHAgentHost(target) || target.type === 'wsl') {
+						await initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, label: root.toString() }]);
+					}
+					// A Tunnel uses the Web session's existing grant, never Desktop host privileges.
+					const directory = await api.fs.resolvePath(root);
+					if (directory.uri.toString() !== root.toString()) throw new Error(localize('agentHost.rootChanged', 'The host returned a different workspace directory.'));
+					scope.directory = directory;
+				};
 				const restoreDirectories = (): Promise<void> => {
 					const task = scope.initialization = initialize();
 					scope.initializing = true;
@@ -361,7 +373,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				throwIfCancelled(signal);
 				if (hostResources.isDisposed) { throw new CancellationError(); }
 				hostResources.add(lease.onDidReconnect(() => { void restoreDirectories().catch(() => { }); }));
-				scope.host = { id, connection: target, api, dispose: release, [Symbol.dispose]: release };
+				scope.host = { id, connection: target, api, get directory() { return scope.directory!; }, dispose: release, [Symbol.dispose]: release };
 				hostChanges.fire();
 				throwIfCancelled(signal);
 				return scope.host;
@@ -375,12 +387,17 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				return [...hostScopes.values()].map(scope => ({ id: scope.id, connection: scope.target, state: hostState(scope), host: scope.host }));
 			},
 			onDidChangeConnections: hostChanges.event,
-			connect: (target, signal) => {
+			listWSLDistros: () => invoke<readonly string[]>(REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL),
+			connect: (input, signal, ticket) => {
+				const target = canonicalAgentHostConnection(input);
 				throwIfCancelled(signal);
 				if (resources.isDisposed) throw new CancellationError();
 				const key = agentHostConnectionAddress(target);
 				const existing = hostScopes.get(key);
-				if (existing) return raceCancellationError(existing.ready, signal);
+				if (existing) {
+					if (ticket && !isSSHAgentHost(target) && target.type === 'tunnel') releaseScope(existing);
+					else return raceCancellationError(existing.ready, signal);
+				}
 				const controller = new AbortController();
 				const hostResources = new DisposableStore();
 				const ready = new DeferredPromise<IRendererAgentHost>();
@@ -393,7 +410,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				hostResources.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
 				resources.add(hostResources);
 				hostChanges.fire();
-				void openHostScope(scope).then(host => { signal.removeEventListener('abort', cancel); void ready.complete(host); }, error => { void ready.error(error); });
+				void openHostScope(scope, ticket).then(host => { signal.removeEventListener('abort', cancel); void ready.complete(host); }, error => { void ready.error(error); });
 				return ready.p;
 			},
 			disconnect: id => { const scope = [...hostScopes.values()].find(scope => scope.id === id); if (scope) releaseScope(scope); },

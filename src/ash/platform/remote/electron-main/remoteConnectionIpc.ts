@@ -1,3 +1,4 @@
+import { canonicalAgentHostConnection, isSSHAgentHost, type RemoteAgentHostConnection } from '../../agentHost/common/remoteAgentHostService.js';
 import { localize } from '../../../nls.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { canceled } from '../../../base/common/errors.js';
@@ -110,7 +111,7 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 
 	constructor(
 		private readonly catalog: Pick<IRemoteConnectionApi, 'list'>,
-		private readonly createConnection: (connection: RemoteConnectionDefinition, id: string) => IDisposable,
+		private readonly createConnection: (connection: RemoteAgentHostConnection, id: string, signal: AbortSignal, ticket?: string) => (IDisposable & { readonly connection?: RemoteAgentHostConnection; }) | Promise<IDisposable & { readonly connection?: RemoteAgentHostConnection; }>,
 	) {
 		super();
 		this._register(toDisposable(() => this.reset()));
@@ -120,12 +121,15 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		return [{
 			channel: REMOTE_AGENT_HOST_OPEN_CHANNEL,
 			validate: value => {
-				const params = record(value, ['id', 'connection']);
-				return { id: connectionLeaseId(params.id), connection: connectionDefinition(params.connection) };
+				const hasTicket = typeof value === 'object' && value !== null && Object.hasOwn(value, 'ticket');
+				const params = record(value, hasTicket ? ['id', 'connection', 'ticket'] : ['id', 'connection']);
+				const connection = canonicalAgentHostConnection(params.connection);
+				if (hasTicket && (isSSHAgentHost(connection) || connection.type !== 'tunnel' || typeof params.ticket !== 'string' || !/^[a-f0-9]{64}$/.test(params.ticket))) throw new TypeError('Invalid Tunnel ticket');
+				return { id: connectionLeaseId(params.id), connection, ...(hasTicket ? { ticket: params.ticket as string } : {}) };
 			},
 			invoke: value => {
-				const request = value as { readonly id: string; readonly connection: RemoteConnectionDefinition; };
-				return this.open(request.id, request.connection);
+				const request = value as { readonly id: string; readonly connection: RemoteAgentHostConnection; readonly ticket?: string; };
+				return this.open(request.id, request.connection, request.ticket);
 			},
 		}, {
 			channel: REMOTE_AGENT_HOST_CLOSE_CHANNEL,
@@ -134,7 +138,7 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		}];
 	}
 
-	private async open(id: string, expected: RemoteConnectionDefinition): Promise<void> {
+	private async open(id: string, expected: RemoteAgentHostConnection, ticket?: string): Promise<RemoteAgentHostConnection> {
 		this.assertNotDisposed();
 		if (this.leases.has(id)) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists')); }
 		if (this.leases.size >= 16) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections')); }
@@ -144,13 +148,19 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		// Register before the asynchronous catalog read so close/navigation retires setup too.
 		this.leases.set(id, resources);
 		try {
-			// Retiring a lease must settle its OPEN route even if the old catalog connection never replies.
-			const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(connection => connection.name === expected.name);
-			if (this.isDisposed || this.leases.get(id) !== resources) { throw canceled(); }
-			if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
-				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));
+			if (isSSHAgentHost(expected)) {
+				const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(connection => connection.name === expected.name);
+				if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
+					throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));
+				}
 			}
-			resources.add(this.createConnection(actual, id));
+			if (resources.isDisposed) throw canceled();
+			const acquisition = Promise.resolve(this.createConnection(expected, id, cancellation.signal, ticket));
+			void acquisition.then(lease => { if (resources.isDisposed) lease.dispose(); }, () => { });
+			const lease = await raceCancellationError(acquisition, cancellation.signal);
+			if (resources.isDisposed) { lease.dispose(); throw canceled(); }
+			resources.add(lease);
+			return lease.connection ?? expected;
 		} catch (error) {
 			if (this.leases.get(id) === resources) { this.close(id); }
 			throw error;

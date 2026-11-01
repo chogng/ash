@@ -189,6 +189,8 @@ class PendingSessionService implements ISessionsManagementService {
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
+	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
+	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }

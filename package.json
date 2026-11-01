@@ -255,7 +255,8 @@
     "native-keymap": "3.3.9",
     "paper": "0.12.18",
     "paperjs-offset": "2.2.1",
-    "playwright-core": "1.61.1"
+    "playwright-core": "1.61.1",
+    "undici": "7.29.0"
   },
   "optionalDependencies": {
     "native-is-elevated": "0.9.0"

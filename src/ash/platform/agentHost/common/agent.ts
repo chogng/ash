@@ -99,7 +99,8 @@ export interface SessionCreateParams {
 	readonly executionTarget:
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
-	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; }
+	| { readonly type: 'remote'; readonly authority: string; readonly root: string; }
+	| { readonly type: 'provider'; readonly providerId: string; readonly workspace: string; readonly root: string; readonly hostAuthority?: string; }
 	| null;
 	readonly agent:
 	| { readonly type: 'default'; }

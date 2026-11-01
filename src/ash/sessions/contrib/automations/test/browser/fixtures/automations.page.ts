@@ -1,3 +1,4 @@
+import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -247,13 +248,14 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 		onDidChangeConnections: endpointChanges.event,
 		disconnect: id => { [...endpoints.values()].find(entry => entry.id === id)?.host?.dispose(); },
 		reconnect: async () => { },
+		listWSLDistros: async () => [],
 		connect: async target => {
 			const key = agentHostConnectionAddress(target);
 			const existing = endpoints.get(key)?.host;
 			if (existing) return existing;
 			hostChanges.push(`open:${target.name}`);
 			const host: IRendererAgentHost = {
-				id: target.name, connection: target,
+				id: target.name, connection: target, directory: { uri: URI.file('/srv/project'), target: { type: 'environment', dirId: target.name } },
 				api: {
 					...disconnected,
 					appServer: { ...disconnected.appServer, getConnectionState: async () => 'ready' },

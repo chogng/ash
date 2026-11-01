@@ -257,7 +257,7 @@ import { ViewsService } from '../../workbench/services/views/browser/viewsServic
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { WorkspaceSelection } from './workspaceSelection.js';
 import { IDevContainerAgentHostService } from '../common/devContainerAgentHostService.js';
-import { DevContainerAgentHostService } from './devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { logSessionsInteraction } from '../common/sessionsTelemetry.js';
 import '../../workbench/services/workspaces/browser/workspacesService.js';
 import type { Part } from '../../workbench/browser/part.js';
@@ -495,7 +495,7 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
 		primaryHostServices.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
 		primaryHostServices.registerInstance(IAgentSessionService, options.api.session);
-		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
+		services.registerSingleton(IDevContainerAgentHostService, () => primaryHostServices.createInstance(DevContainerAgentHostService));
 		primaryHostServices.registerInstance(IAgentThreadService, options.api.thread);
 		services.registerInstance(IAgentTurnService, options.api.turn);
 		services.registerInstance(ITurnChangesApi, options.api.turnChanges);

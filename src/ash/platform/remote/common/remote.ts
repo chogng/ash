@@ -1,6 +1,7 @@
 import { URI } from '../../../base/common/uri.js';
 import { Schemas } from '../../../base/common/network.js';
 import { getRemoteAuthority as getResourceRemoteAuthority } from './remoteHosts.js';
+import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
 
 export const ASH_REMOTE_SCHEME = Schemas.ashRemote;
 /** First SSH initialization also verifies and installs the remote profile's runtime package. */
@@ -38,8 +39,32 @@ export function createSshRemoteWorkspaceUri(host: string, path: string): URI {
 }
 
 /** Optional Session runtimes use an opaque authority; SessionDirectory owns execution routing. */
-export function createProviderRemoteWorkspaceUri(providerId: string, workspace: string, path: string): URI {
-	return URI.from({ scheme: ASH_REMOTE_SCHEME, authority: `provider+${encodeURIComponent(JSON.stringify([providerId, workspace]))}`, path: remoteUriPath(normalizeRemoteWorkspacePath(path)) });
+export function createProviderRemoteWorkspaceUri(providerId: string, workspace: string, path: string, hostAuthority?: string): URI {
+	// URI authorities are case-insensitive. Hex retains case-sensitive source paths within a host namespace.
+	const authority = hostAuthority === undefined ? `provider+${encodeURIComponent(JSON.stringify([providerId, workspace]))}`
+		: `provider-host+${encodeHex(VSBuffer.fromString(JSON.stringify([hostAuthority, providerId, workspace])))}`;
+	return URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: remoteUriPath(normalizeRemoteWorkspacePath(path)) });
+}
+
+/** Reads a runtime resource's source identity at the URI boundary. */
+export function getProviderRemoteWorkspace(resource: URI): { readonly providerId: string; readonly workspace: string; readonly hostAuthority?: string; } | undefined {
+	if (resource.scheme !== ASH_REMOTE_SCHEME) return undefined;
+	const scoped = resource.authority.startsWith('provider-host+');
+	if (!scoped && !resource.authority.startsWith('provider+')) return undefined;
+	let encoded: string;
+	if (scoped) {
+		const hex = resource.authority.slice('provider-host+'.length);
+		if (!/^(?:[0-9a-f]{2})+$/.test(hex) || hex.length > 32768) throw new TypeError('Invalid Session runtime authority');
+		encoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(hex.match(/../g)!, pair => Number.parseInt(pair, 16)));
+	} else {
+		encoded = decodeURIComponent(resource.authority.slice('provider+'.length));
+	}
+	const source: unknown = JSON.parse(encoded);
+	if (!Array.isArray(source) || source.length !== (scoped ? 3 : 2) || source.some(value => typeof value !== 'string' || !value.length)) {
+		throw new TypeError('Invalid Session runtime authority');
+	}
+	return scoped ? { hostAuthority: source[0], providerId: source[1], workspace: source[2] }
+		: { providerId: source[0], workspace: source[1] };
 }
 
 /** Resolves the connection authority encoded by a Remote resource URI. */

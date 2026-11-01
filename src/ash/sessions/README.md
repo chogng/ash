@@ -382,12 +382,33 @@ through a view contract and never imports the Sessions product layer.
 An untitled Session captures the frontend Workspace when it opens. A single
 folder supplies its execution target; a multi-root Workspace asks the user to
 choose a folder when the draft becomes durable. An empty Workspace sends no
-target. `session/create` carries `executionTarget` (local or SSH), never the
+target. `session/create` carries `executionTarget` (local, SSH or Provider), never the
 editor Workspace. App Server stores the execution target with the root Thread
 and Session catalog. Existing Sessions keep their own target when another
 Workbench hands off a chat. Local targets select a directory runtime; SSH
 targets select the configured remote App Server. The frontend workspace summary
 displays the stored root and does not grant access.
+
+The composer workspace picker stores the source folder and Dev Container choice
+on its untitled Session. Choosing a container does not start it. Materialization
+uses the owning provider's host-scoped Dev Container service to prepare the runtime
+before creating the durable Session. Concurrent drafts share an in-flight
+preparation; the last waiting caller's cancellation stops that preparation.
+Failure or cancellation retains the draft and never substitutes its source host.
+Container configuration, provisioning and admitted runtime targets remain owned
+by the Rust Provider and App Server.
+
+Additional SSH, WSL and self-hosted Tunnel hosts share the renderer's connection
+registry. `RemoteAgentHostContribution` owns their child service scopes and
+`RemoteAgentHostSessionsProvider` mounts directories from the canonical Sessions
+model on the same host connection. Resource authorities retain both the source
+host and runtime workspace, including when two containers use the same path.
+Main acquires native carriers and relays bytes; each renderer scope owns its
+protocol client. WSL uses a discovered WSL 2 distribution and its independently
+installed `ash-remote-server`. Tunnel exchanges the authenticated launch URL in
+Main and keeps its token only for that window lease. It uses the Web session's
+existing directory authorization. Disconnect retires the provider and its file
+routes without falling back to another host or stopping the shared daemon.
 
 ## Failure and lifecycle semantics
 

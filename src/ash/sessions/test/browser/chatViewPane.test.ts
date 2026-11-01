@@ -115,6 +115,8 @@ import { TestSessionsManagementService as BaseSessionsManagementService } from '
 import { AppServerSessionsProvider } from '../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import type { ISession } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
+import { DevContainerAgentHostService } from '../../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { ViewsService } from '../../../workbench/services/views/browser/viewsService.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -196,6 +198,7 @@ class SessionsManagementService extends BaseSessionsManagementService {
 		services.registerInstance(IRendererHostService, api);
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
+		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
 		services.registerInstance(IAgentModelsService, api.model);
 		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(IServerEventApi, api.events);
@@ -1173,11 +1176,42 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		const content = help.provideContent();
 		assert.match(content, /已完成的附件仍保留在草稿中/u);
 		assert.match(content, /暂不支持远程项目/u);
+		assert.match(content, /首次发送消息时才会准备容器/u);
+		assert.match(content, /停止任务/u);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		assert.match(chinese.bundles.ash['chat.sessions.help'], /新聊天和已有对话的输入区都保持可见/u);
 		assert.match(chinese.bundles.ash['chat.sessions.help'], /关闭标签页会保留会话、草稿和运行中的任务/u);
 		assert.match(chinese.bundles.ash['chat.sessions.presentation.description'], /以标签页显示已打开的会话/u);
 	} finally { resetNlsResolver(); }
+});
+
+test('Stop task cancels first-send container preparation while retaining the untitled composer', async () => {
+	const fake = fakeApi({ sessions: [] });
+	const entered = new DeferredPromise<void>();
+	let cancellation: AbortSignal | undefined;
+	fake.api.session.invokeRuntime = (_provider, _request, signal) => {
+		cancellation = signal;
+		void entered.complete();
+		return new Promise(() => { });
+	};
+	using sessions = new SessionsManagementService(fake.api);
+	const draft = sessions.createUntitledSession('Container', { type: 'local', root: '/source' });
+	sessions.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { devContainer: true });
+	using chat = createChatService(fake.api);
+	using widget = createWidgetModel(chat, { kind: 'untitled', session: sessions.activeUntitledSession! }, sessions);
+	await widget.initialize();
+	const send = widget.send('Keep this unsent task');
+	const rejected = assert.rejects(send, isCancellationError);
+	await entered.p;
+	assert.equal(widget.inputState.canInterrupt, true);
+	await widget.interrupt();
+	await rejected;
+	assert.equal(cancellation?.aborted, true);
+	assert.equal(widget.inputState.canInterrupt, false);
+	assert.equal(widget.untitledSessionId, draft.untitledSessionId);
+	assert.equal(sessions.untitledSessions[0]?.devContainer, true);
+	assert.deepEqual(fake.createSessionRequests, []);
+	assert.deepEqual(fake.turnStartRequests, []);
 });
 
 test('a removed Sessions attachment cannot report a stale draft persistence error', async () => {
