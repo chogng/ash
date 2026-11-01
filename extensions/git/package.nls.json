@@ -732,5 +732,14 @@
   "git.status.pushTooltip": "Push {0} commits to {1}",
   "command.git.getChangesSummary": "Get Workspace Change Summary",
   "command.git.openWorkspaceChanges": "Open Workspace Changes",
-  "git.workspaceChanges": "Workspace Changes"
+  "git.workspaceChanges": "Workspace Changes",
+  "git.settings.repositories": "Repositories and cloning",
+  "git.settings.commit": "Commit messages and behavior",
+  "git.settings.commitChecks": "Commit checks and signing",
+  "git.settings.branches": "Branches and worktrees",
+  "git.settings.sync": "Fetch, pull and push",
+  "git.settings.changes": "Changes, stashes and merging",
+  "git.settings.authentication": "Terminal and authentication",
+  "git.settings.environment": "Git environment and diagnostics",
+  "git.settings.presentation": "Source Control presentation"
 }

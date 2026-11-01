@@ -481,7 +481,13 @@
     "roles.openFailed": "无法打开 Agent 定义：{0}",
     "roles.verbosityInvalid": "Agent 定义无障碍详细程度必须为布尔值。",
     "roles.verbosityTitle": "Agent 定义无障碍帮助",
-    "roles.verbosityDescription": "提示如何打开 Agent 定义的无障碍帮助。"
+    "roles.verbosityDescription": "提示如何打开 Agent 定义的无障碍帮助。",
+    "sourceControl.gitChanges.label": "Git 更改",
+    "sourceControl.gitChanges.description": "设置 Git 文件状态、更改分组、计数和进度。",
+    "sourceControl.gitControls.label": "Git 操作控件",
+    "sourceControl.gitControls.description": "选择 Git 操作、提交输入框以及点击更改文件时打开的内容。",
+    "sourceControl.gitHistory.label": "Git 历史与行归属",
+    "sourceControl.gitHistory.description": "设置 Git 历史、文件时间线以及编辑器和状态栏中的行归属信息。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

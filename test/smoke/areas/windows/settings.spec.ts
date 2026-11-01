@@ -980,6 +980,9 @@ test.describe('Manage menu', () => {
 		await workbench.settingsEditor.selectCategory('source-control');
 		const quickDiffWhitespace = page.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]').getByRole('combobox');
 		await expect(quickDiffWhitespace).toHaveCSS('height', '24px');
+		await workbench.settingsEditor.selectGroup('extensions');
+		await workbench.settingsEditor.selectCategory('extension.ash.git');
+		await workbench.settingsEditor.selectCategory('extension.ash.git.group.git.sync');
 		const autoFetchPeriod = page.locator('[data-configuration-key="git.autofetchPeriod"]');
 		await expect(autoFetchPeriod).toHaveCSS('height', '24px');
 		await expect(autoFetchPeriod).toHaveCSS('width', '96px');
@@ -1000,7 +1003,7 @@ test.describe('Manage menu', () => {
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
 		const appearanceGroups = page.locator('.ash-settings-content-group:not(.is-settings-root)');
-		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText(['Color theme', 'Editor tips']);
+		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText(['Workbench Style', 'Color theme', 'Editor tips']);
 		for (const card of await appearanceGroups.locator('.ash-settings-card').all()) {
 			await expect(card).toHaveCSS('border-radius', '8px');
 		}
@@ -1012,15 +1015,8 @@ test.describe('Manage menu', () => {
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
 			await expect(setting).toHaveCSS('height', '68px');
 		}
-		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
-		await page.locator('[data-settings-category-id="layout"]').click();
 		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
 		await expect(layoutStyle).toBeVisible();
-		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
-			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
-			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
-		}
-		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		const modernWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(modernWidth).toBeDefined();
 		expect(modernWidth!).toBeLessThan(120);
@@ -1043,11 +1039,22 @@ test.describe('Manage menu', () => {
 		});
 		expect(fontSizes.option).toBe(fontSizes.trigger);
 		await page.getByRole('option', { name: 'Flat' }).click();
+		await expect(layoutStyle.getByRole('combobox')).toHaveText('Flat');
+		await expect(workbench.element).toHaveAttribute('data-layout-style', 'flat');
 		const flatWidth = (await layoutStyle.getByRole('combobox').boundingBox())?.width;
 		expect(flatWidth).toBeDefined();
-		expect(flatWidth!).toBeLessThan(modernWidth!);
+		// Both labels can fit inside the select's minimum width.
+		expect(flatWidth!).toBeLessThanOrEqual(modernWidth!);
 		await layoutStyle.getByRole('combobox').click();
 		await page.getByRole('option', { name: 'Modern' }).click();
+		await expect(workbench.element).toHaveAttribute('data-layout-style', 'modern');
+		await page.locator('[data-settings-category-id="layout"]').click();
+		await expect(page.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
+		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
+			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
+		}
+		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
 		if (target.kind === 'electron') {
 			await expect(page.locator('[data-configuration-key="window.zoomLevel"]')).toBeVisible();
 		} else {

@@ -8,6 +8,8 @@ export interface SettingsGroupDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
+	/** An explicit extension owner allows its settings to appear in the relevant product surface. */
+	readonly source?: string;
 	readonly settings: readonly string[];
 }
 
@@ -492,6 +494,27 @@ export const SettingsNavigation = [
 							'scm.graph.showOutgoingChanges',
 						],
 					},
+					{
+						id: 'git-changes',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitChanges.label' }, 'Git changes'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitChanges.description' }, 'Configure Git file status, change groups, counts, and progress.'),
+						source: 'ash.git',
+						settings: ['git.decorations.enabled', 'git.untrackedChanges', 'git.countBadge', 'git.alwaysShowStagedChangesResourceGroup', 'git.showProgress', 'git.optimisticUpdate'],
+					},
+					{
+						id: 'git-controls',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitControls.label' }, 'Git controls'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitControls.description' }, 'Choose Git actions, commit input, and what opens when selecting a changed file.'),
+						source: 'ash.git',
+						settings: ['git.openDiffOnClick', 'git.showInlineOpenFileAction', 'git.enableStatusBarSync', 'git.showCommitInput', 'git.showActionButton'],
+					},
+					{
+						id: 'git-history',
+						label: localize({ bundle: 'ash.settings', key: 'sourceControl.gitHistory.label' }, 'Git history and authorship'),
+						description: localize({ bundle: 'ash.settings', key: 'sourceControl.gitHistory.description' }, 'Configure Git history, file timelines, and line authorship in the editor and status bar.'),
+						source: 'ash.git',
+						settings: ['git.commitShortHashLength', 'git.blame.*', 'git.timeline.*'],
+					},
 				],
 			},
 			{
@@ -749,7 +772,7 @@ export const SettingsCategories: readonly SettingsCategoryDescriptor[] = Setting
 
 /** Projects registered configuration settings through the canonical layout. */
 export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
-	const remaining = new Map(settings.filter(setting => !setting.configuration.source).map(setting => [setting.id, setting]));
+	const remaining = new Map(settings.map(setting => [setting.id, setting]));
 	const categories: SettingsLayoutCategory[] = SettingsCategories.map(category => ({
 		descriptor: category,
 		id: category.id,
@@ -757,7 +780,7 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.map(group => {
 				// Each group applies the same rules to every remaining setting.
 				const patterns = group.settings.map(settingIdPattern);
-				const matches = [...remaining.values()].filter(setting => patterns.some(pattern => pattern.test(setting.id)));
+				const matches = [...remaining.values()].filter(setting => setting.configuration.source?.id === group.source && patterns.some(pattern => pattern.test(setting.id)));
 				for (const setting of matches) remaining.delete(setting.id);
 				return {
 					id: group.id,
@@ -769,12 +792,13 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 			.filter(group => group.settings.length > 0),
 	}));
 
-	if (remaining.size > 0) {
-		const ids = [...remaining.keys()].sort().join(', ');
+	const unplaced = [...remaining.values()].filter(setting => !setting.configuration.source);
+	if (unplaced.length > 0) {
+		const ids = unplaced.map(setting => setting.id).sort().join(', ');
 		throw new Error(`Registered settings are missing from settingsLayout.ts: ${ids}`);
 	}
 	const extensions = new Map<string, ISetting[]>();
-	for (const setting of settings) {
+	for (const setting of remaining.values()) {
 		const source = setting.configuration.source;
 		if (!source) continue;
 		const entries = extensions.get(source.id) ?? [];

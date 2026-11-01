@@ -690,6 +690,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 								description: 'Enable sample',
 								tags: ['preview'],
 							},
+							'git.showCommitInput': { type: 'boolean', default: true },
 							'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
 							'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
 							'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
@@ -709,6 +710,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 		defaults.all.map(setting => [setting.id, setting.valueType]),
 		[
 			['editor.sample.enabled', 'boolean'],
+			['git.showCommitInput', 'boolean'],
 			['sample.count', 'number'],
 			['sample.mode', 'select'],
 			['sample.text', 'text'],
@@ -727,6 +729,7 @@ test('Extension settings use catalog identities and standard schemas without a p
 	);
 	assert.equal(extension.descriptor.label, '示例扩展');
 	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
+	assert.equal(findSettingCategory(layout, 'git.showCommitInput'), extension.id, 'product placement requires the declared extension owner, not just a matching key');
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
@@ -762,10 +765,32 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	assert.deepEqual(
 		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
-			['extension.ash.git', 103],
+			['extension.ash.git', 82],
 			['extension.ash.markdown-language-features', 18],
 			['extension.ash.media-preview', 2],
 		],
+	);
+	const git = layout.find(category => category.id === 'extension.ash.git')!;
+	assert.deepEqual(git.groups.map(group => [group.id, group.title]), [
+		['git.repositories', '仓库与克隆'],
+		['git.commit', '提交说明与行为'],
+		['git.commitChecks', '提交检查与签名'],
+		['git.branches', '分支与工作树'],
+		['git.sync', '获取、拉取与推送'],
+		['git.changes', '更改、储藏与合并'],
+		['git.authentication', '终端与身份验证'],
+		['git.environment', 'Git 环境与诊断'],
+	]);
+	const sourceControl = layout.find(category => category.id === 'source-control')!;
+	assert.equal(sourceControl.groups.flatMap(group => group.settings).length, 21);
+	assert.equal(findSettingCategory(layout, 'git.openDiffOnClick'), sourceControl.id);
+	assert.equal(findSettingCategory(layout, 'git.blame.editorDecoration.enabled'), sourceControl.id);
+	assert.equal(findSettingCategory(layout, 'git.closeDiffOnOperation'), git.id);
+	assert.equal(findSettingCategory(layout, 'git.mergeEditor'), git.id);
+	assert.deepEqual(
+		layout.flatMap(category => category.groups.flatMap(group => group.settings.map(setting => setting.id))).sort(),
+		defaults.all.map(setting => setting.id).sort(),
+		'every registered setting has exactly one editing location',
 	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
@@ -778,6 +803,12 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	]);
 	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
 	tree.setChildren(settingsRootNodes(layout));
+	const gitToc = new TOCTreeModel(tree, () => [git.descriptor, sourceControl.descriptor]);
+	assert.equal([...gitToc.children[0].children!].length, 8);
+	tree.setQuery('@id:git.openDiffOnClick');
+	assert.deepEqual(gitToc.children.map(node => node.element.id), ['source-control']);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['git.openDiffOnClick']);
+	tree.setQuery('');
 	const toc = new TOCTreeModel(tree, () => [markdown.descriptor]);
 	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), [
 		'extension.ash.markdown-language-features.group.markdown',
@@ -3511,6 +3542,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(rebaseWhenSync, false);
 	assert.equal(rebaseControl.getAttribute('aria-checked'), 'false');
 	assert.equal(autoFetch, 'all');
+	root.querySelector<HTMLElement>('[data-settings-category-id="extension.ash.git"]')!.click();
+	root.querySelector<HTMLElement>('[data-settings-category-id="extension.ash.git.group.git.commitChecks"]')!.click();
+	assert.ok(root.querySelector('[data-settings-item-id="git.enableCommitSigning"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="git.autofetch"]'), null);
+	assert.equal(root.querySelector('[data-settings-item-id="git.showCommitInput"]'), null);
+	await preferences.openSettings({ section: 'source-control' });
+	assert.ok(root.querySelector('[data-settings-item-id="git.showCommitInput"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="git.enableCommitSigning"]'), null);
+	await preferences.openSettings({ query: '@id:git.openDiffOnClick' });
+	assert.equal(root.querySelectorAll('[data-settings-item-id="git.openDiffOnClick"]').length, 1);
+	assert.equal(root.querySelector('[data-settings-category-id="extension.ash.git"]'), null);
 
 	const extensionNodes = [
 		...parseExtensionManifest(
