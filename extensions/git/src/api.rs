@@ -315,14 +315,49 @@ impl Api {
         let _ = self
             .output
             .append_line(format!("[Git] {command}: {}", error.message));
+        // The current backend contract carries command diagnostics in its display
+        // message. Keep that envelope in the log, but summarize Git's own output.
+        let diagnostic = error
+            .message
+            .strip_prefix('`')
+            .and_then(|message| message.split_once("` failed with exit code "))
+            .and_then(|(command, failure)| {
+                let (_, stderr) = failure.split_once(": ")?;
+                (!stderr.trim().is_empty()).then_some((command, stderr))
+            });
+        let summary = diagnostic
+            .map_or(error.message.as_str(), |(_, stderr)| stderr)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("> husky"))
+            .map(|line| line.strip_prefix("error: ").unwrap_or(line))
+            .find(|line| !line.is_empty());
+        let message = summary.map_or_else(
+            || self.text("git.operationFailed", &[]),
+            |summary| self.text("git.commandFailed", &[summary]),
+        );
+        let mut buttons = vec![self.text("git.openGitLog", &[])];
+        if diagnostic.is_some() {
+            buttons.push(self.text("git.showCommandOutput", &[]));
+        }
         let choice = self.editor(
             json!({"method":"prompt","title":"Git","severity":"error",
-                "message":self.text("git.commandFailed", &[&error.message]),
-                "buttons":[self.text("git.openGitLog", &[])]}),
+                "message":message,"buttons":buttons}),
             Some(token),
         )?;
         if choice["selection"] == 0 {
             self.output.show()?;
+        } else if choice["selection"] == 1
+            && let Some((command, stderr)) = diagnostic
+        {
+            self.editor(
+                json!({"method":"open","input":{
+                    "resource":format!("git-output:/git-error-{}", crate::commands::random_id()?),
+                    "label":self.text("git.commandOutput", &[]),"languageId":"plaintext",
+                    "initialText":format!("> {command}\n{stderr}"),"readOnly":true
+                },"options":{"pinned":true}}),
+                Some(token),
+            )?;
         }
         Ok(())
     }

@@ -1027,19 +1027,58 @@ fn verify_remote_command_feedback(
     status: &Value,
     language: &str,
 ) {
+    let stderr = "\r\n> husky - pre-pull\r\nerror: From https://example.invalid/fixture\r\nhint: Synthetic transport failure\r\nfatal: Need to specify how to reconcile divergent branches.\r\n";
+    let diagnostic = format!(
+        "`/usr/bin/git pull --no-edit --tags -- origin refs/heads/main` failed with exit code Some(128): {stderr}"
+    );
     for command in ["git.fetchAll", "git.pull", "git.push"] {
-        // The same registered command must recover after failure and cancellation
-        // through the real extension process.
-        for failure in [Some("GitOperationFailed"), Some("RequestCancelled"), None] {
+        // Exercise both actions and dismissal through the registered command in
+        // the real extension process, then prove it recovers after cancellation.
+        for (failure, message, summary, selection) in [
+            (
+                Some("GitOperationFailed"),
+                "Synthetic transport failure",
+                "Synthetic transport failure",
+                Some(0),
+            ),
+            (
+                Some("GitOperationFailed"),
+                diagnostic.as_str(),
+                "From https://example.invalid/fixture",
+                Some(0),
+            ),
+            (
+                Some("GitOperationFailed"),
+                diagnostic.as_str(),
+                "From https://example.invalid/fixture",
+                Some(1),
+            ),
+            (
+                Some("GitOperationFailed"),
+                diagnostic.as_str(),
+                "From https://example.invalid/fixture",
+                None,
+            ),
+            (
+                Some("GitOperationFailed"),
+                "`git pull` failed with exit code Some(1): ",
+                "`git pull` failed with exit code Some(1):",
+                Some(0),
+            ),
+            (
+                Some("RequestCancelled"),
+                "Synthetic transport failure",
+                "",
+                None,
+            ),
+            (None, "", "", None),
+        ] {
             let before = supervisor.snapshot().output_events.len();
             let mut prompts = 0;
             let mut transports = 0;
+            let mut documents = 0;
             let result = supervisor
-                .begin_invoke(invocation(
-                    command,
-                    "execute",
-                    json!({"arguments":["root"]}),
-                ))
+                .begin_invoke(invocation(command, "execute", json!({"arguments":["root"]})))
                 .unwrap()
                 .wait_with_client(|operation, _, _| match operation {
                     Operation::BackendRequest { ref method, .. } if method == "runTransport" => {
@@ -1047,7 +1086,7 @@ fn verify_remote_command_feedback(
                         wait_for_sync_snapshot(client, true, false);
                         Ok(ResultValue::Value {
                             value: match failure {
-                                Some(name) => json!({"backendError":{"name":name,"message":format!("{name}: Synthetic transport failure")}}),
+                                Some(name) => json!({"backendError":{"name":name,"message":format!("{name}: {message}")}}),
                                 None => json!({"status":status,"outcome":{"kind":"completed"}}),
                             },
                         })
@@ -1060,15 +1099,27 @@ fn verify_remote_command_feedback(
                         assert_eq!(failure, Some("GitOperationFailed"));
                         assert_eq!(payload["title"], "Git");
                         assert_eq!(payload["severity"], "error");
-                        assert_eq!(payload["message"], if language == "zh-CN" {
-                            "Git 操作失败：Synthetic transport failure"
-                        } else {
-                            "Git operation failed: Synthetic transport failure"
-                        });
-                        assert_eq!(payload["buttons"], json!([if language == "zh-CN" { "打开 Git 日志" } else { "Open Git Log" }]));
+                        assert_eq!(payload["message"], format!("Git: {summary}"));
+                        let mut buttons = vec![if language == "zh-CN" { "打开 Git 日志" } else { "Open Git Log" }];
+                        if message == diagnostic {
+                            buttons.push(if language == "zh-CN" { "显示命令输出" } else { "Show Command Output" });
+                        }
+                        assert_eq!(payload["buttons"], json!(buttons));
                         let settled = wait_for_sync_snapshot(client, false, true);
-                        assert_eq!(settled["statusMessage"], "Synthetic transport failure");
-                        Ok(ResultValue::Value { value: json!({"selection":0}) })
+                        assert_eq!(settled["statusMessage"], message);
+                        Ok(ResultValue::Value { value: json!({"selection":selection}) })
+                    }
+                    Operation::EditorOperation { payload } if payload["method"] == "open" => {
+                        documents += 1;
+                        assert_eq!(selection, Some(1));
+                        let input = &payload["input"];
+                        assert!(input["resource"].as_str().unwrap().starts_with("git-output:/git-error-"));
+                        assert_eq!(input["initialText"], format!("> /usr/bin/git pull --no-edit --tags -- origin refs/heads/main\n{stderr}"));
+                        assert_eq!(input["label"], if language == "zh-CN" { "Git 命令输出" } else { "Git Command Output" });
+                        assert_eq!(input["languageId"], "plaintext");
+                        assert_eq!(input["readOnly"], true);
+                        assert_eq!(payload["options"]["pinned"], true);
+                        Ok(ResultValue::Value { value: Value::Null })
                     }
                     operation => client.request(operation),
                 })
@@ -1076,6 +1127,7 @@ fn verify_remote_command_feedback(
             assert_eq!(transports, 1, "{command}, {failure:?}");
             let failed = failure == Some("GitOperationFailed");
             assert_eq!(prompts, usize::from(failed), "{command}, {failure:?}");
+            assert_eq!(documents, usize::from(failed && selection == Some(1)));
             if failure.is_some() {
                 assert_eq!(
                     result.payload,
@@ -1092,11 +1144,11 @@ fn verify_remote_command_feedback(
                         host::HostOutputOperation::Show { .. }
                     ))
                     .count(),
-                usize::from(failed)
+                usize::from(failed && selection == Some(0))
             );
             if failed {
                 assert!(output[before..].iter().any(|event| matches!(&event.event.operation,
-                    host::HostOutputOperation::Append { text, .. } if text.contains(command) && text.contains("Synthetic transport failure"))));
+                    host::HostOutputOperation::Append { text, .. } if text.contains(command) && text.contains(message))));
             }
             wait_for_sync_snapshot(client, false, true);
         }
