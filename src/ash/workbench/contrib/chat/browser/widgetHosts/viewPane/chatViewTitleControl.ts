@@ -6,7 +6,7 @@ import { getFlatContextMenuActions } from '../../../../../../platform/actions/br
 import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import type { PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
-import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, h, isElement } from '../../../../../../base/browser/dom.js';
 
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -32,6 +32,8 @@ export class ChatViewTitleControl extends Disposable {
 	private readonly layoutToolbar: MenuWorkbenchToolBar;
 	private tabs: WorkbenchTabsControl<string> | undefined;
 	private tabsHost: HTMLElement | undefined;
+	private tabItems: readonly TabListItem<string>[] = [];
+	private getTabActions: ((id: string) => readonly IAction[]) | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -115,11 +117,17 @@ export class ChatViewTitleControl extends Disposable {
 	}
 
 	/** Shares editor tab presentation while the caller retains conversation identity and lifetime. */
-	setTabs(items: readonly TabListItem<string>[], activeId: string | undefined, options: TabListOptions<string> | undefined): void {
+	setTabs(items: readonly TabListItem<string>[], activeId: string | undefined, options: TabListOptions<string> | undefined, getActions?: (id: string) => readonly IAction[]): void {
+		this.tabItems = items;
+		this.getTabActions = options ? getActions : undefined;
 		if (options && !this.tabs) {
 			this.tabsHost = h(this.titleElement.ownerDocument, 'div', { className: 'ash-chat-view-tabs' });
 			this.titleElement.prepend(this.tabsHost);
 			this.tabs = this._register(this.instantiationService.createInstance(WorkbenchTabsControl<string>, this.tabsHost, options));
+			this._register(addDisposableListener(this.tabsHost, 'contextmenu', event => this.showTabContextMenu(event)));
+			this._register(addDisposableListener(this.tabsHost, 'keydown', event => {
+				if (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey) this.showTabContextMenu(event);
+			}));
 		}
 		const focusInTitle = this.titleElement.contains(this.titleElement.ownerDocument.activeElement);
 		this.titleButton.hidden = options !== undefined;
@@ -132,6 +140,28 @@ export class ChatViewTitleControl extends Disposable {
 				this.tabsHost?.querySelector<HTMLElement>('.ash-tab.checked .ash-tab-label')?.focus();
 			}
 		}
+	}
+
+	private showTabContextMenu(event: MouseEvent | KeyboardEvent): void {
+		if (!isElement(event.target) || !this.getTabActions) return;
+		const tab = event.target.closest<HTMLElement>('.ash-tab');
+		if (!tab || !this.tabsHost?.contains(tab)) return;
+		const item = this.tabItems.find(item => item.id === tab.dataset.actionId);
+		if (!item) return;
+		event.preventDefault();
+		event.stopPropagation();
+		// Capture the clicked tab's actions before a later activation can change the conversation.
+		const actions = this.getTabActions(item.value);
+		this.contextMenuService.showContextMenu({
+			cancellationToken: this.menuCancellation,
+			getAnchor: () => event.type === 'contextmenu'
+				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
+				: tab,
+			getActions: () => actions,
+			onHide: () => {
+				if (tab.isConnected && !this.tabsHost?.hidden) tab.querySelector<HTMLElement>('[role=tab]')?.focus();
+			},
+		});
 	}
 
 	private showTitleContextMenu(event: MouseEvent | KeyboardEvent): void {

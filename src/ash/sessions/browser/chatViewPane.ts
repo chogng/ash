@@ -36,6 +36,8 @@ import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import type { IAction } from '../../base/common/actions.js';
+import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 
 let chatPaneInstanceId = 0;
 
@@ -365,7 +367,10 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			} else {
 				pane.model.selectUntitledSession(untitledSession);
 			}
-			entries.push({ id: paneId, label: untitledSession.title.trim() || localize('chat.title.new', 'New Chat'), pane });
+			entries.push({
+				id: paneId, label: untitledSession.title.trim() || localize('chat.title.new', 'New Chat'), pane,
+				getActions: () => this.getSessionTabActions({ kind: 'untitled', session: untitledSession }),
+			});
 		}
 		for (const session of this.sessionService.sessions) {
 			if (session.status !== 'active') continue;
@@ -405,7 +410,10 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			}
 			const selectedThread = session.chats.find(chat => chat.threadId === selection.threadId);
 			const threadTitle = selectedThread?.origin.type !== 'root' ? selectedThread?.title : undefined;
-			entries.push({ id: paneId, label: threadTitle?.trim() || session.title.trim() || localize('chat.title.default', 'Chat'), pane });
+			entries.push({
+				id: paneId, label: threadTitle?.trim() || session.title.trim() || localize('chat.title.default', 'Chat'), pane,
+				getActions: () => this.getSessionTabActions({ kind: 'session', active: selection }),
+			});
 		}
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;
@@ -429,6 +437,25 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				return { ...entry, detached: { placeholder: popup.placeholder, titleId: popup.shell.title.id } };
 			}),
 		};
+	}
+
+	private getSessionTabActions(selection: SessionsViewSelection): readonly IAction[] {
+		const actions = createSessionItemActions(selection, this.commandService, this.storage, this.notifications, () => this.openInNewWindow(selection))
+			.filter(action => ['agentSession.rename', 'sessions.list.togglePin', 'sessions.openInNewWindow'].includes(action.id));
+		const rename = actions.find(action => action.id === 'agentSession.rename')!;
+		return [
+			rename,
+			{
+				id: ForkConversationActionId, label: localize('sessions.history.fork', 'Fork'), tooltip: '', enabled: selection.kind === 'session',
+				run: () => {
+					if (selection.kind !== 'session') return;
+					return this.commandService.executeCommand(ForkConversationActionId, {
+						sessionId: selection.active.session.sessionId, threadId: selection.active.threadId,
+					}).catch(error => this.notifications.error(String(error)));
+				},
+			},
+			...actions.filter(action => action !== rename),
+		];
 	}
 
 	private selectionForSession(session: ISession): IActiveSessionThread | undefined {

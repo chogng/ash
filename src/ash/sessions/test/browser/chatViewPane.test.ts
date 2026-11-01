@@ -5317,6 +5317,93 @@ test('Chat tabs retain independent drafts and closing only removes the opened pr
 	assert.equal(pane.element.querySelector('.ash-chat:not([hidden])')?.getAttribute('aria-labelledby'), title.querySelector('[role=tab][aria-selected=true]')?.id);
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Chat tab menu captures a background branch and restores keyboard focus (${locale})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			const f = await createNavigationInputPane();
+			using resources = f.resources;
+			f.sessions.selectThread('session-1', 'thread-2');
+			await nextTask();
+			const draft = f.sessions.createUntitledSession();
+			const title = chatTitleContent(f.pane);
+			const labels = title.querySelectorAll<HTMLButtonElement>('.ash-tab-label');
+			let menu: IContextMenuDelegate | undefined;
+			f.contextMenus.showContextMenu = value => { menu = value as IContextMenuDelegate; };
+			labels[0]!.dispatchEvent(new f.dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }));
+			assert.ok(menu);
+			assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
+			const actions = menu.getActions().filter(action => !(action instanceof Separator));
+			assert.deepEqual(actions.map(action => action.label), locale === 'en'
+				? ['Rename', 'Fork', 'Pin chat', 'Open in new window', 'Close', 'Close Others', 'Close to the Right', 'Close All', 'Chat Settings']
+				: ['重命名', '分叉', '置顶聊天', '在新窗口中打开', '关闭', '关闭其他', '关闭右侧', '全部关闭', '聊天设置']);
+			assert.equal(actions.find(action => action.id === ForkConversationActionId)?.enabled, true);
+			const calls: { id: string; args: readonly unknown[]; }[] = [];
+			f.commands.executeCommand = async <T>(id: string, ...args: readonly unknown[]): Promise<T> => {
+				calls.push({ id, args });
+				return undefined as T;
+			};
+			f.sessions.selectThread('session-1', 'thread-1');
+			for (const id of ['agentSession.rename', ForkConversationActionId, 'sessions.list.togglePin', 'workbench.action.chat.openSettings']) {
+				await actions.find(action => action.id === id)!.run();
+			}
+			assert.deepEqual(calls, [
+				{ id: 'agentSession.rename', args: ['session-1'] },
+				{ id: ForkConversationActionId, args: [{ sessionId: 'session-1', threadId: 'thread-2' }] },
+				{ id: 'sessions.list.togglePin', args: ['session-1'] },
+				{ id: 'workbench.action.chat.openSettings', args: [] },
+			]);
+			labels[1]!.focus();
+			labels[1]!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+			assert.equal(menu.getActions().find(action => action.id === ForkConversationActionId)?.enabled, false);
+			assert.equal(menu.getActions().find(action => action.id === 'chat.closeTabsToRight')?.enabled, false);
+			labels[1]!.blur();
+			menu.onHide?.(true);
+			assert.equal(f.dom.window.document.activeElement, labels[1]);
+			assert.equal(f.sessions.active?.threadId, 'thread-1');
+			assert.equal(f.fake.turnStartRequests.length, 0);
+		} finally { resetNlsResolver(); }
+	});
+}
+
+for (const command of ['chat.closeTab', 'chat.closeOtherTabs', 'chat.closeTabsToRight', 'chat.closeAllTabs'] as const) {
+	test(`Chat tab menu ${command} preserves sessions and unsent drafts`, async () => {
+		await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
+		const f = await createNavigationInputPane();
+		using resources = f.resources;
+		f.layout.hasFocus = () => false;
+		typeChatText(f.dom.window, f.input, 'Keep original draft');
+		await f.pane.captureActiveDraft();
+		const drafts = [f.sessions.createUntitledSession('Middle'), f.sessions.createUntitledSession('Right')];
+		const input = f.pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+		typeChatText(f.dom.window, input, 'Keep right draft');
+		const title = chatTitleContent(f.pane);
+		let menu: IContextMenuDelegate | undefined;
+		f.contextMenus.showContextMenu = value => { menu = value as IContextMenuDelegate; };
+		title.querySelectorAll<HTMLButtonElement>('.ash-tab-label')[1]!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true }));
+		assert.ok(menu);
+		await menu.getActions().find(action => action.id === command)!.run();
+		const saved = JSON.parse(f.storage.get('chat.viewState', StorageScope.WORKSPACE)!);
+		const middle = `untitled:${drafts[0]!.untitledSessionId}`;
+		const right = `untitled:${drafts[1]!.untitledSessionId}`;
+		assert.deepEqual(saved.opened, {
+			'chat.closeTab': ['session:session-1', right],
+			'chat.closeOtherTabs': [middle],
+			'chat.closeTabsToRight': ['session:session-1', middle],
+			'chat.closeAllTabs': [right],
+		}[command]);
+		if (command === 'chat.closeAllTabs') assert.equal(f.layout.isPartVisible('auxiliarybar'), false);
+		f.sessions.selectUntitledSession(drafts[1]!.untitledSessionId);
+		await waitFor(() => f.pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')?.value === 'Keep right draft');
+		f.sessions.selectThread('session-1', 'thread-1');
+		assert.equal(f.input.value, 'Keep original draft');
+		assert.equal(f.sessions.untitledSessions.length, 2);
+		assert.equal(f.fake.archiveRequests.length, 0);
+		assert.equal(f.fake.stopRequests.length, 0);
+		assert.equal(f.fake.turnStartRequests.length, 0);
+	});
+}
+
 for (const kind of ['session', 'untitled'] as const) {
 	for (const trigger of ['click', 'Delete'] as const) {
 		test(`Closing the last ${kind} Chat tab by ${trigger} hides the side bar and retains its draft`, async () => {

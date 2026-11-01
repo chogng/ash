@@ -26,6 +26,7 @@ import {
 	AgentSessionsPresentation,
 	AgentSessionsPresentationContext,
 	AgentSessionsSidebarVisibleContext,
+	OPEN_CHAT_SETTINGS_COMMAND_ID,
 } from '../../../common/chat.js';
 import { ChatConfiguration } from '../../../common/constants.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
@@ -34,6 +35,7 @@ import type { ChatContextAttachment, ChatImageCapture, IChatContextTarget } from
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import type { TabListOptions } from '../../../../../../base/browser/ui/tablist/tabList.js';
 import { onUnexpectedError } from '../../../../../../base/common/errors.js';
+import { Separator, type IAction } from '../../../../../../base/common/actions.js';
 import { ChatEditorInput } from '../editor/chatEditorInput.js';
 import { ChatViewTitleControl } from './chatViewTitleControl.js';
 
@@ -48,6 +50,8 @@ export interface IChatViewPaneEntry<TModel extends IChatWidgetModel> {
 	readonly id: string;
 	readonly label: string;
 	readonly pane: ChatWidget<TModel>;
+	/** Captures product actions for this conversation when its tab menu opens. */
+	readonly getActions?: () => readonly IAction[];
 	/** Borrowed mount and accessible title of a product-owned auxiliary window. */
 	readonly detached?: { readonly placeholder: HTMLElement; readonly titleId: string; readonly visible?: boolean; };
 }
@@ -540,12 +544,48 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			tabId: `${entry.pane.element.id}-tab`,
 			panelId: entry.detached?.placeholder.id ?? entry.pane.element.id,
 			closeActionTooltip: localize('chat.sessions.closeTab', 'Close session tab'),
-		})), this.activePane?.element.id, tabs ? this.tabsOptions : undefined);
+		})), this.activePane?.element.id, tabs ? this.tabsOptions : undefined, id => this.getTabActions(id));
 		for (const entry of entries) {
 			entry.pane.element.setAttribute('role', tabs ? 'tabpanel' : 'region');
 			entry.pane.setTabId(entry.detached?.titleId
 				?? (tabs ? `${entry.pane.element.id}-tab` : entry.pane === this.activePane ? this.titleControl.titleId : undefined));
 		}
+	}
+
+	private getTabActions(id: string): readonly IAction[] {
+		const entry = this.renderedPanes.find(entry => entry.id === id);
+		if (!entry) return [];
+		const ids = this.renderedPanes.map(entry => entry.id);
+		const others = ids.filter(candidate => candidate !== id);
+		const right = ids.slice(ids.indexOf(id) + 1);
+		const close = async (targets: readonly string[]): Promise<void> => {
+			for (const target of targets) await this.closePane(target);
+		};
+		return Separator.join([...(entry.getActions?.() ?? [])], [
+			{
+				id: 'chat.closeTab', label: localize({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'),
+				tooltip: '', enabled: true, run: () => close([id]),
+			},
+			{
+				id: 'chat.closeOtherTabs', label: localize({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Others'),
+				tooltip: '', enabled: others.length > 0, run: () => close(others),
+			},
+			{
+				id: 'chat.closeTabsToRight', label: localize({ bundle: 'ash', key: 'workbench.closeEditorsToTheRight' }, 'Close to the Right'),
+				tooltip: '', enabled: right.length > 0, run: () => close(right),
+			},
+			{
+				id: 'chat.closeAllTabs', label: localize({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All'),
+				tooltip: '', enabled: true, run: () => close(ids),
+			},
+		], [
+			{
+				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+				label: localize({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, 'Chat Settings'),
+				tooltip: '', enabled: true,
+				run: () => this.commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID),
+			},
+		]);
 	}
 
 	private async closePane(id: string): Promise<void> {
