@@ -36,7 +36,8 @@
 .ash-split-view-separator-border
 	> .ash-split-view-pane:not(:first-child)::before {
 	position: absolute;
-	z-index: 1;
+	/* Paint above pane tabs and scrollbars (1–3), below resize feedback (35). */
+	z-index: 4;
 	top: 0;
 	left: 0;
 	background-color: var(--ash-split-view-separator-border);
