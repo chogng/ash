@@ -1,4 +1,5 @@
 import { BuiltinDynamicCompletions } from './editor/chatInputCompletions.js';
+import { InputEditorDecorations } from './editor/chatInputEditorContrib.js';
 import { IChatSlashCommandService } from '../../../common/participants/chatSlashCommands.js';
 import { IChatService, type QueuedMessage } from '../../../../../services/chat/common/chatService.js';
 import type { IChatWidget } from '../../chat.js';
@@ -274,6 +275,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	// The toolbar owns the retained item; commands open it without synthesizing DOM events.
 	private modelPickerActionItem!: ModelPickerActionItem;
 	private modePickerActionItem: ModePickerActionItem | undefined;
+	private readonly inputDecorations: InputEditorDecorations | undefined;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
 	private readonly slashCommands: SlashCommandCatalog;
 	private readonly skills = new SkillSelectorCatalog();
@@ -406,6 +408,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel));
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
 		if (this.input.codeEditor) {
+			this.inputDecorations = this._register(new InputEditorDecorations(this.input.codeEditor,
+				() => this.visible && this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined));
 			this._register(instantiationService.createInstance(BuiltinDynamicCompletions, this.input, {
 				getAttachments: () => this.contexts,
 				getSessionId: () => this.state.conversation?.sessionId,
@@ -482,6 +486,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View ? this.canvasPills!.getAccessibleContent() : localize('canvas.pillHelp', 'Canvas buttons open interactive pages from this conversation. Use Tab to reach an Open Canvas or Close Canvas button, and Enter or Space to activate it. Close Canvas ends its page. Closing the editor tab only hides it; use its Canvas button or Open Canvas to reopen it. Canvas actions do not attach content to the message.'), () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 						provider.onDidChangeContent = this.canvasPills.onDidChangeContent;
 						return provider;
+					}
+					const agentPreview = focused?.closest<HTMLElement>('.ash-chat-agent-hover');
+					if (agentPreview && this.input.codeEditor && agentPreview.dataset.chatInputId === this.input.codeEditor.getId()) {
+						return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type },
+							() => type === AccessibleViewType.Help ? this.getAccessibilityHelpContent()
+								: [...agentPreview.children].map(element => element.textContent).join('\n'),
+							() => focused?.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 					}
 					const footerFocused = focused && (this.inputFooter?.contains(focused) || this.secondaryToolbarContainer?.contains(focused));
 					const changesFocused = focused && this.changesPill.domNode.contains(focused);
@@ -1150,6 +1161,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.inputDecorations?.update();
 		this.changesPill.setVisible(visible);
 		this.updateOnboardingHosts();
 		this.renderStatus();
@@ -1196,6 +1208,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.skillSelectors = state.skillSelectors;
 		}
 		this.state = state;
+		this.inputDecorations?.update();
 		this.updateOnboardingHosts();
 		this.conversation.set(state.conversation, undefined);
 		this.changesPill.render(state.changes, this.delegate.openChanges !== undefined, state.changesScope, state.changesError);
@@ -1710,7 +1723,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return () => !this.isDisposed && !lifetime.aborted && !this.state.aiDisabled;
 			}, () => {
 				this.renderToolbarActions();
-			});
+			}, () => this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined);
 		}
 		return new ChatInputButtonViewItem(action);
 	}

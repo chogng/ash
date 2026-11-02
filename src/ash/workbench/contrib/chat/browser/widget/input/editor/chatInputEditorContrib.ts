@@ -1,10 +1,45 @@
 import { addDisposableListener, stopEvent } from '../../../../../../../base/browser/dom.js';
-import { Disposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { registerEditorContribution, EditorContributionInstantiation } from '../../../../../../../editor/browser/editorFeatureRegistration.js';
 import type { ICodeEditor } from '../../../../../../../editor/browser/editorBrowser.js';
 import { EditorOption } from '../../../../../../../editor/common/config/editorOptions.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../../../editor/common/core/selection.js';
+import type { ChatAgent } from '../../../../../../services/chat/common/chatService.js';
+
+/** Projects references to the current Agent; selection and routing stay with the composer. */
+export class InputEditorDecorations extends Disposable {
+	private readonly decorations;
+
+	constructor(private readonly editor: ICodeEditor, private readonly getAgent: () => ChatAgent | undefined) {
+		super();
+		this.decorations = editor.createDecorationsCollection();
+		this._register(toDisposable(() => this.decorations.clear()));
+		this._register(editor.onDidChangeModel(() => this.update()));
+		this._register(editor.onDidChangeModelContent(() => this.update()));
+	}
+
+	public update(): void {
+		const model = this.editor.getModel();
+		const agent = this.getAgent();
+		const text = model?.getValue() ?? '';
+		const start = text.search(/\S/u);
+		const token = agent ? `@${agent.name}` : '';
+		const end = start + token.length;
+		if (!model || !agent || !text.startsWith(token, start) || end < text.length && !/\s/u.test(text[end]!)) {
+			this.decorations.clear();
+			return;
+		}
+		this.decorations.set([{
+			range: Range.fromPositions(model.getPositionAt(start), model.getPositionAt(end)),
+			options: {
+				description: 'chat-agent-reference',
+				// The empty projection borrows metadata without adding text or changing cursor positions.
+				before: { content: '', attachedData: agent },
+			},
+		}]);
+	}
+}
 
 /** Keeps immediate command removal in the input's existing edit and undo lifecycle. */
 class ChatTokenDeleter extends Disposable {

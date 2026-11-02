@@ -36,13 +36,17 @@ control／viewer 仍有底层差异：当前 AsyncDataTree 逐父节点刷新时
 
 host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerCharacterToken` 提供，`AgentHostInputCompletionsBase` 在读取当前模型版本后使用它：只查询 host 声明的触发词，行首斜杠命令可以继续补全参数；普通文字、邮箱中的 `@`、引用词后的空白和过期 snapshot 不发起 host 查询。注册、取消和附件状态继续由原输入及领域服务拥有。
 
+上下文补全也先核对捕获的模型版本，再通过同文件的 `computeCompletionRanges` 和 `getCompletionRangeWord` 区分光标前的查询与完整替换词，保留词后消息及已有分隔空格。范围工具不维护候选或草稿状态。host 结果目前受 App Server 的 command／skill／resource 领域契约约束；上游 chat 引用、配置动作等变体不能只在 Renderer 增加分支，须先有后端契约与实际 producer。
+
+`widget/chatAgentHover.ts / ChatAgentHover` 展示现有选中自定义 Agent 的名称与描述，不发布第二份 Agent 目录，也不展示内部目录标识。模式选择器使用原托管 Hover；输入开头的 `@名称` 与选中 Agent 精确匹配时，`editor/chatInputEditorContrib.ts / InputEditorDecorations` 借用同一对象投影引用，`ChatAgentHoverParticipant` 通过原编辑器 Hover 展示同一信息卡。引用文字保留在草稿中，不切换 Agent 或建立新的请求路由语义。键盘 hover、无障碍纯文本、Escape 焦点恢复及切换 Agent／模式、隐藏、释放均沿现有输入与 Hover 生命周期处理。
+
 当前 Ash 生产链的职责归位与上游全量功能覆盖分别记录。目录仍有以下上游差异，未创建无调用方入口：
 
 | 上游职责                                              | Ash 当前调用链                                                                                                                         |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `chatEditorInputContentProvider.ts` 的 URI 内容解析   | `ChatInputEditor` 直接创建并释放模型；现有输入没有外部 URI resolver／bulk-edit 消费者。                                                |
+| `chatEditorInputContentProvider.ts` 的 URI 内容解析   | `ChatInputEditor` 创建并释放模型；粘贴的 `BulkEditService` 直接借用匹配的嵌入模型及其撤销栈，没有外部 URI resolver 消费者。            |
 | `chatInputInlineSuggestions.ts`                       | 上游绑定 Copilot Chat provider 专属设置；Ash 没有该 provider，通用编辑器补全由原 Editor 层提供。                                       |
-| AgentHover、`editorHoverWrapper.ts` 和样式            | 上游处理正文中的 `@participant` 及其操作；Ash 的角色选择归原模式菜单，没有这种正文请求语义或 hover action producer。                   |
+| `editorHoverWrapper.ts` 和样式                        | Agent 信息卡已由原托管 Hover／编辑器 Hover 容器承载；没有扩展 participant 的 hover action producer，不另建并行容器。                   |
 | 内联附件的 prompt rebasing／selection projection 端口 | Ash 的引用标签已在原文本中；`ChatDynamicVariableModel` 拥有偏移和撤销，复制粘贴沿原 snapshot 处理，不建立隐藏 anchor 或第二份 prompt。 |
 
 `ChatInlineAttachments.refresh` 接收 Ash 现有引用快照及移除回调；`getPillReferences`、`openActivePill` 与 `layout` 分别服务输入字体／Tab 策略、Alt+Enter 和原输入布局。该公开输入形状适配 Ash 领域模型，不宣称与上游类型签名完全兼容。其余无消费者的补全匹配／排序 helper 也不单独导出。

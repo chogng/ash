@@ -9,7 +9,52 @@ import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipan
 import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../../../../nls.js';
 import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
+import type { ChatAgent } from '../../../../../../services/chat/common/chatService.js';
+import { ChatAgentHover } from '../../chatAgentHover.js';
 import '../../../attachments/chatAttachmentWidgets.css';
+
+/** Resolves only Agent references projected by this input's owning composer. */
+export class ChatAgentHoverParticipant implements IEditorHoverParticipant {
+	constructor(private readonly editor: ICodeEditor) { }
+
+	public computeSync(anchor: HoverAnchor): ChatAgentHoverPart[] {
+		return (this.editor.getModel()?.getDecorationsInRange(Range.fromPositions(anchor.position)) ?? [])
+			.filter(decoration => decoration.options.description === 'chat-agent-reference')
+			.map(decoration => new ChatAgentHoverPart(this, Range.lift(decoration.range),
+				decoration.options.before!.attachedData as ChatAgent));
+	}
+
+	public renderHoverParts(context: IEditorHoverRenderContext, parts: IHoverPart[]): IRenderedHoverParts {
+		const resources = new DisposableStore();
+		const part = parts.find((candidate): candidate is ChatAgentHoverPart => candidate instanceof ChatAgentHoverPart && candidate.owner === this)!;
+		const hover = new ChatAgentHover(context.container.ownerDocument);
+		hover.setAgent(part.agent);
+		hover.domNode.tabIndex = -1;
+		hover.domNode.dataset.chatInputId = this.editor.getId();
+		hover.domNode.setAttribute('role', 'group');
+		hover.domNode.setAttribute('aria-label', localize('chat.agentPicker.mode', 'Agent: {0}', part.agent.name));
+		context.container.append(hover.domNode);
+		resources.add(toDisposable(() => hover.domNode.remove()));
+		resources.add(this.editor.onDidChangeModelDecorations(() => {
+			if (!this.computeSync({ position: part.range.getStartPosition(), target: undefined, source: 'keyboard' })
+				.some(current => current.agent === part.agent && current.range.equalsRange(part.range))) {
+				context.hide();
+			}
+		}));
+		return Object.assign(resources, {
+			focus: () => hover.domNode.focus({ preventScroll: true }),
+			isUpdatingEditor: () => false,
+		});
+	}
+}
+
+export class ChatAgentHoverPart implements IHoverPart {
+	constructor(
+		public readonly owner: ChatAgentHoverParticipant,
+		public readonly range: Range,
+		public readonly agent: ChatAgent,
+	) { }
+}
 
 /** Reads image references from the input's existing decoration projection. */
 export class ChatAttachmentReferenceHoverParticipant implements IEditorHoverParticipant {
@@ -130,3 +175,4 @@ export class ChatAttachmentReferenceHoverPart implements IHoverPart {
 }
 
 onActivate(() => HoverParticipantRegistry.register(ChatAttachmentReferenceHoverParticipant));
+onActivate(() => HoverParticipantRegistry.register(ChatAgentHoverParticipant));

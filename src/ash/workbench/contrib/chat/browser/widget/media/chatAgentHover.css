@@ -1,0 +1,23 @@
+.ash-chat-agent-hover {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+	max-width: 100%;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-agent-hover > :is(h3, p) {
+	margin: 0;
+	white-space: pre-wrap;
+}
+
+.ash-chat-agent-hover-name {
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.stanza-editor-hover > .ash-chat-agent-hover {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}

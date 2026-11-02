@@ -51,7 +51,7 @@ const { ILanguageFeaturesService } = await import('../../../../../editor/common/
 const { CopyPasteController } = await import('../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js');
 const { ChatInputSessionLinkProvider } = await import('../../browser/widget/input/editor/chatInputSessionLinkProvider.js');
 const { buildOpenSessionLinkUri } = await import('../../../../../platform/agentHost/common/openSessionLink.js');
-const { createLanguageFeatureRequest } = await import('../../../../../editor/common/languages.js');
+const { createLanguageFeatureRequest, createLanguageCompletionInvokeContext } = await import('../../../../../editor/common/languages.js');
 const { SelectAllCommand } = await import('../../../../../editor/browser/editorExtensions.js');
 const { URI } = await import('../../../../../base/common/uri.js');
 const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
@@ -1640,6 +1640,22 @@ suite('Chat context completion browser behavior', () => {
 	});
 });
 
+
+test('Context completion ignores a retired snapshot instead of reading ranges from the replacement draft', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	fixture.editor.value = 'Read @notes';
+	const model = fixture.editor.getModel();
+	const request = {
+		requestId: 1, languageId: 'ash-chat-input', resource: model.uri,
+		position: model.getPositionAt(model.getValueLength()),
+		context: createLanguageCompletionInvokeContext(), snapshot: model.createVersionedSnapshot(),
+	};
+	fixture.editor.value = 'Replacement draft';
+	assert.equal(await fixture.provider.provideCompletions(request, new AbortController().signal), undefined);
+	assert.equal(fixture.editor.value, 'Replacement draft');
+	assert.equal(fixture.reads, 0);
+});
 
 test('Context completion replaces its whole token and reuses the separator before following text', async () => {
 	using resources = new DisposableStore();

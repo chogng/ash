@@ -152,6 +152,9 @@ declare global {
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
 		setInputReadOnly(readOnly: boolean): void;
+		setAgent(agent: ChatInputState['selectedAgent'], mode?: ChatInputState['mode']): void;
+		showAgentHover(): void;
+		agentHoverAccessibility(): { help?: string; content?: string; };
 		setCatalogError(message: string | undefined): void;
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
@@ -723,11 +726,12 @@ document.body.append(errorOutput);
 resources.add(notifications.model.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
 if (new URLSearchParams(location.search).has('contextHover') || new URLSearchParams(location.search).has('inlineCode')) {
-	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
+	const hover = services.has(IHoverService) ? services.get(IHoverService) : resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
 		contextMenuStyle: 'custom',
 		showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	}));
 	resources.add(setHoverDelegate(hover));
+	if (!services.has(IHoverService)) services.registerInstance(IHoverService, hover);
 }
 
 let workspaceChangesReads = 0;
@@ -953,6 +957,25 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	setAgent: (selectedAgent, mode = 'agent') => {
+		state = { ...state, selectedAgent, mode, canSelectAgent: true };
+		part.render(state);
+	},
+	showAgentHover: () => services.get(IHoverService).showManagedHover(document.activeElement as HTMLElement),
+	agentHoverAccessibility: () => {
+		const result: { help?: string; content?: string; } = {};
+		for (const entry of AccessibleViewRegistry.getImplementations()) {
+			if (!entry.name.startsWith('hover-')) continue;
+			const provider = entry.getProvider(services);
+			if (!provider) continue;
+			try {
+				result[entry.type === AccessibleViewType.Help ? 'help' : 'content'] = provider.provideContent();
+			} finally {
+				provider.dispose();
+			}
+		}
+		return result;
+	},
 	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
 	hostCompletionRequests: () => [...hostCompletionRequests],
 	setInputReadOnly: readOnly => inlineEditor!.setReadOnly(readOnly),

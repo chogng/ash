@@ -21,6 +21,7 @@ import { Position } from '../../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { matchedCharacterIndices, type SlashCommandCatalog } from '../../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../../common/skillSelectors.js';
+import { computeCompletionRanges, getCompletionRangeWord } from './chatInputCompletionUtils.js';
 
 export const CHAT_INPUT_LANGUAGE_ID = 'ash-chat-input';
 
@@ -165,18 +166,18 @@ export class BuiltinDynamicCompletions extends Disposable {
 			languageIds: [CHAT_INPUT_LANGUAGE_ID],
 			triggerCharacters: ['@', '#'],
 			provideCompletions: async (request, signal) => {
-				if (request.resource?.toString() !== model.uri.toString() || lifetime.signal.aborted) { return undefined; }
+				if (request.resource?.toString() !== model.uri.toString() || lifetime.signal.aborted
+					|| request.snapshot.version !== model.getVersionId()) { return undefined; }
 				const text = request.snapshot.getText();
 				const line = text.split('\n')[request.position.lineNumber - 1] ?? '';
-				const prefix = line.slice(0, request.position.column - 1);
-				const token = /(?:^|\s)([@#])([^\s@#]*)$/u.exec(prefix);
+				const ranges = computeCompletionRanges(model, request.position, /[@#][^\s@#]*/u, true);
+				const token = ranges && getCompletionRangeWord(ranges);
 				if (!token) { return emptyCompletionResult(); }
 				// The connected host owns resource capture and stale-draft admission when advertised.
-				if (hostCompletions.getTriggerCharacters(host.getSessionId()).includes(token[1]!)) return emptyCompletionResult();
-				const query = token[2]!;
-				const startColumn = prefix.length - query.length;
-				const suffix = line.slice(request.position.column - 1).match(/^[^\s]*/u)![0];
-				const endColumn = request.position.column + suffix.length;
+				if (hostCompletions.getTriggerCharacters(host.getSessionId()).includes(token[0]!)) return emptyCompletionResult();
+				const query = token.slice(1);
+				const startColumn = ranges!.replace.startColumn;
+				const endColumn = ranges!.replace.endColumn;
 				const separatorLength = /[ \t]/u.test(line[endColumn - 1] ?? '') ? 1 : 0;
 				const range = new Range(request.position.lineNumber, startColumn, request.position.lineNumber, endColumn + separatorLength);
 				const start = text.split('\n').slice(0, request.position.lineNumber - 1).reduce((sum, line) => sum + line.length + 1, 0) + startColumn - 1;
@@ -223,7 +224,7 @@ export class BuiltinDynamicCompletions extends Disposable {
 					items: candidates.slice(0, 50).map((candidate, index) => ({
 						id: candidate.key, label: candidate.name, kind: candidate.directory ? LanguageCompletionItemKind.Folder : LanguageCompletionItemKind.Reference,
 						detail: candidate.resource?.path, range, insertText: `${candidate.name} `,
-						filterText: `${token[1]}${query}`, preselect: index === 0, sortText: String(index).padStart(3, '0'),
+						filterText: token, preselect: index === 0, sortText: String(index).padStart(3, '0'),
 						command: { id: 'chat.attachContext', title: localize('chat.context.add', 'Add context'), arguments: [{ ...candidate, resource: candidate.resource?.toString(), start }] },
 					})),
 					isIncomplete: true,
