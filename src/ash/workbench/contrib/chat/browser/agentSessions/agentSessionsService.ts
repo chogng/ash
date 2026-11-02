@@ -1,33 +1,13 @@
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import type { IAction } from '../../../../../base/common/actions.js';
-import type { Event } from '../../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { IQuickPickItem, IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
+import type { URI } from '../../../../../base/common/uri.js';
+import type { IAgentSession, IAgentSessionsModel } from './agentSessionsModel.js';
 
-/** A host operation; the picker owns how its prompt is suspended and resumed. */
-export interface IAgentSessionPickerAction extends IAction {
-	readonly keepPickerOpen?: boolean;
-	/** An operation may return the identity to focus after a draft is materialized. */
-	run(): void | string | Promise<void | string>;
-}
-
-/** Presentation and borrowed operations, without exposing the host's Session implementation. */
-export interface IAgentSessionPickerItem extends IQuickPickItem {
-	readonly id: string;
-	open(): void | Promise<void>;
-	getActions(): readonly IAgentSessionPickerAction[];
-	getButtonAction(id: string): IAgentSessionPickerAction | undefined;
-}
-
-export interface IAgentSessionsPickerModel {
-	readonly onDidChange: Event<void>;
-	readonly items: readonly (IAgentSessionPickerItem | IQuickPickSeparator)[];
-}
-
-/** The host projects its catalog on demand; Workbench owns picker presentation. */
+/** The runtime supplies one catalog projection; Workbench owns its presentations. */
 export interface IAgentSessionsService {
-	readonly model: IAgentSessionsPickerModel;
+	readonly model: IAgentSessionsModel;
+	getSession(resource: URI): IAgentSession | undefined;
 }
 
 export const IAgentSessionsService = createServiceIdentifier<IAgentSessionsService>('agentSessions');

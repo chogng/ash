@@ -77,8 +77,10 @@ export class SessionActionsService implements IAgentSessionActionsService {
 	}
 
 	discardDraft(argument: unknown): boolean {
-		if (!isRecord(argument) || argument.kind !== 'untitled') return false;
-		const draftId = Reflect.get(argument.session ?? {}, 'untitledSessionId');
+		if (!isRecord(argument)) return false;
+		const canonical = Object.keys(argument).length === 1 && 'untitledSessionId' in argument;
+		if (!canonical && argument.kind !== 'untitled') return false;
+		const draftId = canonical ? argument.untitledSessionId : Reflect.get(argument.session ?? {}, 'untitledSessionId');
 		if (typeof draftId !== 'string') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		if (this.sessionsOwner.untitledSessions.some(session => session.untitledSessionId === draftId)) {
 			this.sessionsOwner.discardUntitledSession(draftId);

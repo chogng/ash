@@ -1,3 +1,4 @@
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { StatusbarService } from '../../../../browser/parts/statusbar/statusbarPart.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -42,6 +43,15 @@ import { INotificationsCenter } from '../../../../browser/parts/notifications/no
 import { AccessibilityWorkbenchSettingId } from '../../browser/accessibilityConfiguration.js';
 import '../../../../browser/parts/notifications/notificationAccessibleView.js';
 import '../../../codeEditor/browser/accessibility/accessibility.js';
+
+test('Agent Sessions verbosity remains available to Chat and workspace status help', async () => {
+	using configuration = new TestConfigurationService({ source: '{"accessibility.verbosity.agentSessions":false}' });
+	await configuration.reloadConfiguration();
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.AgentSessions), false);
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.Chat), true);
+	await configuration.updateValue(AccessibilityVerbositySettingId.AgentSessions, true);
+	assert.equal(configuration.getValue(AccessibilityVerbositySettingId.AgentSessions), true);
+});
 
 test('Explorer accessibility hint follows the verbosity setting', async () => {
 	using fixture = new AccessibleViewFixture();

@@ -4,6 +4,14 @@ Chat／Cowork 共用输入、响应组件和窗口服务。Session、Thread、Tu
 
 VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照 `f2d375b9623eb7245db28d3a7dab1c9fb3dddb0f`，后续参照 `3fd165bbb0d1dcafd9e3df36c3aa26474c6ecb85`。文件／公开成员差异用于定位真实消费者，不作为实现队列或兼容完成率。历史清单在 `.build/chat-alignment/inventory.json` 与 `report.html`，可恢复快照在 `.build/chat-alignment/chat-speech-validated-slices-20261013`；whole-file 快照可能包含当时共享工作区修改，不能盲目恢复。
 
+会话侧栏的帮助由 `actions/chatAccessibilityHelp.ts` 提供，在 `chat.shared.contribution.ts` 注册；侧栏 DOM owner 保有焦点作用域。`accessibility.verbosity.agentSessions` 的注册归无障碍配置 owner；它仍被 Sessions 工作区状态帮助消费，保留既有设置含义。历史选择器只向 Quick Input 提供条目和按钮，行布局与按钮显隐归 `platform/quickinput`。
+
+列表和历史选择器共用窗口的 `IAgentSessionsService.model`：`sessions` 提供 Session／草稿及其子 Thread，`onDidChangeSessions` 发布原 owner 的变化，`getSession(resource)` 在打开前重新查询捕获的资源。`ChatHistoryModel` 只投影现有 Session、分组和置顶状态，不保留第二份目录；列表按 Session 展示，历史选择器将子 Thread、归档分组和操作按钮投影为 Quick Input 条目。
+
+`AgentSessionsControl` 拥有 Tree、搜索、焦点、菜单和刷新调度，通过 `element` 暴露自身 DOM。`agentSessionsViewer.ts` 拥有目录投影、行渲染、无障碍与键盘标签及编辑器拖拽；草稿的可见说明、搜索与朗读共用同一描述。拖拽取消或来源释放时回收临时 editor input，成功交给编辑器后由编辑器接管。
+
+control／viewer 仍有底层差异：当前 AsyncDataTree 逐父节点刷新时拒绝跨分组复用同一 ID，因此行身份仍包含分组，重分组后由 control 恢复逻辑焦点。上游基于资源的身份要先闭合 Tree 的跨父节点更新；模板 renderer／list delegate 也要先迁移本地 Tree 的渲染端口。审批行、provider／已读状态、仓库分组及没有本地调用方的 reveal／批量选择端口仍待对应 owner 和真实入口就绪。
+
 ## 会话提交与运行摘要
 
 `browser/chatSessions/` 承接 Chat 的会话展示与输入生命周期：

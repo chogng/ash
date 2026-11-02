@@ -49,6 +49,7 @@ export const enum AccessibleViewProviderId {
 	ChatUsage = 'chatUsage',
 	AgentRolesSettings = 'agentRolesSettings',
 	ChatEditing = 'chatEditing',
+	PanelChat = 'panelChat',
 	SessionsChat = 'sessionsChat',
 	QuickChat = 'quickChat',
 	SessionsSettings = 'sessionsSettings',

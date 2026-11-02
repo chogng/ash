@@ -54,8 +54,11 @@ including Cowork, retain full-history behavior.
 Workbench `ChatViewPane` owns the Chat frame, active-widget projection, opened-tab
 order and close behavior, session-list layout, composer entrypoints and editor
 mount. The Workbench also owns layout actions, configuration and menus.
-Sessions `SessionChatViewPane` supplies the session catalog, retained conversation
-models, selection revision, draft persistence and auxiliary-window composition.
+Sessions `SessionChatViewPane` supplies retained conversation models, selection
+revision, draft persistence and auxiliary-window composition. `ChatHistoryModel`
+projects one window catalog through `IAgentSessionsService.model`; the list reads
+Session roots and history reads their child Threads. Both reopen captured resources
+through `getSession`, while the original Session owner retains all mutable state.
 Actions use
 `IChatViewPane` and `IChatSessionNavigationService` without importing Sessions
 implementations. IDE history commands and `AgentSessionsPicker` belong to Workbench;

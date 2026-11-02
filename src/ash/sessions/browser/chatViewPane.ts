@@ -3,7 +3,6 @@ import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/c
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
 import type { IQuickChatSession, IChatWidgetViewOptions } from '../../workbench/contrib/chat/browser/chat.js';
-import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
@@ -29,7 +28,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { createAgentSessionsModel, createSessionItemActions } from './agentSessionsModel.js';
+import { createSessionItemActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
@@ -83,7 +82,6 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@ISessionGroupsService groups: ISessionGroupsService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService editorGroups: IEditorGroupsService,
@@ -94,12 +92,21 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
-		this.initializeSessionsControl(createAgentSessionsModel(sessionService, storage, groups,
-			selection => createSessionItemActions(selection, commandService, storage, notifications, () => this.openInNewWindow(selection)), preserveFocus => {
-				const focusChat = !this.sessionsSideBySide || !preserveFocus;
-				this.hideSessionsAfterSelection();
-				if (focusChat) this.focus();
-			}), () => { this.sessionService.createUntitledSession(); });
+		this.initializeSessionsControl(() => { this.sessionService.createUntitledSession(); }, item => {
+			const target = item.target;
+			const selection = 'untitledSessionId' in target
+				? sessionService.untitledSessions.find(draft => draft.untitledSessionId === target.untitledSessionId)
+				: sessionService.sessions.find(session => session.sessionId === target.sessionId);
+			if (!selection) return [];
+			const captured: SessionsViewSelection = 'untitledSessionId' in selection
+				? { kind: 'untitled', session: selection }
+				: { kind: 'session', active: { session: selection, threadId: 'threadId' in target ? target.threadId! : selection.chats[0]!.threadId } };
+			return createSessionItemActions(captured, commandService, storage, notifications, () => this.openInNewWindow(captured));
+		}, preserveFocus => {
+			const focusChat = !this.sessionsSideBySide || !preserveFocus;
+			this.hideSessionsAfterSelection();
+			if (focusChat) this.focus();
+		});
 		const storedSelection = storage.get('chat.viewState', StorageScope.WORKSPACE);
 		const restored = this.restoreViewState(storedSelection);
 		this._register(sessionService.onDidChange(() => {

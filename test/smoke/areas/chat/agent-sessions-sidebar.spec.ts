@@ -1,5 +1,89 @@
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../../src/ash/workbench/contrib/chat/common/chat.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+
+test('Chat sessions help follows sidebar focus and returns to its invoking control', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+	const sidebar = page.locator('.ash-chat-sessions-sidebar');
+	const tree = sidebar.getByRole('tree', { name: 'Agent sessions', exact: true });
+	await expect(tree).toBeFocused();
+	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
+	await tree.press('Alt+F1');
+	await expect(help.getByRole('textbox')).toHaveValue(/Agent Sessions[\s\S]*Focus Agent Sessions/u);
+	await help.getByRole('textbox').press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(tree).toBeFocused();
+	const search = sidebar.getByRole('searchbox', { name: 'Search sessions', exact: true });
+	await search.focus();
+	await search.press('Alt+F1');
+	await expect(help).toBeVisible();
+	await help.getByRole('textbox').press('Escape');
+	await expect(help).toHaveCount(0);
+	await expect(search).toBeFocused();
+});
+
+test('Session list and history reopen the same retained draft catalog', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand(NEW_CHAT_COMMAND_ID);
+	await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+	const sidebar = page.locator('.ash-chat-sessions-sidebar');
+	const tree = sidebar.getByRole('tree', { name: 'Agent sessions', exact: true });
+	const firstDraft = tree.locator('[data-item^="draft:"]').first();
+	await expect(firstDraft).toBeVisible();
+	const firstId = (await firstDraft.getAttribute('data-item'))!.slice('draft:'.length);
+	await tree.locator(`[data-item="draft:${firstId}"]`).click();
+	const chat = page.locator('.ash-chat-view-pane .ash-chat-pane-host > .ash-chat:visible');
+	await expect(chat).toHaveAttribute('data-untitled-session-id', firstId);
+	const editor = new Editor(chat);
+	await editor.input.focus();
+	await editor.waitForTypeInEditor('Shared catalog draft A');
+	await workbench.quickaccess.runCommand(NEW_CHAT_COMMAND_ID);
+	await expect(chat).not.toHaveAttribute('data-untitled-session-id', firstId);
+	const secondId = (await chat.getAttribute('data-untitled-session-id'))!;
+	await editor.waitForEditorFocus();
+	await editor.waitForTypeInEditor('Shared catalog draft B');
+	await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+	await tree.locator(`[data-item="draft:${firstId}"]`).click();
+	await expect(chat).toHaveAttribute('data-untitled-session-id', firstId);
+	await editor.waitForEditorContents(text => text === 'Shared catalog draft A');
+	await workbench.quickaccess.runCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	const picker = page.locator('.ash-quick-pick');
+	// Both presentations retain the owner's newest-first draft order.
+	await picker.getByRole('option').first().click();
+	await expect(picker).toHaveCount(0);
+	await expect(chat).toHaveAttribute('data-untitled-session-id', secondId);
+	await editor.waitForEditorContents(text => text === 'Shared catalog draft B');
+	await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+	await tree.locator(`[data-item="draft:${firstId}"]`).click();
+	await expect(chat).toHaveAttribute('data-untitled-session-id', firstId);
+	await editor.waitForEditorContents(text => text === 'Shared catalog draft A');
+});
+
+test('A Session list row transfers its retained draft to the editor', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand(NEW_CHAT_COMMAND_ID);
+	const chat = page.locator('.ash-chat-view-pane .ash-chat-pane-host > .ash-chat:visible');
+	const input = new Editor(chat);
+	await input.input.focus();
+	await input.waitForTypeInEditor('Draft from the Session list');
+	const draftId = await chat.getAttribute('data-untitled-session-id');
+	const originalInput = await input.element.elementHandle();
+	try {
+		await workbench.quickaccess.runCommand(NEW_CHAT_COMMAND_ID);
+		await input.waitForEditorFocus();
+		await input.waitForTypeInEditor('Keep the sidebar conversation');
+		await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+		const row = page.locator(`.ash-chat-sessions-sidebar [data-item="draft:${draftId}"]`);
+		await row.dragTo(page.locator('[data-part="editor"] .ash-tab').first(), { targetPosition: { x: 8, y: 12 } });
+		const editor = new Editor(page.locator(`.ash-chat-editor .ash-chat[data-untitled-session-id="${draftId}"]`));
+		await editor.waitForEditorContents(text => text === 'Draft from the Session list');
+		expect(await editor.element.evaluate((element, retained) => element === retained, originalInput)).toBe(true);
+		await input.waitForEditorContents(text => text === 'Keep the sidebar conversation');
+	} finally {
+		await originalInput?.dispose();
+	}
+});
 
 for (const presentation of ['Tabs', 'List']) {
 	test(`Sessions button expands a narrow ${presentation} Chat into two retained columns`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench }, testInfo) => {
@@ -68,7 +152,7 @@ test('Sessions shared Tree switches retained drafts, searches and pins the captu
 	const firstId = await currentChat.getAttribute('data-untitled-session-id');
 	const originalEditor = await input.element.elementHandle();
 	expect(firstId).toBeTruthy();
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	await input.waitForEditorFocus();
 	await input.waitForTypeInEditor('Tree draft B');
 	const secondId = await currentChat.getAttribute('data-untitled-session-id');

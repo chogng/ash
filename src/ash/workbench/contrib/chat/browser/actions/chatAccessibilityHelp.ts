@@ -1,5 +1,47 @@
+import { getActiveElement, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { CHAT_VIEW_ID } from '../../common/chat.js';
+import type { IChatViewPane } from '../chat.js';
 import { localize } from '../../../../../nls.js';
 import { getChatInputNoticeHelp } from '../widget/input/notices/chatInputNoticeWidget.js';
+
+/** Chat help borrows the focused sidebar and returns to its live view when a row was replaced. */
+export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation {
+	public readonly priority = 100;
+	public readonly name = 'panelChat';
+	public readonly type = AccessibleViewType.Help;
+	public readonly when = ContextKeyExpr.has('agentSessionsSidebarFocused');
+
+	public getProvider(accessor: ServicesAccessor): AccessibleContentProvider | undefined {
+		const view = accessor.get(IViewsService).getViewWithId<IChatViewPane>(CHAT_VIEW_ID);
+		if (!view) return undefined;
+		const focusTarget = getActiveElement(view.element.ownerDocument);
+		if (!isHTMLElement(focusTarget) || !view.element.contains(focusTarget)
+			|| !accessor.get(IContextKeyService).contextMatchesRules(this.when, focusTarget)) {
+			return undefined;
+		}
+		return new AccessibleContentProvider(
+			AccessibleViewProviderId.PanelChat,
+			{ type: AccessibleViewType.Help },
+			() => [
+				localize('chat.sessions.help', 'Agent Sessions\nUse Tab and Shift+Tab to reach New Session, search and the sessions tree. Type in Search sessions to filter the list. In the tree, Up and Down move focus, Left and Right collapse or expand a section, and Home and End move to the first or last row. Enter opens a session and focuses Chat. Space opens a session while keeping focus in a side-by-side list. Tab from a focused session reaches More actions; Shift+F10 opens its menu. A stacked list closes when a session opens; a side-by-side list stays open. Escape closes the list and returns to Chat. The input stays visible for both new chats and existing conversations. Hover or focus a session to reveal More actions, or press Shift+F10 to open its menu. Organizing keeps the unsent draft. In Chat More Actions, Session display switches between Tabs and List. Tabs show opened sessions; the list and history remain available for all sessions. In either display mode, the Sessions button docks the list beside Chat, including an already visible stacked list. It widens the hosting side bar when needed. Using the Sessions button to close it restores the previous width. On the tab row, Left and Right move focus, Enter or Space activates a tab, and Delete closes it. Closing a tab keeps the session, draft and running work. In List mode, Chat automatically opens the sessions sidebar when there is room for both columns. Narrower Chat areas show the list above the input. Drag the separator past its minimum-width threshold to keep sessions stacked above Chat, even after widening the window. In the Command Palette, Show Agent Sessions Sidebar restores side-by-side layout; Stack Agent Sessions Above Chat switches to stacked layout. Resizing preserves focus and drafts, and a manually closed list stays closed. Switching display modes preserves your conversations and drafts.'),
+				localize('chat.sessions.editorTabMenuHelp', 'Right-click a conversation tab or press Shift+F10 to rename, fork, pin, move it to the editor area, open it in a new window, close tabs, or open Chat settings. In Tabs mode, drag an individual Chat tab to the editor tab bar or editor area and drag it back onto the Chat tab row. The same composer, draft and running work are retained. On an editor tab, Shift+F10 offers Move Chat to Side Bar. In Tabs and List modes, drag a session from the sessions tree into the editor tab bar, or choose Open in Editor from its menu. The editor title New Chat button starts a new conversation in that same editor group and keeps the old conversation and draft in history. Use Refresh Sessions to reload the catalog, Search sessions to focus search, Filter Sessions to show all sessions, in-progress sessions, drafts or pinned sessions, and Toggle Session Layout to switch placement. The menu targets that tab without switching conversations. Fork is unavailable for unsent drafts. Escape closes the menu and returns focus to the tab.'),
+				localize('chat.sessions.focusHelp', 'In the Command Palette, run {0} to focus the session list without changing the active conversation.', localize('chat.focusAgentSessionsViewer.label', 'Focus Agent Sessions')),
+			].join('\n'),
+			() => {
+				if (!view.element.isConnected) return;
+				if (focusTarget.isConnected) focusTarget.focus();
+				else if (!view.focusSessions()) view.focusInput();
+			},
+			AccessibilityVerbositySettingId.AgentSessions,
+		);
+	}
+}
 
 /** Shared input operations; product composers append their own layout and session help. */
 export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryToolbarVisible: boolean, slashCommands: boolean): string {

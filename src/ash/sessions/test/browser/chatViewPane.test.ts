@@ -5,7 +5,7 @@ import { IVoiceModeOnboardingService } from '../../../workbench/contrib/agentsVo
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
-import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { TestViewDescriptorService } from '../../../workbench/test/browser/workbenchTestServices.js';
 import { ChatEditor } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
@@ -13,8 +13,8 @@ import { DraggedEditorIdentifier } from '../../../workbench/browser/parts/editor
 import { LocalSelectionTransfer } from '../../../platform/dnd/browser/dnd.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
-import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
@@ -22,8 +22,8 @@ import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
-import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
-import { createAppServerAgentSessionService, createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { IAgentVoiceService, IAgentHostInputCompletionService } from '../../../platform/agentHost/common/agentService.js';
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createDisconnectedAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/models/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -49,7 +49,7 @@ import { LanguageModelsConfigurationService as CoworkModelPreferencesService } f
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { AccessibleViewType } from '../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../platform/accessibility/browser/accessibleView.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
@@ -137,7 +137,7 @@ import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../
 import { URI } from '../../../base/common/uri.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { IOpenerService, OpenOptions } from '../../../platform/opener/common/opener.js';
+import { IOpenerService, type OpenOptions } from '../../../platform/opener/common/opener.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -192,11 +192,38 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	// The editor parent contains product descriptors, but the host boundary belongs to this scope.
 	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 	services.registerInstance(IAgentVoiceService, undefined);
+	services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
 	return services;
 }
+function createSessionChatViewPane(...args: ConstructorParameters<typeof SessionChatViewPane>): InstanceType<typeof SessionChatViewPane> {
+	const services = inputResources.add(args[12].createChild());
+	services.registerInstance(IChatService, args[2]);
+	services.registerInstance(ISessionsManagementService, args[3]);
+	services.registerInstance(IMenuService, args[4]);
+	services.registerInstance(IContextMenuService, args[5]);
+	services.registerInstance(IContextViewService, args[6]);
+	services.registerInstance(ICommandService, args[7]);
+	services.registerInstance(IWorkbenchLayoutService, args[8]);
+	services.registerInstance(IFileService, args[9]);
+	services.registerInstance(IAccessibleViewService, args[10]);
+	services.registerInstance(INotificationService, args[11]);
+	services.registerInstance(IConfigurationService, args[13]);
+	services.registerInstance(IStorageService, args[14]);
+	services.registerInstance(ILifecycleService, args[15]);
+	services.registerInstance(IAuxiliaryWindowService, args[16]);
+	services.registerInstance(IContextKeyService, args[17]);
+	services.registerInstance(IEditorGroupsService, args[18]);
+	if (args[19]) services.registerInstance(IOpenerService, args[19]);
+	if (args[20]) services.registerInstance(IEditorService, args[20]);
+	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(IAgentSessionsService, () => services.createInstance(descriptor));
+	return services.createInstance(SessionChatViewPane, args[0], args[1]);
+}
+
 function createChatListWidget(container: HTMLElement, options: ConstructorParameters<typeof ChatListWidget>[1] = {}): InstanceType<typeof ChatListWidget> {
 	const services = inputResources.add(createTestEditorServices(undefined, createCodeEditorServices(inputResources)));
 	services.registerInstance(IAgentThreadService, createDisconnectedAgentThreadService(async operation => { throw new Error(operation); }));
@@ -350,7 +377,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 		const menuService = new MenuService(commands, contextKeys);
 		const contextMenuService = { showContextMenu: () => undefined } as unknown as IContextMenuService;
 		const paneChat = createChatService(fake.api);
-		using pane = new SessionChatViewPane(
+		using pane = createSessionChatViewPane(
 			dom.window.document.body,
 			{ id: CHAT_VIEW_ID, title: 'Chat' },
 			paneChat,
@@ -363,7 +390,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -425,12 +452,12 @@ test('Quick Chat retains its independent composer through hide, materialization 
 		onDidLayoutActiveContainer: Event.None,
 		onDidChangeActiveContainer: Event.None,
 	} as IWorkbenchLayoutService;
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		services.get(IMenuService), services.get(IContextMenuService), contextView, services.get(ICommandService),
 		layout, unavailableFileService, unavailableAccessibleViewService, notifications,
 		services, services.get(IConfigurationService), services.get(IStorageService), testLifecycle,
-		{ groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, services.get(IContextKeyService), emptyEditorGroupsService,
+		unavailableAuxiliaryWindows, services.get(IContextKeyService), emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
@@ -538,11 +565,11 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 	using chat = createChatService(fake.api);
 	const services = createInputServices(contextView, chat);
 	const menus = services.get(IMenuService);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menus, services.get(IContextMenuService), contextView, services.get(ICommandService),
 		testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		services, services.get(IConfigurationService), services.get(IStorageService), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, services.get(IContextKeyService), emptyEditorGroupsService,
+		services, services.get(IConfigurationService), services.get(IStorageService), testLifecycle, unavailableAuxiliaryWindows, services.get(IContextKeyService), emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
@@ -638,6 +665,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(ISessionsManagementService, sessions);
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
+	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
@@ -658,7 +686,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	} as unknown as IViewsService);
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(INotificationService, notifications);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
@@ -674,7 +702,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, storage, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, storage, testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, 'div');
@@ -1608,7 +1636,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
 	const paneChat = createChatService(api);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
@@ -1627,7 +1655,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1738,7 +1766,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
 	const paneChat = createChatService(fake.api);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
@@ -1757,7 +1785,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1812,7 +1840,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
 	const paneChat = createChatService(fake.api);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
@@ -1831,7 +1859,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1899,7 +1927,7 @@ test('one Session retains one Chat pane while its selected Thread changes', asyn
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
 	const paneChat = createChatService(api);
-	using pane = new SessionChatViewPane(
+	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
@@ -1918,7 +1946,7 @@ test('one Session retains one Chat pane while its selected Thread changes', asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
+		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1976,6 +2004,7 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
+	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IViewsService, {
 		openView: async () => undefined,
@@ -2055,6 +2084,7 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 			const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 			services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
+			services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 			services.registerInstance(IConfigurationService, configuration);
 			services.registerInstance(IStorageService, storage);
 			services.registerInstance(IViewsService, {} as IViewsService);
@@ -2101,7 +2131,7 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			assert.equal(draftActions.find(action => action.id === 'fork')?.enabled, false);
 			menu!.onHide?.(false);
 			await draftActions.find(action => action.id === 'delete')!.run();
-			assert.deepEqual(calls.at(-1), { id: 'agentSession.delete', target: { kind: 'untitled', session: draft } });
+			assert.deepEqual(calls.at(-1), { id: 'agentSession.delete', target: { untitledSessionId: draft.untitledSessionId } });
 			assert.equal(picker.value, 'Keep search');
 			picker.hide();
 			await picking;
@@ -5141,6 +5171,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const viewServices = resources.add(inputServices.createChild());
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessions);
+	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1]));
 	viewServices.registerInstance(ICommandService, commands);
 	viewServices.registerInstance(IWorkbenchLayoutService, layout);
 	viewServices.registerInstance(IFileService, configurationFiles ?? configuration.fileService);
@@ -5157,7 +5188,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	resources.add(pane);
 	resources.add(auxiliaryWindows);
 	inputServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
-	commandServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
+	commandServices.registerInstance(IViewsService, { openView: async () => pane, getViewWithId: () => pane } as unknown as IViewsService);
 	dom.window.document.body.append(pane.element);
 	if (!initialization) await sessions.initialize();
 	await nextTask();
@@ -5218,9 +5249,20 @@ for (const locale of ['en', 'zh-CN']) test(`Focus Agent Sessions opens the list 
 		assert.equal(sidebar.hidden, false);
 		assert.equal(dom.window.document.activeElement, sidebar.querySelector('[role=tree]'));
 		assert.equal(sessions.active, before);
-		const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'agentSessionsHelp')!.getProvider({} as ServicesAccessor)!;
+		const implementation = AccessibleViewRegistry.getImplementations().find(provider => provider.name === 'panelChat')!;
+		const tree = sidebar.querySelector<HTMLElement>('[role=tree]')!;
+		const contextKeys = fixture.commandServices.get(IContextKeyService);
+		assert.equal(contextKeys.contextMatchesRules(implementation.when, tree), true);
+		const help = fixture.commandServices.invokeFunction(accessor => implementation.getProvider(accessor))!;
+		assert.equal(help.id, AccessibleViewProviderId.PanelChat);
+		assert.equal(help.verbositySettingKey, AccessibilityVerbositySettingId.AgentSessions);
 		assert.match(help.provideContent(), locale === 'en' ? /Focus Agent Sessions/u : /聚焦代理会话/u);
+		input.focus();
+		help.dispose();
+		assert.equal(dom.window.document.activeElement, tree);
 		pane.focusInput();
+		assert.equal(contextKeys.contextMatchesRules(implementation.when, input), false);
+		assert.equal(fixture.commandServices.invokeFunction(accessor => implementation.getProvider(accessor)), undefined);
 		assert.equal(dom.window.document.activeElement, input);
 		assert.equal(input.value, 'Keep the focus command draft');
 		assert.equal(fixture.fake.turnStartRequests.length, 0);
@@ -6429,9 +6471,9 @@ for (const navigate of [false, true]) {
 		const menu = new MenuService(commands, contextKeys);
 		const contextMenus = { showContextMenu: () => { }, hideContextMenu: () => { } } as unknown as IContextMenuService;
 		const chat = resources.add(createChatService(fake.api));
-		const pane = resources.add(new SessionChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
+		const pane = resources.add(createSessionChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;

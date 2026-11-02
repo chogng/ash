@@ -6,9 +6,86 @@ import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
-import type { AsyncTreeDataSource } from '../../../../../base/browser/ui/tree/tree.js';
+import type { AsyncTreeDataSource, TreeDragAndDrop, TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
+import type { ListAccessibilityProvider } from '../../../../../base/browser/ui/list/list.js';
+import type { CompressibleKeyboardNavigationLabelProvider } from '../../../../../base/browser/ui/tree/objectTree.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
-import { isAgentSessionSection, type AgentSessionListItem, type IAgentSessionListItem, type IAgentSessionsModel, type IAgentSessionSection } from './agentSessionsModel.js';
+import { isAgentSessionSection, type IAgentSession, type IAgentSessionsModel, type IAgentSessionSection } from './agentSessionsModel.js';
+import { LocalSelectionTransfer } from '../../../../../platform/dnd/browser/dnd.js';
+import { DraggedEditorIdentifier } from '../../../../browser/parts/editor/editorTabDragAndDrop.js';
+import { EditorInput } from '../../../../common/editor/editorInput.js';
+
+export type AgentSessionListItem = IAgentSession | IAgentSessionSection;
+
+function sessionLabel(item: AgentSessionListItem): string {
+	return item.label || (item.kind === 'draft'
+		? localize('chat.sessions.new', 'New Session')
+		: localize('chat.sessions.untitled', 'Untitled session'));
+}
+
+function sessionDescription(item: IAgentSession): string {
+	return item.kind === 'draft' ? localize('chat.sessions.draft', 'Draft') : item.description;
+}
+
+/** Search, keyboard navigation and screen readers describe the same rendered row. */
+export class AgentSessionsAccessibilityProvider implements ListAccessibilityProvider<AgentSessionListItem> {
+	getWidgetAriaLabel(): string {
+		return localize('chat.sessions.sidebar', 'Agent sessions');
+	}
+
+	getAriaLabel(item: AgentSessionListItem): string {
+		if (isAgentSessionSection(item)) return item.label;
+		const description = sessionDescription(item);
+		return description ? localize('chat.sessions.rowLabel', '{0}, {1}', sessionLabel(item), description) : sessionLabel(item);
+	}
+}
+
+export class AgentSessionsKeyboardNavigationLabelProvider implements CompressibleKeyboardNavigationLabelProvider<AgentSessionListItem> {
+	getKeyboardNavigationLabel(item: AgentSessionListItem): string {
+		return sessionLabel(item);
+	}
+
+	getCompressedNodeKeyboardNavigationLabel(items: readonly AgentSessionListItem[]): string {
+		return items.map(item => sessionLabel(item)).join(' / ');
+	}
+}
+
+/** The source owns a temporary input until an editor drop consumes its transfer. */
+export class AgentSessionsDragAndDrop extends Disposable implements TreeDragAndDrop<AgentSessionListItem> {
+	private draggedEditor: DraggedEditorIdentifier | undefined;
+
+	getDragURI(item: AgentSessionListItem): string | undefined {
+		return !isAgentSessionSection(item) && item.getEditorInput ? item.resource.toString() : undefined;
+	}
+
+	onDragStart(data: TreeDragData<AgentSessionListItem>, event: DragEvent): void {
+		this.onDragEnd();
+		const item = data.elements[0];
+		if (!item || isAgentSessionSection(item)) return;
+		const input = item.getEditorInput?.();
+		if (!input) return;
+		this.draggedEditor = new DraggedEditorIdentifier(undefined, input);
+		LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>().setData([this.draggedEditor], DraggedEditorIdentifier.prototype);
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+	}
+
+	onDragOver(): boolean { return false; }
+	drop(): void { }
+
+	onDragEnd(): void {
+		const transfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+		if (this.draggedEditor && transfer.getData(DraggedEditorIdentifier.prototype)?.[0] === this.draggedEditor) {
+			transfer.clearData(DraggedEditorIdentifier.prototype);
+			if (this.draggedEditor.input instanceof EditorInput) this.draggedEditor.input.dispose();
+		}
+		this.draggedEditor = undefined;
+	}
+
+	override dispose(): void {
+		this.onDragEnd();
+		super.dispose();
+	}
+}
 
 /** Formats a provider's per-chat timestamp without assigning a time to unknown activity. */
 export function sessionDateFromNow(sessionTime: number, appendAgoLabel = false): string {
@@ -27,15 +104,15 @@ export function sessionDateFromNow(sessionTime: number, appendAgoLabel = false):
 	return new Intl.NumberFormat(getNLSLanguage(), { style: 'unit', unit, unitDisplay: 'short' }).format(amount);
 }
 
-export function agentSessionSectionId(item: IAgentSessionListItem): string {
-	if (item.pinned) return 'pinned';
+export function agentSessionSectionId(item: IAgentSession): string {
+	if (item.isPinned()) return 'pinned';
 	if (item.kind === 'draft') return 'drafts';
 	return item.group ? `group:${item.group.sectionId}` : 'sessions';
 }
 
 /** Groups the current model snapshot without owning session or selection state. */
 export class AgentSessionsDataSource implements AsyncTreeDataSource<IAgentSessionsModel, AgentSessionListItem> {
-	constructor(private readonly query: () => string, private readonly include: (item: IAgentSessionListItem) => boolean = () => true) { }
+	constructor(private readonly query: () => string, private readonly include: (item: IAgentSession) => boolean = () => true) { }
 
 	public hasChildren(element: IAgentSessionsModel | AgentSessionListItem): boolean {
 		return !('kind' in element) || isAgentSessionSection(element);
@@ -44,13 +121,15 @@ export class AgentSessionsDataSource implements AsyncTreeDataSource<IAgentSessio
 	public getChildren(element: IAgentSessionsModel | AgentSessionListItem): Iterable<AgentSessionListItem> {
 		if ('kind' in element) return isAgentSessionSection(element) ? element.items : [];
 		const query = this.query().trim().toLocaleLowerCase();
-		const groups = new Map<string, { label: string; items: IAgentSessionListItem[]; }>();
-		for (const item of element.items) {
-			if (!this.include(item)) continue;
-			if (query && !item.title.toLocaleLowerCase().includes(query) && !item.description.toLocaleLowerCase().includes(query)) continue;
+		const groups = new Map<string, { label: string; items: IAgentSession[]; }>();
+		for (const item of element.sessions) {
+			if (item.isArchived() || !this.include(item)) continue;
+			const label = sessionLabel(item);
+			const description = sessionDescription(item);
+			if (query && !label.toLocaleLowerCase().includes(query) && !description.toLocaleLowerCase().includes(query)) continue;
 			const id = agentSessionSectionId(item);
-			const label = item.pinned ? localize('sessions.list.pinned', 'Pinned') : item.kind === 'draft' ? localize('chat.sessions.drafts', 'Drafts') : item.group?.name ?? localize('chat.sessions.sessions', 'Sessions');
-			if (!groups.has(id)) groups.set(id, { label, items: [] });
+			const sectionLabel = item.isPinned() ? localize('sessions.list.pinned', 'Pinned') : item.kind === 'draft' ? localize('chat.sessions.drafts', 'Drafts') : item.group?.name ?? localize('chat.sessions.sessions', 'Sessions');
+			if (!groups.has(id)) groups.set(id, { label: sectionLabel, items: [] });
 			groups.get(id)!.items.push(item);
 		}
 		return [...groups].sort(([a], [b]) => Number(b === 'pinned') - Number(a === 'pinned'))
@@ -61,7 +140,7 @@ export class AgentSessionsDataSource implements AsyncTreeDataSource<IAgentSessio
 /** Owns only rendered row resources; the shared Tree owns their placement and navigation. */
 export class AgentSessionRenderer extends Disposable {
 	private readonly rows = this._register(new DisposableMap<HTMLElement, AgentSessionRow>());
-	private readonly menuRequested = this._register(new Emitter<{ readonly item: IAgentSessionListItem; readonly anchor: ContextMenuAnchor; onHide(): void; }>());
+	private readonly menuRequested = this._register(new Emitter<{ readonly item: IAgentSession; readonly anchor: ContextMenuAnchor; onHide(): void; }>());
 	public readonly onDidRequestContextMenu = this.menuRequested.event;
 	private readonly rowRemoved = this._register(new Emitter<string>());
 	public readonly onDidRemoveSession = this.rowRemoved.event;
@@ -105,10 +184,10 @@ class AgentSessionRow extends Disposable {
 	private readonly button: HTMLDivElement;
 	private readonly title: HTMLSpanElement;
 	private readonly description: HTMLSpanElement;
-	private item: IAgentSessionListItem | undefined;
+	private item: IAgentSession | undefined;
 	private readonly more: Button;
 
-	constructor(document: Document, showMenu: (event: { item: IAgentSessionListItem; anchor: ContextMenuAnchor; onHide(): void; }) => void) {
+	constructor(document: Document, showMenu: (event: { item: IAgentSession; anchor: ContextMenuAnchor; onHide(): void; }) => void) {
 		super();
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-agent-session-item';
@@ -158,13 +237,13 @@ class AgentSessionRow extends Disposable {
 		this.more.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 
-	update(item: IAgentSessionListItem): void {
+	update(item: IAgentSession): void {
 		this.item = item;
 		this.domNode.dataset.item = item.id;
-		this.title.textContent = item.title;
-		this.description.textContent = item.description;
-		this.description.hidden = item.description.length === 0;
-		this.button.title = item.title;
+		this.title.textContent = sessionLabel(item);
+		this.description.textContent = sessionDescription(item);
+		this.description.hidden = this.description.textContent.length === 0;
+		this.button.title = this.title.textContent;
 		if (item.active) this.button.setAttribute('aria-current', 'page');
 		else this.button.removeAttribute('aria-current');
 	}

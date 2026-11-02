@@ -17,10 +17,8 @@ import { IWorkbenchLayoutService } from '../../../../../services/layout/browser/
 import { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatViewPane, IQuickChatSession, IChatWidgetViewOptions } from '../../chat.js';
 import type { ChatWidget, IChatWidgetModel } from '../../widget/chatWidget.js';
-import { AgentSessionsControl } from '../../agentSessions/agentSessionsControl.js';
+import { AgentSessionsControl, type IAgentSessionsControlOptions } from '../../agentSessions/agentSessionsControl.js';
 import { AgentSessionsViewerOrientation } from '../../agentSessions/agentSessions.js';
-import { registerAgentSessionsAccessibility } from '../../agentSessions/agentSessionsAccessibility.js';
-import type { IAgentSessionsModel } from '../../agentSessions/agentSessionsModel.js';
 import {
 	SHOW_CHAT_HISTORY_COMMAND_ID,
 	AGENT_SESSIONS_PRESENTATION_SETTING,
@@ -190,7 +188,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		this.sessionsSidebar.setAttribute('aria-label', localize('chat.sessions.sidebar', 'Agent sessions'));
 		this.body.append(this.sessionsSidebar, this.paneHost);
 		this._register(toDisposable(() => this.sessionsSidebar.remove()));
-		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, contextKeyService));
+		this._register(contextKeyService.createScoped(this.sessionsSidebar)).createKey('agentSessionsSidebarFocused', true);
 		this.sessionsSash = this._register(new Sash(this.body, {
 			getVerticalSashLeft: () => this.chatBodyWidth - this.effectiveSessionsSidebarWidth,
 			getVerticalSashTop: () => 0,
@@ -254,17 +252,18 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	}
 
 	/** Connects a product-owned catalog after the adapter has initialized its state. */
-	protected initializeSessionsControl(model: IAgentSessionsModel, onNewSession: () => void): void {
+	protected initializeSessionsControl(onNewSession: () => void, getActions: IAgentSessionsControlOptions['getActions'], onDidOpenSession: (preserveFocus: boolean) => void): void {
 		this.onNewSession = onNewSession;
 		const createNewSession = () => {
 			onNewSession();
 			this.hideSessionsAfterSelection();
 			this.activePane?.focus();
 		};
-		this.sessionsControl = this._register(this.instantiationService.createInstance(AgentSessionsControl, this.sessionsSidebar, model));
-		this._register(observeElementSize(this.sessionsControl.domNode, size => this.sessionsControl.layout(size.height, size.width)));
+		this.sessionsControl = this._register(this.instantiationService.createInstance(AgentSessionsControl, this.sessionsSidebar, { getActions }));
+		this._register(observeElementSize(this.sessionsControl.element, size => this.sessionsControl.layout(size.height, size.width)));
 		this.sessionsControl.setVisible(false);
 		this._register(this.sessionsControl.onDidRequestNewSession(createNewSession));
+		this._register(this.sessionsControl.onDidOpenSession(event => onDidOpenSession(event.preserveFocus)));
 		this._register(this.sessionsControl.onDidRequestToggleLayout(() => {
 			const command = this.sessionsSideBySide ? 'agentSessions.hideAgentSessionsSidebar' : 'agentSessions.showAgentSessionsSidebar';
 			void this.commandService.executeCommand(command).catch(onUnexpectedError);

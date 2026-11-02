@@ -3,6 +3,7 @@ import { ChatSideChatProvider } from './chatSideChat.js';
 import { IChatSideChatService, ChatSideChatService } from '../common/chatSideChatService.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
 import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
+import { PanelChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
@@ -125,6 +126,7 @@ registerChatQueueActions();
 registerWorkbenchContribution(ChatQueuePickerRendering.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatQueuePickerRendering));
 registerChatAccessibilityActions();
 AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
+AccessibleViewRegistry.register(new PanelChatAccessibilityHelp());
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
 	key: AGENT_SESSIONS_PRESENTATION_SETTING,

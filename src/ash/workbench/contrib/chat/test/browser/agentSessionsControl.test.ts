@@ -1,3 +1,4 @@
+import { URI } from '../../../../../base/common/uri.js';
 import assert from 'node:assert/strict';
 import { suite, test, teardown } from 'mocha';
 import { expect } from '@playwright/test';
@@ -5,19 +6,19 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from '../../../../../base/common/event.js';
 import { AgentSessionsDataSource } from '../../browser/agentSessions/agentSessionsViewer.js';
-import { isAgentSessionSection, type IAgentSessionListItem } from '../../browser/agentSessions/agentSessionsModel.js';
+import { isAgentSessionSection, type IAgentSession } from '../../browser/agentSessions/agentSessionsModel.js';
 
 suite('Agent Sessions data projection', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('groups and filters the owning model without changing its records', () => {
-		const items: IAgentSessionListItem[] = [
-			{ id: 'draft', kind: 'draft', title: 'Draft', description: '', active: false, getActions: () => [], open() { } },
-			{ id: 'pin', kind: 'session', title: 'Pinned', description: 'find this', active: true, pinned: true, getActions: () => [], open() { } },
-			{ id: 'group', kind: 'session', title: 'Grouped', description: '', active: false, group: { sectionId: 'team', name: 'Team' }, getActions: () => [], open() { } },
-		];
+		const items: IAgentSession[] = [
+			{ id: 'draft', kind: 'draft', label: 'Draft', description: '', active: false, open() { } },
+			{ id: 'pin', kind: 'session', label: 'Pinned', description: 'find this', active: true, open() { } },
+			{ id: 'group', kind: 'session', label: 'Grouped', description: '', active: false, group: { sectionId: 'team', name: 'Team' }, open() { } },
+		].map(item => ({ ...item, kind: item.kind as 'draft' | 'session', resource: URI.from({ scheme: 'test-session', path: `/${item.id}` }), target: { sessionId: item.id }, isArchived: () => false, isPinned: () => item.id === 'pin' }));
 		let query = '';
 		const source = new AgentSessionsDataSource(() => query);
-		const model = { items, state: 'ready' as const, error: undefined, onDidChange: Event.None };
+		const model = { sessions: items, state: 'ready' as const, error: undefined, onDidChangeSessions: Event.None, getSession: (resource: URI) => items.find(item => item.resource.toString() === resource.toString()) };
 		const sections = [...source.getChildren(model)];
 		assert.deepEqual(sections.map(item => isAgentSessionSection(item) ? item.id : undefined), ['pinned', 'drafts', 'group:team']);
 		assert.equal([...source.getChildren(sections[0]!)][0], items[1]);
@@ -35,6 +36,7 @@ interface Fixture {
 	doubleClickMode(): Promise<void>;
 	refreshDuringNavigation(): Promise<void>;
 	rename(): Promise<void>;
+	blankDraft(): Promise<void>;
 	pin(): Promise<void>;
 	invokeMenu(): Promise<void>;
 	readonly opened: string[];

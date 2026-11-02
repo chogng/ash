@@ -1,8 +1,16 @@
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { IViewsService } from '../../../../../services/views/common/viewsService.js';
+import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
+import { AgentSessionsPicker } from '../../../browser/agentSessions/agentSessionsPicker.js';
+import { IAgentSessionsService } from '../../../browser/agentSessions/agentSessionsService.js';
+import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import '../../../../../common/theme.js';
 import { AgentSessionsControl } from '../../../browser/agentSessions/agentSessionsControl.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { URI } from '../../../../../../base/common/uri.js';
-import type { IAgentSessionListItem } from '../../../browser/agentSessions/agentSessionsModel.js';
+import type { IAgentSession } from '../../../browser/agentSessions/agentSessionsModel.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -50,13 +58,13 @@ let menuCount = 0;
 let newSessionCount = 0;
 let refreshCount = 0;
 let layoutCount = 0;
-let items: readonly IAgentSessionListItem[] = Array.from({ length: Number(parameters.get('count') ?? 3) }, (_, index) => ({
+let items: readonly IAgentSession[] = Array.from({ length: Number(parameters.get('count') ?? 3) }, (_, index) => ({
+	resource: URI.from({ scheme: 'test-session', path: `/${index}` }), target: index === 0 ? { untitledSessionId: `draft-${index}` } : { sessionId: `session-${index}`, threadId: `root-${index}` },
 	id: `session-${index}`, kind: index === 0 ? 'draft' : 'session',
-	title: `Session ${index}`, description: `Synthetic session ${index}`, active: index === 1,
-	inProgress: index === 1,
+	label: `Session ${index}`, description: `Synthetic session ${index}`, active: index === 1,
+	inProgress: index === 1, isArchived: () => false, isPinned: () => false,
 	getEditorInput: () => ({ resource: URI.from({ scheme: 'test-chat', path: `/${index}` }) }),
-	getActions: () => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => opened.push(`rename-${index}`) }],
-	open: () => opened.push(`session-${index}`),
+	open: () => { opened.push(`session-${index}`); },
 }));
 services.registerInstance(IContextMenuService, {
 	contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
@@ -66,16 +74,21 @@ services.registerInstance(IContextMenuService, {
 const container = document.createElement('main');
 container.style.cssText = 'display:flex;flex-direction:column;width:340px;height:440px;font:13px sans-serif;background:var(--ash-sideBar-background);color:var(--ash-foreground)';
 document.body.append(container);
+const model = {
+	onDidChangeSessions: changed.event, get sessions() { return items; }, state: 'ready' as const, error: undefined,
+	getSession: (resource: URI) => items.find(item => item.resource.toString() === resource.toString()),
+	refresh: async () => { refreshCount++; items = items.map(item => item.id === 'session-1' ? { ...item, label: 'Refreshed Session' } : item); changed.fire(); },
+};
+services.registerInstance(IAgentSessionsService, { model, getSession: resource => model.getSession(resource) });
 const instance = resources.add(new MutableDisposable<DisposableStore>());
 let control: AgentSessionsControl;
 function createControl(): void {
 	const owned = new DisposableStore();
 	instance.value = owned;
 	control = owned.add(services.createInstance(AgentSessionsControl, container, {
-		onDidChange: changed.event, get items() { return items; }, state: 'ready', error: undefined,
-		refresh: async () => { refreshCount++; items = items.map(item => item.id === 'session-1' ? { ...item, title: 'Refreshed Session' } : item); changed.fire(); },
+		getActions: (item: IAgentSession) => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => { opened.push(`rename-${item.id.slice('session-'.length)}`); } }],
 	}));
-	owned.add(observeElementSize(control.domNode, size => control.layout(size.height, size.width)));
+	owned.add(observeElementSize(control.element, size => control.layout(size.height, size.width)));
 	owned.add(control.onDidRequestNewSession(() => newSessionCount++));
 	owned.add(control.onDidRequestToggleLayout(() => layoutCount++));
 }
@@ -88,12 +101,13 @@ Object.assign(window, { agentSessionsFixture: {
 	async doubleClickMode() { await configuration.updateValue('workbench.list.openMode', 'doubleClick'); },
 	async refreshDuringNavigation() {
 		const updating = control.update();
-		control.domNode.querySelector<HTMLElement>('[role="tree"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+		control.element.querySelector<HTMLElement>('[role="tree"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
 		await updating;
 	},
 	opened,
-	async rename() { items = items.map(item => item.id === 'session-1' ? { ...item, title: 'Renamed Session' } : item); changed.fire(); await control.update(); },
-	async pin() { items = items.map(item => item.id === 'session-1' ? { ...item, pinned: true } : item); changed.fire(); await control.update(); },
+	async rename() { items = items.map(item => item.id === 'session-1' ? { ...item, label: 'Renamed Session' } : item); changed.fire(); await control.update(); },
+	async blankDraft() { items = items.map(item => item.kind === 'draft' ? { ...item, label: '', description: 'Provider draft details' } : item); changed.fire(); await control.update(); },
+	async pin() { items = items.map(item => item.id === 'session-1' ? { ...item, isPinned: () => true } : item); changed.fire(); await control.update(); },
 	async invokeMenu() { await menu?.getActions()[0]?.run(); menu?.onHide?.(false); menu = undefined; await control.update(); },
 	get menuOpen() { return menu !== undefined; },
 	get menuCount() { return menuCount; },
@@ -102,6 +116,38 @@ Object.assign(window, { agentSessionsFixture: {
 	get layoutCount() { return layoutCount; },
 	async chooseFilter(id: string) { await menu?.getActions().find(action => action.id === id)?.run(); menu?.onHide?.(false); menu = undefined; await control.update(); },
 	get menuAnchoredToRow() { return menu?.getAnchor() instanceof HTMLElement && (menu.getAnchor() as HTMLElement).getAttribute('role') === 'treeitem'; },
+	dispose,
+} });
+const historyActions: string[] = [];
+const historyItems: readonly IAgentSession[] = ['Alpha', 'Beta'].map(label => ({
+	id: label, label: `${label} conversation with a long title`, description: '', kind: 'session', active: false,
+	resource: URI.from({ scheme: 'test-session', path: `/${label}` }), target: { sessionId: label, threadId: `${label}-root` },
+	updatedAt: Date.now() - 300_000, isArchived: () => false, isPinned: () => false,
+	open: () => { historyActions.push(`open:${label}`); },
+}));
+services.registerInstance(ICommandService, {
+	onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+	executeCommand: async <T>(id: string, target: unknown): Promise<T> => {
+		historyActions.push(`${id === 'sessions.list.togglePin' ? 'pin' : id}:${target}`);
+		changed.fire();
+		return target as T;
+	},
+});
+services.registerInstance(IViewsService, { focusView: async () => true } as unknown as IViewsService);
+services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
+const quickInput = resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }));
+services.registerInstance(IQuickInputService, quickInput);
+const openHistory = document.createElement('button');
+openHistory.textContent = 'Open history';
+document.body.append(openHistory);
+resources.add(addDisposableListener(openHistory, 'click', () => {
+	items = historyItems;
+	changed.fire();
+	void services.createInstance(AgentSessionsPicker, openHistory, undefined).pickAgentSession();
+}));
+Object.assign(window, { agentSessionsPickerFixture: {
+	actions: historyActions,
+	hideMenu() { const current = menu; menu = undefined; current?.onHide?.(false); },
 	dispose,
 } });
 resources.add(addDisposableListener(window, 'pagehide', dispose, { once: true }));

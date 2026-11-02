@@ -3,7 +3,7 @@ import { IStorageService, StorageScope } from '../../../../../platform/storage/c
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
-import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -116,6 +116,7 @@ async function historyFixture(wording: 'archive' | 'done', archived = true) {
 	const current = await fixture(wording, archived);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	current.services.registerSingleton(IAgentSessionsService, () => current.services.createInstance(descriptor));
+	current.services.registerSingleton(ISessionGroupsService, () => current.services.createInstance(SessionGroupsService));
 	const errors: string[] = [];
 	current.services.registerInstance(ICommandService, current.commands);
 	current.services.registerInstance(IViewsService, { focusView: async () => true } as unknown as IViewsService);
