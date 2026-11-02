@@ -19,7 +19,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IChatService, type TurnChangeDetails } from '../../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeDetails } from '../../../../../../workbench/services/chat/common/chatService.js';
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
 import { emptyEditorServiceState } from '../../../../../../workbench/test/common/testEditorService.js';
 import { registerTestComponentServices } from '../../../../../../workbench/test/common/testEditorServices.js';
@@ -133,6 +133,9 @@ function multipleTurns(): readonly TurnChangeDetails[] {
 	return [details, { ...details, summary: { ...details.summary, changeSetId: 'second', turnId: 'second-turn' }, files: [{ ...details.files[0]!, path: 'tests/main.test.ts' }] }];
 }
 if (new URL(location.href).searchParams.has('multiple')) { ledger = multipleTurns(); }
+const threadUpdates = resources.add(new Emitter<ThreadUpdateEnvelope>());
+let checkpoint: ThreadChangesSummary | undefined;
+const summaryReads: unknown[] = [];
 let sessionId = 'session';
 let threadId = 'thread';
 let pendingLedger: Promise<void> | undefined;
@@ -150,7 +153,7 @@ services.registerInstance(IChatService, {
 	readThread: async () => ({ thread: { sessionId, threadId: 'thread', status: 'active', sequence: 7, turns: activeTurn ? [{ status: 'running' }] : [] } }),
 	startTurn: async (request: unknown) => { agentRequests.push({ action: 'start', request }); },
 	queueTurn: async (request: unknown) => { agentRequests.push({ action: 'queue', request }); },
-	onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
+	onDidUpdateThread: threadUpdates.event, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None,
 	listTurnChanges: async (sessionId: string, threadId: string) => {
 		const held = holdNextLedger;
 		holdNextLedger = undefined;
@@ -160,6 +163,19 @@ services.registerInstance(IChatService, {
 		if (pendingLedger) { await pendingLedger; }
 		if (fail) { throw new Error('Repository unavailable'); }
 		return summaries;
+	},
+	readThreadChanges: async () => {
+		if (pendingLedger) { await pendingLedger; }
+		if (fail) { throw new Error('Repository unavailable'); }
+		if (checkpoint) { return checkpoint; }
+		return { sequence: 7, revision: String(ledger[0]?.summary.revision ?? 0),
+			statistics: { files: ledger.length, additions: ledger.length * 3, deletions: ledger.length * 2 },
+			repositories: [{ repositoryId: 'repository', files: ledger.flatMap(entry => entry.files) }], warnings: [] };
+	},
+	readThreadChangeFile: async (sessionId: string, threadId: string, revision: string, repositoryId: string, path: string) => {
+		summaryReads.push({ sessionId, threadId, revision, repositoryId, path });
+		if (pendingFileFailure) { fileReadStarted = true; return pendingFileFailure; }
+		return { path: details.files[0]!.path, binary: false, truncated: false, before: 'Before', after: 'After' };
 	},
 	readTurnChange: async (sessionId: string, threadId: string, id: string) => {
 		const entry = ledger.find(entry => entry.summary.changeSetId === id)!;
@@ -236,6 +252,8 @@ declare global {
 			reduceMotion(value: 'on' | 'off' | 'auto'): Promise<void>;
 			fail(value: boolean): void;
 			multipleTurns(): void;
+			checkpoint(value: ThreadChangesSummary): void;
+			summaryReads(): unknown[];
 			revision(value: number): void;
 			visible(value: boolean): void;
 			selectSession(id: string): void;
@@ -278,6 +296,8 @@ window.ashChangesIntegration = {
 	reduceMotion: value => configuration.updateValue('workbench.reduceMotion', value),
 	agentRequests: () => agentRequests,
 	activeTurn: value => { activeTurn = value; },
+	checkpoint: value => { checkpoint = value; threadUpdates.fire({ sessionId, threadId, durableSequence: value.sequence, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } }); },
+	summaryReads: () => summaryReads,
 	multipleTurns: () => {
 		ledger = multipleTurns();
 		changed.fire();

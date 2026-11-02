@@ -8,7 +8,7 @@ test('deleted file identity matches both comparison sides but never another capt
 	const change = {
 		file: { path: 'src/deleted.ts', kind: 'deleted' },
 		summary: { sessionId: 'session', threadId: 'thread', changeSetId: 'turn', revision: 7 },
-	} as IChangesFileItem;
+	} as Extract<IChangesFileItem, { readonly summary: unknown; }>;
 	const normalized = createSessionFileChange(change.summary, change.file);
 	const resource = getChangesEditorFileResource(normalized);
 	assert.equal(resource.toString(), 'ash-turn-diff:/turn/src/deleted.ts?session=session&thread=thread&revision=7');

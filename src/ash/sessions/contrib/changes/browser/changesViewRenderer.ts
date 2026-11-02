@@ -2,13 +2,29 @@ import { h } from '../../../../base/browser/dom.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { localize } from '../../../../nls.js';
 import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
+import type { TurnChangeFile } from '../../../../workbench/services/chat/common/chatService.js';
 import { getChangesEditorFileStats } from './changesEditorLabels.js';
 
-export interface IChangesFileItem extends ISessionFileChange {
+interface IChangesTurnFileItem extends ISessionFileChange {
 	readonly type: 'file';
 	readonly id: string;
 	readonly turnNumber: number;
 }
+
+/** Backend checkpoint files have no single Turn capture or commit selection. */
+export interface IChangesThreadFileItem extends Pick<ISessionFileChange, 'uri' | 'originalUri' | 'modifiedUri' | 'insertions' | 'deletions'> {
+	readonly type: 'file';
+	readonly id: string;
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly repositoryId: string;
+	readonly repositoryLabel?: string;
+	readonly revision: string;
+	readonly file: TurnChangeFile;
+	readonly warnings: readonly string[];
+}
+
+export type IChangesFileItem = IChangesTurnFileItem | IChangesThreadFileItem;
 
 interface ChangesFolderItem {
 	readonly type: 'folder';
@@ -22,17 +38,17 @@ export function isChangesFileItem(element: ChangesTreeElement): element is IChan
 	return element.type === 'file';
 }
 
-/** Separate Turn roots keep repeated paths and different repositories independently selectable. */
+/** Turn captures and checkpoint repositories keep repeated paths independently selectable. */
 export function buildTreeChildren(items: readonly IChangesFileItem[]): ObjectTreeElement<ChangesTreeElement>[] {
 	const roots: ObjectTreeElement<ChangesTreeElement>[] = [];
 	const folders = new Map<string, ObjectTreeElement<ChangesTreeElement>[]>();
 	for (const item of items) {
-		let key = `turn:${item.summary.changeSetId}`;
+		let key = 'summary' in item ? `turn:${item.summary.changeSetId}` : `repository:${item.repositoryId}`;
 		if (!folders.has(key)) {
 			const children: ObjectTreeElement<ChangesTreeElement>[] = [];
 			folders.set(key, children);
 			roots.push({
-				element: { type: 'folder', id: key, name: localize('sessions.changes.turn', 'Turn {0}', item.turnNumber) },
+				element: { type: 'folder', id: key, name: 'summary' in item ? localize('sessions.changes.turn', 'Turn {0}', item.turnNumber) : item.repositoryLabel ?? localize('sessions.changes.conversationChanges', 'Conversation Changes') },
 				children,
 			});
 		}
@@ -70,16 +86,17 @@ export class ChangesTreeRenderer {
 		counts.textContent = `+${statistics.insertions} −${statistics.deletions}`;
 		const state = h(this.document, 'span', { className: 'ash-sessions-change-state' });
 		state.textContent = [
-			localize('sessions.changes.turn', 'Turn {0}', row.turnNumber), fileState(row),
+			'summary' in row ? localize('sessions.changes.turn', 'Turn {0}', row.turnNumber) : row.repositoryLabel, fileState(row),
 			reviewed ? localize('sessions.changes.reviewed', 'Reviewed') : undefined,
 		].filter(Boolean).join(' · ');
-		state.title = [state.textContent, row.summary.failureMessage, ...row.summary.warnings].filter(Boolean).join('\n');
+		state.title = [state.textContent, ...('summary' in row ? [row.summary.failureMessage, ...row.summary.warnings] : row.warnings)].filter(Boolean).join('\n');
 		element.append(label, state, counts);
 		return element;
 	}
 }
 
 export function fileState(row: IChangesFileItem): string {
+	if (!('summary' in row)) { return ''; }
 	const summary = row.summary;
 	if (summary.committedPaths.includes(row.file.path)) { return localize('sessions.changes.fileCommitted', 'Committed'); }
 	if (summary.captureState !== 'sealed') { return localize('sessions.changes.fileUnsealed', 'Not sealed'); }

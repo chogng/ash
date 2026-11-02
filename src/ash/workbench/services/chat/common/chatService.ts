@@ -1,3 +1,4 @@
+import { URI } from '../../../../base/common/uri.js';
 import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
@@ -227,6 +228,14 @@ export interface ThreadChangesSummary {
 	readonly statistics: TurnChangeSetSummary['statistics'];
 	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
 	readonly warnings: readonly string[];
+}
+
+/** Stable review identity for one file in an exact conversation checkpoint. */
+export function createThreadChangeFileResource(sessionId: string, threadId: string, revision: string, repositoryId: string, path: string): URI {
+	return URI.from({
+		scheme: 'ash-thread-change', path: `/${threadId}/${repositoryId}/${path}`,
+		query: new URLSearchParams({ session: sessionId, thread: threadId, revision, repository: repositoryId }).toString(),
+	});
 }
 
 export interface TurnChangeFileContents {

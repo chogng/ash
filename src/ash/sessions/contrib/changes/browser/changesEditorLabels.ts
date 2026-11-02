@@ -4,16 +4,16 @@ import type { ISessionFileChange } from '../../../services/sessions/common/sessi
 import type { ILabelService } from '../../../../platform/label/common/label.js';
 
 /** A read marker identifies the captured revision, including files deleted by the Turn. */
-export function getChangesEditorFileResource(change: ISessionFileChange): URI {
+export function getChangesEditorFileResource(change: Pick<ISessionFileChange, 'uri'>): URI {
 	return change.uri;
 }
 
 /** Both sides of an individual comparison refer to the same captured file revision. */
-export function findChangesEditorFileChange(resource: URI, changes: readonly ISessionFileChange[]): ISessionFileChange | undefined {
+export function findChangesEditorFileChange<T extends Pick<ISessionFileChange, 'uri' | 'originalUri' | 'modifiedUri'>>(resource: URI, changes: readonly T[]): T | undefined {
 	return changes.find(change => [change.uri, change.originalUri, change.modifiedUri].some(candidate => extUri.isEqual(candidate, resource)));
 }
 
-export function getChangesEditorFileStats(resource: URI, changes: readonly ISessionFileChange[]): { readonly insertions: number; readonly deletions: number; } | undefined {
+export function getChangesEditorFileStats(resource: URI, changes: readonly Pick<ISessionFileChange, 'uri' | 'originalUri' | 'modifiedUri' | 'insertions' | 'deletions'>[]): { readonly insertions: number; readonly deletions: number; } | undefined {
 	const change = findChangesEditorFileChange(resource, changes);
 	return change && { insertions: change.insertions, deletions: change.deletions };
 }

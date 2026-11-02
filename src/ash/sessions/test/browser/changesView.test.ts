@@ -117,6 +117,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 				if (loadFailure) { throw new Error('Repository unavailable'); }
 				return params.sessionId === 'old' ? old.p : pendingRefresh ? pendingRefresh.p : { changeSets: [details.summary] };
 			},
+			summary: async params => ({ sequence: 1, revision: 'checkpoint', statistics: details.summary.statistics, repositories: [{ repositoryId: 'repo', files: details.files }], warnings: [] }),
 			read: async params => { requests.push(params); return details; },
 			readFile: async params => { requests.push(params); return pendingRead ? pendingRead.p : { path: 'main.ts', binary: false, truncated, before: 'before', after: 'after' }; },
 		});
@@ -142,6 +143,9 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		await settle();
 		await old.complete({ changeSets: [] });
 		await settle();
+		const initialPicker = view.element.querySelector<HTMLSelectElement>('select')!;
+		initialPicker.value = details.summary.changeSetId;
+		initialPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		assert.match(view.getAccessibleContent(), /main.ts: \+1 −1/u);
 		assert.equal(view.element.querySelector('.ash-sessions-changes-summary')!.textContent, locale === 'zh-CN' ? '1 个文件 +1 −1' : '1 file +1 −1');
 		const accessibility = AccessibleViewRegistry.getImplementations().filter(provider => provider.name.startsWith('sessionsChanges.'));
@@ -183,7 +187,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		assert.equal(review.resource.toString(), 'ash-session-changes:/current?thread=current-thread');
 		assert.deepEqual(review.changesetSelection, { kind: 'id', id: 'change-current' });
 		assert.equal(openOptions[2]?.forceReload, true);
-		turnPicker.value = '';
+		turnPicker.value = 'change-current';
 		turnPicker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		truncated = true;
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -352,8 +356,9 @@ suite('Changes visibility lifecycle', () => {
 			onDidChange: changed.event, activeSelection: selected('a'),
 		} as unknown as ISessionsService);
 		services.registerInstance(IChatService, {
-			onDidUpdateTurnChanges: ledgerChanged.event,
+			onDidUpdateThread: Event.None, onDidUpdateTurnChanges: ledgerChanged.event,
 			onDidBecomeReady: Event.None,
+			readThreadChanges: async () => ({ sequence: 1, revision: 'checkpoint', statistics: details.summary.statistics, repositories: [{ repositoryId: 'repo', files: details.files }], warnings: [] }),
 			listTurnChanges: async () => [details.summary],
 			readTurnChange: async () => details,
 			readTurnChangeFile: async () => { reads++; return pendingFile.p; },
@@ -370,6 +375,9 @@ suite('Changes visibility lifecycle', () => {
 		using view = registerTestComponentServices(services).createInstance(ChangesViewPane, browser.window.document.body, { id: CHANGES_VIEW_ID, title: 'Changes' });
 		view.setVisible(true);
 		await settle();
+		const picker = view.element.querySelector<HTMLSelectElement>('select')!;
+		picker.value = details.summary.changeSetId;
+		picker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		await settle();
@@ -408,8 +416,9 @@ suite('Changes visibility lifecycle', () => {
 			get activeSelection() { return selection; },
 		} as unknown as ISessionsService);
 		services.registerInstance(IChatService, {
-			onDidUpdateTurnChanges: ledgerChanged.event,
+			onDidUpdateThread: Event.None, onDidUpdateTurnChanges: ledgerChanged.event,
 			onDidBecomeReady: ready.event,
+			readThreadChanges: async (id: string) => ({ sequence: 1, revision: 'checkpoint', statistics: changes(id).summary.statistics, repositories: [{ repositoryId: 'repo', files: changes(id).files }], warnings: [] }),
 			listTurnChanges: async (sessionId: string) => {
 				listCalls.push(sessionId);
 				return listCalls.length === 1 ? pendingList.p : [changes(sessionId).summary];
@@ -454,6 +463,9 @@ suite('Changes visibility lifecycle', () => {
 		assert.equal(listCalls.length, 2);
 		assert.match(view.getAccessibleContent(), /main.ts/u);
 
+		const picker = view.element.querySelector<HTMLSelectElement>('select')!;
+		picker.value = 'change-b';
+		picker.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		const tree = view.element.querySelector<HTMLElement>('[role="tree"]')!;
 		tree.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
 		await settle();

@@ -29,8 +29,9 @@ class OpenChangedFileAction extends Action2 {
 		if (!(pane instanceof SessionChangesEditor)) { return; }
 		const change = await pane.getFileChange(resource);
 		if (!change) { return; }
-		const session = accessor.get(ISessionsManagementService).sessions.find(session => session.sessionId === change.summary.sessionId);
-		const workspace = session?.chats.find(chat => chat.threadId === change.summary.threadId)?.workspace ?? session?.workspace;
+		const owner = 'summary' in change ? change.summary : change;
+		const session = accessor.get(ISessionsManagementService).sessions.find(session => session.sessionId === owner.sessionId);
+		const workspace = session?.chats.find(chat => chat.threadId === owner.threadId)?.workspace ?? session?.workspace;
 		if (!workspace) { return; }
 		const root = sessionWorkspaceUri(workspace);
 		const fileResource = root.with({ path: `${root.path.replace(/\/$/u, '')}/${change.file.path}` });
@@ -110,7 +111,7 @@ class PreviewChangesetFileAction extends Action2 {
 		const pane = accessor.get(IEditorPart).activePane;
 		if (!(pane instanceof SessionChangesEditor)) { return; }
 		const change = await pane.getFileChange(resource);
-		if (!change) { return; }
+		if (!change || !('summary' in change)) { return; }
 		const sessionResource = URI.from({ scheme: 'ash-session', path: `/${change.summary.sessionId}`, query: new URLSearchParams({ thread: change.summary.threadId }).toString() });
 		const changeset = await accessor.get(ISessionChangesService).resolveChangeset(sessionResource, change.summary.changeSetId);
 		const operation = changeset.operations.get().find(operation => operation.id === 'preview');

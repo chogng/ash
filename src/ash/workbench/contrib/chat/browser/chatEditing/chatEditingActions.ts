@@ -15,7 +15,9 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IChatService, ChatHistoryConflictError, type ChatCheckpoint } from '../../../../services/chat/common/chatService.js';
+import { IChatService, ChatHistoryConflictError, createThreadChangeFileResource, type ChatCheckpoint } from '../../../../services/chat/common/chatService.js';
+import { raceCancellationError } from '../../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 
@@ -148,16 +150,19 @@ class ThreadChangesNotCurrentError extends Error {
 }
 
 /** Opens precisely the checkpoint revision advertised by the composer, across all repositories. */
-export async function createThreadMultiDiffEditorInput(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string): Promise<MultiDiffEditorInput> {
-	const summary = await chat.readThreadChanges(sessionId, threadId);
+export async function createThreadMultiDiffEditorInput(chat: IChatService, sessionId: string, threadId: string, expectedRevision?: string, signal?: AbortSignal): Promise<MultiDiffEditorInput> {
+	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
+	if (signal) { throwIfCancelled(signal); }
+	const summary = await read(chat.readThreadChanges(sessionId, threadId));
 	const changed = () => new Error(localize('chat.changes.checkpointChanged', 'The conversation changed while loading. Open Changes again to review its current checkpoint.'));
 	if (expectedRevision !== undefined && summary.revision !== expectedRevision) throw new ThreadChangesNotCurrentError();
 	const items: MultiDiffEditorInputItem[] = [];
 	for (const repository of summary.repositories) {
 		for (const file of repository.files) {
-			const contents = await chat.readThreadChangeFile(sessionId, threadId, summary.revision, repository.repositoryId, file.path);
+			if (signal) { throwIfCancelled(signal); }
+			const contents = await read(chat.readThreadChangeFile(sessionId, threadId, summary.revision, repository.repositoryId, file.path));
 			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
-			const resource = URI.from({ scheme: 'ash-thread-change', path: `/${threadId}/${repository.repositoryId}/${file.path}`, query: summary.revision });
+			const resource = createThreadChangeFileResource(sessionId, threadId, summary.revision, repository.repositoryId, file.path);
 			let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 			if (summary.repositories.length > 1) label = `${repository.repositoryId}: ${label}`;
 			if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
@@ -165,13 +170,13 @@ export async function createThreadMultiDiffEditorInput(chat: IChatService, sessi
 			}
 			items.push({
 				label, binary: contents.binary,
-				original: { resource: resource.with({ fragment: 'before' }), initialText: contents.before ?? '', readOnly: true },
-				modified: { resource: resource.with({ fragment: 'after' }), initialText: contents.after ?? '', readOnly: true },
+				original: { resource: resource.with({ query: `${resource.query}&side=before` }), initialText: contents.before ?? '', readOnly: true },
+				modified: { resource: resource.with({ query: `${resource.query}&side=after` }), initialText: contents.after ?? '', readOnly: true },
 			});
 		}
 	}
 	// A history move between the final file read and publication must not publish a stale review.
-	if ((await chat.readThreadChanges(sessionId, threadId)).revision !== summary.revision) throw changed();
+	if (items.length && (await read(chat.readThreadChanges(sessionId, threadId))).revision !== summary.revision) throw changed();
 	const label = localize('chat.changes.conversationTitle', 'Conversation Changes');
 	return createMultiDiffEditorInput(
 		URI.from({ scheme: 'ash-multi-diff', path: `/conversation/${sessionId}/${threadId}`, query: summary.revision }),
