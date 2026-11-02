@@ -92,7 +92,7 @@ import type { ChatContextUsage, ModelRef } from '../../../src/ash/workbench/serv
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { ChatInputTipPresenter } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.js';
+import { ChatInputTipPresenter } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
 import { registerChatActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatActions.js';
 import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';

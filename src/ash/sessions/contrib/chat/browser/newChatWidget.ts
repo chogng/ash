@@ -11,7 +11,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
-import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.js';
+import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { NewChatInputWidget } from './newChatInput.js';

@@ -15,7 +15,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IChatTipService } from '../../browser/chatTipService.js';
-import { ChatInputTipPresenter } from '../../browser/widget/input/notices/chatInputTipPresenter.js';
+import { ChatInputTipPresenter } from '../../browser/widget/input/chatInputTipPresenter.js';
 import { ChatInputNoticeHost } from '../../browser/widget/input/notices/chatInputNoticeHost.js';
 import { IChatTipService as ICoworkTipService } from '../../../../../sessions/contrib/cowork/browser/chatTipService.js';
 import { ChatInputTipPresenter as CoworkTipPresenter } from '../../../../../sessions/contrib/cowork/browser/widget/input/chatInputTipPresenter.js';
