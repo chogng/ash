@@ -314,6 +314,28 @@ starts from the restored selection. Legacy Chat/Code arrangements are merged,
 and conflicting drafts become separate untitled Sessions. Renderer shutdown
 joins pending attachment resolution before flushing storage.
 
+### Input ownership and names
+
+Agent Window has three product input components; IDE Chat is a fourth host. They
+all use `workbench/contrib/chat/browser/widget/input/chatInputEditor.ts`, backed by
+`editor/browser/widget/codeEditor/codeEditorWidget.ts`. IDE, Code and Cowork also
+use `chatInputPart.ts` for input operations; ChatGPT owns its service-specific
+controls. Each product owns its composition, model policy and draft lifecycle.
+
+| Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                                                                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent Window Code   | `NewChatInputWidget` in `contrib/chat/browser/newChatInput.ts`                                            | Ash's Code composer for both new and existing conversations. The upstream Sessions new-session role lives in `contrib/chat/browser/sharedChatInputComposer.ts`; its public class is `SharedChatInputComposer`. These are different contracts, so the Ash class retains its current name. |
+| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy. Its embedded presentation is used by project pages.                                                                                                                                                       |
+| Agent Window Chat   | `ChatGPTInputWidget` in `contrib/chatgptweb/browser/chatGPTInputWidget.ts`                                | Ash product component; ChatGPT's service owns conversation identity, drafts and requests.                                                                                                                                                                                                |
+| IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                                                                                                                                                                    |
+
+In VS Code, `sessions/contrib/chat/browser/newChatComposerInput.ts` defines the
+new-session host options and send contracts; it does not export an input widget.
+`SharedChatInputComposer` delegates submission to its host and participates in the
+normal Chat input command scope. Its public contract does not describe all three
+Ash Agent Window products. Project pages compose the Cowork input and use
+`IProjectService` for membership; they do not own a fifth editor implementation.
+
 ## Execution path
 
 1. The Code browser or Electron entry calls `createSessionsWorkbench` to prepare

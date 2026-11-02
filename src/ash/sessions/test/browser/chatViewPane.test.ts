@@ -1141,7 +1141,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using input = surface === 'chat'
 		? fixture.services.createInstance(SessionsInputForTest, document.body, fixture.delegate, fixture.model)
-		: fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+		: fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	input.render(fixture.model.inputState);
 	input.appendToDraft('Review ');
 	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
@@ -1171,7 +1171,7 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
 	fixture.input.dispose();
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model);
+	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	const skill = { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:commit' } };
 	input.render({
 		...fixture.model.inputState,

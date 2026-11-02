@@ -394,14 +394,15 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
-	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+	async prepareConversation(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
 		this.assertAIEnabled();
+		if (signal?.aborted) throw canceled();
 		const identity = this.threadId ?? this.untitledSessionId;
-		await this.initialize();
-		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		await (signal ? raceCancellationError(this.initialize(), signal) : this.initialize());
+		if (this.isDisposed || signal?.aborted || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
 		this.assertAIEnabled();
-		const active = await this.ensureActiveSession();
-		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
+		const active = await this.ensureActiveSession(signal);
+		if (this.isDisposed || signal?.aborted || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
 
@@ -1068,10 +1069,10 @@ export class CoworkWidgetModel extends Disposable {
 		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
-	private async ensureActiveSession(): Promise<IActiveSessionThread> {
+	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
-		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
+		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal);
 		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
 			// Keep the completed durable session, but never replace a newer conversation selection.
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);

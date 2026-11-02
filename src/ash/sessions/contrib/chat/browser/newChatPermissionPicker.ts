@@ -103,15 +103,6 @@ export class NewChatPermissionPicker extends Disposable {
 			menu.append(item);
 			buttons.push(item);
 		}
-		const settings = h(menu.ownerDocument, 'button');
-		settings.type = 'button';
-		settings.tabIndex = -1;
-		settings.className = 'ash-sessions-permission-settings';
-		settings.setAttribute('role', 'menuitem');
-		settings.textContent = localize('sessions.chat.permission.reviewModel', 'Review model…');
-		this.listeners.add(addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')));
-		menu.append(settings);
-		buttons.push(settings);
 		if (this.services.getOptional(IApprovalEnvironmentService)) {
 			const environment = h(menu.ownerDocument, 'button');
 			environment.type = 'button';

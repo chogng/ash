@@ -59,6 +59,8 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+const projectChanges = new Emitter<void>();
+window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
 	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
 	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
@@ -72,7 +74,7 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	globalThis.ashWebWorkbenchHost = {
 		api: {
 			...globalThis.ashWebWorkbenchHost!.api,
-			projects: { ...disconnectedApi.projects, list: async () => [project], read: async () => project },
+			projects: { ...disconnectedApi.projects, onDidChange: projectChanges.event, list: async () => [project], read: async () => project },
 			automation: {
 				onDidChange: Event.None,
 				list: async () => [{
@@ -191,6 +193,7 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			refreshProject(): void;
 			completeCustomizeDetails(): void;
 			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
 			readonly errors: readonly string[];
@@ -210,6 +213,7 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
+	refreshProject: () => projectChanges.fire(),
 	completeCustomizeDetails: () => completeCustomizeDetails(),
 	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },
 	errors, errorDetails, multiHost,

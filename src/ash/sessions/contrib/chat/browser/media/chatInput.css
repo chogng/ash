@@ -125,8 +125,6 @@
 	padding: var(--ash-spacing-size80);
 	color: var(--ash-foreground);
 	background: var(--ash-menu-background);
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-sessions-permission-heading {
@@ -170,6 +168,10 @@
 	gap: var(--ash-spacing-size20);
 }
 
+.ash-sessions-permission-text > :first-child {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
 .ash-sessions-permission-description {
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
@@ -190,8 +192,4 @@
 .ash-sessions-permission-settings {
 	margin-top: var(--ash-spacing-size40);
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);
-}
-
-.ash-high-contrast .ash-sessions-permission-menu {
-	border-color: var(--ash-contrastBorder);
 }

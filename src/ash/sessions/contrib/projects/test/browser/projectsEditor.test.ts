@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test';
 import { suite, test, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import { Editor } from '../../../../../../../test/automation/editor.js';
 
 suite('Projects toolbar', () => {
 	const browser = useBrowserTests();
@@ -9,6 +10,53 @@ suite('Projects toolbar', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`retains the project chat editor and draft across refresh and page navigation (${locale})`, async () => {
+			const { page, info } = browser;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('.ash-projects-card').click();
+			const composer = page.locator('.ash-projects-composer');
+			await expect(composer).toHaveAccessibleName(chinese ? '在项目中新建聊天' : 'New chat in project');
+			await expect(composer.locator('.ash-sessions-cowork-input.embedded-composer')).toBeVisible();
+			await expect(composer.locator('.ash-sessions-chat-input')).toHaveCount(0);
+			const editor = new Editor(composer);
+			const input = editor.input;
+			await editor.waitForEditorFocus();
+			await editor.waitForTypeInEditor('Draft for this project');
+			await input.press('ArrowLeft');
+			const originalEditor = await input.elementHandle();
+			await page.evaluate(() => window.ashSessionsIntegration.refreshProject());
+			await expect(page.locator('.ash-projects-body')).toHaveAttribute('aria-busy', 'false');
+			await expect(input).toBeFocused();
+			await editor.waitForTypeInEditor('!');
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
+			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
+			await page.locator('.ash-projects-card').click();
+			await editor.waitForEditorContents(text => text === 'Draft for this projec!t');
+			expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+				for (const width of [1280, 600]) {
+					await page.setViewportSize({ width, height: 720 });
+					await expect.poll(async () => {
+						const bounds = await composer.boundingBox();
+						return bounds ? bounds.x + bounds.width : Number.POSITIVE_INFINITY;
+					}).toBeLessThanOrEqual(width);
+					const bounds = (await composer.boundingBox())!;
+					expect(bounds.width).toBeGreaterThan(200);
+					expect(bounds.height).toBeGreaterThan(30);
+					expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+					await expect(page.locator('.ash-projects-materials .ash-projects-goals')).toContainText(chinese ? '项目目标' : 'Project goals');
+					await expect(composer.locator('.embedded-composer')).toHaveCSS('padding', '0px');
+					await expect(composer.locator('.ash-sessions-cowork-welcome-heading')).toBeHidden();
+					await page.screenshot({ path: info.outputPath(`project-composer-${locale}-${theme}-${width}.png`) });
+				}
+			}
+		});
+
 		test(`keeps project dialog sizing and content insets independent of stylesheet order (${locale})`, async () => {
 			const { page, info } = browser;
 			await page.goto(`/sessions.html?search&locale=${locale}`);

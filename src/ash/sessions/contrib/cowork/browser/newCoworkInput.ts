@@ -52,6 +52,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: ICoworkWidgetModel,
+		private readonly presentation: 'conversation' | 'embedded',
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
@@ -87,7 +88,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
-				placeholder: '',
+				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
 		}, [{
@@ -101,6 +102,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
+		this.element.classList.toggle('embedded-composer', presentation === 'embedded');
 		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
 		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
@@ -219,7 +221,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const hasConversation = this.submittedMessage || this.model.items.length > 0;
 		this.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.element.classList.toggle('has-conversation', hasConversation);
-		this.heading.hidden = hasConversation;
+		this.heading.hidden = hasConversation || this.presentation === 'embedded';
 		this.tips.update();
 	}
 }

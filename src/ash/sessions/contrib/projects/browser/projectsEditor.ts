@@ -15,7 +15,7 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
-import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
@@ -37,6 +37,8 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import { IProjectsService, type ProjectSortOrder, type ProjectsState } from './projectsService.js';
 import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ProjectChatInput } from './projectChatInput.js';
 import './projects.css';
 
 /** A pinned project shows its removal action in the same slot on hover or focus. */
@@ -84,6 +86,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private createActionViewItem!: ButtonActionViewItem;
 	private sortDropdown!: DropdownMenuActionViewItem;
 	private sortMenuOpen = false;
+	private readonly projectInputs = this._register(new DisposableMap<string, ProjectChatInput>());
+	private activeProjectInput: ProjectChatInput | undefined;
 
 	constructor(
 		@IProjectsService private readonly projects: IProjectsService,
@@ -97,6 +101,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		@IDialogService private readonly dialogs: IDialogService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super('sessions.editor.projects', themeService, storageService);
 	}
@@ -312,6 +317,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
+		this.activeProjectInput?.setVisible(visible);
+		if (!visible && this.activeProjectInput?.submitted) this.activeProjectInput = undefined;
 		this.updateTitlebar();
 		if (visible) {
 			void this.projects.reload();
@@ -328,7 +335,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.domNode.classList.toggle('narrow', dimension.width < 760);
 	}
 	public override focus(): void {
-		this.projects.state.get().selectedId ? this.title.focus() : this.createActionViewItem.focus();
+		if (this.projects.state.get().selectedId) {
+			if (this.activeProjectInput) this.activeProjectInput.focus();
+			else this.title.focus();
+		} else {
+			this.createActionViewItem.focus();
+		}
 	}
 
 	private updateTitlebar(): void {
@@ -341,6 +353,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private render(state: ProjectsState): void {
+		// Metadata can refresh while the editor has a selection or an IME composition.
+		// Keep the same detail DOM and composer in that case, replacing only its supporting content.
+		const retainedInput = this.activeProjectInput;
+		const retainDetail = !!state.selected && retainedInput === this.projectInputs.get(state.selected.id)
+			&& this.body.querySelector('.ash-projects-detail:not(.ash-projects-skeleton)') !== null;
+		const focusedInComposer = retainedInput?.element.contains(getActiveElement(this.domNode.ownerDocument)) ?? false;
 		if (state.selectedId && this.sortMenuOpen) {
 			this.contextMenus.hideContextMenu();
 		}
@@ -349,7 +367,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const focusKey = this.body.contains(focused) ? focused.dataset.projectControl : undefined;
 		this.relativeTimeUpdate.cancel();
 		this.content.clear();
-		this.body.replaceChildren();
+		if (!retainDetail) this.body.replaceChildren();
 		this.breadcrumbSeparator.hidden = !state.selected && !loadingProject;
 		if (this.rename && this.rename.project.id !== state.selected?.id) {
 			this.finishRename(false);
@@ -410,7 +428,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		} else if (!state.loading && !state.message) {
 			this.renderEmpty(!!state.query);
 		}
-		if (focusKey) {
+		if (!state.selected) {
+			this.activeProjectInput?.setVisible(false);
+			this.activeProjectInput = undefined;
+		}
+		if (focusKey && !focusedInComposer) {
 			(
 				Array.from(this.body.querySelectorAll<HTMLElement>('[data-project-control]')).find(
 					node => node.dataset.projectControl === focusKey,
@@ -722,8 +744,20 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	private renderProject(project: Project): void {
 		const document = this.domNode.ownerDocument;
-		const layout = h(document, 'div', { className: 'ash-projects-detail' });
-		const overview = h(document, 'section', { className: 'ash-projects-overview' });
+		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail:not(.ash-projects-skeleton)') ?? h(document, 'div', { className: 'ash-projects-detail' });
+		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
+		let input = this.projectInputs.get(project.id);
+		// Only start a fresh composer on return. A late project refresh must not
+		// dispose a successful sender before its scheduled conversation navigation.
+		if (!input || input.submitted && this.activeProjectInput !== input) {
+			this.projectInputs.deleteAndDispose(project.id);
+			input = this.instantiationService.createInstance(ProjectChatInput, document, project.id);
+			this.projectInputs.set(project.id, input);
+		}
+		if (this.activeProjectInput !== input) this.activeProjectInput?.setVisible(false);
+		this.activeProjectInput = input;
+		if (!overview.contains(input.element)) overview.replaceChildren(input.element);
+		input.setVisible(this.isVisible());
 		const heading = h(
 			document,
 			'div',
@@ -739,7 +773,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			},
 			'edit',
 		);
-		overview.append(
+		const goals = h(document, 'section', { className: 'ash-projects-goals' });
+		goals.append(
 			heading,
 			h(
 				document,
@@ -828,6 +863,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			list.append(row);
 		}
 		materials.append(list);
+		layout.querySelector('.ash-projects-materials')?.remove();
 		this.button(
 			materials,
 			{
@@ -848,8 +884,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				localize('projects.referenceHint', 'Files stay in their original location.'),
 			),
 		);
-		layout.append(overview, materials);
-		this.body.append(layout);
+		materials.append(goals);
+		if (overview.parentElement !== layout) layout.append(overview);
+		layout.append(materials);
+		if (layout.parentElement !== this.body) this.body.append(layout);
 	}
 
 	private renderLoading(detail: boolean): void {

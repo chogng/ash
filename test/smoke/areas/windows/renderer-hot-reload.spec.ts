@@ -12,7 +12,7 @@ import type * as Stanza from '../../../../src/ash/editor/editor.main.js';
 import { createLogger, createServer } from 'vite';
 import { createServer as createHttpServer } from 'node:http';
 import type { DisposableStore } from '../../../../src/ash/base/common/lifecycle.js';
-import type { ChatInputTipPresenter } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
+import type { ChatInputTipPresenter } from '../../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.js';
 import type { ChatWidget } from '../../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { CoworkWidget } from '../../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
 import type { ViewPane } from '../../../../src/ash/workbench/browser/parts/views/viewPane.js';
@@ -338,7 +338,8 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const { BrowserStorageService } = await import(moduleUrl('workbench/services/storage/browser/storageService.ts'));
 			const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
 			const { IChatTipService, ChatTipService } = await import(moduleUrl('workbench/contrib/chat/browser/chatTipService.ts'));
-			const { ChatInputTipPresenter } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.ts'));
+			const { ChatInputTipPresenter } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.ts'));
+			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHost.ts'));
 			const scope = new DisposableStore();
 			const services = scope.add(new InstantiationService());
 			const storage = scope.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'widget-hmr', backend: localStorage, flushInterval: 0 }));
@@ -351,7 +352,8 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const editor = globalThis.stanza.editor.getEditors()[0]!;
 			const model = editor.getModel()!;
 			model.setValue('kept through widget reload');
-			const presenter = scope.add(services.createInstance(ChatInputTipPresenter, { container: host, isEligible: () => true, focusInput: () => editor.focus() })) as ChatInputTipPresenter;
+			const noticeHost = scope.add(new ChatInputNoticeHost(() => editor.focus()));
+			const presenter = scope.add(services.createInstance(ChatInputTipPresenter, { container: host, isEligible: () => true, focusInput: () => editor.focus() }, noticeHost)) as ChatInputTipPresenter;
 			editor.focus();
 			editor.setSelection({ startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 9 });
 			globalThis.widgetHotReloadEvidence = { scope, presenter, editor, model, root: editor.getDomNode(), host, document, previous: presenter.current!.domNode, previousButton: presenter.current!.domNode.querySelector<HTMLButtonElement>('button')! };
