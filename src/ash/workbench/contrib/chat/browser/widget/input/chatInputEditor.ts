@@ -24,6 +24,8 @@ import { InjectedTextCursorStops, TrackedRangeStickiness, type IModelDecorationO
 import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { dynamicVariableDecorationType } from '../../attachments/chatDynamicVariables.js';
 import { registerChatInputReferenceDecorationType } from './editor/chatInputReferenceDecorations.js';
+import { InputEditorCommandArgumentHint } from './editor/chatInputCommandArgumentHint.js';
+import { LinkDetector } from '../../../../../../editor/contrib/links/browser/links.js';
 import { localize } from '../../../../../../nls.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../../base/common/network.js';
@@ -85,7 +87,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			createChatSkillCompletionProvider(options.skills),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
-		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID];
+		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID, LinkDetector.ID];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -109,6 +111,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		}));
 		this._register(registerChatInputReferenceDecorationType(codeEditors));
 		this.referenceStyle = codeEditors.resolveDecorationOptions(dynamicVariableDecorationType, false);
+		this._register(new InputEditorCommandArgumentHint(this.editor, options.slashCommands));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(toDisposable(() => { for (const widget of this.referenceWidgets.values()) widget.dispose(); this.referenceWidgets.clear(); }));
 		this._register(this.editor.onDidChangeCursorSelection(() => this.updateReferenceSelection()));

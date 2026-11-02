@@ -109,6 +109,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Chat / Speech · TODO
 
+- [ ] **后端前置 · Chat 输入编辑器补全** · `editor/agentHostInputCompletions.ts`、`agentHostInputCompletionsBase.ts` 尚无 Ash 的 `provideChatInputCompletions` 生产 RPC／provider 和接受操作；先在现有会话领域闭合这些契约，再接入取消、版本和生命周期。`chatInputInlineSuggestions.ts` 的上游开关属于 Copilot Chat provider；当前 Ash Chat 没有对应行内建议 provider，不能登记为 Ash Code／TUI 的专属设置。2026-11-02 已确认保留现有 4 个 Ash 输入导出及职责，决定和已闭合行为记于 `docs/chat.md`，不再等待入口保留确认。
+- [ ] **Owner 前置 · 输入编辑器剩余端口** · `chatInputCompletionUtils.ts` 的 model 端口尚无已保留 Stanza snapshot 输入链的消费者；`chatEditorInputContentProvider.ts` 需要模型解析／bulk-edit 的实际调用边。`chatInputEditorContrib.ts`、`chatInputEditorHover.ts`、`editorHoverWrapper.ts`、`media/editorHoverWrapper.css` 依赖尚未接入的 participant／请求解析或专用 hover 契约；`chatInlineAttachments.ts`、`media/chatInlineAttachments.css` 的 anchor／projection owner 与当前引用位置、附件内容和原生控件 owner 不兼容。下一步必须从对应实际用户行为及下层领域契约开始；不新增并行引用状态、无调用方 facade 或复制式样式。现有附件、快照、通用占位和 hover 行为保留原 owner；这份缺口不表示 Ash 的现有行为缺失。
+- [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。本地只读 VS Code 参照没有 node_modules、编译测试输出或可运行产物，尚不能执行相同 UI 场景；取得对应参照产物后复核输入、焦点／选区、换行和主题，不将本轮视为完整上游 API／UI 对齐验收。
+
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
 
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。

@@ -22,6 +22,10 @@ VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照
 
 `ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill 补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
 
+2026-11-02 已确认保留 Ash 的 `CHAT_INPUT_LANGUAGE_ID`、`createChatCommandCompletionProvider`、`createChatSkillCompletionProvider` 和 `createChatFileAttachments` 入口及职责。补全读取捕获的 Stanza snapshot，沿当前命令／Skill 目录生成替换；前导空白与提交端的 trim 规则一致，接受补全复用已有分隔空格。`SlashCommandCatalog` 发布同一份命令快照的变化，`editor/chatInputCommandArgumentHint.ts` 借用它投影参数提示；提示不进入文本、撤销历史或提交内容，键入参数和只读状态会隐藏提示，目录更新、撤销和恢复可重新计算它。提示使用输入占位文字的主题 token，并通过现有 ARIA 状态和输入帮助提供同一说明。
+
+IDE 的 `chat.contribution.ts` 在现有会话链接 opener 之后注册 `editor/chatInputSessionLinkProvider.ts`。输入内的 canonical `agent-host-session:` 链接经共享解析器验证，交回编辑器链接检测和 `IOpenerService`；Ctrl／Command 点击和光标处的 Open Link 命令均不提交或修改草稿。嵌套在其他 URL 内、参数重复或带 fragment 的候选不作为会话链接。该注册不扩展 Agents Window 的会话导航契约。VS Code 的 `github.copilot.completions.chat.enabled` 属于 Copilot 聊天输入 provider，Ash 当前没有对应 provider，不把这个插件设置注册为 Ash Code 或 Chat 的通用开关。
+
 Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，最大文本高度 314px，文本增长向上扩展。textarea 根据内容与容器宽度布局，ResizeObserver／调度器随输入释放。`ChatAttachmentModel` 是当前附件内容与身份的唯一 owner，并原子发布新增、更新、删除事件；`ChatDynamicVariableModel` 借用这些内容，只拥有正文位置和按文本模型版本保存的撤销快照。删除、撤销、重做与草稿恢复均同步回同一附件集合；来源拥有的实时上下文更新原身份，撤销不能复活已撤销的来源。输入框不展示当前编辑器文件推荐栏，切换文件或 SCM diff 不自动附加文件。添加上下文、粘贴、拖放和代码选区仍生成消息内引用。
 
 `attachments/chatAttachmentResolveService.ts` 拥有编辑器、未命名编辑器、资源、图片、符号与 SCM 历史项的 Chat 附件构造：文本优先取工作副本或版本快照，目录生成限定范围的文件清单，图片复用原有解码、缩放与内容哈希管线。“打开的编辑器”跳过没有文本快照和文件 provider 的页签；只读编辑器的显式内容代表其显示版本，优先于同 URI 的可编辑工作副本；可编辑输入继续读取未保存文本。读取失败仍由原草稿报告，取消后的结果不能附加。工作区和编辑器图片在加入草稿前检查当前模型能力。 粘贴、拖放和文件选择也通过同一图片解析服务；当原生文件缺少 MIME 或仅有通用二进制类型时，按扩展名识别 PNG、JPEG、GIF 和 WebP，并在读取前检查图片大小与模型能力。混合文件批次在全部准备完成并再次检查模型和取消状态后，交回原有正文引用入口接收。符号源版本校验由 Search 的 `common/search.ts` 共享领域操作承担；SCM 仍解析固定提交与比较父版本，Chat resolver 只构造捕获条目。`attachments/chatContextPickService.ts` 拥有公开 value／picker／pick 契约与窗口注册；`AttachContextAction` 拥有选择界面、查询取消、错误和原输入接收。内置来源及 Browser、Debug、SCM 注册方均使用该契约。共享附件领域数据保留在 `services/chat/common/chatContextService.ts`；Code 和 Sessions 通过 `chat.shared.contribution.ts` 装配窗口默认服务。
@@ -146,6 +150,8 @@ IDE 与 Agent Window 均可从命令面板运行“开发人员：导出 Agent H
 ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录制状态及读取失败、未录制、截断和分页上限。每个文件最多 16 MiB，最多 1,000 个文件、64 MiB，每类会话证据最多 64 页；正文索引最多 1,000 项，完整原引用仍在诊断分页中。daemon 每次只读取该 profile 的最多 32 个日志文件，共最多 64 MiB，不修改生产日志。超过限额的来源和宿主尾读缺口均有标记，不再因旧的 1 MiB 单文件限制丢弃正文。部分来源失败仍导出已有证据并通知用户。取消等待当前有界读取结束后停止并释放尚未读取的资源，不下载半成品；后端连接或 capture 变化拒绝迟到证据，不向新代次续读。复测入口为 `exportAgentHostDebugLogs.test.ts`、`appServerAgentService.test.ts` 和 `test/smoke/areas/chat/chat-debug-logs.spec.ts`。
 
 ## 历史验证与复测入口
+
+2026-11-02 在 Windows x64 验证输入编辑器：`chatInputEditor.test.ts`、`chatPasteProviders.test.ts`、`slashCommands.test.ts` 共 86 项通过，含 en／zh-CN × 四主题的真实 Chromium 参数提示、ARIA／帮助、目录更新、文本／焦点／撤销保持与释放；Open Link 的 provider／菜单生命周期和真实编辑器命令另有 2 项补验通过。Renderer、完整 unit 与 automation 类型检查、修改文件格式、CSS 和翻译检查通过。真实 Electron＋App Server 的代码快照粘贴场景通过，键盘命令场景最终通过参数提示换行、参数键入后隐藏及前导空白补全。单测记录为 `.build/desktop/chat-input-verified.log`、`.build/desktop/chat-input-links-verified.log`；两个桌面场景在同一轮最终复验通过，记录为 `.build/desktop/chat-input-smoke-combined.log`。本轮不包含服务端动态输入补全、Chat 行内建议 provider 或上游运行环境验收。
 
 2026-10-30 在 Windows x64 按代码与测试验收语音链路：SpeechService、VoiceClient、听写会话／云端适配器／引导和 Call adapter 共 6 文件 60 项通过，覆盖输入归属、准备／取消、PCM 尾包、停止回执和迟到结果；`just test ash-voice-host --lib --features host` 的 8 项通过，覆盖有符号 PCM、控制帧、设备控制代次、重采样、滤波状态清理、回声参考和增益不削波。重新编译后的最终复验包含于 `.build/todo-code-audit-voice-document-scoped.log`，AudioHost 日志为 `.build/todo-code-audit-audio-host.log`。本轮使用受控账户／音频接口和合成信号，原语音验收待办按代码口径消项；没有新增真实账户、物理采音、主观音质或界面验收。旧麦克风枚举故障仍待定位，完整 Prompt／Agent 格式及缺失 MCP capability 不在本次结论内。
 

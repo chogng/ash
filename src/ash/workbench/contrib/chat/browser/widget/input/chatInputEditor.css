@@ -16,6 +16,11 @@
 	cursor: pointer;
 }
 
+.ash-chat-input-editor .ash-chat-command-argument-hint {
+	color: var(--ash-input-placeholderForeground);
+	pointer-events: none;
+}
+
 /* Each attachment owns its visible control; this object reserves its atomic inline position. */
 .ash-chat-input-editor
 	.stanza-editor

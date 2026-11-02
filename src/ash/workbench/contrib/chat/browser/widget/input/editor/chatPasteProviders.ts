@@ -399,7 +399,8 @@ function parseCopiedCode(raw: string | undefined, clipboardText: string | undefi
 				name,
 				resource,
 				reference: { start: 0, end: name.length },
-				content: `Source: ${resource}\n\n${clipboardText}`,
+				// Snapshots use LF independently of the source editor and destination model's EOL.
+				content: `Source: ${resource}\n\n${clipboardText.replace(/\r\n|\r/g, '\n')}`,
 			}],
 		};
 	} catch {

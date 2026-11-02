@@ -13,17 +13,21 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),
 		triggerCharacters: Object.freeze(['/']),
 		provideCompletions: (request: LanguageCompletionProviderRequest) => {
-			if (request.position.lineNumber !== 1) return undefined;
-			const line = request.snapshot.getText().split('\n', 1)[0] ?? '';
-			const prefix = line.slice(0, request.position.column - 1);
+			const lines = request.snapshot.getText().split('\n');
+			const lineNumber = request.position.lineNumber;
+			// Submission trims the draft. Suggestions must admit the same leading whitespace.
+			if (lines.slice(0, lineNumber - 1).some(line => line.trim())) return emptyCompletionResult();
+			const line = lines[lineNumber - 1] ?? '';
+			const commandStart = line.search(/\S/u);
+			const prefix = line.slice(commandStart, request.position.column - 1);
 			if (!prefix.startsWith('/') || /\s/.test(prefix)) return emptyCompletionResult();
 			const query = prefix.slice(1);
 			const matches = catalog.matching(query);
 			// Weak name and description matches need an explicit choice before Enter can accept them.
 			const selectFirst = !query || (matches[0]?.name.startsWith(query.toLowerCase()) ?? false);
-			const commandEnd = line.search(/\s|$/);
-			const replacementEnd = commandEnd + (line[commandEnd] === ' ' ? 1 : 0);
-			const range = Range.fromPositions(new Position(1, 1), new Position(1, replacementEnd + 1));
+			const commandEnd = commandStart + line.slice(commandStart).search(/\s|$/);
+			const replacementEnd = commandEnd + (/[ \t]/u.test(line[commandEnd] ?? '') ? 1 : 0);
+			const range = Range.fromPositions(new Position(lineNumber, commandStart + 1), new Position(lineNumber, replacementEnd + 1));
 			return Object.freeze({
 				items: Object.freeze(matches.map((command, index) => Object.freeze({
 					id: command.name,
@@ -110,5 +114,6 @@ function activeSkillToken(line: string, cursorColumn: number): { readonly query:
 	if (!/^[a-z0-9-]*$/.test(tokenSuffix)) {
 		return undefined;
 	}
-	return { query, startColumn, endColumn: cursorColumn + tokenSuffix.length };
+	const tokenEnd = cursorColumn + tokenSuffix.length;
+	return { query, startColumn, endColumn: tokenEnd + (/[ \t]/u.test(line[tokenEnd] ?? '') ? 1 : 0) };
 }

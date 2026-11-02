@@ -90,6 +90,8 @@ import { IPreferencesService } from '../../../src/ash/workbench/services/prefere
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { ChatInputSessionLinkProvider } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/editor/chatInputSessionLinkProvider.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { CopyTextProvider } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/editor/chatPasteProviders.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -146,7 +148,7 @@ declare global {
 		finishSubmission(error?: string): void;
 		replaceDraftOnClear(): void;
 		recoveryState(): { pending: boolean; drafts: NonNullable<Parameters<ChatInputPart['restoreDraft']>[0]>[]; };
-		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -217,7 +219,7 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
@@ -690,6 +692,7 @@ const delegate: ChatInputDelegate = {
 const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
+resources.add(services.createInstance(ChatInputSessionLinkProvider));
 resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
 resources.add(languageFeatures.documentPasteEditProvider.register({ scheme: '*', hasAccessToAllModels: true }, services.createInstance(CopyTextProvider)));
 if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture')) {
@@ -951,6 +954,13 @@ window.ashChatInputIntegration = {
 		part.addContext({ id: 'deferred-context', kind: 'file', name: 'draft.txt', resource: URI.file('/workspace/draft.txt'), resolve: () => pending });
 	},
 	releaseReferencePreview: () => releaseReferencePreview?.(),
+	inputLinkAtCursor: () => {
+		const editor = inlineEditor?.codeEditor;
+		const position = editor?.getPosition();
+		return editor && position ? LinkDetector.get(editor)?.getLinkOccurrence(position)?.target : undefined;
+	},
+	openInputLink: () => services.get(ICommandService).executeCommand('editor.action.openLink'),
+	setSlashCommands: slashCommands => { state = { ...state, slashCommands }; part.render(state); },
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },

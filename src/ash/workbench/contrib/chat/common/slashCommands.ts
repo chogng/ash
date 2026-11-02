@@ -1,5 +1,6 @@
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
 import { localize } from '../../../../nls.js';
+import { observableValue } from '../../../../base/common/observable.js';
 import { ProductSlashCommands, type SlashCommandDefinition } from '../../../services/chat/common/chatService.js';
 import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from './chat.js';
 
@@ -32,7 +33,9 @@ export class SlashCommandCatalog {
 	private readonly local: readonly LocalSlashCommandRegistration[];
 	private server: readonly SlashCommandDefinition[] = Object.freeze([]);
 	private entriesByName: ReadonlyMap<string, CatalogEntry> = new Map();
-	private _commands: readonly SlashCommandDefinition[] = Object.freeze([]);
+	private readonly commandSnapshot = observableValue<readonly SlashCommandDefinition[]>(this, Object.freeze([]));
+	/** Subscriptions own their listeners; the catalog remains a plain snapshot owner. */
+	public readonly onDidChange = this.commandSnapshot.onDidChange;
 
 	constructor(local: readonly LocalSlashCommandRegistration[], server: readonly SlashCommandDefinition[]) {
 		this.local = Object.freeze([...local]);
@@ -40,7 +43,7 @@ export class SlashCommandCatalog {
 	}
 
 	get commands(): readonly SlashCommandDefinition[] {
-		return this._commands;
+		return this.commandSnapshot.get();
 	}
 
 	setServerCommands(server: readonly SlashCommandDefinition[]): void {
@@ -67,7 +70,7 @@ export class SlashCommandCatalog {
 		}
 		for (const command of this.server) append(command, Object.freeze({ origin: 'server' }));
 		this.entriesByName = entriesByName;
-		this._commands = Object.freeze(commands);
+		this.commandSnapshot.set(Object.freeze(commands));
 	}
 
 	get(name: string): SlashCommandDefinition | undefined {
