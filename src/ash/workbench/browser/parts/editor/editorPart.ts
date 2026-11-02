@@ -1068,8 +1068,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
 		if (this._groups.length === 1) throw new Error('EditorPart cannot remove its last group');
-		this.preserveFocus(() => this.editorGrid.removeView(host.view));
+		// Grid removal emits layout synchronously; observers must only see groups
+		// whose views still belong to that Grid.
 		this._groups.splice(index, 1);
+		this.preserveFocus(() => this.editorGrid.removeView(host.view));
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		if (this._activeGroup === host.group) {

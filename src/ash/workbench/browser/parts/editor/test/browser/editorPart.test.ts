@@ -1711,6 +1711,29 @@ test('EditorPart keeps unguarded clean group replacement synchronous for layout 
 	}
 });
 
+test('EditorPart layout observers can query every published group during removal', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using editor = createEditorPart(dom.window.document.body, {});
+		editor.layout(new Dimension(900, 600));
+		const remaining = editor.activeGroup;
+		const removed = editor.addGroup(remaining.id, Direction.Right);
+		const failures: unknown[] = [];
+		const observed: number[][] = [];
+		using listener = editor.onDidLayout(() => {
+			try {
+				observed.push(editor.groups.map(group => group.id));
+				for (const group of editor.groups) editor.isGroupVisible(group.id);
+				editor.setEditorContentVisible(true);
+			} catch (error) { failures.push(error); }
+		});
+		assert.equal(await editor.removeGroup(removed), true);
+		assert.deepEqual(failures, []);
+		assert.ok(observed.length > 0);
+		assert.ok(observed.every(ids => ids.length === 1 && ids[0] === remaining.id));
+	} finally { dom.window.close(); }
+});
+
 test('EditorPart confirms an inactive dirty editor before unguarded group removal', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
