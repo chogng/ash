@@ -215,7 +215,7 @@ test('Chat completes catalog commands from the keyboard and restores the empty i
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const editor = page.locator('.ash-chat-input-editor');
+	const editor = page.locator('.ash-chat-view-pane .ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
 	await page.keyboard.insertText('/history argument');
@@ -238,10 +238,17 @@ test('Chat completes catalog commands from the keyboard and restores the empty i
 	await input.press('ControlOrMeta+a');
 	await input.press('Backspace');
 	await input.press('Shift+Enter');
-	await input.pressSequentially('  /ne');
+	await input.pressSequentially('  /');
 	await expect(editor.locator('.stanza-editor-completion-label').getByText('/new', { exact: true })).toBeVisible();
-	await input.press('Enter');
+	await editor.locator('.stanza-editor-completion-label').getByText('/new', { exact: true }).click();
 	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  /new ']);
+	await input.press('Backspace');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  ']);
+	await input.press('ControlOrMeta+z');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  /new ']);
+	await input.press('ControlOrMeta+Shift+z');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  ']);
+	await expect(input).toBeFocused();
 	await input.press('ControlOrMeta+a');
 	await input.press('Backspace');
 	await expect(editor.locator('.stanza-editor-placeholder-text')).toBeVisible();

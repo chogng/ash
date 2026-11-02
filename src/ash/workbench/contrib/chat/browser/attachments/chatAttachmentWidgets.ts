@@ -17,8 +17,6 @@ import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../../files/browser/fileConsta
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { FOCUS_SEARCH_COMMAND_ID } from '../../../search/common/constants.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget } from '../../../../../editor/browser/editorBrowser.js';
-import { PositionAffinity } from '../../../../../editor/common/model.js';
 import { ContextViewFocusRestore } from '../../../../../base/browser/ui/contextview/contextview.js';
 import { IContextMenuService, IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
@@ -26,13 +24,12 @@ import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { IconLabel } from '../../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { MarkdownString } from '../../../../../base/common/htmlContent.js';
-import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
-import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Emitter } from '../../../../../base/common/event.js';
 import { cancelOnDispose, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import type { Icon } from '../../../../../base/common/icon.js';
-import { IChatAttachmentWidgetRegistry, type IChatAttachmentWidgetInstance } from './chatAttachmentWidgetRegistry.js';
+import type { IChatAttachmentWidgetInstance } from './chatAttachmentWidgetRegistry.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import {
@@ -45,125 +42,6 @@ import { isRemoteResource } from '../../../../../platform/remote/common/remote.j
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
 import type { URI } from '../../../../../base/common/uri.js';
-
-interface SavedContentAttachmentWidget {
-	readonly onDidOpen: Event<void>;
-	setHoverMessage(message: MarkdownString): void;
-	hideHover(): void;
-}
-
-/** Owns editor projection only; each attachment widget owns its DOM and actions. */
-export class InlineChatAttachmentWidget extends Disposable {
-	readonly widgets: readonly IContentWidget[];
-	private readonly fileWidget: FileAttachmentWidget | undefined;
-	private readonly savedContentWidget: SavedContentAttachmentWidget | undefined;
-	private readonly attachmentWidget: IChatAttachmentWidgetInstance;
-
-	constructor(
-		private readonly editor: ICodeEditor,
-		public attachment: ChatContextAttachment,
-		remove: () => void,
-		openSaved: (() => void) | undefined,
-		@IChatAttachmentWidgetRegistry registry: IChatAttachmentWidgetRegistry,
-		@IInstantiationService instantiation: IInstantiationService,
-	) {
-		super();
-		const document = editor.getDomNode()!.ownerDocument;
-		const host = h(document, 'div');
-		const options = { shouldFocusClearButton: false, supportsDeletion: true };
-		let content: IChatAttachmentWidgetInstance | undefined;
-		try {
-			if (attachment.kind === 'file' || attachment.kind === 'codeSelection' || attachment.kind === 'directory') {
-				content = this.fileWidget = instantiation.createInstance(FileAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'image') {
-				content = instantiation.createInstance(ImageAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'terminal' || attachment.kind === 'terminalCommand' || attachment.terminalSnapshot) {
-				content = instantiation.createInstance(TerminalCommandAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'browserElement') {
-				content = instantiation.createInstance(ElementChatAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'scmHistoryItem') {
-				content = instantiation.createInstance(SCMHistoryItemAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'scmHistoryItemChange') {
-				content = instantiation.createInstance(SCMHistoryItemChangeAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'instruction') {
-				content = instantiation.createInstance(PromptFileAttachmentWidget, attachment, options, host);
-			} else if (attachment.kind === 'tool' || attachment.kind === 'toolSet' || attachment.kind === 'toolSelection') {
-				content = instantiation.createInstance(ToolSetOrToolItemAttachmentWidget, attachment, options, host);
-			} else {
-				content = registry.createWidget(attachment, options, host);
-				if (!content && attachment.kind === 'sessionReference') throw new Error('Missing Chat reference attachment widget registration');
-				content ??= instantiation.createInstance(DefaultChatAttachmentWidget, attachment, options, host);
-			}
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
-		this.attachmentWidget = this._register(content);
-		this._register(content.onDidDelete(remove));
-		host.className = this.fileWidget ? 'ash-chat-code-reference-widget' : 'ash-chat-reference-attachment-widget';
-		if (this.fileWidget) {
-			const file = this.fileWidget;
-			if (attachment.kind !== 'directory') this.savedContentWidget = file;
-			this._register(addDisposableListener(file.element, 'dblclick', event => {
-				if (!(event.target as HTMLElement).closest('.ash-chat-code-reference-source')) return;
-				event.preventDefault();
-				const model = editor.getModel()!;
-				const reference = this.attachment.reference!;
-				editor.setSelection({
-					startLineNumber: model.getPositionAt(reference.start).lineNumber, startColumn: model.getPositionAt(reference.start).column,
-					endLineNumber: model.getPositionAt(reference.end).lineNumber, endColumn: model.getPositionAt(reference.end).column,
-				});
-				editor.focus();
-			}));
-		}
-		if (content instanceof ElementChatAttachmentWidget || content instanceof SCMHistoryItemAttachmentWidget || content instanceof SCMHistoryItemChangeAttachmentWidget || content instanceof DefaultChatAttachmentWidget && !attachment.resource) {
-			this.savedContentWidget = content;
-		}
-		if (this.savedContentWidget) {
-			this._register(this.savedContentWidget.onDidOpen(() => openSaved?.()));
-			this._register(editor.onDidChangeCursorSelection(() => this.savedContentWidget?.hideHover()));
-		}
-		this.widgets = [this.addContentWidget(host)];
-	}
-
-	get opensSavedContent(): boolean {
-		return this.savedContentWidget !== undefined;
-	}
-
-	get widthInEm(): number {
-		const font = this.editor.getOption(EditorOption.fontInfo);
-		// Cursor positions use whole pixels; reserve the complete fractional-width surface.
-		return Math.ceil(this.attachmentWidget.element.getBoundingClientRect().width || this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize;
-	}
-
-	setSelected(selected: boolean): void {
-		this.attachmentWidget.element.classList.toggle('selected', selected);
-	}
-
-	setHoverMessage(message: MarkdownString): void {
-		this.savedContentWidget?.setHoverMessage(message);
-	}
-
-	open(): void {
-		if (this.isDisposed) return;
-		this.attachmentWidget.element.click();
-	}
-
-	private addContentWidget(node: HTMLElement): IContentWidget {
-		const widget: IContentWidget = {
-			getId: () => `chat-context-${this.attachment.id}`,
-			getDomNode: () => node,
-			getPosition: () => ({
-				position: this.editor.getModel()!.getPositionAt(this.attachment.reference!.start),
-				positionAffinity: PositionAffinity.LeftOfInjectedText,
-				preference: [ContentWidgetPositionPreference.EXACT],
-			}),
-		};
-		this.editor.addContentWidget(widget);
-		this._register(toDisposable(() => this.editor.removeContentWidget(widget)));
-		return widget;
-	}
-}
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {

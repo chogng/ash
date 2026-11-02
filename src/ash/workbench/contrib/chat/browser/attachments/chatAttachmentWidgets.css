@@ -1,14 +1,3 @@
-/* The editor positions the host; one flex row owns the complete attachment surface. */
-.ash-chat-code-reference-widget {
-	width: max-content;
-	height: var(--ash-chat-context-reference-height);
-}
-
-.ash-chat-reference-attachment-widget {
-	width: max-content;
-	height: var(--ash-chat-context-reference-height);
-}
-
 .ash-chat-reference-attachment {
 	display: flex;
 	align-items: center;
@@ -187,6 +176,11 @@
 	max-width: min(600px, calc(100vw - 56px));
 	max-height: 55vh;
 	object-fit: contain;
+}
+
+.ash-chat-image-reference-hover,
+.ash-chat-image-reference-hover > img {
+	max-width: 100%;
 }
 
 .ash-chat-terminal-reference-preview {

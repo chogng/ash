@@ -6,6 +6,7 @@ import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration
 import { ILanguageFeaturesService } from '../../../../../../../editor/common/services/languageFeatures.js';
 import type { ITextModel } from '../../../../../../../editor/common/model.js';
 import { CHAT_INPUT_LANGUAGE_ID } from './chatInputCompletions.js';
+import { isAtTriggerCharacterToken } from './chatInputCompletionUtils.js';
 
 /** Registers host-backed candidates for one input model and its current draft lifetime. */
 export abstract class AgentHostInputCompletionsBase extends Disposable {
@@ -55,7 +56,8 @@ export abstract class AgentHostInputCompletionsBase extends Disposable {
 		signal: AbortSignal,
 		provider: Omit<LanguageCompletionProvider, 'id' | 'languageIds'>,
 	): Promise<LanguageCompletionProviderResult | undefined> {
-		if (!this.isCurrentInput(request.resource?.toString())) {
+		if (!this.isCurrentInput(request.resource?.toString()) || this.model.getVersionId() !== request.snapshot.version
+			|| !isAtTriggerCharacterToken(this.model, request.position, provider.triggerCharacters ?? [])) {
 			return undefined;
 		}
 		const draft = this.currentLifecycle();

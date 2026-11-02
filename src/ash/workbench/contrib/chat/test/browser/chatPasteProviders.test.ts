@@ -8,8 +8,7 @@ import type { IFileService } from '../../../../../platform/files/common/files.js
 import type { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
 import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
-import { ChatAttachmentResolveService } from '../../browser/attachments/chatAttachmentResolveService.js';
-import { createChatFileAttachments } from '../../browser/widget/input/editor/chatPasteProviders.js';
+import { ChatAttachmentResolveService, createChatFileAttachments } from '../../browser/attachments/chatAttachmentResolveService.js';
 import { URI } from '../../../../../base/common/uri.js';
 
 // File preparation uses only the resolver's in-memory image port in this suite.

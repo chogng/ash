@@ -1,0 +1,26 @@
+/* The editor positions the host; one flex row owns the complete attachment surface. */
+.ash-chat-code-reference-widget {
+	width: max-content;
+	height: var(--ash-chat-context-reference-height);
+}
+
+.ash-chat-reference-attachment-widget {
+	width: max-content;
+	height: var(--ash-chat-context-reference-height);
+}
+
+.ash-chat-input-editor .ash-chat-code-reference {
+	cursor: pointer;
+}
+
+/* Each attachment owns its visible control; this object reserves its atomic inline position. */
+.ash-chat-input-editor
+	.stanza-editor
+	.view-lines
+	.stanza-editor-line-text
+	> :is(
+		.ash-chat-code-reference-space,
+		.ash-chat-attachment-reference-space
+	) {
+	color: transparent;
+}

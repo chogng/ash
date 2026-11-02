@@ -495,7 +495,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
 						if (previewOwned) {
 							if (previewAttachment?.terminalSnapshot) return localize('terminal.chat.previewAccessibility', 'Saved terminal output: {0}\nThis preview is read only and retains the output captured when attached. Press Escape or Close terminal preview to return to the message.\n\n{1}', previewAttachment.name, previewAttachment.terminalSnapshot.text);
-							const image = referencePreview!.querySelector('img')!;
+							const image = referencePreview!.querySelector('img');
+							if (referencePreview!.getAttribute('aria-busy') === 'true') return localize('chat.context.imageLoading', 'Loading preview: {0}', previewAttachment!.name);
+							if (!image?.naturalWidth) return localize('chat.context.previewFailed', 'Preview unavailable: {0}', previewAttachment!.name);
 							return localize('chat.context.imagePreviewAccessibility', 'Image preview: {0}\nDimensions: {1} × {2}\nPress Escape or activate Close image preview to return. This view identifies the image; it does not describe its contents.', image.alt, image.naturalWidth, image.naturalHeight);
 						}
 						const names = this.contexts.map(attachment => attachment.name).join('\n');

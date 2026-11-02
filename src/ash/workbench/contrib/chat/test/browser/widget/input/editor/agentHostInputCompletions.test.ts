@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../../../../../../test/unit/browser/context.js';
 import { DeferredPromise } from '../../../../../../../../base/common/async.js';
 import { Emitter } from '../../../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../../../base/common/lifecycle.js';
@@ -85,6 +87,62 @@ suite('AgentHostInputCompletions', () => {
 		assert.deepEqual(value.accepted, [skill]);
 	});
 
+	test('queries the host only for advertised tokens through the production completion service', async () => {
+		using resources = new DisposableStore();
+		const calls: { text: string; offset: number; }[] = [];
+		const value = fixture(resources, async ({ text, offset }) => { calls.push({ text, offset }); return []; });
+		const service = resources.add(new LanguageCompletionService(value.model, value.features.completionProvider, { resource: value.model.uri }));
+		const cases: readonly [string, number, boolean][] = [
+			['', 0, false],
+			['Review ordinary text', 12, false],
+			['mail@example.com', 9, false],
+			['Review #src/main.ts', 7, false],
+			['Review #src/main.ts', 8, true],
+			['Review #src/main.ts', 14, true],
+			['Review #src/main.ts ', 20, false],
+			['Review\t@src/main.ts', 12, true],
+			['中文 😀\n  $review', 15, true],
+			['  /mcp enable server', 20, true],
+			['say /mcp enable server', 22, false],
+			['/mcp enable\nordinary text', 25, false],
+		];
+		for (const [text, offset, expected] of cases) {
+			calls.length = 0;
+			value.model.setValue(text);
+			await service.request('ash-chat-input', value.model.getPositionAt(offset), createLanguageCompletionInvokeContext());
+			assert.deepEqual(calls, expected ? [{ text, offset }] : [], JSON.stringify({ text, offset }));
+		}
+	});
+
+	test('uses changed host capabilities to gate tokens, including punctuation triggers', async () => {
+		using resources = new DisposableStore();
+		let queries = 0;
+		const value = fixture(resources, async () => { queries++; return []; });
+		const service = resources.add(new LanguageCompletionService(value.model, value.features.completionProvider, { resource: value.model.uri }));
+		value.model.setValue('/mcp enable server');
+		for (const triggers of [[], ['#'], ['/']] as const) {
+			value.changeTriggers([...triggers]);
+			await service.request('ash-chat-input', value.model.getPositionAt(value.model.length), createLanguageCompletionInvokeContext());
+		}
+		assert.equal(queries, 1);
+		value.changeTriggers(['[', ']', '-', '^', '\\']);
+		for (const trigger of ['[', ']', '-', '^', '\\']) {
+			value.model.setValue(`Review ${trigger}source`);
+			await service.request('ash-chat-input', value.model.getPositionAt(value.model.length), createLanguageCompletionInvokeContext());
+		}
+		assert.equal(queries, 6);
+	});
+
+	test('rejects an outdated input snapshot before querying the host', async () => {
+		using resources = new DisposableStore();
+		let queries = 0;
+		const value = fixture(resources, async () => { queries++; return []; });
+		const request = value.request();
+		value.model.setValue('Ordinary text');
+		assert.equal(await value.provider.provideCompletions(request, new AbortController().signal), undefined);
+		assert.equal(queries, 0);
+	});
+
 	for (const retirement of ['draft', 'workspace', 'connection', 'dispose', 'request'] as const) {
 		test(`cancels an outstanding host query on ${retirement} retirement`, async () => {
 			using resources = new DisposableStore();
@@ -127,4 +185,29 @@ suite('AgentHostInputCompletions', () => {
 		value.completions.dispose();
 		assert.deepEqual(value.features.completionProvider.providerCatalog.providers, []);
 	});
+});
+
+suite('Agent host completion browser input', () => {
+	const browser = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) {
+		test(`ordinary typing skips host queries and a reference token still completes in ${locale}`, async () => {
+			const { page } = browser;
+			await page.goto(`/chatInput.html?hostInputCompletions&inlineCode&locale=${locale}`);
+			const input = page.getByRole('textbox', { name: 'Chat message', exact: true });
+			await input.pressSequentially('Write hello@there');
+			await page.evaluate(() => window.ashChatInputIntegration.triggerInputSuggestions());
+			assert.deepEqual(await page.evaluate(() => window.ashChatInputIntegration.hostCompletionRequests()), []);
+			await input.press('ControlOrMeta+A');
+			await input.pressSequentially('Review #src');
+			await expect(page.locator('.stanza-editor-completion-label').filter({ hasText: '#src/nested.txt' })).toBeVisible();
+			const calls = await page.evaluate(() => window.ashChatInputIntegration.hostCompletionRequests());
+			assert.ok(calls.length > 0);
+			assert.ok(calls.every(call => call.text.slice(0, call.offset).startsWith('Review #')));
+			await expect(input).toBeFocused();
+			await input.press('Enter');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveText('nested.txt');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review nested.txt ');
+			await expect(input).toBeFocused();
+		});
+	}
 });
