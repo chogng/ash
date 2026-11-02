@@ -4,7 +4,7 @@ import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { isResponseHelpful, markResponseHelpful, chatUpvoteAnimationConfiguration } from '../../common/chatResponseFeedback.js';
-import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
+import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { Turn, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 
 const target = { sessionId: 'feedback-session', threadId: 'feedback-thread', turnId: 'feedback-turn', itemId: 'feedback-item' };

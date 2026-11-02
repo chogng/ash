@@ -22,11 +22,11 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
-import type { ChatTurnErrorAction } from './chatListItems.js';
+import type { ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
-import type { IChatListItem } from './chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
 import { addDisposableListener, getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';

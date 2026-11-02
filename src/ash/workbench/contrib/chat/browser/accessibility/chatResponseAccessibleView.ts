@@ -6,7 +6,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
-import type { IChatListItem } from '../widget/chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
 
 interface ChatResponseSource {

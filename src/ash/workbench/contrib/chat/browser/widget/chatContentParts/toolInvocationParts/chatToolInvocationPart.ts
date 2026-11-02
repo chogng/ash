@@ -8,7 +8,7 @@ import { addDisposableListener, h } from '../../../../../../../base/browser/dom.
 import { Emitter } from '../../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../../nls.js';
-import type { IChatListItem } from '../../chatListItems.js';
+import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatImageGenerationProgressPart } from './chatImageGenerationProgressPart.js';
 import { ChatGeneratedImageResultSubPart } from './chatGeneratedImageResultSubPart.js';
 

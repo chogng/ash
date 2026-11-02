@@ -11,7 +11,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { createCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
-import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
+import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import type { ChatHookRun, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';

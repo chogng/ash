@@ -1,5 +1,13 @@
 {
   "ash": {
+    "chat.fontFamily.title": "字体",
+    "chat.fontFamily.description": "设置聊天消息的字体，包括 Markdown 和链接文字。使用 default 或留空时跟随界面字体。输入框和代码块的字体单独设置。",
+    "chat.fontFamily.default": "界面字体",
+    "chat.fontFamily.invalid": "消息字体必须是单行字符串，且不超过 256 个字符。",
+    "chat.fontSize.title": "字号",
+    "chat.fontSize.description": "设置聊天消息文字的基础像素大小。Markdown 标题保留字号层级。输入框和代码块的字号单独设置。",
+    "chat.fontSize.invalid": "消息字号必须是 6 到 100 之间的数字。",
+    "chat.typography.help": "在设置中打开“聊天 → 外观”可更改消息字体和字号，包括 Markdown 和链接文字。消息输入框和代码块有独立的字体设置。修改设置会保留草稿和阅读位置。",
     "agentsVoice.introduction.help": "使用 Tab 访问“知道了”。选择“知道了”表示已了解此介绍，之后不再自动显示。Escape 会关闭介绍，但不会标记为已了解。显示介绍不会打开麦克风或启动语音对话。",
     "agentsVoice.command.introduction": "语音：显示入门介绍",
     "chat.notice.dismiss": "关闭通知",

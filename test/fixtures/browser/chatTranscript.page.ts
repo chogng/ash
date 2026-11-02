@@ -86,7 +86,7 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
 import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -610,6 +610,7 @@ declare global {
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
+			setTypography(values: Readonly<Record<string, string | number | undefined>>): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
 			showHistoryPagination(fail?: boolean): void;
@@ -798,6 +799,9 @@ window.ashChatTranscriptIntegration = {
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),
+	setTypography: async values => {
+		for (const [key, value] of Object.entries(values)) await services.get(IConfigurationService).updateValue(key, value);
+	},
 	setTheme: value => {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : value === 'hcLight' ? highContrastLightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);

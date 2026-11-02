@@ -1,16 +1,23 @@
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
+import { ILoggerService, LogLevel, type LogEntry } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
-import { chatTranscriptListItem, chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
+import { chatTranscriptListItem, chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry, TurnError } from '../../../../services/chat/common/chatService.js';
-import type { IChatListItem } from '../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { CodeBlockPart } from '../../browser/widget/chatContentParts/codeBlockPart.js';
 import type { URI } from '../../../../../base/common/uri.js';
@@ -38,15 +45,122 @@ class RecordingResponseFiles extends ChatResponseResourceFileSystemProvider {
 const source = { sessionId: 'session', threadId: 'thread', itemId: 'image', kind: 'item' as const };
 const image = { type: 'imageAttachment' as const, detail: 'auto' as const, attachment: { contentDigest: `sha256:${'a'.repeat(64)}`, width: 2, height: 1, mediaType: 'png' as const, encodedBytes: 70 } };
 
-function mount(resources: DisposableStore, services: ReturnType<typeof createTestEditorServices>): ChatListWidget {
+function mount(resources: DisposableStore, services: ReturnType<typeof createTestEditorServices>, classPrefix?: string): ChatListWidget {
 	if (!services.has(IAgentThreadService)) services.registerInstance(IAgentThreadService, createDisconnectedRendererApi().thread);
 	if (!services.has(IChatResponseResourceFileSystemProvider)) services.registerInstance(IChatResponseResourceFileSystemProvider, resources.add(services.createInstance(ChatResponseResourceFileSystemProvider)));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
 	const container = document.createElement('main');
 	document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
-	return resources.add(services.createInstance(ChatListWidget, container, {}));
+	return resources.add(services.createInstance(ChatListWidget, container, { classPrefix }));
 }
+
+suite('Chat message renderer lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('the list requires its logger service at the production construction boundary', () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		using incomplete = new InstantiationService(new ServiceCollection(
+			[IConfigurationService, services.get(IConfigurationService)],
+			[IChatLayoutService, services.get(IChatLayoutService)],
+		));
+		assert.throws(() => incomplete.createInstance(ChatListWidget, document.createElement('main'), {}), /loggerService/);
+	});
+
+	for (const classPrefix of ['ash-chat', 'ash-cowork']) {
+		test(`${classPrefix} shares bounded diagnostics across streaming, replacement, removal and disposal`, () => {
+			using resources = new DisposableStore();
+			const entries: LogEntry[] = [];
+			const logger = resources.add(new LogService({ level: LogLevel.Trace, sinks: [{ log: entry => entries.push(entry) }] }));
+			const parent = createCodeEditorServices(resources);
+			parent.registerInstance(ILoggerService, logger);
+			const services = resources.add(createTestEditorServices(undefined, parent));
+			const widget = mount(resources, services, classPrefix);
+			widget.render([response]);
+			const original = widget.element.querySelector('article');
+			widget.render([response]);
+			widget.render([{ ...response, text: response.text + '\nMore private text.' }]);
+			assert.equal(widget.element.querySelector('article'), original);
+			widget.render([{ ...response, label: 'Changed identity' }]);
+			assert.notEqual(widget.element.querySelector('article'), original);
+			widget.render([]);
+			widget.render([response]);
+			widget.dispose();
+			const emitted = entries.filter(entry => entry.category === 'chat.layout');
+			const records = emitted.map(entry => JSON.parse(entry.message) as { traceId: number; events: { method: string; count: number; }[]; });
+			const totals = new Map<string, number>();
+			for (const event of records.flatMap(record => record.events)) totals.set(event.method, (totals.get(event.method) ?? 0) + event.count);
+			assert.deepEqual(Object.fromEntries(totals), { renderElement: 6, disposeElement: 3 });
+			assert.equal(new Set(records.map(record => record.traceId)).size, 1);
+			assert.ok(emitted.every(entry => !entry.message.includes('private text') && !entry.message.includes('const value')));
+			widget.dispose();
+			assert.equal(entries.filter(entry => entry.category === 'chat.layout').length, emitted.length);
+		});
+
+		test(`${classPrefix} leaves disabled logging idle and borrows the channel across list lifetimes`, () => {
+			using resources = new DisposableStore();
+			const entries: LogEntry[] = [];
+			const logger = resources.add(new LogService({ sinks: [{ log: entry => entries.push(entry) }] }));
+			const parent = createCodeEditorServices(resources);
+			parent.registerInstance(ILoggerService, logger);
+			const services = resources.add(createTestEditorServices(undefined, parent));
+			const widget = mount(resources, services, classPrefix);
+			widget.render([response]);
+			const channel = logger.getLogger('chat.layout')!;
+			channel.setLevel(LogLevel.Trace);
+			widget.render([{ ...response, text: 'Pending trace' }]);
+			channel.setLevel(LogLevel.Info);
+			widget.dispose();
+			assert.equal(entries.length, 0);
+			channel.setLevel(LogLevel.Trace);
+			const replacement = mount(resources, services, classPrefix);
+			replacement.render([response]);
+			replacement.dispose();
+			assert.equal(entries.length, 1);
+			assert.deepEqual(JSON.parse(entries[0].message).events.map((event: { method: string; count: number; }) => [event.method, event.count]), [['renderElement', 1], ['disposeElement', 1]]);
+		});
+
+		test(`${classPrefix} replaces, removes and disposes message resources through the list lifecycle`, async () => {
+			using resources = new DisposableStore();
+			const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+			const pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
+			let signal: AbortSignal | undefined;
+			services.registerInstance(IAgentThreadService, { ...createDisconnectedRendererApi().thread, readAttachment: async (_source, cancellation) => { signal = cancellation; return pending.p; } });
+			const widget = mount(resources, services, classPrefix);
+			const editors = services.get(ICodeEditorService);
+			widget.render([{ ...response, content: [image], attachmentSource: source }]);
+			const original = widget.element.querySelector('article')!;
+			const originalModel = editors.listCodeEditors()[0].getModel()!;
+			original.querySelector<HTMLButtonElement>('.ash-chat-media button')!.click();
+			const retiredImage = original.querySelector('img')!;
+			assert.equal(signal?.aborted, false);
+
+			widget.render([{ ...response, label: 'Corrected identity', text: '```typescript\nconst value = 2;\n```' }]);
+			const replacement = widget.element.querySelector('article')!;
+			assert.notEqual(replacement, original);
+			assert.equal(original.isConnected, false);
+			assert.equal(originalModel.isDisposed(), true);
+			assert.equal(signal?.aborted, true);
+			assert.equal(editors.listCodeEditors().length, 1);
+			const replacementModel = editors.listCodeEditors()[0].getModel()!;
+			assert.equal(replacementModel.getValue(), 'const value = 2;');
+			await pending.complete({ bytes: new Uint8Array(), mimeType: 'image/png' });
+			assert.equal(retiredImage.hasAttribute('src'), false);
+
+			widget.render([]);
+			assert.equal(replacement.isConnected, false);
+			assert.equal(replacementModel.isDisposed(), true);
+			assert.equal(editors.listCodeEditors().length, 0);
+			widget.render([response]);
+			const finalRow = widget.element.querySelector('article')!;
+			const finalModel = editors.listCodeEditors()[0].getModel()!;
+			widget.dispose();
+			assert.equal(finalRow.isConnected, false);
+			assert.equal(finalModel.isDisposed(), true);
+			assert.equal(editors.listCodeEditors().length, 0);
+		});
+	}
+});
 
 test('response media updates independently of streamed Markdown and releases removed media', () => {
 	using resources = new DisposableStore();

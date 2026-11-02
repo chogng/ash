@@ -1,4 +1,6 @@
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
+import { IChatLayoutService } from '../../contrib/chat/common/widget/chatLayoutService.js';
+import { ChatLayoutService } from '../../contrib/chat/browser/widget/chatLayoutService.js';
 import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
@@ -25,7 +27,7 @@ import { Schemas } from '../../../base/common/network.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
-import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
+import { ILoggerService, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
@@ -114,6 +116,8 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, new NullLoggerService());
+	if (!services.has(IChatLayoutService)) services.registerSingleton(IChatLayoutService, () => services.createInstance(ChatLayoutService));
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	if (!services.has(IElevatedFileService)) { services.registerInstance(IElevatedFileService, new BrowserElevatedFileService()); }
 	if (!services.has(IWorkbenchEnvironmentService)) {

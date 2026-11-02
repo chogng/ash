@@ -11,7 +11,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatWidget } from './widget/chatWidget.js';
-import type { IChatListItem } from './widget/chatListItems.js';
+import type { IChatListItem } from '../common/model/chatViewModel.js';
 import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export interface IChatAcceptInputOptions {

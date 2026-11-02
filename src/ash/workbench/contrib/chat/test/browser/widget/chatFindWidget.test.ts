@@ -13,7 +13,7 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IChatListItem } from '../../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { ChatFindWidget, findMatchRangesInDom, type IChatFindHost } from '../../../browser/widget/chatFind/chatFindWidget.js';
 
 suite('ChatFindWidget', () => {

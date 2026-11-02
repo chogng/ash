@@ -1,31 +1,23 @@
+import { ChatListItemRenderer } from './chatListRenderer.js';
+import { ChatLayoutTrace } from './chatLayoutTrace.js';
+import { ILoggerService } from '../../../../../platform/log/common/log.js';
+import { autorun } from '../../../../../base/common/observable.js';
+import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
 import { findLast } from '../../../../../base/common/arraysFind.js';
-import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
-import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
-import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
-import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ChatTurnErrorAction, IChatListItem } from './chatListItems.js';
+import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
-import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
-import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -33,12 +25,7 @@ import { AccessibleViewRegistry } from '../../../../../platform/accessibility/br
 import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatResponseAccessibleView } from '../accessibility/chatResponseAccessibleView.js';
-import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
 import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './chatFind/chatFindWidget.js';
-import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
-import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
-import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
-import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 
 interface ChatListWidgetOptions {
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
@@ -55,36 +42,7 @@ interface ChatListWidgetOptions {
 
 const textInputSelector = 'textarea, [role="textbox"], [contenteditable="true"]';
 const focusableSelector = 'button, a, summary, textarea, audio, [role="textbox"], [tabindex="0"], [contenteditable="true"]';
-const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 const viewportMargin = 600;
-
-class RenderedItem extends Disposable {
-	inViewport = true;
-	readonly edit = this._register(new MutableDisposable<DisposableStore>());
-	public editButton: Button | undefined;
-	public copyButton: Button | undefined;
-	public updateReadAloud: (() => void) | undefined;
-	public updateHelpful: (() => void) | undefined;
-	public readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
-	readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
-	readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
-	readonly mediaChanges = this._register(new MutableDisposable());
-	readonly resources = this._register(new MutableDisposable<ChatResourceGroupWidget>());
-	readonly resourceChanges = this._register(new MutableDisposable());
-	constructor(
-		public item: IChatListItem,
-		public readonly element: HTMLElement,
-		disposables: DisposableStore,
-		public readonly toolPart?: ChatToolInvocationPart,
-		public readonly markdownPart?: ChatMarkdownContentPart,
-		public readonly attachments?: HTMLElement,
-		public readonly hookPart?: ChatHookContentPart,
-		public readonly context?: { readonly disclosure: HTMLDetailsElement; readonly summary: HTMLElement; readonly content: HTMLElement; },
-	) {
-		super();
-		this._register(disposables);
-	}
-}
 
 interface ReadingAnchor {
 	readonly id: string;
@@ -105,18 +63,16 @@ interface ChatListViewState {
 
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
 export class ChatListWidget extends DomWidget {
+	// Disposed after the row collection so the final batch includes every row release.
+	private readonly layoutTraceStore = this._register(new DisposableStore());
 	private readonly findWidget = this._register(new MutableDisposable<ChatFindWidget>());
 	private items: readonly IChatListItem[] = [];
 	private lastFocusedItemId: string | undefined;
 	private readonly domNode: HTMLElement;
 	private readonly scrollable: ScrollableElement;
 	private readonly transcript: HTMLDivElement;
-	private readonly renderedItems = this._register(new DisposableMap<string, RenderedItem>());
-	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
-	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
-	private readonly onDidRequestLink: ((target: string) => void) | undefined;
-	private readonly imageResourceLoader: ChatListWidgetOptions['imageResourceLoader'];
-	private readonly mcpAppDelegate: ChatListWidgetOptions['mcpAppDelegate'];
+	private readonly layoutTrace: ChatLayoutTrace;
+	private readonly renderedItems = this._register(new DisposableMap<string, ChatListItemRenderer>());
 	private readonly classPrefix: string;
 	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
@@ -191,22 +147,12 @@ export class ChatListWidget extends DomWidget {
 		container: HTMLElement, private readonly options: ChatListWidgetOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
-		@ICommandService private readonly commands: ICommandService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService,
-		@IStorageService private readonly storageService: IStorageService,
+		@IChatLayoutService chatLayoutService: IChatLayoutService,
+		@ILoggerService loggerService: ILoggerService,
 	) {
 		super();
-		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
-		this.onDidRequestMemoryReference = options.onDidRequestMemoryReference;
-		this.onDidRequestLink = options.onDidRequestLink;
-		this.imageResourceLoader = options.imageResourceLoader;
-		this.mcpAppDelegate = options.mcpAppDelegate;
+		this.layoutTrace = this.layoutTraceStore.add(new ChatLayoutTrace(() => performance.now(), loggerService.createLogger('chat.layout')));
 		this.classPrefix = options.classPrefix ?? 'ash-chat';
-		this._register(this.storageService.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && event.key.startsWith(ChatResponseFeedbackStoragePrefix)) {
-				for (const [, row] of this.renderedItems) row.updateHelpful?.();
-			}
-		}));
 		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: 'vertical',
 			vertical: 'auto',
@@ -255,7 +201,7 @@ export class ChatListWidget extends DomWidget {
 				const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 				if (!active || !this.transcript.contains(active)) return undefined;
 				const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type: AccessibleViewType.Help }, () => {
-					return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.');
+					return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in the Command Palette copies the current history without sending. Use New Chat to start an empty conversation. These actions preserve the original conversation.') + '\n' + localize('chat.remainingActions.help', 'Chat: Configure Tools edits the focused draft’s tool selection; Escape discards changes. Chat: Approve Tool Once and Chat: Decline Tool act only on the currently displayed approval. They never save an approval rule. Chat: Submit Requested Answers submits the current question form with its entered values; required answers must be filled. Use Ctrl or Command+Enter while the question form has focus. Chat: Retry Failed Request repeats an available failed request through its original retry policy. Chat: Copy Final Response copies the latest completed assistant reply without speaker labels or streaming text. Chat: Next Code Block and Chat: Previous Code Block move focus through the current or latest response’s code blocks and wrap at the ends. Use Ctrl or Command+Alt+Page Down or Page Up in Chat. Chat: Export Conversation Transcript saves a frozen backend text snapshot, including voice transcripts, tool call summaries with inputs and errors, and partial markers. Tool output, result attachments and internal reasoning are excluded. Chat: Open Saved Transcript (Read-Only) opens a supported saved document in a read-only editor; it does not restore or execute a conversation. These commands keep the unsent draft.') + '\n' + localize('chat.pickers.commandHelp', 'Use Chat: Open Model Picker, Chat: Open Mode or Agent Picker, or Chat: Open Permission Picker in the Command Palette to configure the most recently focused composer. Model and mode pickers also open with {0} and {1}. Fixed-mode inputs keep the mode picker hidden. Cowork uses its existing permission flow. Escape closes a picker. Opening or cancelling keeps the draft and attachments without sending. Switching conversations retires pending selections and permission confirmations.', '<keybinding:workbench.action.chat.openModelPicker>', '<keybinding:workbench.action.chat.openModePicker>') + '\n' + localize('chat.execution.help', 'Chat: Send Message uses the current draft, attachments and submission policy. Chat: Add Message to Queue waits for the current request to finish; Chat: Steer with Message explicitly targets it. When idle, both send normally. Explicit steering rejects a different mode, Skill or task type. Queue and steering actions do not run slash commands. Failed submissions restore the draft if it has not been edited again. Use {0} to stop the focused task while keeping unsent text. Stopping remains available for running work when AI features are disabled.', '<keybinding:workbench.action.chat.cancel>') + '\n' + localize('chat.queue.manageHelp', 'Use Chat: Edit Queued Message, Chat: Remove Queued Message or Chat: Send Queued Message Immediately in the Command Palette, then select a message in queue order. Editing pauses that message and preserves attached inputs and your unsent draft. Ctrl or Command+Enter saves; Escape restores a previously pending message at its original position. Previously paused or failed messages remain paused when editing is cancelled. A changed revision requires choosing the message again. Send Immediately moves the original message to the front and stops the current task before running it. Remove All Queued Messages removes the captured revisions and keeps messages added while the action runs.') + '\n' + localize('chat.navigation.help', 'Use {0} to focus the latest response and {1} to return to the last focused message. Use {2} and {3} to move between user prompts without wrapping. Navigation includes loaded messages; load earlier messages to reach older prompts. On macOS, the input-to-list shortcut applies only on the first visual input line. Quick Chat reverses the input-to-list shortcut direction. Use {4} to focus a pending confirmation or return to the input. Focusing never accepts or declines a request, sends a message or changes the draft.', '<keybinding:chat.action.focus>', '<keybinding:workbench.chat.action.focusLastFocused>', '<keybinding:workbench.action.chat.previousUserPrompt>', '<keybinding:workbench.action.chat.nextUserPrompt>', '<keybinding:workbench.action.chat.focusConfirmation>') + '\n' + localize('chat.find.commandsHelp', 'Use {0} to find text in this conversation. Find includes complete code blocks and continues through earlier history without sending or changing the draft. Use the result controls to navigate; Escape closes Find and restores focus.', '<keybinding:workbench.action.chat.find>') + '\n' + localize('chat.commands.help', 'Use Focus Chat Input in the Command Palette to return to the most recently focused Chat input. From a conversation, use {0} to return to its input. Chat: Copy Conversation in the Command Palette copies all text messages and voice transcripts, including earlier history. Markdown is preserved. Export Transcript in the conversation title menu saves a JSON snapshot of the conversation. Draft text is kept in the input.', '<keybinding:workbench.action.chat.focusInput>') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.') + '\n' + localize('chat.response.feedbackHelp', 'Completed IDE Chat responses offer Helpful. Press Enter or Space to save a personal helpful mark for that response; reopening Chat retains it. Feedback stays in the current Ash profile and is not sent to the model provider or used to change the response. Choose Helpful response animation in Settings to change or disable the effect. Reduced motion also disables the animation.') + '\n' + localize('chat.typography.help', 'In Settings, open Chat, then Appearance to change the message font and text size, including Markdown and links. Message input and code blocks have separate font settings. Changes keep your draft and reading position.');
 				}, () => { if (active.isConnected) active.focus(); }, AccessibilityVerbositySettingId.Chat);
 				provider.onDidChangeContent = this._onDidChangeContent.event;
 				return provider;
@@ -283,6 +229,16 @@ export class ChatListWidget extends DomWidget {
 			const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
 			this.updateCodeBlockOptions();
 			if (this.visible) this.layout(anchor);
+		}));
+		this._register(autorun(reader => {
+			const family = chatLayoutService.fontFamily.read(reader);
+			const size = chatLayoutService.fontSize.read(reader);
+			if (this.visible) this.captureFollowState();
+			const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
+			this.transcript.style.fontFamily = family ?? '';
+			this.transcript.style.fontSize = `${size}px`;
+			// Font changes reflow retained rows; restore the position captured before the change.
+			if (this.visible) this.layout(anchor, false);
 		}));
 	}
 
@@ -317,7 +273,6 @@ export class ChatListWidget extends DomWidget {
 		for (const [id, row] of this.renderedItems) {
 			if (ids.has(id)) continue;
 			this.viewportObserver?.unobserve(row.element);
-			row.element.remove();
 			this.renderedItems.deleteAndDispose(id);
 			this.pendingViewportMeasurements.delete(id);
 			changed = true;
@@ -325,53 +280,38 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			if (row && sameItem(row.item, item) && row.item.content === item.content && sameToolInvocation(row.item.toolInvocation, item.toolInvocation)) {
-				row.item = item;
+			const update = row?.update(item);
+			if (row && update === 'unchanged') {
 				if (row.element !== next) { this.transcript.insertBefore(row.element, next); changed = true; }
 				next = row.element.nextSibling;
 				continue;
 			}
 			changed = true;
-			if (row?.context && item.type === 'userContext' && item.contextText !== undefined) {
-				row.context.summary.textContent = item.text;
-				row.context.content.setAttribute('aria-label', item.text);
-				if (row.item.contextText !== item.contextText) row.context.content.textContent = item.contextText;
-				row.item = item;
-			} else if (row?.hookPart && item.hookPart && row.item.hookPart?.run.runId === item.hookPart.run.runId) {
-				row.hookPart.render(item.hookPart);
-				row.item = item;
-				row.element.classList.toggle('error', item.isError === true);
-				if (item.transient) row.element.dataset.transient = 'true';
-				else delete row.element.dataset.transient;
-			} else if (row?.toolPart && item.toolInvocation && row.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
-				row.toolPart.render(item.toolInvocation, item.attachmentSource);
-				row.item = item;
-				row.element.classList.toggle('error', item.isError === true);
-				if (item.transient) row.element.dataset.transient = 'true';
-				else delete row.element.dataset.transient;
-			} else if (row?.markdownPart && !sameItem(row.item, item) && row.item.type === item.type && row.item.label === item.label && row.item.detail === item.detail && sameAction(row.item.action, item.action)
-				&& (row.item.text === item.text && row.item.transient === item.transient
-					|| row.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
-				row.item = item;
-				row.element.classList.toggle('error', item.isError === true);
-				if (item.transient) row.element.dataset.transient = 'true';
-				else delete row.element.dataset.transient;
-			} else if (!row || !sameItem(row.item, item)) {
+			if (!row || update === 'replace') {
 				if (row?.element === next) next = row.element.nextSibling;
 				if (row) this.viewportObserver?.unobserve(row.element);
-				row?.element.remove();
-				row = this.renderedItems.set(item.id, this.renderItem(item));
+				// Retire the previous row before its replacement starts attachment work.
+				this.renderedItems.deleteAndDispose(item.id);
+				row = this.renderedItems.set(item.id, this.instantiationService.createInstance(ChatListItemRenderer, item, this.element.ownerDocument, {
+					...this.options,
+					classPrefix: this.classPrefix,
+					deferCodeBlockModels: !!this.viewportObserver,
+					isVisible: () => this.visible,
+					advisorExpansion: this.advisorExpansion,
+					contextExpansion: this.contextExpansion,
+					onDidChangeHeight: () => this.relayout.schedule(),
+					onDidChangeMarkdownHeight: (id: string) => {
+						if (this.viewportObserver) {
+							this.pendingViewportMeasurements.add(id);
+							this.refreshViewport.schedule();
+						}
+					},
+					onDidChangeContent: () => this._onDidChangeContent.fire(),
+				}, this.layoutTrace));
 				this.viewportObserver?.observe(row.element);
 				if (this.viewportObserver) this.pendingViewportMeasurements.add(item.id);
 			}
-			if (row.copyButton) row.copyButton.enabled = row.item.text.length > 0;
 			if (this.viewportObserver && row.markdownPart) this.pendingViewportMeasurements.add(item.id);
-			const reading = row.reading.value;
-			if (reading && (reading.item.text !== row.item.text || reading.item.attachmentSource?.sessionId !== row.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== row.item.attachmentSource?.threadId)) row.reading.clear();
-			row.updateReadAloud?.();
-			row.updateHelpful?.();
-			this.renderAttachments(row);
-			this.renderMemoryReferences(row);
 			if (row.element !== next) this.transcript.insertBefore(row.element, next);
 			next = row.element.nextSibling;
 		}
@@ -393,7 +333,6 @@ export class ChatListWidget extends DomWidget {
 		if (!visible) {
 			this.relayout.cancel();
 			this.refreshViewport.cancel();
-			for (const [, row] of this.renderedItems) row.reading.clear();
 			this.captureFollowState();
 			this.pendingReadingPosition = { top: this.scrollable.state.top, anchor: this.shouldFollow ? undefined : this.readingPosition };
 		}
@@ -406,9 +345,7 @@ export class ChatListWidget extends DomWidget {
 		this.visible = visible;
 		if (!visible) { this.findWidget.value?.hide(); }
 		for (const [, row] of this.renderedItems) {
-			row.media.value?.setVisible(visible);
-			row.toolPart?.setVisible(visible);
-			row.markdownPart?.setVisible(visible);
+			row.setVisible(visible);
 		}
 		if (visible) {
 			if (this.pendingReadingPosition) {
@@ -465,7 +402,7 @@ export class ChatListWidget extends DomWidget {
 		} finally { this.layingOut = false; }
 	}
 
-	private updateRowViewport(row: RenderedItem): void {
+	private updateRowViewport(row: ChatListItemRenderer): void {
 		if (!row.markdownPart) return;
 		const document = this.element.ownerDocument;
 		const selection = document.getSelection();
@@ -587,408 +524,4 @@ export class ChatListWidget extends DomWidget {
 		return undefined;
 	}
 
-	private renderAttachments(row: RenderedItem): void {
-		if (!row.attachments) return;
-		const content = row.item.content ?? [];
-		const changed = () => { this.relayout.schedule(); this._onDidChangeContent.fire(); };
-		if (content.some(part => part.type !== 'text' && part.type !== 'artifact')) {
-			if (!row.media.value) {
-				const media = this.instantiationService.createInstance(ChatAttachmentsContentPart, { ownerDocument: row.element.ownerDocument, variables: content, source: row.item.attachmentSource });
-				row.media.value = media;
-				row.attachments.prepend(media.domNode);
-				row.mediaChanges.value = media.onDidChangeHeight(changed);
-			} else row.media.value.updateVariables(content, row.item.attachmentSource);
-		} else { row.mediaChanges.clear(); row.media.clear(); }
-		if (content.some(part => part.type === 'artifact')) {
-			if (!row.resources.value) {
-				const resources = this.instantiationService.createInstance(ChatResourceGroupWidget, row.element.ownerDocument);
-				row.resources.value = resources;
-				row.attachments.append(resources.domNode);
-				row.resourceChanges.value = resources.onDidChangeHeight(changed);
-			}
-			row.resources.value.render(content, JSON.stringify([row.item.attachmentSource?.sessionId, row.item.attachmentSource?.threadId, row.item.id]), row.item.attachmentSource);
-		} else { row.resourceChanges.clear(); row.resources.clear(); }
-	}
-
-	private renderCopyAction(row: RenderedItem, lifetime: DisposableStore): void {
-		const actions = h(row.element.ownerDocument, 'div');
-		actions.className = 'ash-chat-message-actions';
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('chat.message.copy', 'Copy message'),
-			icon: Lxicon.copy,
-			presentation: 'quiet',
-			size: 'small',
-			enabled: row.item.text.length > 0,
-		}));
-		row.copyButton = button;
-		const feedback = h(row.element.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-copy-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		row.element.append(actions);
-		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
-		let copying = false;
-		lifetime.add(button.onDidClick(() => {
-			if (copying || row.isDisposed || !this.visible || !row.item.text) return;
-			const item = row.item;
-			const context = { type: item.type, text: item.text };
-			copying = true;
-			button.domNode.setAttribute('aria-busy', 'true');
-			clear.cancel();
-			feedback.textContent = '';
-			void this.commands.executeCommand('workbench.action.chat.copyItem', context).then(() => {
-				if (row.isDisposed || row.item !== item) return;
-				feedback.textContent = localize('chat.message.copied', 'Message copied.');
-				clear.schedule();
-			}, error => {
-				if (row.isDisposed || row.item !== item) return;
-				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
-			}).finally(() => { copying = false; if (!row.isDisposed) button.domNode.removeAttribute('aria-busy'); });
-		}));
-		if (row.item.type === 'agentMessage') {
-			this.renderReadAloudAction(row, actions, lifetime);
-			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)) this.renderHelpfulAction(row, actions, lifetime);
-		}
-		if (row.item.requestSource) this.renderEditAction(row, actions, lifetime);
-	}
-
-	private renderHelpfulAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label: localize('chat.response.helpful', 'Helpful'),
-			title: localize('chat.response.helpfulTooltip', 'Mark this response helpful in Ash'),
-			icon: Lxicon.thumbsup, iconOnly: true, presentation: 'quiet', size: 'small', checked: false,
-		}));
-		button.domNode.classList.add('ash-chat-response-helpful');
-		const status = h(actions.ownerDocument, 'span');
-		status.setAttribute('role', 'status');
-		actions.append(status);
-		const feedback = lifetime.add(new MutableDisposable());
-		let pending = false;
-		const update = (): void => {
-			const target = row.item.feedbackSource;
-			button.hidden = !target || row.item.transient || row.item.isError === true;
-			button.enabled = !pending;
-			button.checked = !!target && isResponseHelpful(this.storageService, target);
-		};
-		row.updateHelpful = update;
-		update();
-		lifetime.add(button.onDidClick(() => {
-			const target = row.item.feedbackSource;
-			if (!target || pending || row.isDisposed || !this.visible) return;
-			const captured = captureAnimationTarget(button.domNode);
-			pending = true;
-			status.textContent = '';
-			update();
-			void this.commands.executeCommand<boolean>('workbench.action.chat.markHelpful', target).then(changed => {
-				if (row.isDisposed || row.item.feedbackSource !== target || !changed) return;
-				status.textContent = localize('chat.response.helpfulSaved', 'Marked helpful in Ash.');
-				const kind = this.configurationService.getValue<ChatUpvoteAnimation>(ChatUpvoteAnimationSettingId) ?? 'floatingThumbs';
-				const animation = { confetti: ClickAnimation.Confetti, floatingThumbs: ClickAnimation.FloatingIcons, pulseWave: ClickAnimation.PulseWave, radiantLines: ClickAnimation.RadiantLines };
-				if (kind !== 'off') feedback.value = triggerClickAnimation(captured, animation[kind], Lxicon.thumbsup);
-			}, error => {
-				if (!row.isDisposed) status.textContent = localize('chat.response.helpfulFailed', 'Could not save feedback in Ash: {0}', String(error));
-			}).finally(() => { pending = false; if (!row.isDisposed) update(); });
-		}));
-	}
-
-	private renderEditAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
-		const edit = lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
-		}));
-		row.editButton = edit;
-		lifetime.add(edit.onDidClick(() => {
-			if (row.edit.value || !row.item.requestSource || !this.visible) return;
-			const source = row.item.requestSource;
-			const store = new DisposableStore();
-			row.edit.value = store;
-			const editor = h(row.element.ownerDocument, 'div');
-			editor.className = 'ash-chat-request-editor';
-			const input = h(editor.ownerDocument, 'textarea');
-			input.setAttribute('aria-label', localize('chat.edit.input', 'Edit request'));
-			input.value = row.item.text;
-			input.rows = Math.min(12, Math.max(3, input.value.split('\n').length));
-			const explanation = h(editor.ownerDocument, 'p');
-			explanation.id = createUuid();
-			input.setAttribute('aria-describedby', explanation.id);
-			explanation.textContent = localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
-			const controls = h(editor.ownerDocument, 'div');
-			controls.className = 'ash-chat-message-actions';
-			const send = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.resend', 'Send edited request'), size: 'small' }));
-			const cancel = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.cancel', 'Cancel edit'), presentation: 'quiet', size: 'small' }));
-			const feedback = h(editor.ownerDocument, 'span');
-			feedback.setAttribute('role', 'status');
-			controls.append(feedback);
-			editor.append(input, explanation, controls);
-			row.element.append(editor);
-			edit.enabled = false;
-			store.add(toDisposable(() => { editor.remove(); edit.enabled = true; }));
-			const close = (): void => {
-				const restoreFocus = this.visible && editor.contains(editor.ownerDocument.activeElement);
-				row.edit.clear();
-				if (restoreFocus) edit.focus();
-				this.relayout.schedule();
-				this._onDidChangeContent.fire();
-			};
-			let pending = false;
-			let attempt: { text: string; commandId: string; } | undefined;
-			const submit = async (): Promise<void> => {
-				if (pending || !input.value.trim() || row.isDisposed || !this.visible) return;
-				if (attempt?.text !== input.value) attempt = { text: input.value, commandId: createUuid() };
-				pending = true;
-				input.readOnly = true;
-				send.enabled = cancel.enabled = false;
-				editor.setAttribute('aria-busy', 'true');
-				feedback.textContent = '';
-				try {
-					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, ...attempt });
-					if (!row.isDisposed) close();
-				} catch (error) {
-					if (!row.isDisposed) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
-				} finally {
-					pending = false;
-					if (!row.isDisposed && row.edit.value === store) {
-						input.readOnly = false;
-						send.enabled = !!input.value.trim();
-						cancel.enabled = true;
-						editor.removeAttribute('aria-busy');
-						const active = editor.ownerDocument.activeElement;
-						if (this.visible && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
-					}
-				}
-			};
-			store.add(send.onDidClick(() => void submit()));
-			store.add(cancel.onDidClick(close));
-			store.add(addDisposableListener(input, 'input', () => { send.enabled = !!input.value.trim(); }));
-			store.add(addDisposableListener(editor, 'keydown', event => {
-				if (event.isComposing) return;
-				if (event.key === 'Escape' && !pending) { event.preventDefault(); event.stopPropagation(); close(); }
-				else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); void submit(); }
-			}));
-			input.focus();
-			this.relayout.schedule(); this._onDidChangeContent.fire();
-		}));
-	}
-
-	private renderReadAloudAction(row: RenderedItem, actions: HTMLElement, lifetime: DisposableStore): void {
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('chat.message.readAloud', 'Read aloud'),
-			presentation: 'quiet',
-			size: 'small',
-		}));
-		const feedback = h(actions.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-read-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		const update = () => {
-			if (row.isDisposed) return;
-			const context = this.contextKeys.getContext();
-			button.domNode.hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
-			const reading = !!row.reading.value;
-			button.label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
-			button.enabled = reading || !row.item.transient && !!row.item.text && context.getValue(TextToSpeechInProgress.key) !== true;
-			button.domNode.setAttribute('aria-pressed', String(reading));
-		};
-		row.updateReadAloud = update;
-		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
-		lifetime.add(CommandsRegistry.onDidChangeCommands(update));
-		lifetime.add(addDisposableListener(row.element, 'keydown', event => {
-			if ((event as KeyboardEvent).key !== 'Escape' || !row.reading.value) return;
-			row.reading.clear(); update(); event.preventDefault(); event.stopPropagation();
-		}));
-		lifetime.add(button.onDidClick(() => {
-			if (row.isDisposed || !this.visible) return;
-			const current = row.reading.value;
-			if (current) {
-				void this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source: current.source });
-				return;
-			}
-			const item = row.item;
-			const source = new CancellationTokenSource();
-			const operation = Object.assign(toDisposable(() => source.dispose(true)), { source, item });
-			row.reading.value = operation; feedback.textContent = ''; update();
-			void this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source }).catch(error => {
-				if (!row.isDisposed && row.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
-					feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
-				}
-			}).finally(() => {
-				if (row.reading.value === operation) row.reading.clear();
-				update();
-			});
-		}));
-		update();
-	}
-
-	private renderMemoryReferences(row: RenderedItem): void {
-		if (!this.onDidRequestMemoryReference) return;
-		const references = [...new Set(row.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
-		for (const [reference] of row.memoryReferences) {
-			if (!references.includes(reference)) row.memoryReferences.deleteAndDispose(reference);
-		}
-		for (const [index, reference] of references.entries()) {
-			let rendered = row.memoryReferences.get(reference);
-			if (!rendered) {
-				const button = h(row.element.ownerDocument, 'button');
-				button.type = 'button';
-				const click = addDisposableListener(button, 'click', () => this.onDidRequestMemoryReference?.(reference));
-				rendered = row.memoryReferences.set(reference, Object.assign(toDisposable(() => { click.dispose(); button.remove(); }), { element: button }));
-				row.element.append(button);
-			}
-			rendered.element.textContent = localize('chat.transcript.memoryReference', 'Open memory reference {0}', index + 1);
-		}
-	}
-
-	private renderItem(item: IChatListItem): RenderedItem {
-		const disposables = new DisposableStore();
-		const article = h(this.element.ownerDocument, 'article');
-		article.className = `${this.classPrefix}-item ${this.classPrefix}-item-${item.type}`;
-		// Accessible View can restore focus to the message without adding a Tab stop.
-		article.tabIndex = -1;
-		article.dataset.itemId = item.id;
-		article.tabIndex = -1;
-		if (item.transient) article.dataset.transient = 'true';
-		if (item.isError) article.classList.add('error');
-		if (item.toolInvocation) {
-			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource, this.mcpAppDelegate));
-			disposables.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
-			article.append(part.domNode);
-			return new RenderedItem(item, article, disposables, part);
-		}
-		if (item.type === 'hook' && item.hookPart) {
-			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
-			article.append(part.domNode);
-			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, part);
-		}
-		if (item.type === 'userContext' && item.contextText !== undefined) {
-			const label = h(article.ownerDocument, 'div');
-			label.className = `${this.classPrefix}-item-label`;
-			label.textContent = this.accessibilityProvider.getAriaLabel(item);
-			const disclosure = h(article.ownerDocument, 'details');
-			disclosure.className = 'ash-chat-context';
-			const summary = h(article.ownerDocument, 'summary');
-			summary.textContent = item.text;
-			const content = h(article.ownerDocument, 'pre');
-			content.textContent = item.contextText;
-			content.tabIndex = 0;
-			content.setAttribute('aria-label', item.text);
-			disclosure.open = this.contextExpansion.get(item.id) ?? false;
-			disclosure.append(summary, content);
-			article.append(label, disclosure);
-			disposables.add(addDisposableListener(disclosure, 'toggle', () => {
-				this.contextExpansion.set(item.id, disclosure.open);
-				this.relayout.schedule();
-			}));
-			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, undefined, { disclosure, summary, content });
-		}
-		const label = h(this.element.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
-		label.className = `${this.classPrefix}-item-label`;
-		label.textContent = this.accessibilityProvider.getAriaLabel(item);
-		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
-		body.append(label);
-		if (body !== article) {
-			const disclosure = body as HTMLDetailsElement;
-			disclosure.open = this.advisorExpansion.get(item.id) ?? true;
-			disposables.add(addDisposableListener(disclosure, 'toggle', () => { this.advisorExpansion.set(item.id, disclosure.open); }));
-			article.append(body);
-		}
-		let markdownPart: ChatMarkdownContentPart | undefined;
-		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
-			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
-				ownerDocument: this.element.ownerDocument,
-				visible: this.visible,
-				deferCodeBlockModels: !!this.viewportObserver,
-				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
-				markedOptions: { breaks: true },
-				fillInIncompleteTokens: item.transient,
-				actionHandler: this.onDidRequestLink ? (target: string) => this.onDidRequestLink!(target) : undefined,
-				sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
-				imageResourceLoader: this.imageResourceLoader,
-			}));
-			disposables.add(markdown.onDidChangeHeight(() => {
-				this.relayout.schedule();
-				if (this.viewportObserver) {
-					this.pendingViewportMeasurements.add(item.id);
-					this.refreshViewport.schedule();
-				}
-				this._onDidChangeContent.fire();
-			}));
-			markdownPart = markdown;
-			body.append(markdown.domNode);
-		} else {
-			const content = h(this.element.ownerDocument, 'pre');
-			content.textContent = item.text;
-			body.append(content);
-		}
-		const attachments = h(article.ownerDocument, 'div');
-		body.append(attachments);
-		if (item.detail) {
-			const detail = h(this.element.ownerDocument, 'p');
-			detail.className = `${this.classPrefix}-turn-error-detail`;
-			detail.textContent = item.detail;
-			body.append(detail);
-		}
-		if (item.action) {
-			const action = item.action;
-			const button = disposables.add(new Button(article, {
-				...defaultButtonStyles,
-				label: action.label,
-				presentation: 'secondary',
-				size: 'small',
-				onClick: () => this.onDidRequestErrorAction?.(action),
-			}));
-			button.domNode.classList.add(`${this.classPrefix}-turn-error-action`);
-		}
-		const row = new RenderedItem(item, article, disposables, undefined, markdownPart, attachments);
-		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(row, disposables);
-		return row;
-	}
-}
-
-function sameToolInvocation(left: IChatListItem['toolInvocation'], right: IChatListItem['toolInvocation']): boolean {
-	if (left === right) return true;
-	return !!left && !!right && left.call === right.call && left.result === right.result && left.stopped === right.stopped
-		&& left.output.length === right.output.length && left.output.every((output, index) => output === right.output[index]);
-}
-
-function sameItem(left: IChatListItem, right: IChatListItem): boolean {
-	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText
-		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
-		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
-		&& left.hookPart?.run === right.hookPart?.run
-		&& left.transient === right.transient && left.isError === right.isError
-		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
-		&& sameContent(left.content, right.content) && left.attachmentSource?.sessionId === right.attachmentSource?.sessionId
-		&& left.attachmentSource?.threadId === right.attachmentSource?.threadId
-		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
-		&& left.attachmentSource?.kind === right.attachmentSource?.kind
-		&& sameAction(left.action, right.action);
-}
-
-function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorAction | undefined): boolean {
-	if (left === right) return true;
-	if (!left || !right || left.type !== right.type || left.label !== right.label) return false;
-	return left.type !== 'retry' || (right.type === 'retry' && left.turnId === right.turnId);
-}
-
-
-
-function sameContent(left: IChatListItem['content'], right: IChatListItem['content']): boolean {
-	if (left === right) return true;
-	if (!left || !right || left.length !== right.length) return false;
-	return left.every((part, index) => {
-		const next = right[index];
-		if (part.type !== next.type) return false;
-		if (part.type === 'artifact') {
-			return next.type === 'artifact'
-				&& part.artifact.contentDigest === next.artifact.contentDigest
-				&& part.artifact.mimeType === next.artifact.mimeType
-				&& part.artifact.data.type === next.artifact.data.type
-				&& part.artifact.truncated === next.artifact.truncated
-				&& JSON.stringify(part.artifact.source) === JSON.stringify(next.artifact.source);
-		}
-		if (part.type === 'text') return next.type === 'text' && part.text === next.text;
-		if ('url' in part) return 'url' in next && part.url === next.url;
-		return 'attachment' in next && part.attachment.contentDigest === next.attachment.contentDigest;
-	});
 }

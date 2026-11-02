@@ -1995,20 +1995,24 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
 		const appearance = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-appearance')!;
 		assert.equal(appearance.descriptor.label, '外观');
-		assert.equal(appearance.descriptor.description, '设置消息输入框和回复中代码块的显示方式。');
-		assert.deepEqual(appearance.groups.map(group => group.title), ['消息输入', '代码块']);
+		assert.equal(appearance.descriptor.description, '设置聊天消息、消息输入框和代码块的显示方式。');
+		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块']);
 		assert.deepEqual(
-			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
 				['chat.input.lineHeight', '行高', 20],
 			],
 		);
+		assert.deepEqual(
+			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			[['chat.upvoteAnimation', '有用回复动画', 'floatingThumbs'], ['chat.fontFamily', '字体', 'default'], ['chat.fontSize', '字号', 13]],
+		);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 		assert.deepEqual(
-			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[2]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -2059,6 +2063,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'updates',
 			'network',
 			'interaction',
+			'chat-usage',
 			'chat-appearance',
 			'agents',
 			'teams',
@@ -3422,9 +3427,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="chat-code-blocks"]'), null);
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
-		['Appearance', 'Message input', 'Code blocks'],
+		['Appearance', 'Messages', 'Message input', 'Code blocks'],
 	);
-	for (const key of ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
+	for (const key of ['chat.fontFamily', 'chat.fontSize', 'chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
 		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
 	}
 	await preferences.openSettings({ section: 'extensions' });
@@ -4049,7 +4054,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 4);
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 5);
+	assert.ok(root.querySelector('[data-settings-item-id="chat.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="terminal.integrated.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.input.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.editor.fontFamily"]'));

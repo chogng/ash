@@ -1,6 +1,6 @@
 import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
 import { localize } from '../../../../../nls.js';
-import type { ChatResponseFeedbackTarget } from '../../common/chatResponseFeedback.js';
+import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 
 export type ChatTurnErrorAction =
 	| { readonly type: 'retry'; readonly label: string; readonly turnId: string; }

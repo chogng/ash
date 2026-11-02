@@ -17,8 +17,11 @@
 .ash-chat-item {
 	margin: 0 0 16px;
 	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-body1);
+	font-size: inherit;
 	line-height: 1.5;
+}
+.ash-chat-list-widget .ash-markdown {
+	font-size: inherit;
 }
 .ash-chat-item-label {
 	margin-bottom: 4px;

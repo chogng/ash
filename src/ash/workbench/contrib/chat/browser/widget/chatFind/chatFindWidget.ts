@@ -17,7 +17,7 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../.
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import type { IChatFindController } from '../../chat.js';
-import type { IChatListItem } from '../chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { ChatFindModel, type IChatFindMatch, type IChatFindOptions, MAX_FIND_MATCHES } from './chatFindModel.js';
 import { getChatFindHighlightRegistry, type IChatFindHighlightRegistry, type IChatFindHighlightWindow } from './chatFindHighlights.js';
 

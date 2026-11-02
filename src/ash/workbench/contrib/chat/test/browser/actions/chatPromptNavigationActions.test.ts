@@ -4,7 +4,7 @@ import { suite, test } from 'mocha';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
-import type { IChatListItem } from '../../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { registerChatPromptNavigationActions } from '../../../browser/actions/chatPromptNavigationActions.js';
 
 registerChatPromptNavigationActions();

@@ -24,11 +24,11 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../../workbench/services/chat/common/modelCatalog.js';
-import type { IChatListItem } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../../workbench/services/chat/common/chatContextService.js';
 import { getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import type { ChatContextAttachment } from '../../../../../workbench/services/chat/common/chatContextService.js';

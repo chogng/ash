@@ -8,6 +8,8 @@ export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
 
 export enum ChatConfiguration {
 	ChatViewSessionsOrientation = 'chat.viewSessions.orientation',
+	FontFamily = 'chat.fontFamily',
+	FontSize = 'chat.fontSize',
 }
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';

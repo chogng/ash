@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { IChatListItem } from '../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { createTestLanguageModelToolsService } from '../common/tools/testLanguageModelToolsService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -43,7 +43,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
+import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import '../../browser/chat.shared.contribution.js';
@@ -489,6 +489,72 @@ suite('chatRenderer browser component', () => {
 		{ id: 'media', type: 'agentMessage', text: 'Delayed media.', content: [image], attachmentSource: source, transient: false },
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
+
+	for (const cowork of [false, true]) {
+		for (const theme of ['light', 'dark', 'hc', 'hcLight'] as const) {
+			test(`${cowork ? 'Cowork' : 'Chat'} message typography updates Markdown and links independently in ${theme}`, async () => {
+				const { page } = browserTests;
+				await page.goto('/chatTranscript.html?richInput');
+				await page.evaluate(({ cowork, theme }) => {
+					window.ashChatTranscriptIntegration.setTheme(theme);
+					window.ashChatTranscriptIntegration.showCopiedMessage('# Heading\n\nParagraph with [a link](https://example.com) and `inline code`.\n\n- List item\n\n> Quoted text\n\n| Column |\n| --- |\n| Cell |\n\n```ts\nconst value = 1;\n```', cowork);
+				}, { cowork, theme });
+				const row = page.locator('[data-item-id="copy-response"]');
+				const link = row.getByRole('link', { name: 'a link' });
+				const editor = row.locator('.ash-chat-code-block .stanza-editor');
+				await expect(editor).toBeVisible();
+				const retainedEditor = await editor.elementHandle();
+				const input = page.locator('.ash-chat-input-editor .stanza-editor-input:visible');
+				await input.focus();
+				await page.keyboard.insertText('Unsent draft');
+				await link.focus();
+				await page.evaluate(() => window.ashChatTranscriptIntegration.setTypography({
+					'chat.fontFamily': 'serif', 'chat.fontSize': 20,
+					'chat.input.fontFamily': 'sans-serif', 'chat.input.fontSize': 18,
+					'chat.editor.fontFamily': 'monospace', 'chat.editor.fontSize': 16,
+				}));
+				for (const selector of ['p', 'li', 'blockquote', 'td', 'a']) {
+					await expect(row.locator(`.ash-markdown ${selector}`).first()).toHaveCSS('font-size', '20px');
+					await expect(row.locator(`.ash-markdown ${selector}`).first()).toHaveCSS('font-family', 'serif');
+				}
+				assert.ok(await row.locator('h1').evaluate(element => parseFloat(getComputedStyle(element).fontSize)) > 20);
+				await expect(row.locator('p code')).not.toHaveCSS('font-family', 'serif');
+				await expect(editor).toHaveCSS('font-size', '16px');
+				await expect(editor).toHaveCSS('font-family', /monospace/);
+				await expect(page.locator('.ash-chat-input-editor .stanza-editor')).toHaveCSS('font-size', '18px');
+				await expect(page.locator('.ash-chat-input-editor .stanza-editor')).toHaveCSS('font-family', /sans-serif/);
+				await expect(link).toHaveCSS('text-decoration-line', 'underline');
+				await expect(link).toBeFocused();
+				assert.equal(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft()), 'Unsent draft');
+				assert.equal(await editor.evaluate((element, retained) => element === retained, retainedEditor), true);
+				await page.evaluate(() => window.ashChatTranscriptIntegration.setTypography({ 'chat.fontFamily': undefined, 'chat.fontSize': undefined }));
+				await expect(link).toHaveCSS('font-size', '13px');
+				await expect(link).toHaveCSS('font-family', 'system-ui');
+				await expect(editor).toHaveCSS('font-size', '16px');
+				await expect(link).toBeFocused();
+				await retainedEditor?.dispose();
+			});
+		}
+	}
+
+	test('message font changes preserve the reading anchor through visible and hidden updates', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.renderItems(Array.from({ length: 24 }, (_, index) => ({
+			id: `font-row-${index}`, type: 'agentMessage', text: `Section ${index}. ${'Reading content. '.repeat(30)}`, transient: false,
+		}))));
+		const anchor = page.locator('[data-item-id="font-row-10"]');
+		await anchor.evaluate(element => element.scrollIntoView({ block: 'start' }));
+		const top = await anchor.evaluate(element => element.getBoundingClientRect().top);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTypography({ 'chat.fontSize': 20 }));
+		await expect.poll(async () => Math.abs(await anchor.evaluate(element => element.getBoundingClientRect().top) - top)).toBeLessThanOrEqual(1);
+		await page.evaluate(async () => {
+			window.ashChatTranscriptIntegration.setTranscriptVisible(false);
+			await window.ashChatTranscriptIntegration.setTypography({ 'chat.fontSize': 16, 'chat.fontFamily': 'serif' });
+			window.ashChatTranscriptIntegration.setTranscriptVisible(true);
+		});
+		await expect.poll(async () => Math.abs(await anchor.evaluate(element => element.getBoundingClientRect().top) - top)).toBeLessThanOrEqual(1);
+	});
 
 
 	test('accessible transcript follows streamed model text and restores the focused response', async () => {

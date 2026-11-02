@@ -2,7 +2,7 @@ import '../../../browser/chat.shared.contribution.js';
 import { createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
 import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import { ChatListWidget } from '../../../browser/widget/chatListWidget.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../../services/chat/common/chatService.js';
 import { formatNlsMessage, setNlsResolver } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';

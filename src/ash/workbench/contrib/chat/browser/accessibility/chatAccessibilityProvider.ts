@@ -1,5 +1,5 @@
 import { localize } from '../../../../../nls.js';
-import type { IChatListItem } from '../widget/chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 
 /** Message labels shared by the transcript and its plain-text presentation. */
 export class ChatAccessibilityProvider {

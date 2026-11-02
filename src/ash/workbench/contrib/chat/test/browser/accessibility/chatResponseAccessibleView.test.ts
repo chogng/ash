@@ -6,7 +6,7 @@ import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { ChatResponseAccessibleView } from '../../../browser/accessibility/chatResponseAccessibleView.js';
-import type { IChatListItem } from '../../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 
 suite('ChatResponseAccessibleView', () => {
 	test('reads current model order, plain Markdown, exact context and complete code without rendered rows', () => {
