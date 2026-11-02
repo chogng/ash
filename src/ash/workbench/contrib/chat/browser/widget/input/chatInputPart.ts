@@ -72,6 +72,10 @@ import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
+import {
+	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
+	refreshChatInputStack, setChatInputStackInputFocused, setChatInputStackSlot,
+} from './chatInputStack.js';
 import { ChatInputNoticeHost } from './notices/chatInputNoticeHost.js';
 import { IChatInputNoticeHubService } from './notices/chatInputNoticeHub.js';
 import { getChatInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
@@ -294,7 +298,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.delegate = delegate;
 		this.history = this._register(instantiationService.createInstance(ChatHistoryNavigator<InputHistoryDraft>));
 		this.element = h(ownerDocument, 'div');
-		this.element.className = 'ash-chat-input-part';
+		this.element.className = `ash-chat-input-part ${chatInputStackClass}`;
 		container.append(this.element);
 		this._register(instantiationService.createInstance(ChatInputNotificationWidget, {
 			container: this.element,
@@ -305,8 +309,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			modelSelection: { openPicker: () => this.openModelPicker() },
 		}));
 		this._register(toDisposable(() => this.clearInputNotifications()));
-		this.dictationOnboardingContainer = h(ownerDocument, 'div', { className: 'ash-chat-input-notice-slot' });
-		this.voiceOnboardingContainer = h(ownerDocument, 'div', { className: 'ash-chat-input-notice-slot' });
+		this.dictationOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
+		this.voiceOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
 		this.element.append(this.voiceOnboardingContainer, this.dictationOnboardingContainer);
 		const context = this._register(contextKeys.createScoped(this.element));
 		ChatContextKeys.inChatInput.bindTo(context).set(true);
@@ -329,7 +333,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.elicitationFocused = interactionContext.createKey('chatElicitationFocused', false);
 		this.interaction.setAttribute('aria-live', 'polite');
 		this.inputContainer = h(ownerDocument, 'form');
-		this.inputContainer.className = 'ash-chat-input-container';
+		this.inputContainer.className = `ash-chat-input-container ${chatInputStackSlotClass}`;
+		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
 		const editorHost = h(ownerDocument, 'div');
 		editorHost.className = 'ash-chat-input-editor-host';
 		// Editor scopes inherit their DOM ancestors when they are constructed.
@@ -464,9 +469,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.canvasPills) { this.element.insertBefore(this.canvasPills.domNode, this.changesPill.domNode); }
 		if (this.inputFooter) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
+		refreshChatInputStack(this.element);
 		this.updateOnboardingHosts();
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			this.inputContainer.classList.add('focused');
+			setChatInputStackInputFocused(this.inputContainer, true);
 			if (this.input.element.contains(event.target as Node)) {
 				const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
 				if (hint) { announceStatus(hint); }
@@ -475,6 +482,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(addDisposableListener(this.inputContainer, 'focusout', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			this.inputContainer.classList.remove('focused');
+			setChatInputStackInputFocused(this.inputContainer, false);
 		}));
 		this._register(addDisposableListener(this.inputContainer, 'submit', (event) => {
 			event.preventDefault();

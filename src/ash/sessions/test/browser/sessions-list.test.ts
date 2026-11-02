@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
@@ -45,7 +46,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 		{ untitledSessionId: 'second', title: 'Second' },
 	];
 	for (const session of untitledSessions) {
-		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
+		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`, chatInputStatePersistence);
 	}
 	const sessionService = {
 		get untitledSessions() { return untitledSessions; },
@@ -132,10 +133,10 @@ for (const mode of ['chat', 'code'] as const) {
 				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications);
 				const rowIds = (): string[] => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
 				assert.deepEqual(rowIds(), ['session:saved']);
-				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank');
+				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assert.deepEqual(rowIds(), ['session:saved']);
 
-				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank');
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assert.deepEqual(rowIds(), ['untitled:blank', 'session:saved']);
 				const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:blank"] .ash-sessions-list-item')!;
 				const label = locale === 'zh-CN' ? '新建会话（草稿）' : 'New Session (draft)';
@@ -143,24 +144,24 @@ for (const mode of ['chat', 'code'] as const) {
 				assert.equal(button.getAttribute('aria-label'), label);
 				assert.equal(button.getAttribute('aria-current'), 'page');
 				button.focus();
-				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank');
+				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft updated', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assert.equal(dom.window.document.activeElement, button);
 				assert.equal(list.domNode.querySelector('[data-item="untitled:blank"] .ash-sessions-list-item'), button);
 
 				// The attachment-only draft is parked outside the visible arrangement.
-				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment');
+				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment', chatInputStatePersistence);
 				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
 				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
 				assert.deepEqual(opened, ['attachment']);
 				storage.store('sessions.inputDraft:untitled:corrupt', 'invalid JSON', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
 
-				writeNewChatDraftState(storage, undefined, 'untitled:blank');
+				writeNewChatDraftState(storage, undefined, 'untitled:blank', chatInputStatePersistence);
 				assert.deepEqual(rowIds(), ['untitled:attachment', 'session:saved']);
 				drafts = [blank, corrupt];
 				changes.fire();
 				assert.deepEqual(rowIds(), ['session:saved']);
-				assert.equal(readNewChatDraftState(storage, 'untitled:attachment')?.contexts[0]?.name, 'source.txt');
+				assert.equal(readNewChatDraftState(storage, 'untitled:attachment', chatInputStatePersistence)?.contexts[0]?.name, 'source.txt');
 			} finally { resetNlsResolver(); }
 		});
 	}
@@ -247,7 +248,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 		}
 	});
 	let drafts = [{ untitledSessionId: 'feedback', title: 'Synthetic feedback' }];
-	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback');
+	writeNewChatDraftState(storage, { mode: 'agent', text: 'Synthetic draft', contexts: [] }, 'untitled:feedback', chatInputStatePersistence);
 	const sessions = { sessions: [], get untitledSessions() { return drafts; }, state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const views = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;

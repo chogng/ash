@@ -814,13 +814,14 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 	).toBeVisible();
 	const feedback = page.locator('.ash-sessions-window > .ash-feedback-host');
 	await expect(feedback).toHaveCSS('position', 'absolute');
-	await expect(feedback).toHaveCSS('bottom', '40px');
+	await expect(feedback).toHaveAttribute('data-notification-position', 'bottom-right');
+	await expect(feedback).toHaveCSS('bottom', '12px');
 	const placement = await feedback.evaluate(element => {
 		const host = element.parentElement!.getBoundingClientRect();
 		const bounds = element.getBoundingClientRect();
 		return { right: host.right - bounds.right, bottom: host.bottom - bounds.bottom };
 	});
-	expect(placement).toEqual({ right: 12, bottom: 40 });
+	expect(placement).toEqual({ right: 12, bottom: 12 });
 	await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
 	expect(await page.evaluate(() => window.ashSessionsIntegration.disposeAndCheckErrorHandler())).toBe(true);
 	const entries = await page.evaluate(
@@ -828,7 +829,9 @@ test('a corrupt legacy draft reports its failure while other drafts and startup 
 	);
 	expect(entries['sessions.draftState:broken'].value).toBe('{broken');
 	expect(entries['sessions.codeDraftState:untitled:saved']).toBeUndefined();
-	expect(JSON.parse(entries['sessions.inputDraft:untitled:saved'].value)).toEqual({
+	const input = JSON.parse(entries['sessions.inputDraft:untitled:saved'].value);
+	expect(input.attachments).toBeUndefined();
+	expect(JSON.parse(input.state)).toEqual({
 		mode: 'agent',
 		text: 'synthetic preserved draft',
 		contexts: [],

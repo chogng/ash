@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { isRecord } from '../../base/common/types.js';
 import { localize } from '../../nls.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -30,10 +31,10 @@ export function captureSessionActionTarget(sessions: ISessionsManagementService,
 					// Park an unmounted composer's draft before the catalog removes its
 					// local identity. Mounted composers retain and migrate their live input.
 					const key = `untitled:${draftId}`;
-					const input = readNewChatDraftState(storage, key);
-					if (input) writeNewChatDraftState(storage, input, active.threadId);
+					const input = readNewChatDraftState(storage, key, chatInputStatePersistence);
+					if (input) writeNewChatDraftState(storage, input, active.threadId, chatInputStatePersistence);
 					sessions.promoteUntitledSession(draftId, active);
-					writeNewChatDraftState(storage, undefined, key);
+					writeNewChatDraftState(storage, undefined, key, chatInputStatePersistence);
 				}
 				return sessions.sessions.find(session => session.sessionId === active.session.sessionId) ?? active.session;
 			},
@@ -81,7 +82,7 @@ export class SessionActionsService implements IAgentSessionActionsService {
 		if (typeof draftId !== 'string') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		if (this.sessionsOwner.untitledSessions.some(session => session.untitledSessionId === draftId)) {
 			this.sessionsOwner.discardUntitledSession(draftId);
-			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`);
+			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`, chatInputStatePersistence);
 		}
 		return true;
 	}

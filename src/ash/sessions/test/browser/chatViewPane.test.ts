@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { IVoiceModeOnboardingService } from '../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
@@ -1338,7 +1339,7 @@ test('Sessions composer retains corrupt storage through visibility changes until
 	assert.equal(notices.model.getNotifications().length, 1);
 	assert.match(notices.model.getNotifications()[0]!.message, /Could not restore the Chat draft/u);
 	input.appendToDraft('A new draft');
-	assert.deepEqual(readNewChatDraftState(storage, identity), { mode: 'agent', text: 'A new draft', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(storage, identity, chatInputStatePersistence), { mode: 'agent', text: 'A new draft', contexts: [] });
 });
 
 test('Chinese Sessions draft recovery and accessibility help use the product language catalog', async () => {
@@ -1401,7 +1402,7 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	await source.error(new Error('Source unavailable'));
 	await rejected;
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
-	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
+	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
 });
 
 test('Sessions composer waits for file paste before sending and clears only the completed request', async () => {
@@ -1425,7 +1426,7 @@ test('Sessions composer waits for file paste before sending and clears only the 
 	await sending;
 	assert.deepEqual(sent, ['selected contents']);
 	assert.equal(await fixture.input.captureDraft(), undefined);
-	assert.equal(readNewChatDraftState(fixture.storage, fixture.identity), undefined);
+	assert.equal(readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence), undefined);
 });
 
 test('Sessions composer cancellation keeps the text and prevents a late file from entering the reopened draft', async () => {
@@ -1547,8 +1548,8 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(widget.sessionId, 'session-1');
 	assert.equal(codeView.model, widgetModel);
 	assert.deepEqual((await chatWidget.captureDraft())?.draft, restoredChatDraft);
-	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`), restoredChatDraft);
-	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
+	assert.deepEqual(readNewChatDraftState(composerStorage, `untitled:${chatSelection.session.untitledSessionId}`, chatInputStatePersistence), restoredChatDraft);
+	assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
 	codeView.dispose();
 	assert.equal(widget.isDisposed, true);
 	assert.equal(widgetModel.isDisposed, true);
@@ -1559,7 +1560,7 @@ test('sending from one session preserves a later draft during first-session crea
 	view.openSession('session-1', 'thread-1');
 	assert.equal(view.activeSelection?.kind, 'session');
 	assert.equal(await widget.captureDraft(), undefined);
-	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
+	assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
 });
 
 test('an empty Session list opens an untitled session and persists it on its first send', async () => {
@@ -5440,7 +5441,7 @@ for (const locale of ['en', 'zh-CN']) test(`Chat editor borrows one composer and
 		typeChatText(dom.window, input, 'Keep the unsent draft');
 		let resolutions = 0;
 		pane.addContext({ id: 'canvas-snapshot', kind: 'file', name: 'draft.txt', resolve: async () => { resolutions++; return { name: 'draft.txt', content: 'Captured unsaved code' }; } });
-		await waitFor(() => readNewChatDraftState(storage, beforeThread)?.contexts.length === 1);
+		await waitFor(() => readNewChatDraftState(storage, beforeThread, chatInputStatePersistence)?.contexts.length === 1);
 		const draft = (await pane.captureActiveDraft())!.draft;
 		const host = dom.window.document.createElement('div');
 		dom.window.document.body.append(host);
@@ -6510,10 +6511,10 @@ test('Cowork consumes rich tool evidence from its actual scoped transcript and c
 test('The original draft codec preserves terminal snapshots and rejects malformed stored geometry', () => {
 	using storage = createTestStorage();
 	const draft = { mode: 'agent' as const, text: 'Check this output', contexts: [{ id: 'terminal:saved', kind: 'terminal', name: 'Saved terminal', content: 'Context', resource: 'internal://terminal?id=saved', terminalSnapshot: { text: 'Saved output', columns: 80 } }] };
-	writeNewChatDraftState(storage, draft, 'thread');
-	assert.deepEqual(readNewChatDraftState(storage, 'thread'), draft);
+	writeNewChatDraftState(storage, draft, 'thread', chatInputStatePersistence);
+	assert.deepEqual(readNewChatDraftState(storage, 'thread', chatInputStatePersistence), draft);
 	storage.store('sessions.inputDraft:thread', JSON.stringify({ ...draft, contexts: [{ ...draft.contexts[0], terminalSnapshot: { text: 'Saved output', columns: 0 } }] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	assert.throws(() => readNewChatDraftState(storage, 'thread'), /Invalid terminal snapshot/);
+	assert.throws(() => readNewChatDraftState(storage, 'thread', chatInputStatePersistence), /Invalid terminal snapshot/);
 });
 
 for (const locale of ['en', 'zh-CN']) {

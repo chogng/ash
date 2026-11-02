@@ -7,6 +7,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { localize } from '../../../../../../../nls.js';
 import type { IChatInputNoticeFocusTarget } from './chatInputNoticeHost.js';
+import { chatInputStackSlotClass, ChatInputStackSlot, isChatInputStackSlotShowing, setChatInputStackSlot } from '../chatInputStack.js';
 import './media/chatInputNotice.css';
 
 export const enum ChatInputNoticeVariant {
@@ -76,13 +77,17 @@ export class ChatInputNoticeWidget extends Disposable implements IChatInputNotic
 	constructor(options: IChatInputNoticeWidgetOptions) {
 		super();
 		this.domNode = h(options.container.ownerDocument, 'section', {
-			className: `ash-chat-input-notice ash-chat-input-notice-${options.variant}${options.className ? ` ${options.className}` : ''}`,
+			className: `ash-chat-input-notice ${chatInputStackSlotClass} ash-chat-input-notice-${options.variant}${options.className ? ` ${options.className}` : ''}`,
 		});
 		this.domNode.tabIndex = -1;
 		this.domNode.setAttribute('role', 'region');
 		this.setAriaLabel(options.ariaLabel);
 		options.container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this.setVisible(true);
+		this._register(toDisposable(() => {
+			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
+			this.domNode.remove();
+		}));
 		this._register(registerChatInputNoticeAccessibleViews(this.domNode, options.focusInput, options.accessibility));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.key !== 'Escape' || !options.onEscape) return;
@@ -107,10 +112,11 @@ export class ChatInputNoticeWidget extends Disposable implements IChatInputNotic
 	}
 
 	focus(): void {
-		if (!this.domNode.hidden && this.domNode.isConnected) this.domNode.focus();
+		if (isChatInputStackSlotShowing(this.domNode) && this.domNode.isConnected) this.domNode.focus();
 	}
 
 	setVisible(visible: boolean): void {
 		if (this.domNode.hidden !== !visible) this.domNode.hidden = !visible;
+		setChatInputStackSlot(this.domNode, visible ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 	}
 }

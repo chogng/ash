@@ -77,6 +77,13 @@ owns its trigger, folder history, choice list, cancellation and focus restoratio
 The Workbench Welcome workspace picker has a separate delegate and presentation;
 it does not own the Sessions execution environment.
 
+The shared `chatInputStatePersistence` codec separates input state from attachment
+snapshots. Sessions `newChatDraftState` retains workspace-scoped keys, complete
+draft validation and migration. Each input record references an immutable attachment
+payload; text or mode edits reuse it. Publishing state follows payload creation,
+and replacement or removal releases the old payload. Combined drafts migrate on
+read after validation; conflicting legacy migrations preserve both records.
+
 Shared notices, introductions and tips live under
 `workbench/contrib/chat/browser/widget/input/notices/`.
 `ChatInputPart` owns one `ChatInputNoticeHost` per composer. Input errors,

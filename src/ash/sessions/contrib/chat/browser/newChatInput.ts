@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -96,8 +97,8 @@ export class NewChatInputWidget extends ChatInputPart {
 			if (hint) announceStatus(hint);
 		}));
 		this.bindDraftStorage(model, {
-			read: identity => readNewChatDraftState(storage, identity),
-			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
+			read: identity => readNewChatDraftState(storage, identity, chatInputStatePersistence),
+			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
 	}

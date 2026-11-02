@@ -47,6 +47,8 @@ import { SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInp
 import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
+import { chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot, refreshChatInputStack, setChatInputStackSlot } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
+import '../../../../../../workbench/contrib/chat/browser/widget/media/chat.css';
 
 
 const listCustomViews = { showCustomView: (id: string) => { document.body.dataset.openedView = id; }, activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
@@ -225,8 +227,23 @@ const opened: string[] = [];
 const opener = { open: async (uri: URI) => { opened.push(uri.toString()); return true; } } as IOpenerService;
 const notifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
-const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
+const inputStack = new URL(location.href).searchParams.has('inputStack');
+const toolbarModel = inputStack ? {
+	get sessionId() { return selection?.kind === 'session' ? selection.active.session.sessionId : undefined; },
+	onDidChange: selected.event,
+} : { sessionId: 'session', onDidChange: Event.None };
+const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
+if (inputStack) {
+	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
+	main.classList.add('ash-chat-input-part', chatInputStackClass);
+	const input = document.createElement('textarea');
+	input.classList.add('ash-chat-input-container', chatInputStackSlotClass);
+	input.value = 'Retained PR draft';
+	main.append(input);
+	setChatInputStackSlot(input, ChatInputStackSlot.Standalone);
+	refreshChatInputStack(main);
+}
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
 const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
 const submissions: Record<string, unknown>[] = [];

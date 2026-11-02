@@ -9,7 +9,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toHaveClass(/empty/u);
 	await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-	const layout = await chat.evaluate(element => {
+	const { surfaceHeight, surfaceCount, ...layout } = await chat.evaluate(element => {
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
 		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
@@ -23,7 +23,16 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 		const composerBounds = composer.getBoundingClientRect();
 		const editorBounds = editor.getBoundingClientRect();
 		const toolbarBounds = toolbar.getBoundingClientRect();
+		// A disconnected host can report a notice above an otherwise empty input.
+		// Its content height varies; the stack must add exactly one gap per visible surface.
+		const surfaces = Array.from(input.children).filter((child): child is HTMLElement =>
+			child instanceof HTMLElement && child !== composer
+			&& child.classList.contains('ash-chat-input-stack-slot')
+			&& !!(child.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING)
+			&& child.getBoundingClientRect().height > 0);
 		return {
+			surfaceHeight: surfaces.reduce((height, surface) => height + surface.getBoundingClientRect().height, 0),
+			surfaceCount: surfaces.length,
 			listHeight: list.getBoundingClientRect().height,
 			inputBottomInset: chatBounds.bottom - inputBounds.bottom,
 			composerTopInset: composerBounds.top - inputBounds.top,
@@ -47,7 +56,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	expect(layout).toEqual({
 		listHeight: 0,
 		inputBottomInset: 0,
-		composerTopInset: 4,
+		composerTopInset: 4 + surfaceHeight + surfaceCount * 8,
 		composerBottomInset: 30,
 		secondaryHeight: 22,
 		secondaryTopInset: 4,

@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -111,7 +112,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
 		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
-		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId);
+		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId, chatInputStatePersistence);
 		if (storedDraft) this.restoreDraft(storedDraft);
 		this._register(this.onDidChangeInput(() => {
 			if (!this.restoringDraft) {
@@ -136,13 +137,13 @@ export class NewCoworkInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
+					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`, chatInputStatePersistence);
 					if (draft) this.restoreDraft(draft);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
 					this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
-					writeNewChatDraftState(storage, undefined, this.displayedDraftId);
+					writeNewChatDraftState(storage, undefined, this.displayedDraftId, chatInputStatePersistence);
 				}
 				this.displayedThreadId = model.threadId;
 				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
@@ -189,7 +190,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const { text, contexts: attachments } = this.snapshotDraftReferences();
 		const mode = this.model.inputState.mode;
 		if (attachments.length === 0) {
-			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
+			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId, chatInputStatePersistence);
 			return;
 		}
 		const contexts = await Promise.all(attachments.map(async attachment => ({
@@ -200,7 +201,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
 		})));
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
-		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);
+		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId, chatInputStatePersistence);
 	}
 
 	private updateConversation(): void {

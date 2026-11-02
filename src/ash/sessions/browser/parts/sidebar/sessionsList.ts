@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import './media/sessionsList.css';
@@ -230,7 +231,7 @@ export class SessionsList extends DomWidget {
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		for (const session of this.sessionService.untitledSessions) {
 			let draft: ReturnType<typeof readNewChatDraftState>;
-			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`); }
+			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
 			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;

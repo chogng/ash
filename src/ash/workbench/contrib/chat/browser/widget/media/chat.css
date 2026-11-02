@@ -89,8 +89,6 @@
 
 .ash-chat-input-part {
 	--ash-chat-input-focus-border: var(--ash-focusBorder);
-	display: flex;
-	flex-direction: column;
 }
 
 .ash-chat-secondary-toolbar {
@@ -317,7 +315,6 @@
 	display: flex;
 	align-items: flex-start;
 	gap: var(--ash-spacing-size80);
-	margin-bottom: var(--ash-spacing-size80);
 	padding-inline: var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);

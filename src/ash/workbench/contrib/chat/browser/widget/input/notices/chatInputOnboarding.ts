@@ -1,6 +1,7 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../../../platform/storage/common/storage.js';
 import { pickActiveChatInput, trackChatInputRecency, type IChatInputNoticeClaimOptions, type IChatInputNoticeFocusTarget, type IChatInputSurface } from './chatInputNoticeHost.js';
+import { ChatInputStackSlot, setChatInputStackSlot } from '../chatInputStack.js';
 
 export type ChatInputNoticeClaim = (options: IChatInputNoticeClaimOptions) => IDisposable;
 
@@ -94,6 +95,7 @@ export class ChatInputOnboarding extends Disposable {
 		this.request = request;
 		// Retire the old card before taking the new claim, but keep its lane occupied
 		// until the replacement is registered so a lower-priority tip never flashes.
+		if (previous) setChatInputStackSlot(previous.host.container, ChatInputStackSlot.Empty);
 		previous?.banner?.dispose();
 		try {
 			if (host.claimNotice) {
@@ -126,9 +128,12 @@ export class ChatInputOnboarding extends Disposable {
 		if (this.request !== request || this.isDisposed || request.leading === leading) return;
 		request.leading = leading;
 		if (!leading) {
+			setChatInputStackSlot(request.host.container, ChatInputStackSlot.Empty);
 			request.banner?.setVisible?.(false);
 			return;
 		}
+		// Card construction can focus its first action, so reveal the host before invoking the feature.
+		setChatInputStackSlot(request.host.container, ChatInputStackSlot.Standalone);
 		if (!request.banner) {
 			try {
 				const banner = request.create({
@@ -154,6 +159,7 @@ export class ChatInputOnboarding extends Disposable {
 			}
 		}
 		request.banner.setVisible?.(request.leading);
+		if (this.request !== request || !request.leading) return;
 		if (request.leading && !request.shown) {
 			request.shown = true;
 			if (this.options.markSeenOn !== 'acknowledge') {
@@ -168,6 +174,7 @@ export class ChatInputOnboarding extends Disposable {
 		if (!request) return;
 		this.request = undefined;
 		const hadFocus = request.banner?.hasFocus() ?? false;
+		setChatInputStackSlot(request.host.container, ChatInputStackSlot.Empty);
 		request.banner?.dispose();
 		request.claim?.dispose();
 		if (restoreFocus && hadFocus) request.host.focus?.();

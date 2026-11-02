@@ -17,6 +17,7 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import { NewChatInputWidget } from './newChatInput.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
+import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import './media/chatInput.css';
 import '../../../common/theme.js';
 
@@ -90,6 +91,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		footer.classList.add('ash-sessions-chat-input-footer');
 		this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
 		parent.append(footer);
+		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
 		this._register(model.onDidChange(() => {
 			if (this.composerThreadId !== model.threadId && this.composerThreadId !== undefined) {

@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
 import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
@@ -775,7 +776,7 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IDesignEditorService, () => services.createInstance(DesignEditorService));
 		this._register(registerSessionsNavigation());
 		const sidebar = this._register(services.createInstance(SidebarPart, this.domNode));
-		const recoveredDrafts = migrateNewChatDraftState(storage, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
+		const recoveredDrafts = migrateNewChatDraftState(storage, chatInputStatePersistence, error => notificationService.error(localize('sessions.chat.draftRestoreFailed', 'Could not restore the Chat draft: {0}', String(error))));
 		this._register(CommandsRegistry.register('sessions.creator.buildWithAgent', async (_accessor, value) => {
 			const request = value as { readonly prompt: string; readonly content: string; };
 			view.openNewSession(localize('sessions.creator.make.session', 'Make development'));
@@ -1110,7 +1111,7 @@ export abstract class Workbench extends Disposable {
 		const selected = view.activeSelection!;
 		for (const recovered of recoveredDrafts) {
 			const session = view.openNewSession(undefined, { sideBySide: true, source: 'restore' });
-			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`);
+			writeNewChatDraftState(storage, recovered.draft, `untitled:${session.untitledSessionId}`, chatInputStatePersistence);
 			this.sessionsPart.restoreDraft(recovered.draft);
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}

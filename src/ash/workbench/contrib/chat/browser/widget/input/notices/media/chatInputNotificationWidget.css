@@ -1,6 +1,5 @@
 .ash-chat-input-notice-notification {
 	min-width: 0;
-	margin-bottom: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size120);
 	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	border-radius: var(--ash-cornerRadius-large);

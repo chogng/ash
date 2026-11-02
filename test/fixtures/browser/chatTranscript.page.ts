@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -1338,7 +1339,7 @@ window.ashChatTranscriptIntegration = {
 	appImagePending: () => completeImageDecode !== undefined,
 	delayAppImages: () => { window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => new Promise<ImageBitmap>((resolve, reject) => { completeImageDecode = () => { window.createImageBitmap = createBitmap; void createBitmap(...args).then(resolve, reject); }; })) as typeof createImageBitmap; },
 	finishAppImages: () => { completeImageDecode?.(); completeImageDecode = undefined; },
-	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
+	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread, chatInputStatePersistence),
 	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
 	chatDraftContexts: async () => (await appChat?.captureDraft())?.draft.contexts,
 	chatDraftContextNames: async () => (await appChat?.captureDraft())?.draft.contexts.map(context => context.name) ?? [],

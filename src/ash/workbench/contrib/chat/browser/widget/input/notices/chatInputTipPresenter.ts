@@ -5,6 +5,8 @@ import { IInstantiationService } from '../../../../../../../platform/instantiati
 import { ChatInputNoticeHost, ChatInputNoticeLane } from './chatInputNoticeHost.js';
 import { registerChatInputNoticeAccessibleViews } from './chatInputNoticeWidget.js';
 
+import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from '../chatInputStack.js';
+
 export interface IChatInputTipPresenterOptions {
 	readonly container: HTMLElement;
 	readonly isEligible: () => boolean;
@@ -20,9 +22,14 @@ export class ChatInputTipPresenter extends Disposable {
 
 	constructor(private readonly options: IChatInputTipPresenterOptions, private readonly noticeHost: ChatInputNoticeHost, @IChatTipService private readonly tips: IChatTipService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
+		this.options.container.classList.add(chatInputStackSlotClass);
 		this.options.container.hidden = true;
+		setChatInputStackSlot(this.options.container, ChatInputStackSlot.Empty);
 		this._register(registerChatInputNoticeAccessibleViews(this.options.container));
-		this._register(toDisposable(() => this.options.container.hidden = true));
+		this._register(toDisposable(() => {
+			this.options.container.hidden = true;
+			setChatInputStackSlot(this.options.container, ChatInputStackSlot.Empty);
+		}));
 		this._register(tips.onDidDismissTip(() => this.update()));
 		this.update();
 	}
@@ -48,6 +55,7 @@ export class ChatInputTipPresenter extends Disposable {
 				onDidChangeLeading: leading => {
 					this.leading = leading;
 					this.options.container.hidden = !leading;
+					setChatInputStackSlot(this.options.container, leading ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 				},
 			});
 		}

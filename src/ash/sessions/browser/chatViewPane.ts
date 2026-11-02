@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
@@ -375,8 +376,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					undefined, this.embeddedOptions.get(untitledSession.untitledSessionId),
 				);
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
@@ -416,8 +417,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					undefined, undefined,
 				);
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);

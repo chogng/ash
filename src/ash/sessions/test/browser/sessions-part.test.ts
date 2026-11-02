@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
@@ -407,7 +408,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, separateDraft);
-	assert.deepEqual(readNewChatDraftState(storage, `untitled:${second.untitledSessionId}`), separateDraft);
+	assert.deepEqual(readNewChatDraftState(storage, `untitled:${second.untitledSessionId}`, chatInputStatePersistence), separateDraft);
 	viewService.activateSelection(selected);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
@@ -451,19 +452,19 @@ test('Sessions draft state restores text and images while isolating Threads and 
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
 	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
-	writeNewChatDraftState(storage, draft, 'untitled:first');
-	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
+	writeNewChatDraftState(storage, draft, 'untitled:first', chatInputStatePersistence);
+	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1', chatInputStatePersistence);
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
-	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first'), draft);
-	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
-	assert.equal(readNewChatDraftState(restored, 'thread-2'), undefined);
+	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), draft);
+	assert.deepEqual(readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence), { mode: 'plan', text: 'Thread draft', contexts: [] });
+	assert.equal(readNewChatDraftState(restored, 'thread-2', chatInputStatePersistence), undefined);
 	restored.switchWorkspace('workspace-b');
-	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), undefined);
 	restored.switchWorkspace('workspace-a');
-	writeNewChatDraftState(restored, undefined, 'untitled:first');
-	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
-	assert.equal(readNewChatDraftState(restored, 'thread-1')?.text, 'Thread draft');
+	writeNewChatDraftState(restored, undefined, 'untitled:first', chatInputStatePersistence);
+	assert.equal(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), undefined);
+	assert.equal(readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence)?.text, 'Thread draft');
 });
 
 test('legacy drafts merge by session identity and conflicting content survives until recovery', async () => {
@@ -474,13 +475,13 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const recovered = migrateNewChatDraftState(storage);
-	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1'), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
+	const recovered = migrateNewChatDraftState(storage, chatInputStatePersistence);
+	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1', chatInputStatePersistence), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
 	assert.equal(storage.get(recovered[0]!.key, StorageScope.WORKSPACE), JSON.stringify(chatDraft));
-	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered');
+	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered', chatInputStatePersistence);
 	storage.remove(recovered[0]!.key, StorageScope.WORKSPACE);
-	assert.deepEqual(migrateNewChatDraftState(storage), []);
+	assert.deepEqual(migrateNewChatDraftState(storage, chatInputStatePersistence), []);
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
-	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
+	assert.deepEqual([readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence), readNewChatDraftState(restored, 'untitled:recovered', chatInputStatePersistence)], [codeDraft, chatDraft]);
 });
