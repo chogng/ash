@@ -1,3 +1,4 @@
+import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -23,7 +24,7 @@ const instructions = '---\nname: meeting-notes\ndescription: Summarize meeting n
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function fixture() {
+function fixture(profileAvailable = true) {
 	const resources = new DisposableStore();
 	const files = resources.add(new FileService());
 	const provider = resources.add(new InMemoryFileSystemProvider());
@@ -38,8 +39,8 @@ function fixture() {
 	services.registerInstance(IFileService, files);
 	services.registerInstance(IDialogService, { input: async () => state.input, prompt: async () => ({}) } as unknown as IDialogService);
 	services.registerInstance(IPathService, { userHome: async () => home, getHostPath: async (resource: URI) => resource.path } as IPathService);
+	services.registerInstance(IRendererHostService, { userDataHome: profileAvailable ? home : undefined } as IRendererHost);
 	services.registerInstance(ISessionPrimaryProviderServices, {
-		host: { userDataHome: home },
 		prompts: {
 			registerSkillSource: async (root: string) => {
 				if (state.registrationError) throw state.registrationError;
@@ -58,6 +59,14 @@ function fixture() {
 	const actions = resources.add(services.createInstance(CustomizeSkillActions, { createElement() { throw new Error('Unexpected file picker'); } } as unknown as Document));
 	return { resources, files, state, actions };
 }
+
+test('skill publication requires the window profile directory', async () => {
+	const { resources, files, actions } = fixture(false);
+	using lifetime = resources;
+	assert.equal(actions.isAvailable, false);
+	await assert.rejects(actions.create(), /Skill storage is unavailable/);
+	await assert.rejects(files.stat(target));
+});
 
 test('Create skill publishes valid instructions, registers their source, and opens the file', async () => {
 	const { resources, files, state, actions } = fixture();

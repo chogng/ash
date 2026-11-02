@@ -180,7 +180,7 @@ export class DesktopMain extends Disposable {
 				} : undefined,
 				createBrowserHost: documentClient ? services => {
 					const browsers = services.get(IBrowserViewWorkbenchService);
-					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService));
+					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
 					const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
 					return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
 				} : undefined,

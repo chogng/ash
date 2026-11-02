@@ -81,7 +81,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	};
 	const addHost = (providerId: string, api: IRendererHost): ISessionProviderScope => {
 		const scope: ISessionProviderScope = {
-			providerId, services: { host: api } as SessionProviderServices, thread: api.thread,
+			providerId, services: { host: api } as unknown as SessionProviderServices, thread: api.thread,
 			identity: value => sessionIdentity(providerId, value, 'primary'),
 			backendIdentity: value => { const parsed = parseSessionIdentity(value, 'primary'); if (parsed.providerId !== providerId) throw new CancellationError(); return parsed.backendSessionId; },
 			assertCurrent: () => { if (hostScopes.get(providerId) !== scope) throw new CancellationError(); },

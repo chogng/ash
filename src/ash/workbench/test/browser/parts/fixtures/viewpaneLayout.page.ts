@@ -102,7 +102,7 @@ const configuration = resources.add(new InMemoryConfigurationService());
 const notifications = resources.add(new TestNotificationService());
 const changesServices = resources.add(new InstantiationService());
 const scopeHost = createDisconnectedRendererApi();
-const providerScope: ISessionProviderScope = { providerId: 'fixture', services: { host: scopeHost } as SessionProviderServices, thread: scopeHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent() { } };
+const providerScope: ISessionProviderScope = { providerId: 'fixture', services: { host: scopeHost } as unknown as SessionProviderServices, thread: scopeHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent() { } };
 changesServices.registerInstance(ISessionProviderScopeService, {
 	onDidChange: Event.None, onDidChangeScopes: Event.None, getScopes: () => [providerScope],
 	getScope: () => providerScope, getProviderScope: () => providerScope, createScope: () => changesServices.createChild(),

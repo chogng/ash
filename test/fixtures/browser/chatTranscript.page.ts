@@ -66,7 +66,7 @@ import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { IAgentThreadService, IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentConnection, IAgentThreadService, IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
@@ -1277,6 +1277,7 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IRendererHostService, disconnected);
+		lifecycleServices.registerInstance(IAgentConnection, lifecycleServices.get(IRendererHostService));
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
 		lifecycleServices.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });

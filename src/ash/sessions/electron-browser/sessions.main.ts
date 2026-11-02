@@ -176,7 +176,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				createBrowserHost: documentClient
 					? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService));
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
 						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),

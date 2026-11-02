@@ -2,17 +2,16 @@ import { BrowserContentSearchService } from '../../../../../platform/search/brow
 import type { IContentSearchOptions, IContentSearchQuery, IContentSearchService } from '../../../../../platform/search/common/search.js';
 import type { IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import type { FileFuzzyQuery, FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
-import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { AgentHostFileSystemProvider } from '../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
-import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 
 /** Adds Session-scoped search to the shared filesystem provider; file routing never uses selection. */
 export class SessionFileService extends AgentHostFileSystemProvider implements IFileSearchService, IContentSearchService {
 	private readonly fileSearch: IFileSearchService;
 	private readonly contentSearch: IContentSearchService;
 	constructor(
-		host: IRendererHost,
+		host: IAgentConnection,
 		directories: () => readonly IFileSystemDirectory[],
 	) {
 		const target = <T extends { readonly dirId?: string; }>(params: T): Omit<T, 'dirId'> & { dirId?: string; sessionDirectory?: { sessionId: string; path: string; }; } => {
@@ -24,12 +23,6 @@ export class SessionFileService extends AgentHostFileSystemProvider implements I
 			api: host.fs,
 			resourceApi: host.resource,
 			directories,
-			onDidChange: listener => {
-				const subscription = host.events.subscribe(event => {
-					if (event.method === 'fs/changed') { listener(event.params); }
-				});
-				return toDisposable(() => subscription.dispose());
-			},
 		});
 		this.fileSearch = host.fileSearch;
 		this.contentSearch = new BrowserContentSearchService({

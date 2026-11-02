@@ -1,3 +1,4 @@
+import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -109,6 +110,7 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, api);
+	services.registerInstance(IAgentConnection, services.get(IRendererHostService));
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);
 	services.registerInstance(IAgentTurnService, api.turn);

@@ -2,6 +2,28 @@
 
 本轮通用服务已按下节的真实调用与领域 owner 闭合；下面各批记录保留其当时的范围和验证。产品差异及真实环境验收由 [AgentHost TODO](TODO.md#agenthost--todo) 维护。保留 Ash 的 Rust 执行与持久化架构，不声明上游 AHP wire protocol 兼容。
 
+## 文件事件领域契约与验证收尾 · 2026-11-02
+
+在上一批工作树上继续实施，当前基线更新为 `9b0e48221119830daa9210dd4fc74064d211bf71`，保留期间合入的 Session 目录与展示 owner 变更。本片沿 Workbench／Session 文件消费者 → `AgentHostFileSystemProvider` → `IFileApi` → 原协议客户端与 Rust 文件通知的调用链收敛职责。
+
+- `platform/files/common/fileApi.ts` 拥有前端 `FileInvalidation` 与 `IFileApi.onDidChangeFiles`；文件 browser adapter 唯一识别 `fs/changed` 并提供连接所属的事件。文件 Provider 直接订阅领域事件，Workbench、Session 文件服务、发现的 worktree 挂载与 Remote Provider 退出原始通知分发；窗口目录授权恢复仍通过附加失效信号请求重新扫描。
+- 新回归使用真实协议客户端、生成 decoder 和文件 Provider，先复现领域事件未到达 Provider，再验证同目录 ID 的两条连接隔离、无关通知过滤、断线／重连、调用者及 Provider 释放。架构检查阻止文件协议通知重新流入领域外消费者；原文件缓存、授权目录、连接和 Rust 状态 owner 保持原职责。
+- 上批编译阻塞实际是导入路径错误：`createChatFileAttachments` 已由 `chatPasteProviders.ts` 实现，修正 `chatInputPart.ts` 的导入后恢复完整编译。扩大窗口验证时补齐 Chat fixture 的搜索／编辑器分组／补全依赖，让命令与输入框共用 Widget 注册表，并按测试释放编辑器监听，避免读取上个测试已释放的配置。
+
+验证：完整 Renderer 和测试项目类型检查通过，`pnpm build:web` 通过。标准单测入口的 13 文件中，其余 12 文件／278 项通过；修复上述 fixture 后，Chat 窗口 221 项完整重跑通过，合计 499 项，包含 Automation／GitHub 的真实 Chromium 组件及中英文 Chat 恢复。首轮失败和最终重跑分别保留在 `.build/agenthost-files-20261102/file-events-final.log`、`chat-window-final.log`，红绿回归及 Web 构建也在同一目录。前批验证待办已移除。
+
+## common 连接契约与窗口能力 · 2026-11-02
+
+本批基线为 Ash `274d8f16f956066ec05603d29c0581c56d110941` 与本地只读 VS Code `ae15303824771284a26e84c78d5769a03051f50d`，工作树开始时干净。按用户确认的第一批连接契约范围实施，不以目录存在或成员数量声明整项 API 等价。
+
+- `platform/agentHost/common/agentService.ts` 的 `IAgentConnection` 承接既有连接所属的领域端口；ConnectionsService、远端 lease、Session 文件与 Provider scope 改用该契约。领域 adapter、连接代次、恢复调度、Main relay 和 Rust 状态 owner 保持原有实现。
+- Workbench 与 Sessions 的窗口装配将同一个宿主对象注册为 `IAgentConnection` 和 `IRendererHostService`；远端 Provider scope 只绑定自己的连接和领域服务，继续借用父作用域的窗口宿主。本机 TCP、profile 目录与配置编辑保留在 Renderer，浏览器代理与技能上传从窗口 owner 显式取得所需能力。
+- 新回归从真实 SSH 命令、Provider scope、后端命名操作到关闭释放，验证远端连接不会覆盖窗口宿主；另覆盖缺少连接注入时创建失败、窗口无 profile 时禁止技能发布，并增加 common 连接契约不依赖 Renderer 装配的架构检查。
+
+验证：先通过 5 文件／36 项最小调用链，再扩大到 15 文件／257 项定向单测，覆盖协议配对、取消、Local／Remote 恢复、目录重绑、权限等待、多宿主同 ID／嵌套根隔离与 scope 释放。最终精简测试装配后，受影响的 Provider 路由、Session 管理和 Automation store 3 文件／116 项重跑通过。生成协议通过仓库 `pnpm protocol:generate` 更新；定向编译继承 `tsconfig.test.json`，配置与选中文件清单位于 `.build/agenthost-connections-20261102/`。
+
+该批结束时，完整编译与窗口验证被 `chatInputPart.ts:74` 的附件导入路径错误阻塞；已在上面的验证收尾切片修复并完成验收。本批只完成连接能力与窗口能力的 owner 切片；上游完整 `IAgentConnection`／`IAgentHostService` 成员、authority／address 与 Session URI 解析、资源快照同名职责及其他领域的原始通知泄漏继续保持待复核状态。
+
 ## 通用服务端到端闭合 · 2026-10-18
 
 本节取代下面历史记录中的“统一连接、主列表、Chat scope、文件过滤尚未实现”结论。范围为现有通用能力；SDK、续接、模型安装和其他独立产品能力继续由根 TODO 列缺口。这里按公开职责核对实际调用与唯一 owner，不以 Node、state／meta 或同名文件数量判断完成，也不声明兼容上游 AHP wire protocol。

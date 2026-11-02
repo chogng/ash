@@ -6,6 +6,7 @@ import { localize } from '../../../nls.js';
 import { IRendererHostService, type IRendererHost } from '../../renderer/common/rendererHost.js';
 import { AMBIENT_AGENT_HOST_AUTHORITY, agentHostConnectionAddress, type IAgentHostConnectionInfo, type IAgentHostConnectionsService } from '../common/agentHostConnectionsService.js';
 import type { AppServerConnectionState } from '../common/appServerApi.js';
+import type { IAgentConnection } from '../common/agentService.js';
 import { remoteAgentHostRoot } from '../common/remoteAgentHostService.js';
 
 /** Projects one selected window host and its runtime endpoint registry without owning another connection table. */
@@ -37,7 +38,7 @@ export class AgentHostConnectionsService extends Disposable implements IAgentHos
 		});
 	}
 
-	public get ambientConnection(): IRendererHost { return this.renderer; }
+	public get ambientConnection(): IAgentConnection { return this.renderer; }
 
 	public resolveConnection(resource: URI): IAgentHostConnectionInfo | undefined {
 		const candidates = this.connections.flatMap(info => {

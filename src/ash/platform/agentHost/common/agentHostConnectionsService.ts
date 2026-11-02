@@ -2,7 +2,7 @@ import type { IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { Event } from '../../../base/common/event.js';
 import type { URI } from '../../../base/common/uri.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
-import type { IRendererHost } from '../../renderer/common/rendererHost.js';
+import type { IAgentConnection } from './agentService.js';
 import { isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from './remoteAgentHostService.js';
 import type { AppServerConnectionState } from './appServerApi.js';
 
@@ -18,7 +18,7 @@ export interface IAgentHostConnectionInfo {
 	readonly isAmbient: boolean;
 	readonly state: AppServerConnectionState;
 	/** Existing domain ports, retained across transient transport recovery and absent during initial acquisition. */
-	readonly connection: IRendererHost | undefined;
+	readonly connection: IAgentConnection | undefined;
 	readonly remoteConnection: RemoteAgentHostConnection | undefined;
 	readonly directory: IFileSystemDirectory | undefined;
 }
@@ -33,7 +33,7 @@ export interface IAgentHostConnectionsService {
 	readonly onDidChangeConnections: Event<void>;
 	readonly connections: readonly IAgentHostConnectionInfo[];
 	/** The selected window host, which may itself be remote. Borrowed, never owned here. */
-	readonly ambientConnection: IRendererHost;
+	readonly ambientConnection: IAgentConnection;
 	/** Resolves a remote resource namespace and its most specific registered directory.
 	 * A single namespace owner also serves its separately granted worktrees. Ambiguous
 	 * ownership throws; absence returns undefined. This lookup grants no file access.

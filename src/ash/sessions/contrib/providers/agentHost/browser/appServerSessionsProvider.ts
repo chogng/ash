@@ -1,4 +1,4 @@
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IAgentConnection, IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { AgentHostAutomationStore } from './agentHostAutomationStore.js';
 import type { AgentExecutionNode, AgentSession, ThreadSubscription, TurnStatus } from '../../../../../platform/agentHost/common/agent.js';
@@ -8,7 +8,6 @@ import { canceled } from '../../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
@@ -64,7 +63,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IAgentSessionService private readonly sessionApi: IAgentSessionService,
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@IAgentTurnService private readonly turnApi: IAgentTurnService,
-		@IRendererHostService private readonly rendererHost: IRendererHost,
+		@IAgentConnection private readonly rendererHost: IAgentConnection,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IDevContainerAgentHostService private readonly containers: IDevContainerAgentHostService,
 	) {

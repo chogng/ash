@@ -64,7 +64,7 @@ test('browser proxy routes SSH, WSL, Tunnel and nested containers through their 
 	using connections = registry(ambient, entries);
 	using lifetime = registerBrowserNetworkHost({ registerChannel: (_name, registered) => { channel = registered; } } as IMainProcessService,
 		connections,
-		{ getWorkspace: () => ({ id: 'window', folders: [], remoteAuthority: windowRemote }) } as unknown as IWorkspaceContextService);
+		{ getWorkspace: () => ({ id: 'window', folders: [], remoteAuthority: windowRemote }) } as unknown as IWorkspaceContextService, ambient.localTcp);
 	for (const host of hosts) {
 		const id = crypto.randomUUID();
 		await channel!.call('window', 'open', { id, network: { authority: host.directory.uri.authority }, host: 'localhost', port: 3000 });

@@ -37,11 +37,17 @@ export interface IFileSystemDirectory {
 	readonly target: { readonly type: 'environment'; readonly dirId: string; } | { readonly type: 'session'; readonly sessionId: string; readonly path: string; };
 }
 
+/** Invalidates connection-owned observations; the filesystem provider resolves paths within its authorized roots. */
+export type FileInvalidation =
+	| { readonly type: 'pathsChanged'; readonly dirId?: string; readonly paths: readonly string[]; }
+	| { readonly type: 'rescanRequired'; readonly dirId?: string; };
+
 export interface IFileApi {
 	/** Discover an existing backend-authorized root; this does not grant access. */
 	resolvePath(resource: URI): Promise<IFileSystemDirectory>;
 	readonly connectionGeneration: number;
 	readonly onDidChangeConnection: Event<void>;
+	readonly onDidChangeFiles: Event<FileInvalidation>;
 	readPathCaseSensitivity(params: FileTarget): Promise<{
 		readonly scopes: readonly { readonly path: string; readonly sensitivity: 'sensitive' | 'insensitive' | 'unknown'; }[];
 	}>;

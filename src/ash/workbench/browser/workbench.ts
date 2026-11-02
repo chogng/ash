@@ -44,7 +44,7 @@ import { IModelService } from '../../editor/common/services/model.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
-import { IAgentHostInputCompletionService, IAgentThreadService, IAgentTurnService, IAgentSessionService } from '../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentThreadService, IAgentTurnService, IAgentSessionService, IAgentConnection } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
@@ -631,6 +631,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILogService, logService);
 		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logService);
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IAgentConnection, api);
 		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
@@ -728,10 +729,6 @@ export class Workbench extends Disposable {
 			isConnectionReady: () => !api.appServer.recovery || api.appServer.recovery.status === 'idle',
 			onDidChange: listener => {
 				const subscriptions = new DisposableStore();
-				const subscription = api.events.subscribe(event => {
-					if (event.method === 'fs/changed') listener(event.params);
-				});
-				subscriptions.add(toDisposable(() => subscription.dispose()));
 				const recovery = api.appServer.recovery;
 				if (recovery) subscriptions.add(recovery.onDidChange(() => {
 					// Directory authorization can recover without replacing the file connection.

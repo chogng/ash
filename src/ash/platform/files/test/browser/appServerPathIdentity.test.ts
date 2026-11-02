@@ -14,7 +14,8 @@ import { createTestTextFileService } from '../../../../workbench/test/common/tes
 import { BrowserTextResourceStore } from '../../../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
 import { BrowserTextModelService } from '../../../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { FileService } from '../../common/fileService.js';
-import type { FsChanged, FsReadPathCaseSensitivityResult } from '../../../../../../.build/protocol/typescript/index.js';
+import type { FileInvalidation } from '../../common/fileApi.js';
+import type { FsReadPathCaseSensitivityResult } from '../../../../../../.build/protocol/typescript/index.js';
 
 suite('App Server directory path identity', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -112,7 +113,7 @@ suite('App Server directory path identity', () => {
 	test('cancelling one waiter preserves the shared query and file changes refresh its facts', async () => {
 		const root = URI.file('/workspace');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
-		using changes = new Emitter<FsChanged>();
+		using changes = new Emitter<FileInvalidation>();
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let count = 0;
 		const host = createDisconnectedRendererApi();
@@ -165,7 +166,7 @@ suite('App Server directory path identity', () => {
 	test('file changes refresh an in-flight acquisition without cancelling it or reusing an edited alias', async () => {
 		const root = URI.file('/workspace');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
-		using changes = new Emitter<FsChanged>();
+		using changes = new Emitter<FileInvalidation>();
 		const oldResponse = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		let queries = 0;
 		const host = createDisconnectedRendererApi();
@@ -202,7 +203,7 @@ suite('App Server directory path identity', () => {
 	test('a shorter refresh removes unconfirmed descendants while preserving sibling facts', async () => {
 		const root = URI.file('/workspace');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
-		using changes = new Emitter<FsChanged>();
+		using changes = new Emitter<FileInvalidation>();
 		let missing = false;
 		const host = createDisconnectedRendererApi();
 		using provider = new AgentHostFileSystemProvider({
@@ -295,7 +296,7 @@ suite('App Server directory path identity', () => {
 				{ id: 'two', uri: URI.file('/two'), name: 'two', index: 1 },
 			]
 		});
-		using changes = new Emitter<FsChanged>();
+		using changes = new Emitter<FileInvalidation>();
 		const response = new DeferredPromise<FsReadPathCaseSensitivityResult>();
 		const host = createDisconnectedRendererApi();
 		let queries = 0;

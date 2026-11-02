@@ -1,4 +1,4 @@
-import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
@@ -54,10 +54,6 @@ export class SessionFileSystemContribution extends Disposable {
 			const host = scope.services.host;
 			const registration = this.files.registerAuthority(value.directory.uri.authority, {
 				api: host.fs, resourceApi: host.resource, directories: () => [value.directory],
-				onDidChange: listener => {
-					const subscription = host.events.subscribe(event => { if (event.method === 'fs/changed') listener(event.params); });
-					return toDisposable(() => subscription.dispose());
-				},
 			});
 			this.mounts.set(key, registration);
 		}

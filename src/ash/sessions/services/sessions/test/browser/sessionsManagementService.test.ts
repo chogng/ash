@@ -1,6 +1,6 @@
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -232,7 +232,7 @@ test('the App Server provider requires the window connection service when create
 	assert.throws(() => services.createInstance(AppServerSessionsProvider, fake.host), /AppServerApi/);
 });
 
-for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IDevContainerAgentHostService]) {
+for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IAgentConnection, IDevContainerAgentHostService]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
 		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
@@ -695,7 +695,7 @@ test('a failed catalog restoration retries on the next ready connection', async 
 
 function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService): AppServerSessionsProvider {
 	using services = new InstantiationService();
-	services.registerInstance(IRendererHostService, fake.host as unknown as IRendererHost);
+	if (omitted !== IAgentConnection) { services.registerInstance(IAgentConnection, fake.host as unknown as IAgentConnection); }
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }

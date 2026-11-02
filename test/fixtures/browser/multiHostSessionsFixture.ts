@@ -1,8 +1,8 @@
+import { IAgentConnection } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { IAgentExecutionSettingsService } from '../../../src/ash/platform/agentHost/common/agentExecutionSettingsService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { AgentHostAutomationStore } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/agentHostAutomationStore.js';
@@ -58,7 +58,7 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 				child.registerInstance(IPromptsService, { onDidChangeSkills: Event.None, onDidChangeHooks: Event.None, findAgentSkills: async () => [], getHooks: async () => [], dispose() { }, [Symbol.dispose]() { } } as unknown as IPromptsService);
 				child.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 				const automation = name === 'Host A' && new URL(location.href).searchParams.has('search') ? globalThis.ashWebWorkbenchHost?.api.automation : undefined;
-				child.registerInstance(IRendererHostService, { ...host, automation, github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] } });
+				child.registerInstance(IAgentConnection, { ...host, automation, github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] } });
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
 				const session: ISession = { sessionId: 'same', title: `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }], agentTree: [] };
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {

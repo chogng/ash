@@ -217,7 +217,7 @@ const host: IRendererHost = {
 		})))
 	},
 };
-const scope: ISessionProviderScope = { providerId: 'primary', services: { host } as SessionProviderServices, thread: host.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
+const scope: ISessionProviderScope = { providerId: 'primary', services: { host } as unknown as SessionProviderServices, thread: host.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
 const scopes = { getScopes: () => [scope], getScope: () => scope, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService;
 const github = resources.add(new GitHubService(sessions, management, scm, scopes, new ConsoleLogger('sessions-pr-test')));
 const main = document.createElement('main');

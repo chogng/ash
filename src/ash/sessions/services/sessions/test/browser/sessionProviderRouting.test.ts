@@ -1,3 +1,4 @@
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { createTestLanguageModelToolsService } from '../../../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
@@ -22,7 +23,6 @@ import { URI } from '../../../../../base/common/uri.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IChatService, type ThreadRead } from '../../../../../workbench/services/chat/common/chatService.js';
 import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
@@ -63,7 +63,7 @@ function fixture() {
 	child.registerInstance(IPromptsService, prompts);
 	child.registerInstance(IAgentExecutionSettingsService, execution);
 	child.registerInstance(ILanguageModelToolsService, tools);
-	child.registerInstance(IRendererHostService, remoteHost);
+	child.registerInstance(IAgentConnection, remoteHost);
 	const provider = (id: string, instantiationService?: InstantiationService): ISessionsProvider => Object.assign(lifetime.add(new class extends Disposable { }()), {
 		id, label: id, order: 0, instantiationService,
 		currentWorkspace: () => id === 'remote' ? { type: 'ssh' as const, host: 'remote', root: '/workspace' } : { type: 'local' as const, root: '/primary' },

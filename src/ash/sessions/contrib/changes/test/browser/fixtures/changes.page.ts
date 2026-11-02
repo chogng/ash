@@ -207,7 +207,7 @@ const host: IRendererHost = {
 	events: { subscribe: listener => accountChanged.event(() => listener({ method: 'account/updated', params: { account: { revision: '2', accounts: [] } } })) },
 };
 const scope: ISessionProviderScope = {
-	providerId: 'fixture', services: { host } as SessionProviderServices, thread: host.thread,
+	providerId: 'fixture', services: { host } as unknown as SessionProviderServices, thread: host.thread,
 	identity: value => value, backendIdentity: value => value, assertCurrent() { },
 };
 services.registerInstance(ISessionProviderScopeService, {

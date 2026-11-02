@@ -293,7 +293,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IWorkspaceTrustApi, { onDidChangeTrust: Event.None } as import('../../../platform/workspace/common/workspaceTrust.js').IWorkspaceTrustApi);
 	const baseHost = createDisconnectedRendererApi();
 	const settingsHost = { ...baseHost, executionSettings: services.get(IAgentExecutionSettingsService), workspaceTrust: services.get(IWorkspaceTrustApi), agentCapabilities: services.get(IAgentCapabilitiesService), appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready' as const } };
-	const settingsScope: ISessionProviderScope = { providerId: 'primary', services: { host: settingsHost } as SessionProviderServices, thread: settingsHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
+	const settingsScope: ISessionProviderScope = { providerId: 'primary', services: { host: settingsHost } as unknown as SessionProviderServices, thread: settingsHost.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
 	services.registerInstance(ISessionProviderScopeService, { getScope: () => settingsScope, onDidChange: Event.None, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService);
 	let editorReveals = 0;
 	let editorRevealing = false;

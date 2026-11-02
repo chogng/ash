@@ -1,3 +1,4 @@
+import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -28,13 +29,14 @@ export class CustomizeSkillActions extends Disposable {
 		@IFileService private readonly files: IFileService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@IPathService private readonly paths: IPathService,
+		@IRendererHostService private readonly rendererHost: IRendererHost,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@IEditorService private readonly editors: IEditorService,
 		@ISessionsService private readonly views: ISessionsService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 	) { super(); }
 
-	public get isAvailable(): boolean { return !!this.primary.host.userDataHome; }
+	public get isAvailable(): boolean { return !!this.rendererHost.userDataHome; }
 
 	public async upload(): Promise<boolean> {
 		const selection = await this.dialogs.prompt<readonly File[]>({
@@ -144,7 +146,7 @@ export class CustomizeSkillActions extends Disposable {
 
 	private async publish(name: string, files: readonly SkillFile[]): Promise<URI> {
 		this.assertActive();
-		const home = this.primary.host.userDataHome;
+		const home = this.rendererHost.userDataHome;
 		const root = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/skills' });
 		const rootReference = home && await this.paths.getHostPath(URI.joinPath(home, 'skills'));
 		if (!rootReference) throw new Error(localize('customize.skillStorageUnavailable', 'Skill storage is unavailable on this host.'));

@@ -45,7 +45,7 @@ import { IStatusbarService } from '../../workbench/services/statusbar/browser/st
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import { BaseSecretStorageService, ISecretStorageService, ISecretStorageStatusService } from '../../platform/secrets/common/secrets.js';
 import { ICallService } from '../../platform/call/common/callService.js';
-import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
+import { IAgentVoiceService, IAgentConnection } from '../../platform/agentHost/common/agentService.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
@@ -492,6 +492,7 @@ export abstract class Workbench extends Disposable {
 		if (!services.has(IBrowserPasswordService)) { services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService); }
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
+		services.registerInstance(IAgentConnection, options.api);
 		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, options.api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);

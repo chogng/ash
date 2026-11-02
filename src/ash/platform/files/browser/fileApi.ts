@@ -7,13 +7,14 @@ import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/in
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import type { IFileApi } from '../common/fileApi.js';
+import type { FileInvalidation, IFileApi } from '../common/fileApi.js';
 
 export function createDisconnectedFileApi(unavailable: UnavailableOperation): IFileApi {
 	return {
 		connectionGeneration: 0,
 		resolvePath: () => unavailable('fs.resolvePath'),
 		onDidChangeConnection: Event.None,
+		onDidChangeFiles: Event.None,
 		readPathCaseSensitivity: () => unavailable('fs.readPathCaseSensitivity'),
 		writeFileElevated: () => unavailable('fs.writeFileElevated'),
 		getMetadata: () => unavailable('fs.getMetadata'),
@@ -42,6 +43,9 @@ export function createAppServerFileApi(connection: AppServerProtocolClient): IFi
 		},
 		get connectionGeneration() { return connection.generation; },
 		onDidChangeConnection: listener => connection.onStateChange(() => listener()),
+		onDidChangeFiles: Event.any<FileInvalidation>((listener, thisArgs) => connection.onNotification(notification => {
+			if (notification.method === 'fs/changed') listener.call(thisArgs, notification.params);
+		})),
 		readPathCaseSensitivity: params => appServerRequest(connection, 'fs/readPathCaseSensitivity', params),
 		writeFileElevated: async (params, signal) => {
 			if (signal) { throwIfCancelled(signal, 'Elevated file save was cancelled'); }

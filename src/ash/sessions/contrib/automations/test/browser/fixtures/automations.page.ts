@@ -1,3 +1,4 @@
+import { IAgentConnection } from '../../../../../../platform/agentHost/common/agentService.js';
 import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
@@ -280,6 +281,7 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 	},
 } : { ...disconnected, automation: parameters.get('available') === '0' ? undefined : backend };
 services.registerInstance(IRendererHostService, renderer);
+services.registerInstance(IAgentConnection, services.get(IRendererHostService));
 services.registerInstance(IAgentHostConnectionsService, resources.add(services.createInstance(AgentHostConnectionsService)));
 
 const registry = resources.add(new SessionsProvidersService());

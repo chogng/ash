@@ -10,8 +10,13 @@ import type { ITcpService, TcpExecutionTarget } from '../../network/common/tcp.j
 import { validateBrowserViewNetwork } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
 
-/** Resolves native proxy streams onto existing renderer-owned backend connections. No credentials cross IPC. */
-export function registerBrowserNetworkHost(main: IMainProcessService, hosts: IAgentHostConnectionsService, workspace: IWorkspaceContextService) {
+/** Resolves proxy streams through backend connections; local device access is supplied by the window owner. */
+export function registerBrowserNetworkHost(
+	main: IMainProcessService,
+	hosts: IAgentHostConnectionsService,
+	workspace: IWorkspaceContextService,
+	localTcp?: ITcpService,
+) {
 	const lifetime = new DisposableStore();
 	const ambient = hosts.ambientConnection;
 	const streams = new Map<string, { api: ITcpService; generation: number; target?: TcpExecutionTarget; }>();
@@ -32,7 +37,7 @@ export function registerBrowserNetworkHost(main: IMainProcessService, hosts: IAg
 		const local = authority === 'local' || authority === getWorkspaceRemoteAuthority(workspace.getWorkspace());
 		let host = info?.connection;
 		if (!info && (local || authority.startsWith('ssh+'))) { host = ambient; }
-		const tcp = authority === 'local' && getWorkspaceRemoteAuthority(workspace.getWorkspace()) ? ambient.localTcp : host?.tcp;
+		const tcp = authority === 'local' && getWorkspaceRemoteAuthority(workspace.getWorkspace()) ? localTcp : host?.tcp;
 		if (!tcp || info && info.state !== 'ready') { throw new Error('BrowserRemoteNetworkUnavailable'); }
 		const target: TcpExecutionTarget | undefined = runtime
 			? { type: 'provider', providerId: runtime.providerId, workspace: runtime.workspace, root: network.root ?? '/', ...(runtime.hostAuthority ? { hostAuthority: runtime.hostAuthority } : {}) }

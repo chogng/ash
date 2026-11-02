@@ -1,3 +1,4 @@
+import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
@@ -71,7 +72,7 @@ import { createTestEditorServices } from '../../../workbench/test/common/testEdi
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
@@ -158,8 +159,16 @@ import { QuickChatService } from '../../../workbench/contrib/chat/browser/widget
 const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
 const inputResources = new DisposableStore();
 const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleService;
+// Editor listeners must retire before the next test installs its configuration.
+teardown(() => inputResources.clear());
 suiteTeardown(() => inputResources.dispose());
-function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
+function createInputServices(
+	contextView: IContextViewService,
+	chat: IChatService,
+	menus?: IMenuService,
+	contextMenus?: IContextMenuService,
+	commandScope?: InstantiationService,
+): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
@@ -196,6 +205,8 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	registerTestDictationOnboarding(services);
+	// Command actions validate membership against the registry that owns this composer.
+	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
 }
 function createSessionChatViewPane(...args: ConstructorParameters<typeof SessionChatViewPane>): InstanceType<typeof SessionChatViewPane> {
@@ -246,6 +257,7 @@ class SessionsManagementService extends BaseSessionsManagementService {
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 		services.registerInstance(IRendererHostService, api);
+		services.registerInstance(IAgentConnection, services.get(IRendererHostService));
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
@@ -1487,8 +1499,15 @@ test('sending from one session preserves a later draft during first-session crea
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+	editorServices.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
+		fileSearch: async () => ({ results: [], messages: [] }),
+		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
+	});
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
+	editorServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+	editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
@@ -1525,7 +1544,7 @@ test('sending from one session preserves a later draft during first-session crea
 	view.openNewSession();
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
-	using commands = new CommandService(new InstantiationService());
+	using commands = new CommandService(editorServices);
 	editorServices.registerInstance(ICommandService, commands);
 	editorServices.registerInstance(IContextViewService, contextViewService);
 	using chat = createChatService(fake.api);
@@ -1652,7 +1671,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService, services),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
@@ -1782,7 +1801,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService, services),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
@@ -1856,7 +1875,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
+		createInputServices(contextViewService, paneChat, menuService, contextMenuService, services),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
 		testLifecycle, unavailableAuxiliaryWindows, contextKeys, emptyEditorGroupsService,
@@ -2735,6 +2754,7 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== IConfigurationService) { services.registerInstance(IConfigurationService, configuration ?? inputResources.add(new WorkbenchConfigurationService())); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
 	services.registerInstance(IRendererHostService, api);
+	services.registerInstance(IAgentConnection, services.get(IRendererHostService));
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, api.session); }
 	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
@@ -3630,6 +3650,7 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
 		commandId: fake.queuedRequests[0]!.commandId,
+		commandInterpretation: undefined,
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
