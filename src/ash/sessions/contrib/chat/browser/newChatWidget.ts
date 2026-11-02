@@ -11,7 +11,8 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
-import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
+import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.js';
+import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { NewChatInputWidget } from './newChatInput.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
@@ -42,6 +43,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IQuickInputService quickInput: IQuickInputService,
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
@@ -67,7 +69,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 						throw error;
 					}
 				},
-			}, model), instantiationService, dialogs, quickInput, widgets, contextKeys);
+			}, model), instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;
@@ -80,11 +82,11 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this._register(toDisposable(() => tipContainer.remove()));
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
-			isEligible: () => !this.submittedInput && this.model.items.length === 0
+			isEligible: () => !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
 				&& !this.model.inputState.interaction,
 			focusInput: () => this.input.focus(),
-		}));
+		}, this.input.noticeHost));
 		footer.classList.add('ash-sessions-chat-input-footer');
 		this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
 		parent.append(footer);

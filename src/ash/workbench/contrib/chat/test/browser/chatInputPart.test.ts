@@ -61,6 +61,7 @@ import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
+import { IChatInputNotificationService } from '../../browser/widget/input/notices/chatInputNotificationService.js';
 import { IChatPasteTargetService } from '../../browser/chat.js';
 import { ChatPasteTargetService } from '../../browser/attachments/chatPasteTargetService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../browser/attachments/chatAttachmentResolveService.js';
@@ -99,6 +100,7 @@ suiteTeardown(() => sharedNotifications.dispose());
 
 class ObservableInputPart extends ChatInputPart {
 	readonly onDidChangeInputForTest = this.onDidChangeInput;
+	inputNotificationsForTest!: IChatInputNotificationService;
 }
 
 function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact'): ObservableInputPart {
@@ -177,6 +179,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	part.inputNotificationsForTest = partServices.get(IChatInputNotificationService);
 	part.render(state);
 	return part;
 }
@@ -506,12 +509,11 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	using notifications = new TestNotificationService();
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
 	const failure = new DeferredPromise<void>();
-	using notification = notifications.model.onDidAdd(() => { void failure.complete(); });
+	using notification = part.inputNotificationsForTest.onDidChange(() => { void failure.complete(); });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.click();
 	await failure.p;
-	assert.deepEqual(notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-		{ severity: Severity.Error, message: 'Dictation failed: Error: HTTP 403' },
-	]);
+	assert.equal(part.element.querySelector('.ash-chat-input-notification-message')?.textContent, 'Dictation failed: Error: HTTP 403');
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.disabled, false);
 });
@@ -670,8 +672,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Failed dictation fin
 	await assert.rejects(part.acceptInput(), /transcription failed/u);
 	assert.deepEqual(sent, []);
 	assert.equal(part.element.querySelector('textarea')!.value, 'Existing draft');
-	assert.equal(notifications.model.getNotifications().length, 1);
-	assert.match(notifications.model.getNotifications()[0]!.message, /Dictation failed: .*transcription failed/u);
+	assert.match(part.element.querySelector('.ash-chat-input-notification-message')!.textContent!, /Dictation failed: .*transcription failed/u);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	await part.acceptInput();
 	assert.deepEqual(sent, ['Existing draft']);
 });
@@ -1579,6 +1581,104 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Catalog notifications open the real model picker and preserve dismissal in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&notices&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-container .stanza-editor-input');
+			await input.pressSequentially('Unsent notification draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Model discovery failed'));
+			const notification = page.locator('.ash-chat-input-notice-notification');
+			await expect(notification).toBeVisible();
+			await expect(notification).toHaveClass(/severity-warning/);
+			const choose = notification.getByRole('button', { name: locale === 'en' ? 'Choose a model' : '选择模型', exact: true });
+			await choose.focus();
+			await choose.press('Enter');
+			await expect(page.locator('.ash-chat-model-picker')).toBeVisible();
+			await expect(notification).toBeHidden();
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.ash-chat-input-model-action')).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.refresh());
+			await expect(notification).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError(undefined));
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Model discovery failed again'));
+			await expect(notification).toBeVisible();
+			const dismiss = notification.getByRole('button', { name: locale === 'en' ? 'Dismiss notification' : '关闭通知', exact: true });
+			await dismiss.focus();
+			const bounds = await notification.boundingBox();
+			const button = await dismiss.boundingBox();
+			expect(button!.x + button!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+			await dismiss.press('Enter');
+			await expect(notification).toBeHidden();
+			await expect(page.locator('.ash-chat-input-tip')).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(input).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Unsent notification draft');
+		});
+	}
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Input notices arbitrate errors, introductions and tips with keyboard focus in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&notices&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-container .stanza-editor-input');
+			const tip = page.locator('.ash-chat-input-tip');
+			const notification = page.locator('.ash-chat-input-notice-notification');
+			const introduction = page.locator('.ash-dictation-onboarding');
+			await expect(tip).toBeVisible();
+			await input.pressSequentially('Retained draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'Connection was lost'));
+			await expect(notification).toBeVisible();
+			await expect(notification).toHaveText('Connection was lost');
+			await expect(tip).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.showIntroduction());
+			await expect(introduction).toHaveCount(0);
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(notification).toBeFocused();
+			const accessible = await page.evaluate(() => window.ashChatInputIntegration.noticeAccessibility());
+			expect(accessible.content).toBe('Connection was lost');
+			expect(accessible.help).toContain(locale === 'en' ? 'Notifications take priority' : '通知优先于');
+			await notification.press('Escape');
+			await expect(input).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(notification).toBeHidden();
+			await expect(introduction).toBeVisible();
+			await expect(introduction).toHaveAccessibleName(locale === 'en' ? 'Dictation introduction' : '听写入门');
+			await expect(tip).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'A second error'));
+			await expect(introduction).toBeHidden();
+			await expect(notification).toBeFocused();
+			await expect(tip).toBeHidden();
+			const geometry = await notification.evaluate(element => {
+				const notice = element.getBoundingClientRect();
+				const editor = element.parentElement!.querySelector('.ash-chat-input-container')!.getBoundingClientRect();
+				const style = getComputedStyle(element);
+				return { bottom: notice.bottom, inputTop: editor.top, width: notice.width, parentWidth: element.parentElement!.getBoundingClientRect().width, border: style.borderTopStyle, color: style.color, background: style.backgroundColor, outline: style.outlineStyle };
+			});
+			expect(geometry.bottom).toBeLessThanOrEqual(geometry.inputTop);
+			expect(geometry.width).toBeLessThanOrEqual(geometry.parentWidth);
+			expect(geometry.border).toBe('solid');
+			expect(geometry.color).not.toBe(geometry.background);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(introduction).toBeVisible();
+			await introduction.getByRole('button', { name: locale === 'en' ? 'Done' : '完成', exact: true }).press('Escape');
+			await expect(introduction).toHaveCount(0);
+			await expect(input).toBeFocused();
+			await expect(tip).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(tip).toBeFocused();
+			expect((await page.evaluate(() => window.ashChatInputIntegration.noticeAccessibility())).content).toContain(locale === 'en' ? 'Tip:' : '提示：');
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(input).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Retained draft');
+			await page.evaluate(() => window.ashChatInputIntegration.showIntroduction());
+			await expect(introduction).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect(introduction).toHaveCount(0);
+			await tip.screenshot({ path: browserTests.info.outputPath(`input-notices-${locale}-${theme}.png`) });
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) for (const nextDraft of ['restore', 'typed', 'reentrant', 'emptied'] as const) test(`Compact failed submission preserves the owned draft and selection (${nextDraft}, ${locale})`, async () => {
 		const { page } = browserTests;
 		await page.goto(`/chatInput.html?inlineCode&compact&holdSubmission&locale=${locale}`);
@@ -1691,7 +1791,7 @@ suite('chatInput browser component', () => {
 		if (outcome === 'success') {
 			await expect.poll(submissions).toEqual(['Complete recognized task']);
 		} else if (outcome === 'failure') {
-			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().errors)).toEqual([expect.stringMatching(/Transcription unavailable/u)]);
+			await expect(page.locator('.ash-chat-input-notification-message')).toContainText('Transcription unavailable');
 			await expect(composer.locator('.view-lines')).toHaveText('Keep this draft');
 			expect(await submissions()).toEqual([]);
 			await input.press('Enter');
@@ -2864,7 +2964,8 @@ suite('chatInput browser component', () => {
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
 				await expect(footer.locator('.ash-chat-status-summary')).toHaveText(locale === 'en' ? 'Working…' : '正在运行…');
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'Connection was lost'));
-				await expect(footer.locator('.ash-chat-status-summary')).toHaveText('Connection was lost');
+				await expect(page.locator('.ash-chat-input-notice-notification')).toHaveText('Connection was lost');
+				await expect(footer.locator('.ash-chat-status-summary')).toBeHidden();
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
 				await expect(footer.locator('.ash-chat-status-summary')).toBeHidden();
 				if (locale === 'en' && theme === 'light') {

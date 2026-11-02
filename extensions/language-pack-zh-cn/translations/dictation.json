@@ -38,7 +38,7 @@
     "dictation.test": "测试麦克风",
     "dictation.prepareSettings": "模型与 API 设置",
     "dictation.done": "完成",
-    "dictation.introductionHelp": "按 Tab 访问麦克风、语言、测试、设置和完成按钮。测试按钮开始或停止录音。切换麦克风会继续录音；切换语言会停止录音。Escape 关闭引导并释放录音。试录文字不会插入草稿或终端。",
+    "dictation.introductionHelp": "按 Tab 访问麦克风、语言、测试、设置和完成按钮。测试按钮开始或停止录音。切换麦克风会继续录音；切换语言会停止录音。Escape 关闭引导并释放录音。试录文字不会插入草稿或终端。在聊天中，使用 {0} 在可见通知与消息之间切换焦点。通知会隐藏此功能介绍并停止其录音，直至功能介绍恢复显示。",
     "dictation.systemMicrophone": "系统默认麦克风",
     "dictation.autoLanguage": "自动检测语言",
     "dictation.missingMicrophone": "所选麦克风已断开",

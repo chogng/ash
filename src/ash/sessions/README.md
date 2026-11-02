@@ -69,6 +69,24 @@ input survive draft materialization; the existing model remains the only owner
 of the Session identity and first-send operation. `NewChatInputWidget` retains
 editor, attachment, permission and draft policy without constructing its parent.
 
+Shared notices, introductions and tips live under
+`workbench/contrib/chat/browser/widget/input/notices/`.
+`ChatInputPart` owns one `ChatInputNoticeHost` per composer. Input errors,
+feature introductions and tips claim that host in descending priority; model errors
+remain model-owned. `ChatInputOnboarding` owns introduction host selection, deferred
+creation and persistence. Dictation owns its card and microphone trial,
+which stops when the card loses its place. Visible composers register with the
+window's notice hub; hiding a composer releases its introduction and focus registration.
+`ChatInputNotificationService` owns window-local notification ordering and dismissal,
+with composer identities preventing messages in one input from hiding another's notices.
+`ChatInputNotificationWidget` owns banner rendering and action lifetimes. Input state
+only projects failures into the service; replacing a conversation or disposing its
+composer retires those projections. `registerChatInputOnboardingHosts` binds the
+voice and dictation providers to that composer's visible lifetime and onboarding lane.
+Voice introductions retain the profile acknowledgement preference and share one
+service across Chat, Cowork and floating voice controls. Escape and hiding an input
+release their presentation without acknowledging it; Got it records acknowledgement.
+
 Quick Chat borrows a distinct retained conversation from `SessionChatViewPane`.
 Its background draft leaves foreground selection unchanged; hiding the overlay
 retains the composer and live response. Opening in Chat View reparents that same

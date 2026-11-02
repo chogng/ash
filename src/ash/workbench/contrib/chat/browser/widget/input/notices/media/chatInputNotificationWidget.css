@@ -1,0 +1,48 @@
+.ash-chat-input-notice-notification {
+	min-width: 0;
+	margin-bottom: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-input-notice-notification.severity-error {
+	border-color: var(--ash-error-foreground);
+}
+
+.ash-chat-input-notice-notification.severity-warning {
+	border-color: var(--ash-warning-foreground);
+}
+
+.ash-chat-input-notice-notification.severity-info {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-chat-input-notice-notification p {
+	margin: 0;
+}
+
+.ash-chat-input-notification-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	margin-top: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-notification-actions:empty,
+.ash-chat-input-notification-action-error:empty {
+	display: none;
+}
+
+.ash-chat-input-notification-action-error {
+	color: var(--ash-error-foreground);
+}
+
+.hc-black .ash-chat-input-notice-notification,
+.hc-light .ash-chat-input-notice-notification {
+	border-color: var(--ash-contrastBorder);
+}

@@ -31,6 +31,7 @@ import { resolveChatContextAttachment, type ResolvedChatContext } from '../../..
 import { addDisposableListener, getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
+import { IVoiceModeOnboardingService } from '../../../agentsVoice/browser/voiceModeOnboarding.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { IChatSessionHistoryStatus } from '../../../../../platform/chat/common/chatSessionHistory.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -125,6 +126,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super();
 		this.model = this._register(model);
@@ -252,8 +254,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				get isConnected() { return voiceClient.isConnected; },
 				toggle: () => this.runVoice(() => {
 					if (voiceClient.isActive) return voiceClient.disconnect();
-					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
-					return voiceClient.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+					return this.startVoiceConversation();
 				}),
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
@@ -383,6 +384,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 	/** A floating control starts through this Chat's original source and task dispatcher. */
 	startVoiceConversation(): Promise<void> {
+		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));
+		this.voiceOnboarding.showIfNeeded();
 		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
 	}
 

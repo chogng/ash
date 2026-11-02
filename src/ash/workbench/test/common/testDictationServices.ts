@@ -12,6 +12,10 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from '../../contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from '../../contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from '../../contrib/agentsVoice/browser/voiceModeOnboarding.js';
+import { AgentsVoiceStorageKeys } from '../../contrib/agentsVoice/common/agentsVoice.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { IVoiceCodeTranscriptionBackendService, type DictationBackend, type IDictationInputOptions } from '../../../platform/renderer/common/dictation.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
@@ -117,6 +121,9 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(IChatInputNoticeHubService)) services.registerSingleton(IChatInputNoticeHubService, () => services.createInstance(ChatInputNoticeHubService));
+	if (!services.has(IChatInputNotificationService)) services.registerSingleton(IChatInputNotificationService, () => services.createInstance(ChatInputNotificationService));
+	if (!services.has(IVoiceModeOnboardingService)) services.registerSingleton(IVoiceModeOnboardingService, () => services.createInstance(VoiceModeOnboardingService));
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => services.invokeFunction(accessor => new CommandService(accessor)));
 	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
 	if (!services.has(IVoiceCodeTranscriptionBackendService)) services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
@@ -138,5 +145,6 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 		}));
 	}
 	if (seen) services.get(IStorageService).store('dictation.introductionSeen', true, StorageScope.PROFILE, StorageTarget.USER);
+	if (seen) services.get(IStorageService).store(AgentsVoiceStorageKeys.IntroBannerShown, true, StorageScope.PROFILE, StorageTarget.USER);
 	services.registerSingleton(IDictationOnboardingService, () => services.createInstance(DictationOnboardingService));
 }

@@ -14,8 +14,11 @@ import { ISpeechService } from '../../../../speech/common/speechService.js';
 import { SpeechService } from '../../../../speech/browser/speechService.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../../test/common/testDictationServices.js';
 import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
-import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../browser/speechToText/chatSpeechToTextService.js';
-import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/chatInputNoticeHost.js';
+import { IChatSpeechToTextService, ChatSpeechToTextService, ChatSpeechToTextState } from '../../../browser/speechToText/chatSpeechToTextService.js';
+import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/notices/chatInputNoticeHost.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../browser/widget/input/notices/chatInputNoticeHost.js';
+import { IStorageService, StorageScope } from '../../../../../../platform/storage/common/storage.js';
+import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 
 function fixture() {
 	const owner = new DisposableStore();
@@ -23,6 +26,7 @@ function fixture() {
 	owner.add(toDisposable(() => dom.window.close()));
 	owner.add(installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'Event', 'KeyboardEvent', 'MouseEvent']));
 	const window = dom.window as unknown as Window & typeof globalThis;
+	owner.add(setARIAContainer(window.document.body));
 	const audio = owner.add(installTestDictationAudio(window));
 	const services = owner.add(new InstantiationService());
 	services.registerSingleton(IConfigurationService, () => new TestConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
@@ -35,7 +39,8 @@ function fixture() {
 	const onboarding = services.get(IDictationOnboardingService);
 	const root = dom.window.document.querySelector<HTMLElement>('main')!;
 	const other = dom.window.document.querySelector<HTMLElement>('aside')!;
-	return { root, other, audio, window, onboarding, dispose: () => owner.dispose(), [Symbol.dispose]: () => owner.dispose() };
+	for (const element of [root, other]) element.getClientRects = () => [{ width: 300, height: 100 }] as unknown as DOMRectList;
+	return { root, other, audio, window, onboarding, speech: services.get(IChatSpeechToTextService), storage: services.get(IStorageService), dispose: () => owner.dispose(), [Symbol.dispose]: () => owner.dispose() };
 }
 
 suite('Dictation onboarding host contract', () => {
@@ -47,9 +52,12 @@ suite('Dictation onboarding host contract', () => {
 		using host = f.onboarding.registerHost({ container: f.root, focusRoot: f.root, focus: () => f.root.focus(), claimNotice: options => { claim = options; return toDisposable(() => { released++; }); } });
 		assert.equal(f.onboarding.showIfNeeded(), true);
 		assert.equal(f.onboarding.isVisible, false);
+		assert.equal(f.root.querySelector('.ash-dictation-onboarding'), null);
+		assert.equal(f.storage.getBoolean('dictation.introductionSeen', StorageScope.PROFILE, false), false);
 		assert.equal(claim?.focusTarget?.canFocus?.(), false);
 		claim?.onDidChangeLeading?.(true);
 		assert.equal(f.onboarding.isVisible, true);
+		assert.equal(f.storage.getBoolean('dictation.introductionSeen', StorageScope.PROFILE, false), true);
 		claim?.focusTarget?.focus();
 		assert.equal(claim?.focusTarget?.hasFocus(), true);
 		f.onboarding.reset();
@@ -61,6 +69,55 @@ suite('Dictation onboarding host contract', () => {
 		assert.equal(released, 2);
 		assert.equal(f.onboarding.show(), false);
 		assert.equal(f.audio.requests.length, 0);
+	});
+	test('an unseen introduction survives notification precedence and stops its own recording when displaced', async () => {
+		using f = fixture();
+		using notices = new ChatInputNoticeHost(() => f.root.focus());
+		using host = f.onboarding.registerHost({
+			container: f.root, focusRoot: f.root, focus: () => f.root.focus(),
+			claimNotice: options => notices.occupy(ChatInputNoticeLane.Onboarding, options),
+		});
+		using notification = notices.occupy(ChatInputNoticeLane.Notification);
+		assert.equal(f.onboarding.showIfNeeded(), true);
+		assert.equal(f.root.querySelector('.ash-dictation-onboarding'), null);
+		assert.equal(f.storage.getBoolean('dictation.introductionSeen', StorageScope.PROFILE, false), false);
+		notification.dispose();
+		const banner = f.root.querySelector<HTMLElement>('.ash-dictation-onboarding')!;
+		assert.ok(banner);
+		assert.equal(f.onboarding.isVisible, true);
+		const testButton = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Test microphone')!;
+		const started = new Promise<void>(resolve => {
+			const listener = f.speech.onDidChangeState(() => {
+				if (f.speech.state === ChatSpeechToTextState.Recording) { listener.dispose(); resolve(); }
+			});
+		});
+		testButton.click();
+		await started;
+		using replacement = notices.occupy(ChatInputNoticeLane.Notification);
+		assert.equal(banner.hidden, true);
+		assert.equal(f.onboarding.isVisible, false);
+		await f.speech.stopAndTranscribe();
+		assert.ok(f.audio.tracks.every(track => track.stopped));
+		replacement.dispose();
+		assert.equal(f.root.querySelector('.ash-dictation-onboarding'), banner);
+		assert.equal(banner.hidden, false);
+		host.dispose();
+		assert.equal(f.root.querySelector('.ash-dictation-onboarding'), null);
+	});
+	test('restoring a displaced introduction cannot restart its pending microphone trial', async () => {
+		using f = fixture();
+		using notices = new ChatInputNoticeHost(() => f.root.focus());
+		using host = f.onboarding.registerHost({ container: f.root, focusRoot: f.root, claimNotice: options => notices.occupy(ChatInputNoticeLane.Onboarding, options) });
+		f.onboarding.show();
+		const banner = f.root.querySelector<HTMLElement>('.ash-dictation-onboarding')!;
+		const button = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(candidate => candidate.textContent === 'Test microphone')!;
+		button.click();
+		using notification = notices.occupy(ChatInputNoticeLane.Notification);
+		notification.dispose();
+		assert.equal(f.onboarding.isVisible, true);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(f.audio.requests.length, 0);
+		assert.equal(f.speech.state, ChatSpeechToTextState.Idle);
 	});
 	test('focused visible host wins and refreshing devices never opens a microphone', async () => {
 		using f = fixture();

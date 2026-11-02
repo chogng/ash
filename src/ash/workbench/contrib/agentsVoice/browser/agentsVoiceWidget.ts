@@ -10,8 +10,9 @@ import type { AgentVoiceInputMode, AgentVoiceTranscript } from '../../../../plat
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { VoiceModeOnboardingBanner } from './voiceModeOnboarding.js';
+import { IVoiceModeOnboardingService } from './voiceModeOnboarding.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../chat/browser/widget/input/notices/chatInputNoticeHost.js';
+import { IChatInputNoticeHubService } from '../../chat/browser/widget/input/notices/chatInputNoticeHub.js';
 
 export interface VoiceWidgetCallbacks {
 	openSession(): void;
@@ -50,9 +51,10 @@ export class AgentsVoiceWidget extends Disposable {
 	private readonly rows = new Map<string, HTMLElement>();
 
 	constructor(container: HTMLElement, private readonly callbacks: VoiceWidgetCallbacks, options: VoiceWidgetOptions,
-		@IInstantiationService instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IChatInputNoticeHubService noticeHub: IChatInputNoticeHubService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -126,20 +128,6 @@ export class AgentsVoiceWidget extends Disposable {
 
 .ash-agents-voice-row strong {
 	font-weight: var(--ash-fontWeight-semiBold);
-}
-
-.ash-agents-voice-introduction {
-	padding: var(--ash-spacing-size120);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, var(--ash-border));
-	border-radius: var(--ash-cornerRadius-medium);
-}
-
-.ash-agents-voice-introduction[hidden] {
-	display: none;
-}
-
-.ash-agents-voice-introduction p {
-	margin: var(--ash-spacing-size80) 0;
 }
 
 .ash-agents-voice-transcript:focus-visible {
@@ -216,10 +204,20 @@ export class AgentsVoiceWidget extends Disposable {
 		this.transcript.setAttribute('role', 'region');
 		this.transcript.setAttribute('aria-label', localize('agentsVoice.transcript', 'Voice transcript'));
 		this.element.append(style, header, this.status, controls);
-		if (options.showOnboarding !== false) this._register(instantiation.createInstance(VoiceModeOnboardingBanner, this.element, () => this.openChat.focus()));
+		const introduction = h(document, 'div');
+		if (options.showOnboarding !== false) this.element.append(introduction);
 		this.element.append(this.transcript);
 		this.transcript.hidden = options.inputBoxLayout === true;
 		container.append(this.element);
+		if (options.showOnboarding !== false) {
+			const focusInput = () => { if (!this.isDisposed) this.openChat.focus(); };
+			const host = this._register(new ChatInputNoticeHost(focusInput));
+			this._register(noticeHub.registerHost(host, this.element));
+			this._register(voiceOnboarding.registerHost({
+				container: introduction, focusRoot: this.element, focus: focusInput,
+				claimNotice: options => host.occupy(ChatInputNoticeLane.Onboarding, options),
+			}));
+		}
 		this.setTranscriptTurns([]);
 		const release = () => { if (this.holding) { this.holding = false; callbacks.pttUp(); } };
 		const press = () => { if (!this.holding && this.ptt.enabled) { this.holding = true; callbacks.pttDown(); } };
@@ -270,6 +268,7 @@ export class AgentsVoiceWidget extends Disposable {
 		}
 		this._register(toDisposable(() => this.element.remove()));
 		if (!options.inputBoxLayout) this.openChat.focus();
+		if (options.showOnboarding !== false) voiceOnboarding.showIfNeeded();
 	}
 
 	setConnected(connected: boolean): void {

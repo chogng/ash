@@ -61,6 +61,8 @@ import './chatManagement/chatManagement.contribution.js';
 import { IChatEditingService } from '../common/editing/chatEditingService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/notices/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from './widget/input/notices/chatInputNotificationService.js';
 import { ChatInputEditor } from './widget/input/chatInputEditor.js';
 import { ChatInputEditors } from './widget/input/chatInputEditorRegistry.js';
 import { IChatDebugService } from '../common/chatDebugService.js';
@@ -76,6 +78,8 @@ import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback
 // Both renderer hosts use these primitives; each host registers its own New and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
+registerSingleton(IChatInputNotificationService, ChatInputNotificationService, InstantiationType.Delayed);
 registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));

@@ -1,3 +1,4 @@
+import { IVoiceModeOnboardingService } from '../../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
@@ -99,6 +100,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		@INotificationService private readonly notifications: INotificationService,
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -171,8 +173,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				get isConnected() { return voice.isConnected; },
 				toggle: () => this.runVoice(() => {
 					if (voice.isActive) return voice.disconnect();
-					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
-					return voice.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+					return this.startVoiceConversation();
 				}),
 				interrupt: () => this.runVoice(() => voice.stopSpeaking()),
 			},
@@ -300,7 +301,11 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		return this.input.acceptInput(value, options);
 	}
 
-	startVoiceConversation(): Promise<void> { return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal)); }
+	startVoiceConversation(): Promise<void> {
+		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));
+		this.voiceOnboarding.showIfNeeded();
+		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+	}
 
 	private reportVoiceError(error: unknown): void { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
 	private async runVoice(operation: () => Promise<void>): Promise<void> { try { await operation(); } catch (error) { this.reportVoiceError(error); } }

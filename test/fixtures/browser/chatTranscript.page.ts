@@ -16,7 +16,7 @@ import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/br
 import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
@@ -44,6 +44,11 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { AgentsVoiceStorageKeys } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
+import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
@@ -212,6 +217,7 @@ if (builtinBackend) {
 } else {
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 }
+services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected introduction settings'); } } as unknown as IPreferencesService);
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -402,6 +408,7 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let appChat: ChatWidget | CoworkWidget | undefined;
+let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
 let dictationStarts = 0;
 let dictationCancels = 0;
@@ -659,6 +666,10 @@ declare global {
 			updateAcceptedContext(text: string): void;
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean): void;
 			voiceState(): readonly string[];
+			showVoiceIntroduction(): void;
+			showDictationIntroduction(): void;
+			toggleIntroductionFocus(): void;
+			setIntroductionNotification(visible: boolean): void;
 			voiceSelection(): AgentVoiceSelection | undefined;
 			proposeVoiceTask(): void;
 			delayAppResources(): void;
@@ -1102,6 +1113,10 @@ window.ashChatTranscriptIntegration = {
 		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestDictationOnboarding(chatServices);
+		composerServices = chatServices;
+		if (new URLSearchParams(location.search).has('voiceOnboarding')) {
+			chatServices.get(IStorageService).remove(AgentsVoiceStorageKeys.IntroBannerShown, StorageScope.PROFILE);
+		}
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		chatServices.registerInstance(IContextViewService, contextView);
@@ -1326,6 +1341,14 @@ window.ashChatTranscriptIntegration = {
 	setChatVisible: visible => appChat?.setVisible(visible),
 	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,
+	showVoiceIntroduction: () => { composerServices!.invokeFunction(CommandsRegistry.getCommand('agentsVoice.showIntroduction')!); },
+	showDictationIntroduction: () => { composerServices!.get(IDictationOnboardingService).show(); },
+	toggleIntroductionFocus: () => { composerServices!.get(IChatInputNoticeHubService).toggleNoticeFocus(); },
+	setIntroductionNotification: visible => {
+		const notifications = composerServices!.get(IChatInputNotificationService);
+		if (visible) notifications.setNotification({ id: 'test.voice-notice', severity: ChatInputNotificationSeverity.Error, message: 'Synthetic connection failure', actions: [], dismissible: true, autoDismissOnMessage: false });
+		else notifications.deleteNotification('test.voice-notice');
+	},
 	voiceSelection: () => chosenVoice,
 	proposeVoiceTask: () => {
 		if (!voiceSession) throw new Error('Voice is not connected');

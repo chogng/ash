@@ -82,6 +82,11 @@ import type { ChatContextUsage, ModelRef } from '../../../src/ash/workbench/serv
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatInputTipPresenter } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputTipPresenter.js';
+import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
+import { registerChatActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatActions.js';
+import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -130,6 +135,10 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 
 declare global {
 	interface Window { ashChatInputIntegration: {
+		showIntroduction(): void;
+		setCatalogError(message: string | undefined): void;
+		toggleNoticeFocus(): Promise<unknown>;
+		noticeAccessibility(): { help?: string; content?: string; };
 		dictationState(): { stops: number; errors: string[]; };
 		emitDictation(text: string, final: boolean): void;
 		finishDictation(text: string, error?: string): void;
@@ -697,6 +706,14 @@ const part = resources.add(services.createInstance(ChatInputPart, document.query
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
+if (new URLSearchParams(location.search).has('notices')) {
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
+	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
+	const slot = document.createElement('div');
+	part.element.prepend(slot);
+	resources.add(services.createInstance(ChatInputTipPresenter, { container: slot, isEligible: () => true, focusInput: () => part.focus() }, part.noticeHost));
+	registerChatActions();
+}
 if (inlineCode) {
 	if (snapshotFixture) resources.add(languageFeatures.syntaxProvider.register({
 		id: 'test.snapshot.syntax', languageIds: ['typescript'],
@@ -853,6 +870,20 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
+	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
+	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),
+	noticeAccessibility: () => {
+		const result: { help?: string; content?: string; } = {};
+		for (const entry of AccessibleViewRegistry.getImplementations()) {
+			if (!entry.name.startsWith('chatInputNotice-')) continue;
+			const provider = entry.getProvider(services);
+			if (!provider) continue;
+			try { result[entry.type === AccessibleViewType.Help ? 'help' : 'content'] = provider.provideContent(); }
+			finally { provider.dispose(); }
+		}
+		return result;
+	},
 	finishSubmission: error => finishSubmission?.(error),
 	replaceDraftOnClear: () => { replaceDraftOnClear = true; },
 	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
