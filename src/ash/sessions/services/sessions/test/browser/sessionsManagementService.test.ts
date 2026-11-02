@@ -14,7 +14,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { type ThreadSubscription } from '../../../../../platform/agentHost/common/agent.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import { AppServerSessionsProvider } from '../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';

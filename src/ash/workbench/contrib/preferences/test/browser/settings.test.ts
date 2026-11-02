@@ -67,8 +67,8 @@ import { ILanguageServerService } from '../../../../../platform/language/common/
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
-import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
-import { createDisconnectedAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/models/common/agentModels.js';
+import { createDisconnectedAgentModelsService } from '../../../../../platform/models/browser/appServerAgentModels.js';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
@@ -4306,7 +4306,7 @@ test('Models Settings separates its model, subscription and API cards and saves 
 	document.body.replaceChildren();
 	const root = h(document, 'div');
 	document.body.append(root);
-	const saved: import('../../../../../platform/agentHost/common/agentModels.js').CustomModelProvider[] = [];
+	const saved: import('../../../../../platform/models/common/agentModels.js').CustomModelProvider[] = [];
 	const keys: string[] = [];
 	let removed = 0;
 	let failed = false;

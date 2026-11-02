@@ -34,7 +34,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';

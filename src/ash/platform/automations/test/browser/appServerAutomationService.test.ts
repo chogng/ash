@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../base/common/event.js';
 import { AppServerAutomationService } from '../../browser/appServerAutomationService.js';
-import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { AutomationRun } from '../../common/automation.js';
 
 test('Automation run reads use the run identity independently of history', async () => {

@@ -775,7 +775,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'raw', title: 'Raw shell',
-			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
+			invoke: async (operation): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
 		}]));
 		await profiles.getContributedProfileProvider('acme.extension', 'raw')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0].profile, { type: 'custom', name: 'Raw shell', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo environment value"' });
@@ -960,7 +960,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const { services, profiles, launches, workspace, configuration } = createServices(owner, true);
 		workspace.updateWorkspace({ id: 'unc', uri: URI.from({ scheme: 'file', authority: 'server', path: '/share' }) });
 		await configuration.updateValue('terminal.integrated.env.windows', { CONFIGURED: 'value', Path: 'configured' });
-		let strict: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue = true;
+		let strict: import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue = true;
 		const digest = `sha256:${'b'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.environment', packageSha256: digest }] } });
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
@@ -1064,7 +1064,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'background-runtime', packageDigest: digest, profileId: 'background', title: 'Background',
-			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			invoke: async (operation): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 				if (operation === 'createTerminalProfile') {
 					await entered.complete();
 					await release.p;
@@ -1137,7 +1137,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
 		const requested = new DeferredPromise<void>();
-		const reply = new DeferredPromise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
+		const reply = new DeferredPromise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue>();
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'background', title: 'Background extension',
@@ -1208,7 +1208,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			}
 		});
 		const operations: string[] = [];
-		const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker = async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+		const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker = async (operation, payload, signal): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 			signal.throwIfAborted(); operations.push(operation);
 			if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
 			if (operation === 'createTerminalProfile') return custom ? { options: { name: 'Extension PTY' }, pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true } } : { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['literal argument'], env: { PROFILE: 'value' } } };
@@ -1266,7 +1266,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'selected', title: 'Selected extension',
-			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			invoke: async (operation): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 				operations.push(operation);
 				if (operation === 'createTerminalProfile') return custom
 					? { options: { name: 'Selected extension' }, pty: { ptyId: 'selected-pty', registrationId: 'resource.selected', acceptsInput: true } }
@@ -1311,7 +1311,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'test', title: 'Extension',
-			invoke: async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			invoke: async (operation, payload, signal): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 				signal.throwIfAborted();
 				operations.push({ operation, payload });
 				if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
@@ -1384,7 +1384,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY',
-			invoke: async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+			invoke: async (operation, payload): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 				if (operation === 'createTerminalProfile') return {
 					options: malformed === 'name' ? { name: 'x'.repeat(257) } : malformed === 'options' ? { unknown: true } : { name: 'PTY' },
 					pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: malformed === 'inputFlag' ? 'invalid' : true },
@@ -1404,7 +1404,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
 		Object.assign(services.get(ITerminalService), { createTerminal: async () => assert.fail('Stale profile created a terminal') });
-		let release!: (value: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue) => void;
+		let release!: (value: import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue) => void;
 		const closed: unknown[] = [];
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		bridge.replaceProfiles(withPtyResources([{
@@ -1426,7 +1426,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const { services, profiles } = createServices(owner);
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
-		let release!: (value: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue) => void;
+		let release!: (value: import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue) => void;
 		let signal: AbortSignal | undefined;
 		const closed: unknown[] = [];
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));

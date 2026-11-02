@@ -121,7 +121,7 @@ import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/com
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../src/ash/platform/chat/common/chatSettings.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
@@ -140,7 +140,7 @@ import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platf
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { type AgentSession } from '../../../src/ash/platform/agentHost/common/agent.js';
-import { IAgentModelsService } from '../../../src/ash/platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../src/ash/platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';

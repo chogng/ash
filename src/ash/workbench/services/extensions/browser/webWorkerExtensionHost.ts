@@ -1,6 +1,6 @@
 import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
-import type { ExtensionHostReconcileMode, IExtensionHostApi, ExtensionHostClientHandler, ExtensionHostFleetSnapshot, ExtensionHostRuntime, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionHostRegistrations } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import type { ExtensionHostReconcileMode, IExtensionHostApi, ExtensionHostClientHandler, ExtensionHostFleetSnapshot, ExtensionHostRuntime, JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostInvocationRequest, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, normalizeExtensionHostRegistrations } from '../../../../platform/extensions/browser/extensionHostProtocol.js';
 import { decodeAppServerServerRequestParams } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Disposable, DisposableMap, combinedDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';

@@ -101,7 +101,7 @@ import gitEnglish from '../../../extensions/git/package.nls.json' with { type: '
 import gitChinese from '../../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
 import { MainThreadEditorChanges } from '../../../src/ash/workbench/api/browser/mainThreadEditorChanges.js';
 import { parseExtensionEditorInput } from '../../../src/ash/workbench/api/browser/mainThreadEditorInput.js';
-import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 async function invokeRustGit(registrationId: string, operation: string, payload: unknown) { return window.__rustGitRequest('invoke', { registrationId, operation, payload, deadlineUnixMillis: Date.now() + 10000 }); }
 async function createGitMultiDiffEditorInput(_fixture: typeof titleGit, scope: string) {
 	const value = await invokeRustGit('ash.scm', 'scm', { method: 'multiDiff', providerId: titleGitStatus.repositoryId, resource: `ash-scm://ash.git/${titleGitStatus.repositoryId}?scope=${scope}` });

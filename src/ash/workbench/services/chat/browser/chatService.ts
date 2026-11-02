@@ -11,7 +11,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { QueuedMessage, QueueMessageTarget, ModelRef, SessionId, ThreadId } from '../common/chatService.js';
 import type { AdvisorConfig, ChatSubmissionOptions, ChatInteractionOfferChange, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ResolveInteractionOptions, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnCommitSelection, TurnCommitPreview, TurnChangesUpdate } from '../common/chatService.js';

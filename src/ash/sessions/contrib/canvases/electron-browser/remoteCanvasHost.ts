@@ -2,7 +2,7 @@ import { Disposable, DisposableMap, toDisposable } from '../../../../base/common
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IPlaywrightService } from '../../../../platform/browserView/common/playwrightService.js';

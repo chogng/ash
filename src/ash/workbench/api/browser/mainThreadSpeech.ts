@@ -6,7 +6,7 @@ import { localize } from '../../../nls.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import {
 	ISpeechService, SpeechToTextStatus, TextToSpeechStatus, KeywordRecognitionStatus,
 	type ISpeechProvider, type ISpeechToTextEvent, type ITextToSpeechEvent, type IKeywordRecognitionEvent,

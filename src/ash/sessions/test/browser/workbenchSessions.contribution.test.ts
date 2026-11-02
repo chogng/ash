@@ -15,7 +15,7 @@ import { getSingletonServiceDescriptors } from '../../../platform/instantiation/
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';

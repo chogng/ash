@@ -2,7 +2,7 @@ import { Disposable, DisposableMap, DisposableStore } from '../../../base/common
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { ITextModel } from '../../../editor/common/model.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { type ExtensionDocumentSnapshot } from '../common/extHost.protocol.js';
 
 /** Model events belong to the window connection; a restarted extension receives a fresh open sequence. */

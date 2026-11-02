@@ -1,5 +1,5 @@
 import type { BrowserExtensionHostRequest } from '../../services/extensions/common/extensionHostProtocol.js';
-import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 
 interface BrowserRuntime {
 	activate(): Promise<JsonValue>;

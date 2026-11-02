@@ -7,7 +7,7 @@ import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExt
 import { IExtensionApi, type ExtensionSourceKind } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';

@@ -8,7 +8,7 @@ import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { IRemoteAuthorityResolverService } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IRemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
-import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/extensions/common/extensionHostApi.js';
 import { MutableDisposable, DisposableStore } from '../../base/common/lifecycle.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';

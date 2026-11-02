@@ -29,7 +29,7 @@ import { EditorPaneRegistry } from '../../../src/ash/workbench/browser/editor.js
 import { binaryDiffEditorDescriptor } from '../../../src/ash/workbench/browser/parts/editor/binaryDiffEditor.js';
 import { createTestFileService, createTestEditorServices, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';

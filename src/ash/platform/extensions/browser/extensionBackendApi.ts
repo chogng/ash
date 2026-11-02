@@ -1,4 +1,4 @@
-import type { AppServerProtocolClient } from './appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { APP_SERVER_METHODS, type AppServerMethod } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { normalizeExtensionHostPayload } from './extensionHostProtocol.js';

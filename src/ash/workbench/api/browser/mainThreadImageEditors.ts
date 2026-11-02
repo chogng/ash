@@ -2,7 +2,7 @@ import { INotificationService } from '../../../platform/notification/common/noti
 import { EditorOption } from '../../../editor/common/config/editorOptions.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
-import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IImageEditorService, type CodeImageSnapshot } from '../../services/imageEditor/common/imageEditorService.js';
 import { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';

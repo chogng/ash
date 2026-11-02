@@ -7,7 +7,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import type { IAgentCanvasHost } from '../../../../../platform/agentHost/common/agentService.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IAgentHostConnectionsService } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { IPlaywrightService } from '../../../../../platform/browserView/common/playwrightService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';

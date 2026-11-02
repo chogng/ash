@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { startAcademyExtension } from '../../../../../../test/fixtures/academyExtension.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IExtensionHostApi, type ExtensionHostRuntime, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
 import { EditorPanes } from '../../../browser/editor.js';
 import { type EditorPane } from '../../../browser/parts/editor/editorPane.js';

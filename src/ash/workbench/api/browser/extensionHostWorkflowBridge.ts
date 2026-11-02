@@ -1,12 +1,12 @@
 import { type IDebugSession, type IDebugConfiguration, normalizeDebugAdapterDescriptor, type DebugAdapterFactory, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory } from '../../contrib/debug/common/debug.js';
 import { parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions } from '../../contrib/tasks/common/taskConfiguration.js';
 import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
-import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import type { IWorkspaceTask, TaskDefinition, TaskPseudoterminal, TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from '../../contrib/tasks/common/tasks.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise, TaskQueue } from '../../../base/common/async.js';
-import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostPayload } from '../../../platform/extensions/browser/extensionHostProtocol.js';
 import type { TestProfileContribution, TestProfileProvider } from '../../services/testing/common/testingService.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';

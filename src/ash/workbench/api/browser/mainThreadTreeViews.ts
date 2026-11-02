@@ -1,7 +1,7 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import Severity from '../../../base/common/severity.js';
 import { localize } from '../../../nls.js';
-import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type ExtensionHostTreeDataProviderRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type ExtensionHostTreeDataProviderRegistration, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';

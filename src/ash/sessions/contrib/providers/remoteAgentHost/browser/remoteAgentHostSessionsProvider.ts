@@ -3,7 +3,7 @@ import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteA
 import { DisposableMap, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';

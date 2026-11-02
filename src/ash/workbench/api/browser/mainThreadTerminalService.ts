@@ -18,13 +18,13 @@ import { IExtensionService } from '../../services/extensions/common/extensionSer
 import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
 import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
-import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { ITerminalLinkProviderService } from '../../contrib/terminalContrib/links/browser/links.js';
-import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/extensions/common/extensionHostApi.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';

@@ -19,7 +19,7 @@ import { IExtensionService } from '../../../src/ash/workbench/services/extension
 import { TestExtensionService } from '../../../src/ash/workbench/test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';

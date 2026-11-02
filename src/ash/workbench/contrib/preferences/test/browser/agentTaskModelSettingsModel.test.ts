@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IAgentModelsService, ModelPurpose, type AgentModelDefaults } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose, type AgentModelDefaults } from '../../../../../platform/models/common/agentModels.js';
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 import { AgentTaskModelSettingsModel } from '../../browser/agentTaskModelSettingsModel.js';
 import type { SettingsSectionField } from '../../../../services/preferences/common/preferences.js';

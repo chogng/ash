@@ -16,7 +16,7 @@ import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from 
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from '../../platform/collab/browser/appServerChannelService.js';
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
-import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../platform/extensions/common/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
@@ -33,7 +33,7 @@ import { WorkbenchAgentHostService } from '../services/agentHost/electron-browse
 import { createRendererHost, type RendererCapabilityContribution } from '../browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
-import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
+import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace, initializeWorkspaceDirectories } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { IRendererHost, IRendererAgentHost } from '../../platform/renderer/common/rendererHost.js';

@@ -1,5 +1,5 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionClientSource, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionClientSource, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IAgentHostCanvasCollection, type ICanvasProvider } from '../../contrib/canvases/common/agentHostCanvas.js';
 import type { ICanvasOwner } from '../../contrib/canvases/common/canvas.js';

@@ -16,7 +16,7 @@ import { localize } from '../../../../nls.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../platform/agentHost/common/agentModels.js';
+import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../platform/models/common/agentModels.js';
 import { SecretStorageError } from '../../../../platform/secrets/common/secrets.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { Emitter } from '../../../../base/common/event.js';

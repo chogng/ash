@@ -1,10 +1,10 @@
 import { localize } from '../../../nls.js';
-import { AppServerRemoteError } from '../common/appServerError.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import type { AppServerProtocolClient } from './appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import type { Automation, AutomationDefinition, AutomationRun, AutomationRunResult, AutomationSchedule, AutomationStatus, IAutomationBackendService } from '../common/automation.js';
 
 export class AppServerAutomationService extends Disposable implements IAutomationBackendService {

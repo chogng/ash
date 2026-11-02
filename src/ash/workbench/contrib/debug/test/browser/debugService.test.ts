@@ -27,7 +27,7 @@ import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/tes
 import { DebugContentProvider } from '../../common/debugContentProvider.js';
 import { getUriFromSource } from '../../common/debugSource.js';
 import { MainThreadDebugService } from '../../../../api/browser/mainThreadDebugService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { TaskService } from '../../../tasks/browser/taskService.js';
 import { TerminalService } from '../../../terminal/browser/terminalService.js';

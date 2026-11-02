@@ -5,7 +5,7 @@ import { basename } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import type { ExtensionCustomEditorContribution } from '../../services/extensions/common/extensionManifest.js';
-import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { EditorPanes } from '../../browser/editor.js';
 import { EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';

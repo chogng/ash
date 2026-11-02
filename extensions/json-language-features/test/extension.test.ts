@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { test } from 'mocha';
-import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 
 test('the packaged extension binds the public SDK, observes schemas and retires its diagnostics', async () => {
 	const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8'));

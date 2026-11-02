@@ -20,7 +20,7 @@ import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, W
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
-import { createAppServerExtensionHostApi } from '../../browser/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../../extensions/browser/extensionHostApi.js';
 import { TestAppServerDecodePort } from '../common/testAppServerDecoder.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();

@@ -4,9 +4,9 @@ import '../../../../contrib/accessibility/browser/accessibilityConfiguration.js'
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { setNlsMessages } from '../../../../../nls.js';
-import { IExtensionHostApi, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../../../platform/agentHost/browser/extensionHostApi.js';
-import { normalizeExtensionHostSnapshot } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../../../platform/extensions/browser/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../../../platform/extensions/browser/extensionHostProtocol.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';

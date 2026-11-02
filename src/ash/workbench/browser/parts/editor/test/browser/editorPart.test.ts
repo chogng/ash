@@ -2,7 +2,7 @@ import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
 import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
-import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../services/label/common/labelService.js';

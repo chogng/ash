@@ -1,5 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { ModelRef } from '../../agentHost/common/agentModels.js';
+import type { ModelRef } from '../../models/common/agentModels.js';
 
 export interface CodebaseModels {
 	readonly embeddingModel: ModelRef;

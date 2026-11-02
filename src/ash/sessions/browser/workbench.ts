@@ -59,7 +59,7 @@ import { GlobalExtensionEnablementService } from '../../platform/extensionManage
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/extensionApi.js';
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
-import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../platform/extensions/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
 import { IContentSearchService, IContentSearchConfigurationService } from '../../platform/search/common/search.js';
 import { FileContentSearchService } from '../../platform/search/browser/searchService.js';
@@ -98,7 +98,7 @@ import { ExtensionRecommendationsService } from '../../workbench/contrib/extensi
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IAgentHostInputCompletionService, IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
 import { EditorPanes } from '../../workbench/browser/editor.js';
@@ -270,7 +270,7 @@ import { IMenuService } from '../../platform/actions/common/actions.js';
 import { MenuService } from '../../platform/actions/common/menuService.js';
 import { CommandsRegistry, ICommandService } from '../../platform/commands/common/commands.js';
 import { IContextKeyService, ContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
-import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/extensions/common/extensionHostApi.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { IContextMenuService, IContextViewService } from '../../platform/contextview/browser/contextView.js';

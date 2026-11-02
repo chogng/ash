@@ -1,10 +1,10 @@
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { createAppServerExtensionHostApi } from '../../../../platform/agentHost/browser/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../../../platform/extensions/browser/extensionHostApi.js';
 import { type AppServerConnectionRecovery, type AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { RemoteAgentHostService } from '../../../../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
-import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../../../platform/agentHost/common/appServerTransport.js';
 import { LocalAgentHostServiceClient } from '../../../../platform/agentHost/electron-browser/localAgentHostService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';

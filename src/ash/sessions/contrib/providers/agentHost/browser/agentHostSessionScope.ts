@@ -4,7 +4,7 @@ import { ILanguageModelToolsService } from '../../../../../workbench/contrib/cha
 import type { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAppServerApi, IAppServerHookApi, IAppServerSkillApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';

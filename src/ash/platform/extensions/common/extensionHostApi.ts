@@ -1,6 +1,6 @@
 import type { IConfigurationData } from '../../configuration/common/configuration.js';
 import type { LinkPresentationKind } from '../../dataChannel/common/dataChannel.js';
-import type { AppServerConnectionState } from './appServerApi.js';
+import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 

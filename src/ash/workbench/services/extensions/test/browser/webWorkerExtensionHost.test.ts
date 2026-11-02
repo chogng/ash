@@ -18,10 +18,10 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { normalizeExtensionHostSnapshot } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../../../platform/extensions/browser/extensionHostProtocol.js';
+import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type IExtensionHostApi, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 
-import { createExtensionBackendApi } from '../../../../../platform/agentHost/browser/extensionBackendApi.js';
+import { createExtensionBackendApi } from '../../../../../platform/extensions/browser/extensionBackendApi.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 
 test('extension backend routes decode parameters before using the protocol connection', async () => {

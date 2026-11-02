@@ -27,7 +27,7 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { observableValue, autorun } from '../../../../../../base/common/observable.js';
 import { setNlsMessages } from '../../../../../../nls.js';
 import translations from '../../../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../../platform/automations/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';

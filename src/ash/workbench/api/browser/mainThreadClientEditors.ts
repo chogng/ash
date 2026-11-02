@@ -7,7 +7,7 @@ import { createDocumentEditorPane } from '../../contrib/documentEditor/browser/e
 import { match } from '../../../base/common/glob.js';
 import { basename } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionApi, type ExtensionDescriptor } from '../../../platform/extensions/common/extensionApi.js';
 import { EditorPanes, type IEditorPaneDescriptor } from '../../browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';

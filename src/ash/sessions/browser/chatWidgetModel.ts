@@ -21,7 +21,7 @@ import { chatTranscriptListItems, type IChatListItem } from '../../workbench/con
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
-import type { AgentModelDefaults } from '../../platform/agentHost/common/agentModels.js';
+import type { AgentModelDefaults } from '../../platform/models/common/agentModels.js';
 import { observableValue } from '../../base/common/observable.js';
 import type { IChatSessionHistoryStatus } from '../../platform/chat/common/chatSessionHistory.js';
 import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';

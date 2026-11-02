@@ -3,7 +3,7 @@ import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type { JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { TerminalDataBufferer } from '../../../../../platform/terminal/common/terminalDataBuffering.js';

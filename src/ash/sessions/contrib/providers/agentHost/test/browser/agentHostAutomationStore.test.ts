@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
-import type { Automation, AutomationRun, AutomationRunResult, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
+import type { Automation, AutomationRun, AutomationRunResult, IAutomationBackendService } from '../../../../../../platform/automations/common/automation.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { AgentHostAutomationStore } from '../../browser/agentHostAutomationStore.js';

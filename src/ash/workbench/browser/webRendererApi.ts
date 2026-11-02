@@ -8,7 +8,7 @@ import type { IAppServerConnectionRecovery } from '../../platform/agentHost/comm
 import { AppServerChannelService } from '../../platform/collab/browser/appServerChannelService.js';
 import { createAppServerSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
 import { AppServerMessageHistoryService } from '../../platform/messageHistory/browser/appServerMessageHistoryService.js';
-import { createExtensionBackendApi } from '../../platform/agentHost/browser/extensionBackendApi.js';
+import { createExtensionBackendApi } from '../../platform/extensions/browser/extensionBackendApi.js';
 import { createAppServerExecutionSettingsService } from '../../platform/agentHost/browser/appServerExecutionSettingsService.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
 import { createAppServerInstructionService } from '../../platform/instructions/browser/appServerInstructionService.js';
@@ -34,7 +34,7 @@ import { createAppServerSyntaxApi } from '../../platform/syntax/browser/syntaxAp
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
 import { createAppServerAgentHostInputCompletionService, createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { createAppServerAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
+import { createAppServerAgentModelsService } from '../../platform/models/browser/appServerAgentModels.js';
 import { AppServerTerminalProcessService } from '../../platform/terminal/browser/appServerTerminalProcessService.js';
 import { createAppServerDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
 import { createAppServerCodebaseApi } from '../../platform/codebase/browser/codebaseApi.js';
@@ -43,7 +43,7 @@ import { createAppServerConnectorApi, type BrowserConnectorHostServices } from '
 import { createAppServerToolSearchApi } from '../../platform/toolSearch/browser/toolSearchApi.js';
 import { createAppServerLanguageApi } from '../../platform/language/browser/languageApi.js';
 import { createAppServerPluginManagementApi } from '../../platform/extensionManagement/browser/pluginManagementApi.js';
-import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../platform/extensions/browser/extensionHostApi.js';
 import { createAppServerExtensionManagementApi } from '../../platform/extensionManagement/browser/extensionManagementApi.js';
 import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { createAppServerAgentCapabilitiesApi } from '../../platform/agentCapabilities/browser/agentCapabilitiesApi.js';
@@ -53,7 +53,7 @@ import { AppServerMcpServerManagementService } from '../../platform/mcp/browser/
 import { createAppServerTraceSettingsApi } from '../../platform/trace/browser/traceSettingsApi.js';
 import { createAppServerAccountApi } from '../../platform/accounts/browser/accountApi.js';
 import { createAppServerTurnChangesApi } from '../../platform/turnChanges/browser/turnChangesApi.js';
-import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
+import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
 import { createAppServerTeamApi } from '../../platform/teams/browser/teamApi.js';
 
 export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost['appServer']) => RendererHostCapabilities;

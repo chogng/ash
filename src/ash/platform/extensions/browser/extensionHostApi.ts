@@ -1,8 +1,8 @@
 import type { IExtensionHostApi, JsonValue } from '../common/extensionHostApi.js';
 import { invokeExtensionHost, normalizeExtensionHostChanged, normalizeExtensionHostSnapshot, normalizeExtensionHostPayload, normalizeExtensionStatusBarUpdate } from './extensionHostProtocol.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
-import type { AppServerProtocolClient } from './appServerProtocolClient.js';
-import { appServerRequest } from './appServerRequest.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { APP_SERVER_SERVER_REQUESTS } from '../../../../../.build/protocol/typescript/index.js';
 import type { JsonValue as ProtocolJsonValue } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';

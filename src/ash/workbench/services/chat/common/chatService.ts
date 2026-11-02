@@ -43,8 +43,8 @@ export type {
 	ThreadSnapshotHistory,
 	ThreadHistoryBoundary,
 } from '../../../../platform/agentHost/common/agent.js';
-import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
-export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
+export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
 import type { Event } from '../../../../base/common/event.js';
 import { PRODUCT_SLASH_COMMANDS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';

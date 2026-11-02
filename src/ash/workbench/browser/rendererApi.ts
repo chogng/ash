@@ -16,7 +16,7 @@ import type { IRendererHost } from '../../platform/renderer/common/rendererHost.
 import { unavailableOperation, WebAppServerUnavailableError } from '../../platform/renderer/browser/disconnectedHost.js';
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
 import { createDisconnectedAgentHostInputCompletionService, createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { createDisconnectedAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
+import { createDisconnectedAgentModelsService } from '../../platform/models/browser/appServerAgentModels.js';
 import { DisconnectedTerminalProcessService } from '../../platform/terminal/browser/disconnectedTerminalProcessService.js';
 import { createDisconnectedDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
 import { createDisconnectedCodebaseApi } from '../../platform/codebase/browser/codebaseApi.js';
@@ -25,7 +25,7 @@ import { createDisconnectedConnectorApi } from '../../platform/connectors/browse
 import { createDisconnectedToolSearchApi } from '../../platform/toolSearch/browser/toolSearchApi.js';
 import { createDisconnectedLanguageApi } from '../../platform/language/browser/languageApi.js';
 import { createDisconnectedPluginManagementApi } from '../../platform/extensionManagement/browser/pluginManagementApi.js';
-import { createDisconnectedExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../platform/extensions/browser/extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from '../../platform/extensionManagement/browser/extensionManagementApi.js';
 import { createDisconnectedWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { createDisconnectedAgentCapabilitiesApi } from '../../platform/agentCapabilities/browser/agentCapabilitiesApi.js';

@@ -14,11 +14,11 @@ import { ProgressService } from '../../../services/progress/browser/progressServ
 import type { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
-import type { JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
-import type { IExtensionBackendApi } from '../../../../platform/agentHost/common/extensionBackendApi.js';
+import type { IExtensionBackendApi } from '../../../../platform/extensions/common/extensionBackendApi.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';

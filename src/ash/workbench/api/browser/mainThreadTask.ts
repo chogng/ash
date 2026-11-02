@@ -2,8 +2,8 @@ import { extensionHostTaskSnapshot, extensionHostWorkflowProviderId, normalizeTa
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/extensions/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ITaskService } from '../../contrib/tasks/common/taskService.js';

@@ -6,7 +6,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { observableValue, autorun } from '../../../../base/common/observable.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { localize } from '../../../../nls.js';
-import type { Automation, IAutomationBackendService } from '../../../../platform/agentHost/common/automation.js';
+import type { Automation, IAutomationBackendService } from '../../../../platform/automations/common/automation.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';

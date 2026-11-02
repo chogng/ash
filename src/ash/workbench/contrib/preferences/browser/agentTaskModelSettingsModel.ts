@@ -1,7 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IAgentModelsService, type AgentModelDefaults, type AgentModelDefaultsUpdate } from '../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, type AgentModelDefaults, type AgentModelDefaultsUpdate } from '../../../../platform/models/common/agentModels.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';

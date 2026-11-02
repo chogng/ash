@@ -588,7 +588,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] },
 				activateByEvent: async (event: string) => {
 					if (event !== 'onTerminalProfile:shell') throw new Error(`Unexpected activation: ${event}`);
-					bridge.replaceProfiles([{ runtimeId: 'extension-runtime', packageDigest: digest, profileId: 'shell', title: 'Extension Shell', invoke: async (operation): Promise<import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Extension Shell', shellPath: '${env:HOME}/extension-shell', shellArgs: ['${env:PROFILE_ARG}'], env: { EXTENSION: 'value' } } }) }]);
+					bridge.replaceProfiles([{ runtimeId: 'extension-runtime', packageDigest: digest, profileId: 'shell', title: 'Extension Shell', invoke: async (operation): Promise<import('../../../src/ash/platform/extensions/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Extension Shell', shellPath: '${env:HOME}/extension-shell', shellArgs: ['${env:PROFILE_ARG}'], env: { EXTENSION: 'value' } } }) }]);
 				},
 			});
 		}

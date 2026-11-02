@@ -26,7 +26,7 @@ import { InMemoryConfigurationService } from '../../../../../../platform/configu
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import type { ResourceMetadataResult } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { AgentSession } from '../../../../../../platform/agentHost/common/agent.js';
-import type { Automation, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
+import type { Automation, IAutomationBackendService } from '../../../../../../platform/automations/common/automation.js';
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';

@@ -35,11 +35,12 @@ additional chat UI or own conversation state. Voice capture and playback use
 the renderer's existing media lifecycle. ChatGPT remains separate from the
 Agent/Codex model service, local Threads and execution lifecycle.
 
-Shared Agent execution, Thread records, model catalogs, approval metadata and
-profile execution defaults belong to `platform/agentHost/common/`. Its browser
-adapters own App Server DTO conversion; Workbench and Sessions consume the shared
-domain contracts. The Sessions provider owns the mapping into `ISession` and
-`IChat`, while `languageModels` owns model picker state for both windows.
+Shared Agent execution, Thread records, approval metadata and profile execution
+defaults belong to `platform/agentHost/common/`; model catalogs belong to
+`platform/models/common/`. Each domain's browser adapters own App Server DTO
+conversion; Workbench and Sessions consume the shared domain contracts. The
+Sessions provider owns the mapping into `ISession` and `IChat`, while
+`languageModels` owns model picker state for both windows.
 
 Regular Code Chat requests 20-Turn `latest` windows for read and subscribe.
 `ChatWidgetModel` retains explicitly loaded pages and uses `before` cursors to
@@ -240,8 +241,8 @@ Startup restores the covered entry and session without closing the Custom View
 or stealing focus. Explicit navigation closes it; Back and Forward visit both.
 The provider registry borrows the window's existing App Server Sessions provider.
 Its automation store owns observable frontend snapshots. Product contracts live in
-`workbench/contrib/chat/common/automations`; `platform/agentHost/common/automation.ts`
-and `platform/agentHost/browser/appServerAutomationService.ts` own the host contract
+`workbench/contrib/chat/common/automations`; `platform/automations/common/automation.ts`
+and `platform/automations/browser/appServerAutomationService.ts` own the host contract
 and App Server adapter. Rust owns persistence,
 scheduling and execution. Closing a view or window does not stop its runs.
 See [Automation ownership and lifecycle](../../../crates/docs/automation.md).

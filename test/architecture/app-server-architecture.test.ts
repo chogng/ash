@@ -18,7 +18,9 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (name.includes('/test/') || name.includes('/generated/')) continue;
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentModels|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
+		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
+			|| /^platform\/(?:models|automations)\/common\//u.test(name)
+			|| /^platform\/extensions\/common\/extension(?:Backend|Host)Api\.ts$/u.test(name)
 			|| name === 'platform/files/common/fileApi.ts';
 		const allowed = !domainContract && (/^platform\/agentHost\//u.test(name)
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)

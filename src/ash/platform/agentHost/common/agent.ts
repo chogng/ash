@@ -1,7 +1,7 @@
 import type { FileSearchDirectory } from '../../search/common/fileSearch.js';
 import type { SkillReference } from './appServerApi.js';
 import type { URI } from '../../../base/common/uri.js';
-import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
+import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from '../../models/common/agentModels.js';
 import type { ApprovalMode } from './approvalModes.js';
 import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 

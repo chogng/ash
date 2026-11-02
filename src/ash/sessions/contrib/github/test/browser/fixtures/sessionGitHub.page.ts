@@ -1,5 +1,5 @@
-import { AppServerAutomationService } from '../../../../../../platform/agentHost/browser/appServerAutomationService.js';
-import type { Automation } from '../../../../../../platform/agentHost/common/automation.js';
+import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
+import type { Automation } from '../../../../../../platform/automations/common/automation.js';
 import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { IChecksOperationService } from '../../../../changes/common/checksOperationService.js';

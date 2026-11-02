@@ -7,7 +7,7 @@ import { EndOfLinePreference } from '../../../editor/common/model.js';
 import { Range } from '../../../editor/common/core/range.js';
 import type { ITextFileService } from '../../services/textfile/common/textfiles.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
-import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 /** Validates an extension's diff coordinates against the client's current editor models. */
 export class MainThreadEditorChanges {
 	constructor(private readonly codeEditors: ICodeEditorService, private readonly workingCopies: IWorkingCopyService, private readonly files: ITextFileService) { }

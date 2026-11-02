@@ -1,5 +1,5 @@
-import type { ModelRef, ModelPurpose, ModelCatalogEntry } from '../../../../platform/agentHost/common/agentModels.js';
-export { ModelPurpose } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelRef, ModelPurpose, ModelCatalogEntry } from '../../../../platform/models/common/agentModels.js';
+export { ModelPurpose } from '../../../../platform/models/common/agentModels.js';
 export type {
 	ModelReasoningEffort,
 	ModelReasoningEffortOption,
@@ -7,7 +7,7 @@ export type {
 	ModelRetirement,
 	ModelCatalogEntry,
 	ModelCatalogStatus,
-} from '../../../../platform/agentHost/common/agentModels.js';
+} from '../../../../platform/models/common/agentModels.js';
 
 export function modelRefIdentity(model: ModelRef): string {
 	return `${model.provider}\0${model.model}`;

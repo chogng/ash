@@ -20,9 +20,9 @@ import { ChatGPTWidget } from '../../../src/ash/sessions/contrib/chatgptweb/brow
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
-import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';

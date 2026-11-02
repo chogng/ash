@@ -9,7 +9,7 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';

@@ -390,15 +390,15 @@ flowchart TD
 
 **契约源与 owner**
 
-| 部分                   | 唯一 owner / 现有入口                                                                                                                                                   | 规范                                                                                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 扩展接入 wire          | [`external-ext-protocol`](../crates/external-ext-protocol/src/lib.rs)                                                                                                   | Rust 类型定义生命周期、身份、注册和消息封套；TS SDK 宿主 adapter、Rust SDK 与宿主使用同一序列化格式和校验规则        |
-| 宿主服务请求与结果     | [`client.rs`](../crates/external-ext-protocol/src/client.rs)、[`services.rs`](../crates/external-ext-protocol/src/services.rs)                                          | 使用闭合的 operation/request/result 类型；区分后端执行与客户端执行，由宿主路由，不让扩展选择产品内部 method          |
-| 具体 Provider 业务契约 | 对应领域的公开契约，如 [`ash-login::extension`](../crates/login/src/extension.rs)                                                                                       | 领域 owner 定义请求、结果、事件与权限含义；现有 typed DataChannel 可承载它，不能把 JSON payload 当成未校验的任意调用 |
-| 作者接口               | [`@ash/sdk`](../sdk/typescript/README.md)、[`sdk/rust`](../sdk/rust/README.md)                                                                                          | TS 宿主 adapter 与 Rust SDK 适配上述契约、语言对象与取消；不能复制权限状态、注册 registry 或另建宿主协议             |
-| 接入与监管             | [`external-ext`](../crates/external-ext/README.md)                                                                                                                      | 唯一的身份验证、注册发布、live authority gate、调用 fencing、配额、取消和进程监管语义                                |
-| 产品组合               | App Server 与各客户端宿主                                                                                                                                               | 从现有包来源取得有效授权，选择 scope 和 launcher，绑定后端服务及发起客户端；不链接具体 Provider 实现                 |
-| Workbench 适配         | [`IExtensionHostApi`](../src/ash/platform/agentHost/common/extensionHostApi.ts)、[`MainThreadExtensionApi`](../src/ash/workbench/api/browser/mainThreadExtensionApi.ts) | 把注册接入现有 TS 服务，把客户端请求交给其真实 owner；不建立语言专用分发器                                           |
+| 部分                   | 唯一 owner / 现有入口                                                                                                                                                    | 规范                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 扩展接入 wire          | [`external-ext-protocol`](../crates/external-ext-protocol/src/lib.rs)                                                                                                    | Rust 类型定义生命周期、身份、注册和消息封套；TS SDK 宿主 adapter、Rust SDK 与宿主使用同一序列化格式和校验规则        |
+| 宿主服务请求与结果     | [`client.rs`](../crates/external-ext-protocol/src/client.rs)、[`services.rs`](../crates/external-ext-protocol/src/services.rs)                                           | 使用闭合的 operation/request/result 类型；区分后端执行与客户端执行，由宿主路由，不让扩展选择产品内部 method          |
+| 具体 Provider 业务契约 | 对应领域的公开契约，如 [`ash-login::extension`](../crates/login/src/extension.rs)                                                                                        | 领域 owner 定义请求、结果、事件与权限含义；现有 typed DataChannel 可承载它，不能把 JSON payload 当成未校验的任意调用 |
+| 作者接口               | [`@ash/sdk`](../sdk/typescript/README.md)、[`sdk/rust`](../sdk/rust/README.md)                                                                                           | TS 宿主 adapter 与 Rust SDK 适配上述契约、语言对象与取消；不能复制权限状态、注册 registry 或另建宿主协议             |
+| 接入与监管             | [`external-ext`](../crates/external-ext/README.md)                                                                                                                       | 唯一的身份验证、注册发布、live authority gate、调用 fencing、配额、取消和进程监管语义                                |
+| 产品组合               | App Server 与各客户端宿主                                                                                                                                                | 从现有包来源取得有效授权，选择 scope 和 launcher，绑定后端服务及发起客户端；不链接具体 Provider 实现                 |
+| Workbench 适配         | [`IExtensionHostApi`](../src/ash/platform/extensions/common/extensionHostApi.ts)、[`MainThreadExtensionApi`](../src/ash/workbench/api/browser/mainThreadExtensionApi.ts) | 把注册接入现有 TS 服务，把客户端请求交给其真实 owner；不建立语言专用分发器                                           |
 
 共享 wire 的 Rust 定义是跨语言格式的唯一源。TS wire 类型与 schema 从该源生成，沿用仓库现有 `schemars` / `ts-rs` 和 protocol generation 设施；内部扩展消息与 Renderer 可见消息必须有各自明确的导出范围。含凭据的 `CoreService` 请求与结果不能为了类型复用进入 Renderer RPC。领域消费者继续使用自身领域类型，生成 DTO 只留在 adapter；语言包装可以手写，但不能手写另一份 wire 枚举、错误码或协议版本。
 
@@ -738,27 +738,27 @@ Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地�
 
 ## 2. 当前实现所有权
 
-| 能力                                                                                      | 权威所有者                                                                   | 不负责                                            |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| 内置静态资源源码与上游 provenance                                                         | 根目录 `extensions/`                                                         | 运行时扫描、Extension API                         |
-| Rust 作者接口、回调分发、scoped Services 与 typed DataChannels（认证试点已复用）          | `sdk/rust` / `ash-external-ext-sdk`                                          | 不拥有产品监管或最终授权；通用第三方支持仍需验证  |
-| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次                                       | `ash-external-ext::packages`                                                 | Editor 贡献语义、任意代码执行                     |
-| 静态可信根选择和顺序                                                                      | App Server 产品组合根                                                        | 由 Renderer 提交任意主机路径                      |
-| Plugin 静态目录选择                                                                       | `ash-core-plugins` activation authority + App Server provider                | 解析静态 `package.json`、授予代码执行             |
-| Extensions Theme/Language 静态目录选择                                                    | `ExtensionPackageManager` + App Server provider                              | 解析 Workbench 贡献、主题选择或 LSP lifecycle     |
-| 静态 DTO、connection resource 与错误映射                                                  | App Server / `platform/extensions` adapter                                   | Workbench 领域注册                                |
-| 声明式 catalog 与生命周期                                                                 | `IExtensionService` / `AppServerExtensionService`                            | transport DTO、Plugin enable/grant                |
-| Extensions package artifact/install/update/uninstall 与 capability lease                  | `ash-core-plugins`                                                           | Editor Extension enable/grant、启动进程           |
-| Extensions Editor Extension enable/grant generation、通知与 lease                         | 产品注入的 `ExtensionsEditorExtensionAdmission`                              | package 安装、目录权限、进程隔离                  |
-| Legacy Plugin 本地 package 与 enable/grant generation                                     | `ash-core-plugins` compatibility authority                                   | 远端 Extensions 安装、启动进程                    |
-| 可执行进程、Host RPC、incarnation、取消和 crash recovery                                  | `ash-external-ext`                                                           | package discovery、目录权限决定、领域 payload     |
-| source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC                 | App Server composition                                                       | OS sandbox implementation、Workbench UI           |
-| 生产 sandbox、hard resources 与 killable process tree                                     | 注入的 platform `ExtensionHostLauncher`                                      | package enable/grant 或 provider semantics        |
-| Host snapshot normalization 与 transport                                                  | `platform/agentHost/browser/extensionHostProtocol.ts`、`extensionHostApi.ts` | 领域 provider ownership                           |
-| Host fleet 生命周期、刷新和连接状态                                                       | `IExtensionHostService` implementation                                       | 扩展 provider 注册、generated DTO 作为 domain API |
-| 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期                              | `workbench/api/browser`                                                      | 进程监管、WebSocket、App Server 协议定义          |
-| Renderer Host service 安装与启动阻塞                                                      | Code 产品入口选择的 `workbench/contrib/extensionHost`                        | 通用 Workbench 或 Academy 产品隐式安装            |
-| Commands、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 注册与调用 shape | 各自 Workbench domain owner                                                  | package 安装、进程监管                            |
+| 能力                                                                                      | 权威所有者                                                                    | 不负责                                            |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
+| 内置静态资源源码与上游 provenance                                                         | 根目录 `extensions/`                                                          | 运行时扫描、Extension API                         |
+| Rust 作者接口、回调分发、scoped Services 与 typed DataChannels（认证试点已复用）          | `sdk/rust` / `ash-external-ext-sdk`                                           | 不拥有产品监管或最终授权；通用第三方支持仍需验证  |
+| 静态包扫描、路径/文件类型校验、快照、摘要与目录代次                                       | `ash-external-ext::packages`                                                  | Editor 贡献语义、任意代码执行                     |
+| 静态可信根选择和顺序                                                                      | App Server 产品组合根                                                         | 由 Renderer 提交任意主机路径                      |
+| Plugin 静态目录选择                                                                       | `ash-core-plugins` activation authority + App Server provider                 | 解析静态 `package.json`、授予代码执行             |
+| Extensions Theme/Language 静态目录选择                                                    | `ExtensionPackageManager` + App Server provider                               | 解析 Workbench 贡献、主题选择或 LSP lifecycle     |
+| 静态 DTO、connection resource 与错误映射                                                  | App Server / `platform/extensions` adapter                                    | Workbench 领域注册                                |
+| 声明式 catalog 与生命周期                                                                 | `IExtensionService` / `AppServerExtensionService`                             | transport DTO、Plugin enable/grant                |
+| Extensions package artifact/install/update/uninstall 与 capability lease                  | `ash-core-plugins`                                                            | Editor Extension enable/grant、启动进程           |
+| Extensions Editor Extension enable/grant generation、通知与 lease                         | 产品注入的 `ExtensionsEditorExtensionAdmission`                               | package 安装、目录权限、进程隔离                  |
+| Legacy Plugin 本地 package 与 enable/grant generation                                     | `ash-core-plugins` compatibility authority                                    | 远端 Extensions 安装、启动进程                    |
+| 可执行进程、Host RPC、incarnation、取消和 crash recovery                                  | `ash-external-ext`                                                            | package discovery、目录权限决定、领域 payload     |
+| source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC                 | App Server composition                                                        | OS sandbox implementation、Workbench UI           |
+| 生产 sandbox、hard resources 与 killable process tree                                     | 注入的 platform `ExtensionHostLauncher`                                       | package enable/grant 或 provider semantics        |
+| Host snapshot normalization 与 transport                                                  | `platform/extensions/browser/extensionHostProtocol.ts`、`extensionHostApi.ts` | 领域 provider ownership                           |
+| Host fleet 生命周期、刷新和连接状态                                                       | `IExtensionHostService` implementation                                        | 扩展 provider 注册、generated DTO 作为 domain API |
+| 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期                              | `workbench/api/browser`                                                       | 进程监管、WebSocket、App Server 协议定义          |
+| Renderer Host service 安装与启动阻塞                                                      | Code 产品入口选择的 `workbench/contrib/extensionHost`                         | 通用 Workbench 或 Academy 产品隐式安装            |
+| Commands、Language、Debug、Tasks、Testing、DataChannel、LinkPresentation 注册与调用 shape | 各自 Workbench domain owner                                                   | package 安装、进程监管                            |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和
 资源传输 shape 只存在于运行时 adapter。`src/ash/base` 不认识扩展、语言、grammar 或 Host RPC。

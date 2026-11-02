@@ -17,7 +17,7 @@ import { ChatService } from '../../../workbench/services/chat/browser/chatServic
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import type { AgentInteractionOffer, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
-import type { AdvisorConfig, IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import type { AdvisorConfig, IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';

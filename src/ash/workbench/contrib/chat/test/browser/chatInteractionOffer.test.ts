@@ -7,7 +7,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ChatService } from '../../../../services/chat/browser/chatService.js';
 import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { AgentInteractionOffer, ThreadSubscription, ThreadUpdateEnvelope } from '../../../../../platform/agentHost/common/agent.js';
-import type { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import type { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { AppServerConnectionState, IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../../../platform/turnChanges/common/turnChangesApi.js';

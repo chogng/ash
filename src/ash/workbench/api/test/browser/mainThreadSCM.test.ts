@@ -11,7 +11,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
-import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { SCMService } from '../../../contrib/scm/common/scmService.js';
 import { SCMViewService } from '../../../contrib/scm/browser/scmViewService.js';
 import { QuickDiffService } from '../../../contrib/scm/common/quickDiffService.js';

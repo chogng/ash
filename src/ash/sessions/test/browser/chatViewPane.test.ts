@@ -25,7 +25,7 @@ import { StorageScope, StorageTarget } from '../../../platform/storage/common/st
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 import { createAppServerAgentSessionService, createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
+import { createAppServerAgentModelsService } from '../../../platform/models/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -54,7 +54,7 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService, ModelPurpose, type ModelCatalogEntry } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose, type ModelCatalogEntry } from '../../../platform/models/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -3839,7 +3839,7 @@ function fakeApi(options: FakeOptions = {}): {
 	} as AppServerProtocolClient);
 	const connectionListeners = new Set<(state: 'ready') => void>();
 	let connectionGeneration = 1;
-	let modelDefaults = { revision: 1, model: null as ModelRef | null, reasoningEffort: null as import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
+	let modelDefaults = { revision: 1, model: null as ModelRef | null, reasoningEffort: null as import('../../../platform/models/common/agentModels.js').ModelReasoningEffort | null };
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
@@ -3938,7 +3938,7 @@ function fakeApi(options: FakeOptions = {}): {
 		},
 		model: {
 			readDefaults: async () => modelDefaults,
-			configureDefaults: async (update: import('../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
+			configureDefaults: async (update: import('../../../platform/models/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
 				assert.equal(expectedRevision, modelDefaults.revision);
 				modelDefaults = { revision: modelDefaults.revision + 1, model: update.model === undefined ? modelDefaults.model : update.model, reasoningEffort: update.reasoningEffort === undefined ? modelDefaults.reasoningEffort : update.reasoningEffort };
 			},

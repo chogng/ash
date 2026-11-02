@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type {
 	ConfigUpdateParams,
 	ModelPreferencesUpdateParams
 } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerAgentModelsService } from '../../browser/appServerAgentModels.js';
 import { SecretStorageError } from '../../../secrets/common/secrets.js';
-import { AppServerRemoteError } from '../../common/appServerError.js';
+import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import { setNlsMessages } from '../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 

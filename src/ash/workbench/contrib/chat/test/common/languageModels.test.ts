@@ -1,4 +1,4 @@
-import { createAppServerAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
+import { createAppServerAgentModelsService } from '../../../../../platform/models/browser/appServerAgentModels.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -8,7 +8,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/models/common/agentModels.js';
 import { modelsRecommendedFor } from '../../../../services/chat/common/modelCatalog.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
@@ -757,12 +757,12 @@ function modelCatalogApi(
 test('Model and effort saves serialize against fresh backend revisions while Auto retains executable defaults', async () => {
 	using resources = new DisposableStore();
 	const first = new DeferredPromise<void>();
-	let defaults = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
+	let defaults = { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null as import('../../../../../platform/models/common/agentModels.js').ModelRef | null, reasoningEffort: null as import('../../../../../platform/models/common/agentModels.js').ModelReasoningEffort | null };
 	const writes: unknown[] = [];
 	const api = {
 		...modelCatalogApi(async () => ({ models: [] })),
 		readDefaults: async () => defaults,
-		configureDefaults: async (update: import('../../../../../platform/agentHost/common/agentModels.js').AgentModelDefaultsUpdate, revision: number) => {
+		configureDefaults: async (update: import('../../../../../platform/models/common/agentModels.js').AgentModelDefaultsUpdate, revision: number) => {
 			writes.push({ update, revision });
 			if (writes.length === 1) await first.p;
 			assert.equal(revision, defaults.revision);
@@ -772,7 +772,7 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 	const models = resources.add(new LanguageModelsService(api,
 		{ connectionGeneration: 1, onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
 		{ subscribe: () => ({ dispose() { } }) } as IServerEventApi,
-		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/agentHost/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/models/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const model = { provider: 'example', model: 'reasoning' };
 	const select = models.rememberSelectedModel(model);
