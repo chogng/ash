@@ -578,6 +578,48 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-11-01：Zig 与默认工具链的完整 Rust 开发后端对照
+
+在 Apple M2 Max（12 核、32 GiB）、macOS arm64、Rust 1.99.1、`dev-small`、12 个 Cargo jobs 下，比较默认 Apple Clang／系统链接器与 Zig 0.16.0。测量调用 Desktop 实际的 `development_binary_inputs` 和 `build_binaries`，覆盖全部 21 个 Rust 程序，保留核心、音频、LiveKit、识别器四组 features 隔离。锁定依赖预先获取，构建离线执行；协议、V8 和语音库等固定原生资源预先准备。范围不包含前端 TypeScript、Go LiveKit 源码、V8 源码编译、打包发布或窗口重连。
+
+Zig 组同时设置 C/C++ 编译器和 Rust 链接器，Rust 前端及 LLVM 后端保持不变。直接传入 `zig cc` 最初因 Apple 的 `arm64-apple-macosx` 目标名及 ARM CPU 参数失败，正式样本改用 `cargo-zigbuild 0.24.0` 的参数适配器，源码固定为 `2ffd80658c96b5ff971085dd509e58e5b441f1c8`。未修改仓库工具链或 profile。Git 构建身份固定，按 Rust、Cargo 和实际构建脚本内容校验输入；检测并排除其他 Rust 实际编译，版本／目标查询与源码编译分开识别。
+
+下面的冷构建使用独立空 Cargo 输出目录，保留编译器缓存；Zig 的 C++ 标准库缓存先初始化，原生 C 对象缓存可以跨轮复用。这是“Cargo 产物冷、编译器缓存保留”的结果，不代表清空所有缓存后的首次构建。Zig 原生工具链缓存尚未就绪的两轮完整构建另记为 492.51／459.97 秒，不纳入下表。正式冷构建为默认组第 3／4／5 轮和 Zig 第 4／5／6 轮，各三次。下表均为包含真实四组构建入口的耗时中位数：
+
+| 场景                              | 默认工具链 |       Zig | 耗时变化 |
+| --------------------------------- | ---------: | --------: | -------: |
+| 空 Cargo 输出目录，编译器缓存保留 |  381.73 秒 | 259.99 秒 |   -31.9% |
+| 无改动重跑                        |    2.94 秒 |   3.02 秒 |    +2.9% |
+| 只触碰宿主库源码时间戳            |    5.66 秒 |   9.24 秒 |   +63.2% |
+| 实际修改 App Server runtime       |    9.08 秒 |  12.13 秒 |   +33.5% |
+| 恢复 runtime 原始源码后重编译     |    8.46 秒 |  11.04 秒 |   +30.5% |
+
+真实编辑把 `crates/app-server/src/server/request_dispatch.rs` 的 `REQUEST_CAPACITY` 从 64 分别改为 65／66／67，每次恢复原文，两组使用相同改动。65 的样本在各自第 3 轮缓存中、67 已恢复后补测，两组缓存历史匹配。实际编辑均只重编 runtime、宿主库和宿主程序；时间戳样本触碰 `crates/app-server-host/src/lib.rs`，仅重编宿主库和程序；无改动样本均未重新编译。默认实际编辑三次为 11.58／9.08／8.22 秒，Zig 为 11.85／12.48／12.13 秒；结果只覆盖这处小改动。
+
+冷构建原始三轮为默认 290.83／394.30／381.73 秒、Zig 280.00／256.15／259.99 秒。当前开发机仍有非 Rust 桌面负载，默认组波动明显，不能把中位数差值当作所有机器或所有编辑的固定收益。Cargo timings 中，核心组 AWS-LC 原生构建的中位数为 125.49 → 87.84 秒，SQLite 原生构建为 25.14 → 1.50 秒，支持原生编译缓存参与冷构建收益的判断；这些单元并行执行，不能相加推算总耗时。未单独计时链接器进程，也未证明 Rust 前端或 LLVM 代码生成本身变快。
+
+冷构建最大单进程 RSS 中位数为默认 4084.6 MiB、Zig 4277.5 MiB，不是所有并行进程内存之和；21 个程序的总文件大小中位数为 399.23 → 398.86 MiB。30 个正式样本均核对全部 21 个程序的产物记录，12 次 App Server 版本、stdio 初始化、实际 diff RPC 和 EOF 退出验证通过，diff 结果一致。运行验证使用已准备的开发资源包，后期通过共享包租约防止并发发布回收验证资源；初期参数适配、资源准备和干扰检测记录与正式样本分开保存。
+
+本次观察到保留 Zig 缓存后的空 Cargo 目录构建提速，但常规 Rust 小改动的增量构建回退，继续保留当前默认工具链。未测其他平台、发布构建或运行性能。实验源码已恢复，临时编译目录与工具构建已清理，共享 Cargo 缓存保留。汇总、逐轮 CSV、工具链与输入快照、Cargo 日志／timings、验证记录和复现脚本位于 `.build/build-health/zig-full-20261101/`，入口为 `summary.json`、`comparison.csv`、`verification.json` 和 `timing-analysis.json`。
+
+#### 2026-11-01：macOS 常规开发构建的 Cranelift 评估
+
+本机 macOS arm64、32 GiB 内存使用固定的 `nightly-2026-10-31`（rustc 1.101.0-nightly，`92b5b8c87`）分别测试 LLVM 和 `rustc-codegen-cranelift-preview`，未修改仓库固定的 Rust 1.99.1 或默认 profile。完整 `ash-app-server` 的 `dev-small` 构建在链接 AWS-LC 时失败，出现 `__aws_lc_0_45_0_*` 未定义符号；该轮还有另一个开发构建并发运行，因此耗时不用于性能比较。
+
+锁定的 `aws-lc-sys 0.45.0` 仅通过 `CARGO_ENCODED_RUSTFLAGS` 识别 Cranelift，经 Cargo profile 选择后端没有触发兼容分支。其 `AWS_LC_SYS_NO_U1_BINDINGS=1` 开关可选择另一套绑定，但本轮未用它重新验证完整 App Server。独立 C/Rust 探针复现了 `link_name` 中 `\u{1}` 前缀的链接差异。另一个探针在相同 nightly、显式 `panic=unwind` 下，LLVM 能通过 `catch_unwind` 捕获 panic，Cranelift 则以 101 退出；上游也明确列出 [macOS 不支持 panic 展开](https://github.com/rust-lang/rustc_codegen_cranelift#not-yet-supported)。这会影响 Code Mode 的 panic 恢复和开发动态模块的展开契约，不能只以编译成功判断可替换性。
+
+可完成构建的 `ash-app-server-protocol` 默认功能集通过 `just bench-build ash-app-server-protocol --profile dev-small --jobs 12` 各测三轮，使用相同提交、锁文件、Rust 输入、nightly、目标和 profile，并为每轮分配独立输出目录。依赖预先获取，构建离线执行；LLVM 与 Cranelift 通过 `CARGO_PROFILE_DEV_SMALL_CODEGEN_BACKEND` 选择，启用 `CARGO_UNSTABLE_CODEGEN_BACKEND`。为避免触碰源码触发另一个构建，测量期间暂停 Rust 监听器，结束后已恢复。以下是包含仓库 Cargo 包装入口的耗时中位数：
+
+| 场景                           |     LLVM | Cranelift | 耗时变化 |
+| ------------------------------ | -------: | --------: | -------: |
+| 独立空输出目录构建             | 77.14 秒 |  90.69 秒 |   +17.6% |
+| 无改动重跑                     |  2.28 秒 |   5.04 秒 |  +121.6% |
+| 只触碰协议库源码时间戳后重编译 |  9.47 秒 |  13.03 秒 |   +37.6% |
+
+无改动样本均未重新编译，触碰样本均只重编协议库。冷构建范围为 LLVM 72.00–83.57 秒、Cranelift 89.28–112.55 秒；最大 RSS 中位数为 2069 → 1904 MiB，是 `time` 的单进程最大值，不是编译进程总内存。首轮协议库 `.rlib` 大小为 31718712 → 32517848 字节。额外测试了过程宏与 build script 使用 LLVM、其余使用 Cranelift 的混合方案，但期间 HEAD 和其他 Rust 输入发生变化，被基准工具拒绝，整组不用于加速结论。
+
+当前开发会话仍有其他编辑器、文件监听器及 App Server 的 CPU 负载，因此数字只代表该会话，不能推广为固定回退幅度。本次没有证明常规开发构建提速，完整后端也没有可运行的 Cranelift 对照；保留默认 LLVM。这些协议包结果不代表真实功能编辑、带调试信息的 `dev` profile、完整 Desktop 启动或其他平台。原始报告分别为 `.build/build-health/ash-app-server-protocol-dev-small-1fw7epwv/report.json` 与 `.build/build-health/ash-app-server-protocol-dev-small-yeca1grp/report.json`；复现环境、探针、被排除的样本及汇总位于 `.build/build-health/cranelift-20261101/`。实验编译目录和临时安装的工具链已清理，共享 Cargo 缓存保留。
+
 #### 2026-10-30：App Server 避免无源码变化的重建
 
 macOS 对 `Cargo.lock` 的访问或加锁会产生原生 `change` 通知；监听器原先只在 Windows 过滤访问通知，因此一次后端构建可能通过再次访问锁文件触发下一次构建。现在所有平台按 inode、大小、mtime 和 ctime 去重，继续识别保留大小与 mtime 的真实写入，并处理重命名、删除和不可读输入。真实监听场景中，三次只读 Cargo metadata 命令产生 26 个锁文件通知，未触发后端构建；随后触碰宿主源码时间戳只触发一次构建，没有继续自触发。日志和结果见下述目录中的 `watch-scenario.log` 与 `watch-scenario.json`；下述计时只覆盖身份依赖调整，不包含监听修复的额外收益。
