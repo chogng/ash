@@ -2,8 +2,11 @@
 """Publish incremental Desktop backend builds against prepared shared resources."""
 
 import argparse
+import json
+import os
 import sys
 import subprocess
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
@@ -29,6 +32,7 @@ def build_development_server(
     *, root: Path = ROOT, select_prepared: bool = False, protocol_prepared: bool = False
 ) -> tuple[bool, str]:
     spec = TARGETS[default_target()]
+    publication = _build_context(select_prepared)
     if live_directory() is not None:
         build_live(root, protocol_prepared=protocol_prepared)
     package = current_package(development_root(root, spec.target, "host-provided-node"))
@@ -61,7 +65,9 @@ def build_development_server(
             )
         )
         binaries.update(replacements)
-        result = publish_generation(package, binaries, directory)
+        result = publish_generation(
+            package, binaries, directory, publication=publication
+        )
         print(
             f"[app-server] {'Published' if result[0] else 'Unchanged'} {result[1]}",
             flush=True,
@@ -69,6 +75,63 @@ def build_development_server(
         for preload_result in preloads:
             preload_result.result()
     return result
+
+
+def _build_context(select_prepared: bool) -> dict:
+    source = os.environ.get("ASH_DEV_BUILD_CONTEXT_FILE")
+    if source is None:
+        return {
+            "buildId": str(uuid.uuid4()),
+            "reason": "prepared-runtime-selection"
+            if select_prepared
+            else "manual-build",
+            "files": [],
+            "omittedFileCount": 0,
+        }
+    data = Path(source).read_bytes()
+    if len(data) > 262_144:
+        raise ValueError("Development build context is oversized")
+    context = json.loads(data)
+    if not isinstance(context, dict) or set(context) - {
+        "buildId",
+        "reason",
+        "files",
+        "buildLog",
+        "omittedFileCount",
+    }:
+        raise ValueError("Invalid development build context")
+    if not isinstance(context.get("buildId"), str):
+        raise ValueError("Invalid development build ID")
+    uuid.UUID(context["buildId"])
+    if context.get("reason") not in {"source-change", "initial-build"}:
+        raise ValueError("Invalid development build reason")
+    files = context.get("files")
+    if (
+        not isinstance(files, list)
+        or len(files) > 128
+        or any(
+            not isinstance(file, str)
+            or not file
+            or len(file) > 1024
+            or file.startswith("/")
+            or "\\" in file
+            or ":" in file
+            or any(part in {"", ".", ".."} for part in file.split("/"))
+            or "\0" in file
+            for file in files
+        )
+    ):
+        raise ValueError("Invalid development build source paths")
+    omitted = context.get("omittedFileCount")
+    if type(omitted) is not int or omitted < 0:
+        raise ValueError("Invalid development build omitted file count")
+    if "buildLog" in context and (
+        not isinstance(context["buildLog"], str)
+        or not Path(context["buildLog"]).is_absolute()
+        or len(context["buildLog"]) > 4096
+    ):
+        raise ValueError("Invalid development build log path")
+    return context
 
 
 def _load_app_server(executable: Path) -> None:

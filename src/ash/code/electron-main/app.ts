@@ -1357,7 +1357,7 @@ export class AshApplication extends Disposable {
 		}, connectionKind);
 		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile) {
-			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile });
+			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile });
 			resources.add(this.developmentAppServerReloader.value.registerConnection(connection.launcher, supervisor));
 		}
 		return supervisor;
@@ -2042,7 +2042,7 @@ export class AshApplication extends Disposable {
 					if (authConnection) { windowDisposables.add(authConnection.launcher); }
 					const authentication = windowDisposables.add(new ChatGPTAuthentication(authConnection ? { enabled: true, launcher: authConnection.launcher } : { enabled: false }));
 					if (authConnection?.generationFile) {
-						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile: authConnection.generationFile }); }
+						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile: authConnection.generationFile }); }
 						windowDisposables.add(this.developmentAppServerReloader.value.registerConnection(authConnection.launcher, authentication));
 					}
 					const chatGPT = windowDisposables.add(this.windowServices.createInstance(ChatGPTTransport, {

@@ -1,11 +1,11 @@
-import { appendFile, mkdir, readdir, rename, rm, open, realpath, lstat } from 'node:fs/promises';
+import { readdir, open, realpath, lstat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { isRecord } from '../../../base/common/types.js';
 import { ConsoleLogSink } from '../common/consoleLogSink.js';
 import { AbstractLoggerService, type LogEntry, type ILogFile, type ILogFileCursor, type ILogFileReadResult } from '../common/log.js';
 import { LogService } from '../common/logServiceImpl.js';
+import { LogFileWriter } from './logFileWriter.js';
 
 interface LoggerOptions {
 	readonly logsHome: string;
@@ -22,14 +22,8 @@ const MaxReadBytes = 1024 * 1024;
 /** Owns Desktop log files and their retention; all writes and maintenance share one queue. */
 export class LoggerService extends AbstractLoggerService<LogService> {
 	public readonly sessionPath: string;
-	private readonly fileSizes = new Map<string, number>();
 	private readonly logsHome: string;
-	private readonly maxFileBytes: number;
-	private readonly retainedSessions: number;
-	private queue: Promise<void> = Promise.resolve();
-	private closing: Promise<void> | undefined;
-	private initialized = false;
-	private failure: unknown;
+	private readonly writer: LogFileWriter;
 	private readonly appServerLog: LoggerOptions['appServerLog'];
 	private appServerLogPath: string | undefined;
 
@@ -37,19 +31,13 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 		super();
 		this.logsHome = resolve(options.logsHome);
 		this.appServerLog = options.appServerLog;
-		this.maxFileBytes = options.maxFileBytes ?? 5 * 1024 * 1024;
-		this.retainedSessions = options.retainedSessions ?? 10;
-		if (!Number.isSafeInteger(this.maxFileBytes) || this.maxFileBytes < 1 || !Number.isSafeInteger(this.retainedSessions) || this.retainedSessions < 1) {
-			throw new TypeError('Invalid log retention limits');
-		}
-		const timestamp = new Date().toISOString().replace(/[-:.Z]/g, '');
-		this.sessionPath = join(this.logsHome, `${timestamp}-${randomUUID()}`);
+		this.writer = new LogFileWriter(options);
+		this.sessionPath = this.writer.sessionPath;
 	}
 
 	public async initialize(): Promise<void> {
 		this.assertNotDisposed();
-		await mkdir(this.sessionPath, { recursive: true });
-		this.initialized = true;
+		await this.writer.initialize();
 	}
 
 	protected doCreateLogger(category: string): LogService {
@@ -66,30 +54,16 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	}
 
 	public log(source: string, entry: LogEntry): Promise<void> {
-		if (!/^(main|window-[1-9]\d*)$/.test(source)) { throw new TypeError('Invalid log source'); }
 		const error = entry.error instanceof Error ? entry.error.stack ?? entry.error.message : entry.error === undefined ? undefined : String(entry.error);
 		const line = JSON.stringify({ ...entry, error, source, processId: process.pid }) + '\n';
-		const bytes = Buffer.byteLength(line);
-		if (bytes > this.maxFileBytes) { throw new RangeError('Log entry exceeds file limit'); }
-		return this.run(async () => {
-			const path = join(this.sessionPath, `${source}.log`);
-			let size = this.fileSizes.get(source) ?? 0;
-			if (size > 0 && size + bytes > this.maxFileBytes) {
-				await rm(`${path}.2`, { force: true });
-				try { await rename(`${path}.1`, `${path}.2`); }
-				catch (error) { if (!isRecord(error) || error.code !== 'ENOENT') { throw error; } }
-				await rename(path, `${path}.1`);
-				size = 0;
-			}
-			await appendFile(path, line, 'utf8');
-			this.fileSizes.set(source, size + bytes);
-		});
+		this.assertNotDisposed();
+		return this.writer.append(source, line);
 	}
 
 	/** Enumerate retained files rather than maintaining a second history catalog. */
 	public async getLogFiles(windowSource: string): Promise<readonly ILogFile[]> {
 		this.assertNotDisposed();
-		await this.queue;
+		await this.writer.settled();
 		const current = this.sessionPath.slice(this.logsHome.length + 1);
 		const files: ILogFile[] = [];
 		for (const session of (await readdir(this.logsHome, { withFileTypes: true })).filter(entry => entry.isDirectory() && SessionName.test(entry.name)).sort((a, b) => b.name.localeCompare(a.name))) {
@@ -110,7 +84,7 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	/** Bounded, complete-line reads share the existing writer's ordering and never mutate a log. */
 	public async readLogFile(id: string, cursor?: ILogFileCursor): Promise<ILogFileReadResult> {
 		this.assertNotDisposed();
-		await this.queue;
+		await this.writer.settled();
 		let path: string;
 		if (id === 'app-server' && this.appServerLogPath) {
 			path = this.appServerLogPath;
@@ -151,34 +125,10 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	}
 
 	public cleanUpLogs(): Promise<void> {
-		return this.run(async () => {
-			const sessions = (await readdir(this.logsHome, { withFileTypes: true }))
-				.filter(entry => entry.isDirectory() && /^\d{8}T\d{9}-[\da-f-]{36}$/.test(entry.name) && join(this.logsHome, entry.name) !== this.sessionPath)
-				.sort((left, right) => right.name.localeCompare(left.name));
-			for (const entry of sessions.slice(this.retainedSessions - 1)) {
-				const target = resolve(this.logsHome, entry.name);
-				const withinRoot = relative(this.logsHome, target);
-				if (!withinRoot || withinRoot.startsWith('..') || isAbsolute(withinRoot)) { throw new Error('Log cleanup escaped its directory'); }
-				await rm(target, { recursive: true });
-			}
-		});
-	}
-
-	public async flush(): Promise<void> {
-		await this.queue;
-		if (this.failure !== undefined) { throw this.failure; }
-	}
-
-	public close(): Promise<void> {
-		this.closing ??= this.flush();
-		return this.closing;
-	}
-
-	private run(operation: () => Promise<void>): Promise<void> {
 		this.assertNotDisposed();
-		if (!this.initialized || this.closing) { throw new Error('Desktop logger is not open'); }
-		const result = this.queue.then(operation);
-		this.queue = result.catch(error => { this.failure ??= error; });
-		return result;
+		return this.writer.cleanUpLogs();
 	}
+
+	public flush(): Promise<void> { return this.writer.flush(); }
+	public close(): Promise<void> { return this.writer.close(); }
 }

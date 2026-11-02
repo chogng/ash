@@ -170,6 +170,22 @@ suite('Desktop log files', () => {
 		}
 	});
 
+	test('maintenance protects another active writer until its logs are closed', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-logs-active-'));
+		try {
+			using previous = new LoggerService({ logsHome: directory });
+			await previous.initialize();
+			await previous.log('main', entry('active writer'));
+			using current = new LoggerService({ logsHome: directory, retainedSessions: 1 });
+			await current.initialize();
+			await current.cleanUpLogs();
+			assert.match(await readFile(join(previous.sessionPath, 'main.log'), 'utf8'), /active writer/);
+			await previous.close();
+			await current.cleanUpLogs();
+			assert.deepEqual(await readdir(directory), [current.sessionPath.slice(directory.length + 1)]);
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	test('saved log reads restore previous sessions and keep complete UTF-8 records behind an incremental cursor', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-logs-'));
 		try {

@@ -408,7 +408,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			return this.currentTasks;
 		} catch (error) {
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
-			this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`);
+			if (!isCancellationError(error)) { this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`); }
 			throw error;
 		} finally {
 			if (this.activeRefresh === controller) this.activeRefresh = undefined;
@@ -769,6 +769,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private reportError(error: unknown): void {
+		if (isCancellationError(error)) { return; }
 		this.logService.error('tasks.discovery', 'Could not refresh workspace tasks', error);
 	}
 

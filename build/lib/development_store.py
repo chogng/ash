@@ -93,6 +93,7 @@ def publish_generation(
     directory: Path,
     *,
     symbol_directories: dict[str, Path] | None = None,
+    publication: dict | None = None,
 ) -> tuple[bool, str]:
     # Windows link and directory APIs need extended paths for packaged resource names.
     if os.name == "nt":
@@ -102,7 +103,9 @@ def publish_generation(
     # Publication and collection must serialize: a concurrent publisher may already
     # have linked its objects but not yet committed current.json.
     with _exclusive_lock(directory / "publish.lock", create=True):
-        result = _publish_generation(package, binaries, directory, symbol_directories)
+        result = _publish_generation(
+            package, binaries, directory, symbol_directories, publication
+        )
         _cleanup_generations(directory, result[1])
         return result
 
@@ -112,6 +115,7 @@ def _publish_generation(
     binaries: dict[str, Path],
     directory: Path,
     symbol_directories: dict[str, Path] | None,
+    publication: dict | None,
 ) -> tuple[bool, str]:
     # Cargo may rewrite its outputs on the next build. Freeze only changed binary contents;
     # generations share executable objects through hard links. Declarative resource readers
@@ -153,6 +157,7 @@ def _publish_generation(
         copied_directories,
         {"ash-path": package / "ash-path"},
         directory,
+        publication,
     )
 
 
@@ -181,12 +186,25 @@ def _publish_files(
     copied_directories: dict[str, Path],
     linked_directories: dict[str, Path],
     directory: Path,
+    publication: dict | None = None,
 ) -> tuple[bool, str]:
     generation = hashlib.sha256(identity.encode()).hexdigest()
     contents = json.dumps({"version": 3, "runtime": f"generations/{generation}"}) + "\n"
     pointer = directory / "current.json"
     if pointer.is_file() and pointer.read_text(encoding="utf-8") == contents:
         return False, generation
+    previous_runtime = None
+    if pointer.is_file():
+        try:
+            previous = json.loads(pointer.read_text(encoding="utf-8"))
+            candidate = previous.get("runtime") if isinstance(previous, dict) else None
+            if isinstance(candidate, str) and re.fullmatch(
+                r"generations/[a-f0-9]{64}", candidate
+            ):
+                previous_runtime = candidate
+        except (ValueError, TypeError):
+            # Diagnostic enrichment must not prevent repairing a stale/corrupt pointer.
+            pass
     runtime = directory / "generations" / generation
     if not runtime.exists():
         staging = directory / f".staging-{uuid.uuid4()}"
@@ -221,6 +239,31 @@ def _publish_files(
                 shutil.rmtree(staging)
     next_pointer = directory / f".current.{uuid.uuid4()}.tmp"
     try:
+        if publication is not None:
+            # Diagnostics are outside the runtime identity and published under the
+            # same lock, before readers can lease the new authoritative pointer.
+            diagnostic = directory / f".publication.{uuid.uuid4()}.tmp"
+            try:
+                diagnostic.write_text(
+                    json.dumps(
+                        {
+                            **publication,
+                            "version": 1,
+                            "timestampMillis": int(time.time() * 1000),
+                            "previousRuntime": previous_runtime,
+                            "runtime": f"generations/{generation}",
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                diagnostic.replace(directory / "publication.json")
+            finally:
+                diagnostic.unlink(missing_ok=True)
+        else:
+            # Other publishers (for example the debug launcher) may select an
+            # older generation. Its earlier trigger must not become this cause.
+            (directory / "publication.json").unlink(missing_ok=True)
         next_pointer.write_text(contents, encoding="utf-8")
         next_pointer.replace(pointer)
     finally:

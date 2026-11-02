@@ -1141,6 +1141,7 @@ export class DebugService extends Disposable implements IDebugService {
 
 
 	private reportError(error: unknown): void {
+		if (isCancellationError(error)) { return; }
 		this.logService.error('debug.service', 'Debug service operation failed', error);
 	}
 }

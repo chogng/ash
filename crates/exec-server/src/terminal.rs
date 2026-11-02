@@ -128,8 +128,9 @@ impl TerminalService {
         })
     }
 
-    /// Connects to the profile's independent PTY owner. The local fields only retain
-    /// authorization and shell configuration; no PTY is allocated in this process.
+    /// Creates a facade for the profile's independent PTY owner. The local fields retain
+    /// authorization and shell configuration; the host is contacted only when
+    /// an operation needs it, so unused facades cannot pin an old runtime image.
     pub fn hosted(
         authorization: Authorization,
         profile: &std::path::Path,
@@ -137,7 +138,7 @@ impl TerminalService {
     ) -> Result<Self, TerminalError> {
         validate_authorization(&authorization)?;
         Ok(Self {
-            backend: TerminalBackend::Hosted(host::Client::connect(profile, executable)?),
+            backend: TerminalBackend::Hosted(host::Client::lazy(profile, executable)),
             authorization: RwLock::new(authorization),
             terminal_id_prefix: random_hex::<16>()?,
             next_terminal_id: AtomicU64::new(1),

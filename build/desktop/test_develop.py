@@ -87,6 +87,81 @@ def prepared_package(root: Path) -> Path:
 
 
 class DevelopTests(unittest.TestCase):
+    def test_build_trigger_survives_publication_without_changing_runtime_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = prepared_package(root)
+            binary = root / "ash-app-server"
+            binary.write_text("compiled")
+            directory = root / ".build/desktop/dev/app-server"
+            _, previous = development_store.publish_generation(package, {}, directory)
+            context = {
+                "buildId": str(uuid.uuid4()),
+                "reason": "source-change",
+                "files": ["crates/app-server/src/startup.rs"],
+                "omittedFileCount": 0,
+                "buildLog": str(root / "build.log"),
+            }
+            source = root / "context.json"
+            source.write_text(json.dumps(context))
+            with (
+                patch.dict(os.environ, {"ASH_DEV_BUILD_CONTEXT_FILE": str(source)}),
+                patch.object(develop, "current_package", return_value=package),
+                patch.object(
+                    develop, "build_binaries", return_value={"ash-app-server": binary}
+                ),
+            ):
+                changed, current = develop.build_development_server(root=root)
+                self.assertTrue(changed)
+                record = json.loads((directory / "publication.json").read_text())
+                self.assertEqual(
+                    {
+                        **context,
+                        "version": 1,
+                        "timestampMillis": record["timestampMillis"],
+                        "previousRuntime": f"generations/{previous}",
+                        "runtime": f"generations/{current}",
+                    },
+                    record,
+                )
+                context["buildId"] = str(uuid.uuid4())
+                source.write_text(json.dumps(context))
+                self.assertEqual(
+                    (False, current), develop.build_development_server(root=root)
+                )
+                self.assertEqual(
+                    record, json.loads((directory / "publication.json").read_text())
+                )
+            development_store.publish_generation(package, {}, directory)
+            self.assertFalse((directory / "publication.json").exists())
+
+    def test_invalid_build_context_is_rejected_before_building(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "context.json"
+            for files in [
+                ["../outside.rs"],
+                ["/absolute.rs"],
+                ["C:/outside.rs"],
+                ["file\0.rs"],
+            ]:
+                source.write_text(
+                    json.dumps(
+                        {
+                            "buildId": str(uuid.uuid4()),
+                            "reason": "source-change",
+                            "files": files,
+                            "omittedFileCount": 0,
+                        }
+                    )
+                )
+                with (
+                    patch.dict(os.environ, {"ASH_DEV_BUILD_CONTEXT_FILE": str(source)}),
+                    patch.object(develop, "build_binaries") as build,
+                ):
+                    with self.assertRaisesRegex(ValueError, "source paths"):
+                        develop.build_development_server()
+                    build.assert_not_called()
+
     def test_publication_collects_an_abandoned_image_pin_and_its_unreferenced_object(
         self,
     ):
@@ -133,7 +208,7 @@ class DevelopTests(unittest.TestCase):
                 )
                 return {"ash-app-server": binary}
 
-            def publish(*args):
+            def publish(*args, **kwargs):
                 self.assertTrue(entered.is_set())
                 self.assertEqual(
                     "compiled image", args[1]["ash-app-server"].read_text()

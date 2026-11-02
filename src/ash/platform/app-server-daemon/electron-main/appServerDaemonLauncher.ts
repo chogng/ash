@@ -8,7 +8,7 @@ import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppSe
 import type { IAppServerProcessLauncher } from '../../agentHost/electron-main/appServerProcessLauncher.js';
 import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../agentHost/common/appServerTransport.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
-import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
+import { readDevelopmentAppServerGenerationSync } from '../node/developmentAppServerGeneration.js';
 import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
 
 interface AppServerDaemonConnectionOptions {

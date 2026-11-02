@@ -53,7 +53,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProcessReadResult, type TerminalProcessExecution } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalService } from '../../../terminal/browser/terminalService.js';
@@ -343,6 +343,34 @@ test('a failed current refresh rejects a superseded dispatch instead of using th
 	void release.complete(undefined);
 	await dispatch;
 	assert.equal(terminals.instances.length, 0);
+});
+
+test('TaskService background discovery ignores cancellation and reports real failures', async () => {
+	using resources = new DisposableStore();
+	using terminals = new FakeTerminalService();
+	const root = URI.file('/workspace');
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
+	using changes = new Emitter<IFileChangeEvent>();
+	const files = new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Build","command":"build"}]}' }, changes.event);
+	const services = taskServices(resources, files, workspace, terminals);
+	const errors: unknown[][] = [];
+	const log = services.get(ILogService);
+	log.error = (...args: unknown[]) => errors.push(args);
+	using service = services.createInstance(TaskService);
+	await service.refresh();
+	const saved = service.tasks;
+	for (const failure of [new CancellationError(), new Error('Task configuration read failed')]) {
+		files.stat = async () => { throw failure; };
+		changes.fire({ resources: [URI.joinPath(root, '.vscode/tasks.json')] });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(service.tasks, saved);
+	}
+	assert.equal(errors.length, 2);
+	assert.match(String(errors[0]?.[1]), /Task discovery failed: Task configuration read failed/);
+	assert.equal((errors[1]?.[2] as Error).message, 'Task configuration read failed');
+	const output = services.get(IOutputService).getChannel('tasks')?.getText() ?? '';
+	assert.doesNotMatch(output, /Operation cancelled/);
+	assert.match(output, /Task configuration read failed/);
 });
 
 class FakeFileService implements IFileSystemProvider {
