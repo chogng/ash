@@ -8,6 +8,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { ActionListItemKind, type IActionListOptions } from './actionList.js';
 import { IActionWidgetService } from './actionWidget.js';
+import { ACTION_WIDGET_DROPDOWN_MOTION_CLASS } from './actionWidgetMotion.js';
 
 export interface IActionWidgetDropdownAction extends IAction { }
 
@@ -133,7 +134,10 @@ export class ActionWidgetDropdown extends Disposable {
 				this.element.setAttribute('aria-expanded', 'false');
 				this.visibilityChanged.fire(false);
 			},
-		}, this.options.getAnchor?.() ?? this.element, this.options.listOptions);
+		}, this.options.getAnchor?.() ?? this.element, {
+			...this.options.listOptions,
+			className: [this.options.listOptions?.className, ACTION_WIDGET_DROPDOWN_MOTION_CLASS].filter(Boolean).join(' '),
+		});
 	}
 
 	public hide(): void {

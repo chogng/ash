@@ -5,6 +5,8 @@ import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js
 import { ActionListItemKind, type IActionListItem, type IActionListOptions } from '../../../browser/actionList.js';
 import { TabbedActionListWidget } from '../../../browser/tabbedActionListWidget.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../browser/actionWidget.js';
+import { ActionWidgetDropdown } from '../../../browser/actionWidgetDropdown.js';
+import { MultiSelectDropdown, type IMultiSelectDropdownSection } from '../../../browser/multiSelectDropdown.js';
 import { IConfigurationService } from '../../../../configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../configuration/common/inMemoryConfigurationService.js';
 import { IContextViewService } from '../../../../contextview/browser/contextView.js';
@@ -28,6 +30,10 @@ declare global {
 			show(labels: string[], options?: IActionListOptions): void;
 			showTabs(): void;
 			mountSelect(): void;
+			mountDropdown(): void;
+			update(labels: string[]): void;
+			showMulti(options?: { searchable?: boolean; sections?: readonly IMultiSelectDropdownSection[]; selectedIds?: readonly string[]; width?: number; contextViewLayer?: number; }): void;
+			hideMulti(): void;
 			theme(scheme: `${ColorScheme}`): void;
 		};
 	}
@@ -43,6 +49,8 @@ resources.add(bindTestColorTheme(theme, document.body));
 setIconResolver(document, getIconDefinition);
 const widget = services.get(IActionWidgetService);
 const source = document.querySelector<HTMLButtonElement>('#source')!;
+const multi = resources.add(services.createInstance(MultiSelectDropdown));
+resources.add(multi.onDidChangeSelection(ids => { document.querySelector('output')!.textContent = JSON.stringify(ids); }));
 const delegate = {
 	onSelect(label: string): void {
 		document.querySelector('output')!.textContent = label;
@@ -60,6 +68,27 @@ function createItems(labels: readonly string[]): IActionListItem<string>[] {
 	}));
 }
 window.ashActionWidgetIntegration = {
+	showMulti(options = {}): void {
+		multi.show({
+			anchor: source, ariaLabel: 'Days',
+			sections: [{ label: 'Weekdays', items: [
+				{ id: 'mon', label: 'Monday', description: 'First weekday' },
+				{ id: 'tue', label: 'Tuesday', disabled: true },
+				{ id: 'wed', label: 'Wednesday' },
+			] }, { label: 'Weekend', items: [{ id: 'sun', label: 'Sunday' }] }],
+			selectedIds: ['mon'], ...options,
+		});
+	},
+	hideMulti(): void { multi.hide(); },
+	update(labels): void {
+		widget.updateItems(createItems(labels));
+	},
+	mountDropdown(): void {
+		resources.add(services.createInstance(ActionWidgetDropdown, document.body, {
+			label: 'Choose action', ariaLabel: 'Choose action',
+			actions: [{ id: 'run', label: 'Run', enabled: true, run: () => { document.querySelector('output')!.textContent = 'Run'; } }],
+		}));
+	},
 	show(labels, options): void {
 		source.focus();
 		widget.show('integration', false, createItems(labels), delegate, source, options);

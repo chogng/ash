@@ -487,6 +487,86 @@ test('filtered action updates retain model identity and expose metadata without 
 
 suite('actionWidget browser component', () => {
 	const browserTests = useBrowserTests();
+	test('opening motion finishes before measuring refreshed content and retains keyboard focus', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		await page.locator('body').evaluate(element => element.classList.add('ash-enable-motion'));
+		const result = await page.evaluate(() => {
+			window.ashActionWidgetIntegration.show(['Run']);
+			const root = document.querySelector<HTMLElement>('.ash-action-widget')!;
+			const animation = root.getAnimations().find(animation => animation instanceof CSSAnimation && animation.animationName === 'ash-action-widget-scale-open')!;
+			animation.pause();
+			animation.currentTime = 30;
+			const unrelated = root.animate({ opacity: [0.8, 1] }, { duration: 1000 });
+			unrelated.pause();
+			const scaledWidth = root.getBoundingClientRect().width;
+			const layoutWidth = root.offsetWidth;
+			window.ashActionWidgetIntegration.update(['Run']);
+			return {
+				startedScaled: scaledWidth < layoutWidth,
+				state: animation.playState,
+				unrelatedState: unrelated.playState,
+				width: root.getBoundingClientRect().width,
+				layoutWidth,
+			};
+		});
+		expect(result).toEqual({ startedScaled: true, state: 'finished', unrelatedState: 'paused', width: result.layoutWidth, layoutWidth: result.layoutWidth });
+		await expect(page.getByRole('menuitemradio', { name: 'Run' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('button', { name: 'Open actions', exact: true })).toBeFocused();
+	});
+
+	test('dropdown closing blocks input and cannot dismiss a replacement popup', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		await page.locator('body').evaluate(element => element.classList.add('ash-enable-motion'));
+		await page.evaluate(() => window.ashActionWidgetIntegration.mountDropdown());
+		const trigger = page.getByRole('button', { name: 'Choose action', exact: true });
+		await trigger.press('Enter');
+		const closing = await page.evaluate(() => {
+			const root = document.querySelector<HTMLElement>('.ash-action-widget')!;
+			root.querySelector<HTMLButtonElement>('[role=menuitem]')!.click();
+			const animation = root.getAnimations().find(animation => animation instanceof CSSAnimation && animation.animationName === 'ash-action-widget-dropdown-close')!;
+			animation.pause();
+			const state = {
+				inert: root.inert, attached: root.isConnected, pointerEvents: getComputedStyle(root).pointerEvents,
+				expanded: document.querySelector('[aria-label="Choose action"]')!.getAttribute('aria-expanded'),
+			};
+			window.ashActionWidgetIntegration.show(['Replacement']);
+			return state;
+		});
+		expect(closing).toEqual({ inert: true, attached: true, pointerEvents: 'none', expanded: 'false' });
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(page.getByRole('menuitemradio', { name: 'Replacement' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await trigger.press('Enter');
+		await page.getByRole('menuitem', { name: 'Run', exact: true }).click();
+		await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	});
+
+	test('motion policy disables popup animation in every theme', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(scheme => {
+				window.ashActionWidgetIntegration.theme(scheme);
+				document.body.classList.add('ash-enable-motion');
+				window.ashActionWidgetIntegration.show(['Run']);
+			}, scheme);
+			await expect(page.locator('.ash-action-widget')).toHaveCSS('animation-name', 'ash-action-widget-scale-open');
+			await page.locator('body').evaluate(element => {
+				element.classList.remove('ash-enable-motion');
+				element.classList.add('ash-reduce-motion');
+			});
+			await expect(page.locator('.ash-action-widget')).toHaveCSS('animation-name', 'none');
+			await expect(page.getByRole('menuitemradio', { name: 'Run' })).toBeFocused();
+			await page.keyboard.press('Escape');
+			await page.locator('body').evaluate(element => element.classList.remove('ash-reduce-motion'));
+		}
+	});
+
 	test('single-line action menu rows use the standard 22px height and pitch', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;

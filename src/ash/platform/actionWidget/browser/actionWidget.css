@@ -12,6 +12,51 @@
 	font-weight: var(--ash-fontWeight-regular);
 }
 
+/* Placement belongs to ContextView; only the popup surface scales. */
+.ash-enable-motion .ash-action-widget.ash-action-widget-animated {
+	animation: ash-action-widget-scale-open 120ms ease-out both;
+	transform-origin: top left;
+}
+
+.ash-enable-motion
+	.ash-context-view-above
+	> .ash-action-widget.ash-action-widget-animated {
+	transform-origin: bottom left;
+}
+
+.ash-enable-motion
+	.ash-action-widget.ash-action-widget-dropdown-motion.ash-action-widget-animated {
+	animation-duration: 160ms;
+}
+
+.ash-enable-motion .ash-action-widget.ash-action-widget-dropdown-closing {
+	animation: ash-action-widget-dropdown-close 100ms ease-in both;
+	transform-origin: top left;
+	pointer-events: none;
+}
+
+.ash-enable-motion
+	.ash-context-view-above
+	> .ash-action-widget.ash-action-widget-dropdown-closing {
+	transform-origin: bottom left;
+}
+
+@keyframes ash-action-widget-scale-open {
+	from {
+		transform: scale(0.97);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+
+@keyframes ash-action-widget-dropdown-close {
+	to {
+		opacity: 0;
+		transform: scale(0.97);
+	}
+}
+
 [data-color-scheme="hcDark"] .ash-action-widget,
 [data-color-scheme="hcLight"] .ash-action-widget {
 	border-color: var(--ash-contrastBorder);

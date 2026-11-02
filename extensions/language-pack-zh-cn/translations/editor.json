@@ -134,6 +134,7 @@
     "actionWidget.label": "操作",
     "actionWidget.helpHint": "按 Alt+F1 打开操作菜单的无障碍帮助。",
     "actionWidget.helpTitle": "操作菜单无障碍帮助",
+    "actionWidget.multiSelectHelp": "用上下方向键在选项间移动。回车或空格键立即切换当前选项，菜单保持打开。在搜索框中，空格键输入文字，回车键切换当前结果。Tab 和 Shift+Tab 在搜索框与选项之间移动。Escape 关闭菜单并将焦点返回触发按钮，已选内容不会撤销。禁用选项和组标题会被跳过。",
     "actionWidget.help": "用上下方向键切换可用操作。Tab 和 Shift+Tab 在筛选框、操作列表及页脚控件之间移动。Home 和 End 跳到第一个和最后一个操作。回车或空格键执行当前操作。有标签页时，用左右方向键移动，回车或空格键选择标签页，下方向键返回操作列表。有筛选框时，按 Ctrl+F 或 Command+F 聚焦筛选框，输入文字筛选，再按下方向键返回操作列表。有预览时，按 Ctrl+Enter 或 Command+Enter 预览当前操作。Escape 关闭菜单并返回原来的位置。不可用操作和组标题会被跳过。",
     "actionWidget.verbosityTitle": "操作菜单无障碍帮助",
     "actionWidget.verbosityDescription": "打开操作菜单时提示如何查看无障碍帮助。",

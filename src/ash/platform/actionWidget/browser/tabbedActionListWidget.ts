@@ -9,6 +9,7 @@ import { IContextViewService } from '../../contextview/browser/contextView.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions } from './actionList.js';
+import { ACTION_WIDGET_ANIMATED_CLASS, finishActionWidgetOpeningAnimation } from './actionWidgetMotion.js';
 import './tabbedActionListWidget.css';
 
 export interface ITabDescriptor {
@@ -99,6 +100,7 @@ export class TabbedActionListWidget extends Disposable {
 		}));
 		let descriptors = describeTabs();
 		const layout = (): void => {
+			finishActionWidgetOpeningAnimation(root);
 			const maximum = Math.max(100, document.defaultView!.innerWidth - 16);
 			root.style.width = `${Math.min(maximum, options.width ?? list.layout(0))}px`;
 			this.contextViewService.layout();
@@ -211,6 +213,7 @@ export class TabbedActionListWidget extends Disposable {
 			},
 		});
 		if (shown) {
+			root.classList.add(ACTION_WIDGET_ANIMATED_CLASS);
 			if (options.isBodyCollapsed?.()) { options.focusFooter?.(); }
 			else if (initial.listOptions?.focusFilterOnOpen && initial.listOptions.filterVisible !== false) { list.focusFilter(); }
 			else { list.focus(); }

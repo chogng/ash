@@ -20,6 +20,7 @@ import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../contextview/browser/contextView.js';
+import { finishActionWidgetOpeningAnimation } from './actionWidgetMotion.js';
 import './actionWidget.css';
 
 export const enum ActionListItemKind {
@@ -53,6 +54,7 @@ export interface IActionListOptions {
 	readonly filterPlaceholder?: string;
 	readonly focusFilterOnOpen?: boolean;
 	readonly filterAsCombobox?: boolean;
+	readonly ariaMultiselectable?: boolean;
 	readonly ariaLabel?: string;
 	readonly header?: HTMLElement;
 	readonly footer?: HTMLElement;
@@ -66,6 +68,7 @@ export interface IActionListOptions {
 }
 
 export interface IActionListUpdateOptions {
+	readonly preserveScrollPosition?: boolean;
 	readonly filterVisible?: boolean;
 	readonly itemsVisible?: boolean;
 }
@@ -96,7 +99,7 @@ class ActionListHeader extends ActionViewItem {
 
 /** A selectable row keeps its checked state, summary and badge within one navigation stop. */
 class ActionListAction extends ButtonActionViewItem {
-	constructor(action: IAction, private readonly entry: IActionListItem<unknown>) {
+	constructor(action: IAction, private readonly entry: IActionListItem<unknown>, private readonly options: IActionListOptions) {
 		super(action, { buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' });
 	}
 
@@ -105,10 +108,17 @@ class ActionListAction extends ButtonActionViewItem {
 		super.render(container);
 		const button = this.button.domNode;
 		button.classList.add('ash-action-widget-primary');
-		button.setAttribute('role', this.entry.checked === undefined ? 'menuitem' : 'menuitemradio');
+		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
+		let role = this.entry.checked === undefined ? 'menuitem' : 'menuitemradio';
+		if (this.options.ariaMultiselectable) {
+			button.id = `${this.action.id}.option`;
+			role = listbox ? 'option' : 'menuitemcheckbox';
+		}
+		button.setAttribute('role', role);
 		button.removeAttribute('aria-pressed');
 		if (this.entry.checked !== undefined) {
 			button.setAttribute('aria-checked', String(this.entry.checked));
+			if (listbox) { button.setAttribute('aria-selected', String(this.entry.checked)); }
 			const check = h(container.ownerDocument, 'span');
 			check.className = 'ash-action-widget-check';
 			check.hidden = !this.entry.checked;
@@ -204,6 +214,17 @@ export class ActionList<T> extends Disposable {
 					void this.select(this.focusedEntry);
 				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 					stopEvent(event);
+					if (this.options.ariaMultiselectable) {
+						const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !item.disabled);
+						if (candidates.length) {
+							const index = candidates.indexOf(this.focusedEntry!);
+							this.focusedEntry = candidates[(index + (event.key === 'ArrowDown' ? 1 : -1) + candidates.length) % candidates.length];
+						}
+						this.focus();
+						this.filter!.focus();
+						this.updatePreview();
+						return;
+					}
 					this.focus();
 				}
 			}));
@@ -306,7 +327,7 @@ export class ActionList<T> extends Disposable {
 				header = entry;
 				continue;
 			}
-			const text = `${entry.label} ${entry.detail ?? ''} ${entry.badge ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
+			const text = `${entry.label} ${entry.description ?? ''} ${entry.detail ?? ''} ${entry.badge ?? ''} ${entry.group?.title ?? ''}`.toLocaleLowerCase();
 			if (!terms.every(term => text.includes(term))) {
 				continue;
 			}
@@ -345,10 +366,18 @@ export class ActionList<T> extends Disposable {
 				const entry = entries.get(action.id);
 				if (!entry) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
-				return this.options.presentation === 'details' ? new ActionListAction(action, entry) : undefined;
+				return this.options.presentation === 'details' || this.options.ariaMultiselectable ? new ActionListAction(action, entry, this.options) : undefined;
 			}
 		}, defaultMenuStyles));
-		menu.getContainer().setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
+		menu.getContainer().setAttribute('aria-label', this.options.ariaLabel ?? localize('actionWidget.label', 'Actions'));
+		if (this.options.ariaMultiselectable && this.options.filterAsCombobox) {
+			menu.getContainer().id = `${this.user}.items`;
+			menu.getContainer().setAttribute('role', 'listbox');
+			menu.getContainer().setAttribute('aria-multiselectable', 'true');
+			menu.getContainer().setAttribute('aria-label', this.options.ariaLabel ?? localize('actionWidget.label', 'Actions'));
+			this.filter!.inputElement.setAttribute('aria-controls', menu.getContainer().id);
+			this.filter!.inputElement.setAttribute('aria-haspopup', 'listbox');
+		}
 		const hint = this.domNode.getAttribute('aria-description');
 		if (hint) {
 			menu.getContainer().setAttribute('aria-description', hint);
@@ -392,12 +421,21 @@ export class ActionList<T> extends Disposable {
 	}
 
 	private updatePreview(): void {
+		if (this.options.ariaMultiselectable && this.filter) {
+			if (this.focusedEntry) {
+				this.filter.inputElement.setAttribute('aria-activedescendant', `${this.user}.${this.visibleItems.indexOf(this.focusedEntry)}.option`);
+			} else {
+				this.filter.inputElement.removeAttribute('aria-activedescendant');
+			}
+		}
 		if (this.preview) {
 			this.preview.enabled = !this.busy && this.focusedEntry?.canPreview === true && !this.focusedEntry.disabled;
 		}
 	}
 
 	public updateItems(items: readonly IActionListItem<T>[], options: IActionListUpdateOptions = {}): void {
+		const scrollTop = this.domNode.scrollTop;
+		const menuScrollTop = this.menu?.scrollOffset ?? 0;
 		this.items = items;
 		if (this.filterHost && options.filterVisible !== undefined) {
 			this.filterHost.hidden = !options.filterVisible;
@@ -407,6 +445,10 @@ export class ActionList<T> extends Disposable {
 			this.statusDomNode.hidden = !options.itemsVisible;
 		}
 		this.renderItems();
+		if (options.preserveScrollPosition) {
+			this.domNode.scrollTop = scrollTop;
+			if (this.menu) { this.menu.getContainer().scrollTop = menuScrollTop; }
+		}
 	}
 
 	public focusFilter(): void {
@@ -418,6 +460,7 @@ export class ActionList<T> extends Disposable {
 	public getFocusedElement(): IActionListItem<T> | undefined { return this.focusedEntry; }
 
 	public layout(minWidth: number): number {
+		finishActionWidgetOpeningAnimation(this.domNode);
 		// Measure the existing menu at its intrinsic width, including icons, shortcuts and chrome.
 		// Filtering retains the full menu width so typing does not move the popup's edge.
 		if (this.filterHost?.hidden || !this.filter?.value.trim() || this.contentWidth === undefined) {
@@ -463,7 +506,12 @@ function createHelpProvider(source: Element | null): AccessibleContentProvider {
 	return new AccessibleContentProvider(
 		AccessibleViewProviderId.ActionWidget,
 		{ type: AccessibleViewType.Help },
-		() => localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Tab and Shift+Tab move between the filter, actions and footer controls. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.'),
+		() => {
+			if (source?.closest('.ash-multi-select-dropdown')) {
+				return localize('actionWidget.multiSelectHelp', 'Use Up and Down Arrow to move between choices. Enter or Space toggles the focused choice immediately and keeps the menu open. In the search box, Space inserts text and Enter toggles the active result. Tab and Shift+Tab move between search and choices. Escape closes the menu and returns focus to its trigger without undoing selections. Disabled choices and group headings are skipped.');
+			}
+			return localize('actionWidget.help', 'Use Up and Down Arrow to move between available actions. Tab and Shift+Tab move between the filter, actions and footer controls. Home and End move to the first and last action. Enter or Space runs the focused action. When tabs are available, Left and Right Arrow move between them, Enter or Space selects a tab, and Down Arrow returns to the actions. When a filter is available, Ctrl+F or Command+F focuses it; type to filter, then Down Arrow returns to the actions. When Preview is available, Ctrl+Enter or Command+Enter previews the focused action. Escape closes the menu and returns focus to its source. Unavailable actions and group labels are skipped.');
+		},
 		() => {
 			if (isHTMLElement(source) && source.isConnected) {
 				source.focus({ preventScroll: true });
