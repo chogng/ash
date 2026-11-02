@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { escapeMarkdownSyntaxTokens, isMarkdownString, MarkdownString, parseHrefAndDimensions } from '../../common/htmlContent.js';
+import { appendEscapedMarkdownInlineCode, escapeMarkdownSyntaxTokens, isMarkdownString, isPortableLinkTarget, isPortableMarkdownTarget, MarkdownString, parseHrefAndDimensions } from '../../common/htmlContent.js';
 import { URI } from '../../common/uri.js';
+
+test('portable destinations distinguish public links, document references and machine paths', () => {
+	assert.deepEqual(['https://example.com', 'mailto:team@example.com', '#section', '../guide.md', '/private/a', 'C:/code/a', 'file:///a', 'ash-remote://host/a', 'http://_ashcontentref_/1', ''].map(target => [isPortableLinkTarget(target), isPortableMarkdownTarget(target)]),
+		[[true, true], [true, true], [false, true], [false, true], [false, false], [false, false], [false, false], [false, false], [false, false], [false, false]]);
+	assert.equal(appendEscapedMarkdownInlineCode('`value``'), '``` `value`` ```');
+});
 
 test('MarkdownString distinguishes escaped text from trusted markdown fragments', () => {
 	const markdown = new MarkdownString('', { supportThemeIcons: true });

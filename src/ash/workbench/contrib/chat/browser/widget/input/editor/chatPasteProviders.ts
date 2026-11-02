@@ -1,5 +1,6 @@
 import { CancellationError } from '../../../../../../../base/common/errors.js';
 import { addDisposableListener } from '../../../../../../../base/browser/dom.js';
+import { convertHtmlToMarkdown } from '../../../../../../../base/browser/htmlToMarkdown.js';
 import { Disposable, DisposableStore } from '../../../../../../../base/common/lifecycle.js';
 import { createStringDataTransferItem, VSDataTransfer, type IReadonlyVSDataTransfer } from '../../../../../../../base/common/dataTransfer.js';
 import { HierarchicalKind } from '../../../../../../../base/common/hierarchicalKind.js';
@@ -27,6 +28,7 @@ import type {
 	DocumentPasteEditProvider,
 	DocumentPasteEditsSession,
 } from '../../../../../../../editor/common/languages.js';
+import { DocumentPasteTriggerKind } from '../../../../../../../editor/common/languages.js';
 import { CopyPasteController } from '../../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { getPathForFile } from '../../../../../../../platform/dnd/browser/dnd.js';
 
@@ -74,6 +76,40 @@ export class ChatPasteProvidersFeature extends Disposable {
 			scheme: model.uri.scheme,
 			hasAccessToAllModels: true,
 		}, instantiation.createInstance(PasteTextProvider, input, currentLifecycle)));
+		this._register(features.documentPasteEditProvider.register({
+			scheme: model.uri.scheme,
+			hasAccessToAllModels: true,
+		}, new PasteHtmlProvider(input, currentLifecycle)));
+	}
+}
+
+/** Automatic rich paste is scoped to its owning draft; explicit paste choices keep precedence. */
+class PasteHtmlProvider implements DocumentPasteEditProvider {
+	readonly kind = new HierarchicalKind('chat.paste.html');
+	readonly providedPasteEditKinds = [this.kind];
+	readonly copyMimeTypes = [];
+	readonly pasteMimeTypes = [Mimes.html];
+
+	constructor(private readonly input: IChatInputEditor, private readonly currentLifecycle: () => AbortSignal) { }
+
+	async provideDocumentPasteEdits(model: ITextModel, _ranges: readonly IRange[], transfer: IReadonlyVSDataTransfer,
+		context: DocumentPasteContext, token: CancellationToken): Promise<DocumentPasteEditsSession | undefined> {
+		const lifecycle = this.currentLifecycle();
+		if (model !== this.input.getModel?.() || lifecycle.aborted || token.isCancellationRequested || context.triggerKind !== DocumentPasteTriggerKind.Automatic
+			|| transfer.has(CHAT_ATTACHMENT_MIME_TYPE) || transfer.has(copiedEditorMime) || transfer.has('vscode-editor-data')
+			|| [...transfer].some(([, item]) => !!item.asFile())) { return undefined; }
+		// Editors already supply literal source text; their HTML only adds syntax highlighting.
+		const html = await transfer.get(Mimes.html)?.asString();
+		if (!html || token.isCancellationRequested || lifecycle.aborted || this.currentLifecycle() !== lifecycle || model !== this.input.getModel?.()
+			|| !/<(?:a|strong|b|em|i|h[1-6]|code|pre|ul|ol|li|blockquote|del|s|strike|img|hr|table)\b/i.test(html)) { return undefined; }
+		const markdown = convertHtmlToMarkdown(html);
+		if (!markdown) { return undefined; }
+		return {
+			edits: [{
+				title: localize('pasteHtmlAsMarkdown', 'Paste as Markdown'), kind: this.kind, handledMimeType: Mimes.html,
+				insertText: markdown, yieldTo: [{ kind: new HierarchicalKind('chat.attach') }]
+			}], dispose() { }
+		};
 	}
 }
 

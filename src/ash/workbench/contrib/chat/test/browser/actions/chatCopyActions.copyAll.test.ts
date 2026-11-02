@@ -23,6 +23,24 @@ registerChatCopyActions();
 suite('Copy conversation', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('message, final response and conversation commands share portable Markdown without changing transcript state', async () => {
+		using resources = new DisposableStore();
+		const f = fixture(resources);
+		const text = 'See [source.ts](/workspace/source.ts) and [Docs](https://example.com).';
+		const item = { type: 'agentMessage' as const, itemId: 'reply', turnId: 'turn', text };
+		const conversation = snapshot('session', 'root', [{ type: 'item', entryId: 'reply', turnId: 'turn', transient: false, item }]);
+		f.readWith(async () => conversation);
+		await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.copyItem')!, item);
+		await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.copyFinalResponse')!);
+		await f.copy();
+		assert.deepEqual(f.copied, [
+			'See `source.ts` and [Docs](https://example.com).',
+			'See `source.ts` and [Docs](https://example.com).',
+			'Assistant: See `source.ts` and [Docs](https://example.com).',
+		]);
+		assert.equal(item.text, text);
+	});
+
 	function fixture(lifetime: DisposableStore, options: { readonly registerAmbientConnection?: boolean; } = {}) {
 		const services = lifetime.add(new InstantiationService());
 		let active: { sessionId: string; threadId: string; } | undefined = { sessionId: 'session', threadId: 'root' };

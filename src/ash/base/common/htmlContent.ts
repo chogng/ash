@@ -78,6 +78,27 @@ export function escapeMarkdownSyntaxTokens(value: string): string {
 	return value.replace(/[\\`*_{}[\]()#+!~]/g, '\\$&').replace(/^([ \t]*)-/gm, '$1\\-');
 }
 
+/** Encodes literal text as one code span, including embedded backtick runs. */
+export function appendEscapedMarkdownInlineCode(text: string): string {
+	let delimiterLength = 1;
+	for (const run of text.matchAll(/`+/g)) { delimiterLength = Math.max(delimiterLength, run[0].length + 1); }
+	const delimiter = '`'.repeat(delimiterLength);
+	const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+	return `${delimiter}${pad}${text}${pad}${delimiter}`;
+}
+
+/** Rendered links can travel to another application only with a public destination. */
+export function isPortableLinkTarget(target: string): boolean {
+	const value = target.trim();
+	return /^(?:https?:|mailto:)/i.test(value) && !/^https?:\/\/_[^/?#]*_(?:[/?#]|$)/i.test(value);
+}
+
+/** Markdown may also retain document-relative destinations, but never machine-local paths. */
+export function isPortableMarkdownTarget(target: string): boolean {
+	const value = target.trim();
+	return isPortableLinkTarget(value) || !!value && !/^(?:[a-z][a-z\d+.-]*:|[/\\])/i.test(value);
+}
+
 export function parseHrefAndDimensions(href: string): { href: string; dimensions: string[]; } {
 	const [source, parameters = ''] = href.split('|', 2);
 	const dimensions: string[] = [];

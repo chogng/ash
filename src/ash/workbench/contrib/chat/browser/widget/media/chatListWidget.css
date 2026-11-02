@@ -1,3 +1,8 @@
+.ash-chat-transcript-content {
+	user-select: text;
+	-webkit-user-select: text;
+}
+
 .ash-chat-transcript-scrollable {
 	min-height: 0;
 	flex: 1 1 auto;

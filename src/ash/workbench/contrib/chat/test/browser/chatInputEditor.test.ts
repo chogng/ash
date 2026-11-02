@@ -67,8 +67,68 @@ const { InstantiationService } = await import('../../../../../platform/instantia
 const { MenuId, MenusRegistry } = await import('../../../../../platform/actions/common/actions.js');
 const { ChatContextKeys } = await import('../../common/actions/chatContextKeys.js');
 const { IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+const { DocumentPasteTriggerKind } = await import('../../../../../editor/common/languages.js');
+const { VSDataTransfer, createStringDataTransferItem } = await import('../../../../../base/common/dataTransfer.js');
+const { CancellationToken } = await import('../../../../../base/common/cancellation.js');
+const { DeferredPromise } = await import('../../../../../base/common/async.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('automatic HTML paste retains Markdown through undo, redo and switching to plain text', async () => {
+	using resources = new DisposableStore();
+	const target = createSnapshotComposer(resources);
+	const clipboard = new SnapshotClipboard();
+	clipboard.setData('text/plain', 'Title\nsource.ts');
+	clipboard.setData('text/html', '<h2>Title</h2><p><code>source.ts</code></p>');
+	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
+	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
+	assert.equal(target.editor.value, '## Title\n\n`source.ts`');
+	assert.equal(target.references.variables.length, 0);
+	target.editor.getModel().undo();
+	assert.equal(target.editor.value, '');
+	target.editor.getModel().redo();
+	assert.equal(target.editor.value, '## Title\n\n`source.ts`');
+	// Re-paste after undo so the selector owns the transaction it replaces.
+	target.editor.getModel().undo();
+	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
+	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
+	const document = target.editor.element.ownerDocument;
+	document.querySelector<HTMLButtonElement>('.stanza-editor-post-edit-selector button')!.click();
+	const plain = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text')!;
+	assert.ok(plain);
+	plain.click();
+	await waitFor(() => target.editor.value === 'Title\nsource.ts');
+	assert.equal(target.references.variables.length, 0);
+});
+
+test('HTML paste only runs automatically for its owning live draft and defers to captured references', async () => {
+	using resources = new DisposableStore();
+	const target = createSnapshotComposer(resources);
+	const model = target.editor.getModel();
+	const provider = target.services.get(ILanguageFeaturesService).documentPasteEditProvider.ordered(model)
+		.find(candidate => candidate.providedPasteEditKinds?.some(kind => kind.value === 'chat.paste.html'))!;
+	assert.ok(provider);
+	const transfer = new VSDataTransfer();
+	transfer.append('text/html', createStringDataTransferItem('<strong>Rich</strong>'));
+	const provide = (triggerKind = DocumentPasteTriggerKind.Automatic) => provider.provideDocumentPasteEdits!(model, [new Range(1, 1, 1, 1)], transfer, { triggerKind }, CancellationToken.None);
+	assert.equal(await provide(DocumentPasteTriggerKind.PasteAs), undefined);
+	transfer.append(CHAT_ATTACHMENT_MIME_TYPE, createStringDataTransferItem('captured reference'));
+	assert.equal(await provide(), undefined);
+	transfer.delete(CHAT_ATTACHMENT_MIME_TYPE);
+	transfer.append('application/vnd.code.additional-editor-data', createStringDataTransferItem('copied code'));
+	assert.equal(await provide(), undefined);
+	transfer.delete('application/vnd.code.additional-editor-data');
+	transfer.append('vscode-editor-data', createStringDataTransferItem('{"version":1}'));
+	assert.equal(await provide(), undefined);
+	transfer.delete('vscode-editor-data');
+	const waiting = new DeferredPromise<string>();
+	transfer.replace('text/html', createStringDataTransferItem(waiting.p));
+	const pending = provide();
+	target.lifecycle.abort();
+	await waiting.complete('<strong>Late</strong>');
+	assert.equal(await pending, undefined);
+	assert.equal(target.editor.value, '');
+});
 
 for (const method of ['copy', 'cut'] as const) {
 	test(`Code ${method} offers a reference snapshot after the source changes, while default paste stays plain`, async () => {

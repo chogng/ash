@@ -56,8 +56,8 @@ test('IDE archives and unarchives from History with the default labels and prese
 	}
 });
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
-	test(`${surface} edits requests, starts a new chat and forks history through the owning App Server`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (const clipboardOnly of [false, true]) {
+	test(`${surface} ${clipboardOnly ? 'copies response selections through the native clipboard and restores its draft' : 'edits requests, starts a new chat and forks history through the owning App Server'}`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		test.setTimeout(180_000);
 		let modelCalls = 0;
 		const server = createServer(async (request, response) => {
@@ -68,7 +68,8 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			for await (const _chunk of request) { /* Consume the model input before completing the controlled response. */ }
 			modelCalls++;
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			response.end(`data: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Request action answer ${modelCalls}"},"finish_reason":null}]}\n\ndata: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
+			const content = `Request action answer ${modelCalls}\n\nSee **[source.ts](ash-remote://fixture/source.ts)** and [Docs](https://example.com).`;
+			response.end(`data: ${JSON.stringify({ id: 'request-actions', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\ndata: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
@@ -123,12 +124,14 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await expect(transcript).toContainText('Request action answer 1');
 			await draft.focus();
 			await page.keyboard.insertText('Unsent original draft');
-			// Both command-palette and transcript shortcuts return to this composer's draft.
-			await window.quickaccess.runCommand('workbench.action.chat.focusInput');
-			await expect(draft).toBeFocused();
-			await transcript.getByRole('button', { name: 'Copy message', exact: true }).first().focus();
-			await page.keyboard.press('ControlOrMeta+ArrowDown');
-			await expect(draft).toBeFocused();
+			if (!clipboardOnly) {
+				// Both command-palette and transcript shortcuts return to this composer's draft.
+				await window.quickaccess.runCommand('workbench.action.chat.focusInput');
+				await expect(draft).toBeFocused();
+				await transcript.getByRole('button', { name: 'Copy message', exact: true }).first().focus();
+				await page.keyboard.press('ControlOrMeta+ArrowDown');
+				await expect(draft).toBeFocused();
+			}
 			if (!('windows' in application)) await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 			const previousClipboard = 'windows' in application
 				? await application.evaluate(({ clipboard }) => clipboard.readText())
@@ -138,13 +141,37 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				const copied = 'windows' in application
 					? await application.evaluate(({ clipboard }) => clipboard.readText())
 					: await page.evaluate(() => navigator.clipboard.readText());
-				expect(copied).toBe('User: Original request\n\nAssistant: Request action answer 1');
+				expect(copied).toBe('User: Original request\n\nAssistant: Request action answer 1\n\nSee **`source.ts`** and [Docs](https://example.com).');
 				await expect(composer.locator('.view-lines')).toContainText('Unsent original draft');
+				const paragraph = transcript.locator('.ash-chat-markdown-part p').filter({ hasText: 'See source.ts and Docs.' });
+				const selected = await paragraph.evaluate(element => {
+					(element.closest<HTMLElement>('[data-item-id]'))!.focus();
+					const range = element.ownerDocument.createRange();
+					range.selectNodeContents(element);
+					const selection = element.ownerDocument.defaultView!.getSelection()!;
+					selection.removeAllRanges();
+					selection.addRange(range);
+					return { text: selection.toString(), active: element.ownerDocument.activeElement?.className, userSelect: getComputedStyle(element).userSelect, hasFocus: element.ownerDocument.hasFocus() };
+				});
+				await testInfo.attach('clipboard-selection.json', { body: JSON.stringify(selected), contentType: 'application/json' });
+				expect(selected.userSelect).toBe('text');
+				expect(selected.text).toBe('See source.ts and Docs.');
+				await page.keyboard.press('ControlOrMeta+c');
+				await expect.poll(async () => 'windows' in application
+					? application.evaluate(({ clipboard }) => clipboard.readText())
+					: page.evaluate(() => navigator.clipboard.readText())).toBe('See source.ts and Docs.');
+				await draft.focus();
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('ControlOrMeta+v');
+				await expect(composer.locator('.view-lines')).toHaveText('See **`source.ts`** and [Docs](https://example.com).');
+				await page.keyboard.press('ControlOrMeta+z');
+				await expect(composer.locator('.view-lines')).toHaveText('Unsent original draft');
 				expect(modelCalls).toBe(1);
 			} finally {
 				if ('windows' in application) await application.evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
 				else await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
 			}
+			if (clipboardOnly) { return; }
 			await chat.getByRole('button', { name: 'Edit message', exact: true }).click();
 			const edit = chat.getByRole('textbox', { name: 'Edit request', exact: true });
 			await expect(edit).toHaveValue('Original request');
