@@ -9,10 +9,12 @@ import { localize } from '../../nls.js';
 import type { IAgentSessionListItem, IAgentSessionsModel } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsModel.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
+import { ChatEditorInput } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 
 /** Exposes the Sessions catalog to the Chat view without moving session ownership into Workbench. */
 export function createAgentSessionsModel(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: (preserveFocus: boolean) => void): IAgentSessionsModel {
 	return {
+		refresh: () => sessions.refresh(),
 		onDidChange: Event.any(sessions.onDidChange, groups.onDidChange, (listener: () => void) => storage.onDidChangeValue(event => { if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) listener(); })),
 		get items() { return sessionItems(sessions, storage, groups, actions, onDidOpen); },
 		get state() { return sessions.state === 'loading' ? 'loading' : sessions.state === 'error' ? 'error' : 'ready'; },
@@ -26,6 +28,7 @@ function sessionItems(sessions: ISessionsManagementService, storage: IStorageSer
 		title: draft.title.trim() || localize('chat.sessions.new', 'New Session'),
 		description: localize('chat.sessions.draft', 'Draft'),
 		kind: 'draft',
+		getEditorInput: () => new ChatEditorInput(`untitled:${draft.untitledSessionId}`, draft.title),
 		getActions: () => actions({ kind: 'untitled', session: draft }),
 		active: sessions.activeUntitledSession?.untitledSessionId === draft.untitledSessionId,
 		open: options => {
@@ -45,6 +48,8 @@ function sessionItems(sessions: ISessionsManagementService, storage: IStorageSer
 			title: session.title.trim() || localize('chat.sessions.untitled', 'Untitled session'),
 			description: getInProgressSessionDescription(thread.management ?? session.management) ?? session.workspace?.root ?? '',
 			kind: 'session',
+			inProgress: getInProgressSessionDescription(thread.management ?? session.management) !== undefined,
+			getEditorInput: () => new ChatEditorInput(`session:${session.sessionId}`, session.title),
 			pinned: storage.getBoolean(`sessions.list.pinned.${session.sessionId}`, StorageScope.PROFILE, false),
 			group: groups.groups.find(group => group.sessionIds.includes(session.sessionId)),
 			getActions: () => actions({ kind: 'session', active: { session, threadId: thread.threadId } }),

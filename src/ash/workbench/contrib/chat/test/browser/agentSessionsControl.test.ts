@@ -41,6 +41,9 @@ interface Fixture {
 	readonly menuOpen: boolean;
 	readonly menuCount: number;
 	readonly newSessionCount: number;
+	readonly refreshCount: number;
+	readonly layoutCount: number;
+	chooseFilter(id: string): Promise<void>;
 	readonly menuAnchoredToRow: boolean;
 	dispose(): void;
 }
@@ -49,6 +52,29 @@ declare global { interface Window { agentSessionsFixture: Fixture; } }
 suite('Agent Sessions shared Tree in a browser', () => {
 	const browser = useBrowserTests();
 	teardown(async () => { await browser.page.evaluate(() => window.agentSessionsFixture?.dispose()); });
+	for (const locale of ['en', 'zh-CN']) {
+		test(`session toolbar refreshes, filters, searches and changes layout (${locale})`, async () => {
+			const { page } = browser;
+			await page.goto(`/agentSessions.html?locale=${locale}`);
+			await page.evaluate(() => window.agentSessionsFixture.ready());
+			await page.getByRole('button', { name: locale === 'en' ? 'Refresh Sessions' : '刷新会话', exact: true }).click();
+			await expect(page.locator('[data-item="session-1"] .ash-agent-session-title')).toHaveText('Refreshed Session');
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.refreshCount)).toBe(1);
+			await page.getByRole('button', { name: locale === 'en' ? 'Filter Sessions' : '筛选会话', exact: true }).click();
+			await page.evaluate(() => window.agentSessionsFixture.chooseFilter('running'));
+			await expect(page.getByRole('tree').locator('[data-item]')).toHaveCount(1);
+			await expect(page.locator('[data-item="session-1"]')).toBeVisible();
+			await page.getByRole('button', { name: locale === 'en' ? 'Filter Sessions' : '筛选会话', exact: true }).click();
+			await page.evaluate(() => window.agentSessionsFixture.chooseFilter('drafts'));
+			await expect(page.locator('[data-item="session-0"]')).toBeVisible();
+			await expect(page.getByRole('tree').locator('[data-item]')).toHaveCount(1);
+			await page.getByRole('button', { name: locale === 'en' ? 'Search sessions' : '搜索会话', exact: true }).click();
+			await expect(page.getByRole('searchbox')).toBeFocused();
+			await page.getByRole('button', { name: locale === 'en' ? 'Toggle Session Layout' : '切换会话布局', exact: true }).click();
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.layoutCount)).toBe(1);
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.opened)).toEqual([]);
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Tree owns keyboard focus, sections, activation and search (${locale})`, async () => {
 			const { page } = browser;

@@ -1,5 +1,7 @@
 import '../../../../../common/theme.js';
 import { AgentSessionsControl } from '../../../browser/agentSessions/agentSessionsControl.js';
+import { IEditorService } from '../../../../../services/editor/common/editorService.js';
+import { URI } from '../../../../../../base/common/uri.js';
 import type { IAgentSessionListItem } from '../../../browser/agentSessions/agentSessionsModel.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -36,6 +38,7 @@ function dispose(): void {
 const services = resources.add(new InstantiationService());
 const configuration = resources.add(new InMemoryConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
+services.registerInstance(IEditorService, { openEditor: async () => {} } as unknown as IEditorService);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, profileId: 'agent-sessions-fixture', workspaceId: 'agent-sessions-fixture', flushInterval: 0 })));
 const colors = [lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme];
 const theme = resources.add(new TestThemeService(colors[Number(parameters.get('theme') ?? 0)]!));
@@ -45,9 +48,13 @@ const opened: string[] = [];
 let menu: IContextMenuDelegate | undefined;
 let menuCount = 0;
 let newSessionCount = 0;
+let refreshCount = 0;
+let layoutCount = 0;
 let items: readonly IAgentSessionListItem[] = Array.from({ length: Number(parameters.get('count') ?? 3) }, (_, index) => ({
 	id: `session-${index}`, kind: index === 0 ? 'draft' : 'session',
 	title: `Session ${index}`, description: `Synthetic session ${index}`, active: index === 1,
+	inProgress: index === 1,
+	getEditorInput: () => ({ resource: URI.from({ scheme: 'test-chat', path: `/${index}` }) }),
 	getActions: () => [{ id: 'rename', label: 'Rename', enabled: true, tooltip: '', run: () => opened.push(`rename-${index}`) }],
 	open: () => opened.push(`session-${index}`),
 }));
@@ -64,9 +71,13 @@ let control: AgentSessionsControl;
 function createControl(): void {
 	const owned = new DisposableStore();
 	instance.value = owned;
-	control = owned.add(services.createInstance(AgentSessionsControl, container, { onDidChange: changed.event, get items() { return items; }, state: 'ready', error: undefined }));
+	control = owned.add(services.createInstance(AgentSessionsControl, container, {
+		onDidChange: changed.event, get items() { return items; }, state: 'ready', error: undefined,
+		refresh: async () => { refreshCount++; items = items.map(item => item.id === 'session-1' ? { ...item, title: 'Refreshed Session' } : item); changed.fire(); },
+	}));
 	owned.add(observeElementSize(control.domNode, size => control.layout(size.height, size.width)));
 	owned.add(control.onDidRequestNewSession(() => newSessionCount++));
+	owned.add(control.onDidRequestToggleLayout(() => layoutCount++));
 }
 createControl();
 Object.assign(window, { agentSessionsFixture: {
@@ -87,6 +98,9 @@ Object.assign(window, { agentSessionsFixture: {
 	get menuOpen() { return menu !== undefined; },
 	get menuCount() { return menuCount; },
 	get newSessionCount() { return newSessionCount; },
+	get refreshCount() { return refreshCount; },
+	get layoutCount() { return layoutCount; },
+	async chooseFilter(id: string) { await menu?.getActions().find(action => action.id === id)?.run(); menu?.onHide?.(false); menu = undefined; await control.update(); },
 	get menuAnchoredToRow() { return menu?.getAnchor() instanceof HTMLElement && (menu.getAnchor() as HTMLElement).getAttribute('role') === 'treeitem'; },
 	dispose,
 } });

@@ -35,7 +35,7 @@ export function agentSessionSectionId(item: IAgentSessionListItem): string {
 
 /** Groups the current model snapshot without owning session or selection state. */
 export class AgentSessionsDataSource implements AsyncTreeDataSource<IAgentSessionsModel, AgentSessionListItem> {
-	constructor(private readonly query: () => string) { }
+	constructor(private readonly query: () => string, private readonly include: (item: IAgentSessionListItem) => boolean = () => true) { }
 
 	public hasChildren(element: IAgentSessionsModel | AgentSessionListItem): boolean {
 		return !('kind' in element) || isAgentSessionSection(element);
@@ -46,6 +46,7 @@ export class AgentSessionsDataSource implements AsyncTreeDataSource<IAgentSessio
 		const query = this.query().trim().toLocaleLowerCase();
 		const groups = new Map<string, { label: string; items: IAgentSessionListItem[]; }>();
 		for (const item of element.items) {
+			if (!this.include(item)) continue;
 			if (query && !item.title.toLocaleLowerCase().includes(query) && !item.description.toLocaleLowerCase().includes(query)) continue;
 			const id = agentSessionSectionId(item);
 			const label = item.pinned ? localize('sessions.list.pinned', 'Pinned') : item.kind === 'draft' ? localize('chat.sessions.drafts', 'Drafts') : item.group?.name ?? localize('chat.sessions.sessions', 'Sessions');

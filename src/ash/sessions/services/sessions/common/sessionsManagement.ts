@@ -20,6 +20,7 @@ export interface ISessionsManagementService {
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
+	refresh(): Promise<void>;
 	/** Hydrates current catalog directories without changing foreground selection. */
 	whenDirectoriesReady(signal?: AbortSignal): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;

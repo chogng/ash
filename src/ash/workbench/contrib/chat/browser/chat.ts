@@ -12,6 +12,7 @@ import type { ChatContextAttachment } from '../../../services/chat/common/chatCo
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatWidget } from './widget/chatWidget.js';
 import type { IChatListItem } from './widget/chatListItems.js';
+import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;
@@ -140,6 +141,7 @@ export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetS
 
 /** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
 export interface IChatViewPane extends IView {
+	createNewChatEditorInput(source?: ChatEditorInput): ChatEditorInput;
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;
 	/** Borrows an independent retained composer; releasing the mount preserves its model and draft. */

@@ -23,6 +23,7 @@ import { IFileService, FileSystemProviderCapabilities } from '../../../platform/
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
@@ -58,6 +59,10 @@ import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/b
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
+import { getWindowById, getWindowId } from '../../../base/browser/window.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -88,9 +93,15 @@ suiteTeardown(() => {
 
 test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const dom = browserEnvironment;
+	using windowLifetime = toDisposable(() => {
+		// jsdom.close() does not dispatch the browser lifecycle that retires window monitors.
+		dom.window.dispatchEvent(new dom.window.PageTransitionEvent('pagehide'));
+		getWindowById(getWindowId(dom.window as unknown as Window)!)?.disposables.dispose();
+	});
+	using resources = new DisposableStore();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	dom.window.document.body.replaceChildren();
-	const onDidChange = new Emitter<void>();
+	const onDidChange = resources.add(new Emitter<void>());
 	let untitledSessions: readonly IUntitledChatSession[] = [];
 	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
@@ -106,6 +117,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		error: undefined,
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
+		async refresh() { },
 		async listAgents() { return []; },
 		async openThread() { },
 		selectThread() { },
@@ -160,9 +172,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			throw new Error('Session restoration is unavailable');
 		},
 	};
-	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
-	const transcriptUpdates = new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>();
-	const ready = new Emitter<void>();
+	const threadUpdates = resources.add(new Emitter<ThreadUpdateEnvelope>());
+	const transcriptUpdates = resources.add(new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>());
+	const ready = resources.add(new Emitter<void>());
 	const chatService: IChatService & ILanguageModelsService = {
 		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
 		renameThread: async () => { throw new Error('Unexpected rename'); },
@@ -236,7 +248,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async commitTurnChange() { return []; },
 		async discardThreadChanges() { return []; },
 	};
-	const contextMenuEvents = new Emitter<void>();
+	const contextMenuEvents = resources.add(new Emitter<void>());
 	const contextMenuService: IContextMenuService = {
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: contextMenuEvents.event,
@@ -250,13 +262,12 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		hide() { },
 		layout() { },
 	};
-	const commandEvents = new Emitter<ICommandEvent>();
+	const commandEvents = resources.add(new Emitter<ICommandEvent>());
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
 		async executeCommand() { throw new Error('No commands registered'); },
 	};
-	using resources = new DisposableStore();
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const services = resources.add(editorRoot.createChild());
@@ -295,6 +306,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}));
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
+	services.registerInstance(IWorkspacesService, {
+		onDidChangeRecentlyOpened: Event.None,
+		getRecentlyOpened: async () => ({ workspaces: [] }),
+	} as unknown as IWorkspacesService);
 
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
@@ -344,7 +359,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		const selection = viewService.getSelection();
 		part.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
 	};
-	const partListener = viewService.onDidChange(updatePart);
+	using partListener = viewService.onDidChange(updatePart);
 	updatePart();
 
 	await part.captureActiveDraft();
@@ -430,15 +445,6 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
-
-	partListener.dispose();
-	part.dispose();
-	viewService.dispose();
-	contextMenuEvents.dispose();
-	commandEvents.dispose();
-	threadUpdates.dispose();
-	ready.dispose();
-	onDidChange.dispose();
 });
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {

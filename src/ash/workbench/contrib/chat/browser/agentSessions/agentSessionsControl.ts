@@ -11,6 +11,13 @@ import { WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncData
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { isAgentSessionSection, type AgentSessionListItem, type IAgentSessionListItem, type IAgentSessionsModel } from './agentSessionsModel.js';
 import { AgentSessionRenderer, AgentSessionsDataSource, agentSessionSectionId } from './agentSessionsViewer.js';
+import { LocalSelectionTransfer } from '../../../../../platform/dnd/browser/dnd.js';
+import { DraggedEditorIdentifier } from '../../../../browser/parts/editor/editorTabDragAndDrop.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { EditorInput } from '../../../../common/editor/editorInput.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 
 /** Owns the shared Tree and projects session navigation without owning session state. */
 export class AgentSessionsControl extends Disposable {
@@ -21,11 +28,16 @@ export class AgentSessionsControl extends Disposable {
 	private readonly updates = new TaskQueue();
 	private readonly newSessionRequested = this._register(new Emitter<void>());
 	readonly onDidRequestNewSession = this.newSessionRequested.event;
+	private readonly toggleLayoutRequested = this._register(new Emitter<void>());
+	readonly onDidRequestToggleLayout = this.toggleLayoutRequested.event;
+	private filter: 'all' | 'running' | 'drafts' | 'pinned' = 'all';
+	private readonly header: HTMLElement;
 	private visible = true;
 	private focusRevision = 0;
 	private menuItemId: string | undefined;
 	private updatePending = false;
 	private sectionsBeforeSearch: ReadonlyMap<string, boolean> | undefined;
+	private draggedEditor: DraggedEditorIdentifier | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -33,11 +45,62 @@ export class AgentSessionsControl extends Disposable {
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IStorageService storage: IStorageService,
+		@IEditorService private readonly editors: IEditorService,
 	) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'ash-agent-sessions-control';
+		this.header = h(document, 'header', { className: 'ash-agent-sessions-header' });
+		const title = h(document, 'h2');
+		title.textContent = localize('chat.sessions.title', 'Sessions');
+		const toolbar = h(document, 'div', { className: 'ash-agent-sessions-toolbar' });
+		this.header.append(title, toolbar);
+		this.domNode.append(this.header);
+		const button = (label: string, icon: typeof Lxicon.add, run: () => void) => this._register(new Button(toolbar, {
+			...defaultButtonStyles, presentation: 'quiet', iconOnly: true, label, icon, onClick: run,
+		}));
+		button(localize('chat.sessions.new', 'New Session'), Lxicon.add, () => this.newSessionRequested.fire()).domNode.classList.add('ash-chat-sessions-new');
+		const refresh = button(localize('chat.sessions.refresh', 'Refresh Sessions'), Lxicon.refresh, () => {
+			refresh.enabled = false;
+			void this.model.refresh!().then(() => this.update()).catch(onUnexpectedError).finally(() => {
+				if (!this.isDisposed) refresh.enabled = true;
+			});
+		});
+		refresh.enabled = model.refresh !== undefined;
+		button(localize('sessions.list.search', 'Search sessions'), Lxicon.search, () => this.searchInput.focus());
+		const filter = button(localize('chat.sessions.filter', 'Filter Sessions'), Lxicon.filter, () => {
+			if (this.menuItemId !== undefined) this.contextMenus.hideContextMenu();
+			this.menuItemId = '@filter';
+			filter.domNode.setAttribute('aria-expanded', 'true');
+			const choices = [
+				['all', localize('chat.sessions.filter.all', 'All Sessions')],
+				['running', localize('chat.sessions.filter.running', 'In Progress')],
+				['drafts', localize('chat.sessions.drafts', 'Drafts')],
+				['pinned', localize('sessions.list.pinned', 'Pinned')],
+			] as const;
+			this.contextMenus.showContextMenu({
+				getAnchor: () => filter.domNode,
+				getActions: () => choices.map(([id, label]) => ({
+					id, label, tooltip: '', enabled: true, checked: this.filter === id,
+					run: () => {
+						this.filter = id;
+						filter.domNode.setAttribute('aria-pressed', String(id !== 'all'));
+						void this.update().catch(onUnexpectedError);
+					},
+				})),
+				onHide: () => {
+					this.menuItemId = undefined;
+					filter.domNode.setAttribute('aria-expanded', 'false');
+					if (this.visible && !this.isDisposed) filter.focus();
+					if (this.updatePending) void this.update().catch(onUnexpectedError);
+				},
+			});
+		});
+		filter.domNode.setAttribute('aria-haspopup', 'menu');
+		filter.domNode.setAttribute('aria-expanded', 'false');
+		filter.domNode.setAttribute('aria-pressed', 'false');
+		button(localize('chat.sessions.toggleLayout', 'Toggle Session Layout'), Lxicon.layoutSidebarRight, () => this.toggleLayoutRequested.fire());
 		this.searchInput = h(document, 'input');
 		this.searchInput.type = 'search';
 		this.searchInput.className = 'ash-agent-sessions-search';
@@ -51,8 +114,12 @@ export class AgentSessionsControl extends Disposable {
 			const item = this.sessionsList.focus;
 			return item && !isAgentSessionSection(item) ? item.id : undefined;
 		}));
+		const include = (item: IAgentSessionListItem): boolean => this.filter === 'all'
+			|| this.filter === 'running' && item.inProgress === true
+			|| this.filter === 'drafts' && item.kind === 'draft'
+			|| this.filter === 'pinned' && item.pinned === true;
 		this.sessionsList = this._register(instantiation.createInstance(WorkbenchCompressibleAsyncDataTree<IAgentSessionsModel, AgentSessionListItem>, treeContainer,
-			new AgentSessionsDataSource(() => this.searchInput.value), {
+			new AgentSessionsDataSource(() => this.searchInput.value, include), {
 				ariaLabel: localize('chat.sessions.sidebar', 'Agent sessions'),
 				accessibilityProvider: {
 					getAriaLabel: item => {
@@ -80,6 +147,22 @@ export class AgentSessionsControl extends Disposable {
 				renderCompressedElements: elements => renderer.render(elements[0]!),
 				reuseRows: true,
 				onDidRemoveRow: row => renderer.releaseRow(row),
+				dnd: {
+					getDragURI: item => !isAgentSessionSection(item) && item.getEditorInput ? item.id : undefined,
+					onDragStart: (data, event) => {
+						this.endDrag();
+						const item = data.elements[0];
+						if (!item || isAgentSessionSection(item)) return;
+						const input = item.getEditorInput?.();
+						if (!input) return;
+						this.draggedEditor = new DraggedEditorIdentifier(undefined, input);
+						LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>().setData([this.draggedEditor], DraggedEditorIdentifier.prototype);
+						if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+					},
+					onDragOver: () => false,
+					drop: () => { },
+					onDragEnd: () => this.endDrag(),
+				},
 			} satisfies WorkbenchCompressibleAsyncDataTreeOptions<AgentSessionListItem>));
 		this._register(this.sessionsList.onDidChangeFocus(event => {
 			if (event.browserEvent) {
@@ -128,6 +211,7 @@ export class AgentSessionsControl extends Disposable {
 		this.domNode.append(this.emptyDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => {
+			this.endDrag();
 			this.updates.clearPending();
 			if (this.menuItemId) {
 				this.contextMenus.hideContextMenu();
@@ -155,6 +239,16 @@ export class AgentSessionsControl extends Disposable {
 		this._register(this.model.onDidChange(() => { void this.update().catch(onUnexpectedError); }));
 	}
 
+	private endDrag(): void {
+		const transfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+		// A successful editor drop consumes the transfer and takes ownership of the input.
+		if (this.draggedEditor && transfer.getData(DraggedEditorIdentifier.prototype)?.[0] === this.draggedEditor) {
+			transfer.clearData(DraggedEditorIdentifier.prototype);
+			if (this.draggedEditor.input instanceof EditorInput) this.draggedEditor.input.dispose();
+		}
+		this.draggedEditor = undefined;
+	}
+
 	public focus(): void {
 		const revision = this.focusRevision;
 		this.sessionsList.domFocus();
@@ -173,7 +267,7 @@ export class AgentSessionsControl extends Disposable {
 
 	public layout(height: number, width: number): void {
 		const gap = Number.parseFloat(this.domNode.ownerDocument.defaultView!.getComputedStyle(this.domNode).rowGap) || 0;
-		this.sessionsList.layout(Math.max(0, height - this.searchInput.offsetHeight - gap), width);
+		this.sessionsList.layout(Math.max(0, height - this.header.offsetHeight - this.searchInput.offsetHeight - gap * 2), width);
 	}
 
 	public setVisible(visible: boolean): void {
@@ -203,7 +297,7 @@ export class AgentSessionsControl extends Disposable {
 				this.updatePending = true;
 				return false;
 			}
-			const searching = this.searchInput.value.trim().length > 0;
+			const searching = this.searchInput.value.trim().length > 0 || this.filter !== 'all';
 			if (searching && !this.sectionsBeforeSearch && this.sessionsList.getInput()) {
 				this.sectionsBeforeSearch = new Map((this.sessionsList.getNode().children ?? []).map(node => {
 					const section = node.element as AgentSessionListItem;
@@ -260,7 +354,7 @@ export class AgentSessionsControl extends Disposable {
 			this.updatePending = false;
 			const empty = !(this.sessionsList.getNode().children?.length);
 			this.emptyDomNode.hidden = !empty;
-			if (this.searchInput.value.trim()) {
+			if (searching) {
 				this.emptyDomNode.textContent = localize('sessions.list.noResults', 'No matching sessions');
 			} else if (this.model.state === 'loading') {
 				this.emptyDomNode.textContent = localize('chat.sessions.loading', 'Loading sessions…');
@@ -274,7 +368,13 @@ export class AgentSessionsControl extends Disposable {
 	private showContextMenu(item: IAgentSessionListItem, anchor: ContextMenuAnchor, onHide: () => void): void {
 		if (this.menuItemId !== undefined) this.contextMenus.hideContextMenu();
 		this.menuItemId = item.id;
-		const actions = item.getActions();
+		const actions = [...item.getActions()];
+		if (item.getEditorInput) actions.push({
+			id: 'workbench.action.chat.openSessionInEditorGroup',
+			label: localize('chat.sessions.openInEditor', 'Open in Editor'),
+			tooltip: '', enabled: true,
+			run: () => this.editors.openEditor(item.getEditorInput!(), { pinned: true }),
+		});
 		this.contextMenus.showContextMenu({
 			getAnchor: () => anchor, getActions: () => actions, onHide: () => {
 				this.menuItemId = undefined;

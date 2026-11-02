@@ -24,6 +24,20 @@ type SessionDto = Omit<BackendSession, 'executionTarget'> & Pick<import('../../.
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
+test('refresh reloads the catalog while retaining the selected unsent draft', async () => {
+	const fake = sessionHost([session('first', 'first-root')]);
+	using service = createManagement(fake);
+	await service.initialize();
+	const draft = service.createUntitledSession('Keep this draft');
+	const revision = service.navigationRevision;
+	fake.sessions.push(session('second', 'second-root'));
+	await service.refresh();
+	assert.deepEqual(service.sessions.map(item => item.sessionId).sort(), ['first', 'second']);
+	assert.equal(service.activeUntitledSession, draft);
+	assert.equal(service.navigationRevision, revision);
+	assert.deepEqual(service.untitledSessions, [draft]);
+});
+
 test('independent conversation drafts create their own root worktree only on materialization', async () => {
 	const fake = sessionHost([]);
 	const requests: import('../../../../../platform/agentHost/common/agent.js').SessionCreateParams[] = [];

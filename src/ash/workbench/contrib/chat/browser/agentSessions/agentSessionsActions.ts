@@ -22,7 +22,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
 import { IPaneCompositePartService } from '../../../../services/panecomposite/browser/panecomposite.js';
 import { IWorkbenchLayoutService, isHorizontal } from '../../../../services/layout/browser/layoutService.js';
-import { AgentSessionsPresentation, AgentSessionsPresentationContext, CHAT_VIEW_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../common/chat.js';
+import { CHAT_VIEW_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../common/chat.js';
 import { ChatConfiguration } from '../../common/constants.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { IChatViewPane } from '../chat.js';
@@ -36,7 +36,7 @@ export function registerAgentSessionsLayoutActions(): void {
 	] as const) {
 		registerAction2(class extends Action2 {
 			constructor() {
-				super({ id, title, precondition: AgentSessionsPresentationContext.isEqualTo(AgentSessionsPresentation.List), f1: true });
+				super({ id, title, precondition: ChatContextKeys.enabled.isEqualTo(true), f1: true });
 			}
 			override async run(accessor: ServicesAccessor): Promise<void> {
 				const configuration = accessor.get(IConfigurationService);

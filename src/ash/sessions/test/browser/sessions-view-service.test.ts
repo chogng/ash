@@ -584,6 +584,7 @@ class FakeSessionService implements ISessionsManagementService {
 	whenDirectoriesReady(): Promise<void> { return Promise.resolve(); }
 
 	async initialize(): Promise<void> { }
+	async refresh(): Promise<void> { }
 	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 

@@ -5334,7 +5334,8 @@ for (const locale of ['en', 'zh-CN']) test(`Independent Chat editor tabs retain 
 		const target = pane.element.querySelector<HTMLElement>('.ash-chat-view-tabs [role=tablist]')!;
 		target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
 		await pane.moveSessionToSideBar(editorInput.resource);
-		assert.equal(host.querySelector('textarea'), input);
+		assert.equal(host.querySelector('textarea'), null);
+		assert.equal(input.value, 'Keep the running conversation draft');
 		await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.Tabs);
 		target.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
 		await waitFor(() => pane.element.contains(input) && dom.window.document.activeElement === input);
@@ -5352,6 +5353,40 @@ for (const locale of ['en', 'zh-CN']) test(`Independent Chat editor tabs retain 
 		transfer.clearData(DraggedEditorIdentifier.prototype);
 		initializeTestLocalization('en');
 	}
+});
+
+test('a new conversation in a List mode editor preserves the original draft', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, sessions, dom, inputServices, configuration, input, fake } = fixture;
+	await configuration.updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation.List);
+	pane.setVisible(true);
+	pane.layout(600, 0, 900);
+	pane.toggleSessionsSidebar({ visible: true });
+	typeChatText(dom.window, input, 'Retain this source draft');
+	const original = resources.add(new ChatEditorInput(`session:${sessions.active!.session.sessionId}`, sessions.active!.session.title));
+	const host = dom.window.document.createElement('div');
+	dom.window.document.body.append(host);
+	using editor = inputServices.createInstance(ChatEditor);
+	editor.create(host);
+	await editor.setInput(original, new AbortController().signal);
+	editor.setVisible(true);
+	assert.equal(host.querySelector('textarea'), input);
+	assert.equal(input.value, 'Retain this source draft');
+	sessions.createUntitledSession('A separate sidebar draft');
+	const replacement = resources.add(pane.createNewChatEditorInput(original));
+	assert.match(replacement.paneId!, /^untitled:/u);
+	assert.equal(host.querySelector('textarea'), input);
+	assert.equal(input.value, 'Retain this source draft');
+	editor.clearInput();
+	await editor.setInput(replacement, new AbortController().signal);
+	editor.setVisible(true);
+	const next = host.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.notEqual(next, input);
+	assert.equal(next.value, '');
+	assert.equal(input.value, 'Retain this source draft');
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(fake.stopRequests.length, 0);
 });
 
 test('an independent draft editor keeps its widget when the first submission materializes its Session', async () => {

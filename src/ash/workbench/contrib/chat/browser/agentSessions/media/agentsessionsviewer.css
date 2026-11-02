@@ -18,6 +18,31 @@
 	background: var(--ash-input-background);
 }
 
+.ash-agent-sessions-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-width: 0;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-agent-sessions-header h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-agent-sessions-toolbar {
+	display: flex;
+	flex-shrink: 0;
+}
+
+.ash-agent-sessions-toolbar [aria-pressed="true"] {
+	background: var(--ash-button-secondaryBackground);
+	color: var(--ash-foreground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
 .ash-agent-sessions-viewer {
 	flex: 1 1 0;
 	min-height: 0;

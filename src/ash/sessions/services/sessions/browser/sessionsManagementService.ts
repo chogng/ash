@@ -151,6 +151,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return this.initializePromise;
 	}
 
+	refresh(): Promise<void> {
+		this.initializePromise = this.loadSessions();
+		return this.initializePromise;
+	}
+
 
 	public whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
 		if (this.isDisposed || signal?.aborted) { return Promise.reject(canceled()); }
@@ -209,7 +214,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
+	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
 		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
