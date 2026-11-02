@@ -21,6 +21,8 @@ export interface ISessionsProvider extends IDisposable {
 	readonly id: string;
 	readonly label: string;
 	readonly order: number;
+	/** This provider's connection scope mounts and retires its Session directories. */
+	readonly ownsSessionFileSystem?: boolean;
 	readonly automations?: ISessionsProviderAutomations;
 	readonly connectionStatus?: IObservable<'connecting' | 'connected' | 'disconnected'>;
 	/** The catalog and its detail subscriptions must be read again; selection remains frontend-owned. */

@@ -1058,8 +1058,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const created = this.createGroup(id);
 		const targetIndex = sourceIndex + 1;
 		this.changeGrid(() => {
-			this._groups.splice(targetIndex, 0, created);
+			// Grid insertion can synchronously resize its parent. Publish the group only
+			// after those layout callbacks can query its registered Grid view.
 			this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction);
+			this._groups.splice(targetIndex, 0, created);
 			this.layoutEditorContent();
 			this.notifyConstraintsChanged();
 		});

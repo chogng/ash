@@ -1,3 +1,7 @@
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import type { IPlaywrightService } from '../../browserView/common/playwrightService.js';
+import type { IBrowserViewOwner, IBrowserViewNetwork } from '../../browserView/common/browserView.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type * as Agent from './agent.js';
@@ -161,4 +165,15 @@ export interface IAgentVoiceService {
 	/** A delayed release for an older gesture cannot end the current hold. */
 	pttUp(id: string): Promise<void>;
 	rejectTask(request: Agent.AgentVoiceTaskRequest): Promise<void>;
+}
+
+/** The renderer protocol owner binds a secondary connection without exposing its transport client. */
+export interface IAgentBrowserHostConnection {
+	register(playwright: IPlaywrightService, configuration: IConfigurationService, canvases: IAgentCanvasHost, scope: IAgentBrowserHostScope, resolveNetwork: (owner: IBrowserViewOwner) => IBrowserViewNetwork | undefined): IDisposable;
+}
+
+export interface IAgentBrowserHostScope {
+	readonly providerId: string;
+	toFrontendIdentity(backendId: string): string;
+	toBackendIdentity(frontendId: string): string | undefined;
 }

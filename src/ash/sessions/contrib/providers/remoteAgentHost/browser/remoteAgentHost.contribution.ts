@@ -1,12 +1,11 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import { agentHostConnectionAddress } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { RemoteAgentHostSessionsProvider } from './remoteAgentHostSessionsProvider.js';
+import { RemoteAgentHostSessionsProvider, remoteAgentHostProviderId } from './remoteAgentHostSessionsProvider.js';
 import { createAgentHostSessionScope } from '../../agentHost/browser/agentHostSessionScope.js';
 import { WSLAgentHostContribution } from './wslAgentHost.contribution.js';
 import { TunnelAgentHostContribution } from './tunnelAgentHost.contribution.js';
@@ -70,7 +69,7 @@ export class RemoteAgentHostContribution extends Disposable {
 		// This contribution is the scope owner. Its providers borrow only this connection's domains.
 		const services = createAgentHostSessionScope(this.instantiation, api, resources);
 		const provider = resources.add(services.createInstance(RemoteAgentHostSessionsProvider, {
-			id: isSSHAgentHost(connection) ? `ssh-agent-host:${JSON.stringify([connection.host, connection.workspace])}` : `${connection.type}-agent-host:${connection.type === 'tunnel' ? root.authority : agentHostConnectionAddress(connection)}`, label: connection.name,
+			id: remoteAgentHostProviderId(info), label: connection.name,
 			root, directory: info.directory!,
 			workspace: () => isSSHAgentHost(connection) ? { type: 'ssh', host: connection.host, root: connection.workspace } : { type: 'remote', authority: root.authority, root: connection.workspace },
 			selectWorkspace: async () => undefined,

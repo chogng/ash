@@ -5,7 +5,7 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
-import type { ICanvasOwner, CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvasOwner, ICanvasReference, CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { autorun, derived, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -21,6 +21,7 @@ import { CanvasDefinitionStore } from '../../../../workbench/contrib/canvases/co
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { CancellationError } from '../../../../base/common/errors.js';
+import { IPinnedCanvasService } from '../browser/pinnedCanvases.js';
 
 /** Session selection remains authoritative while Code or a product page covers its chat widget. */
 export class SessionCanvasContextService extends Disposable implements ICanvasContextService {
@@ -39,6 +40,7 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 		@IAgentHostCanvasCollection private readonly collection: IAgentHostCanvasCollection,
 		@ISessionsLayoutService layout: ISessionsLayoutService,
 		@ISessionsManagementService management: ISessionsManagementService,
+		@IPinnedCanvasService private readonly pins: IPinnedCanvasService,
 	) {
 		super();
 		this.workingSets = { state: layout.editorWorkingSetState, registerEditorToRetain: (input: CanvasInput) => layout.retainEditor(input), suppressEditorPartAutoVisibility: () => layout.suppressEditorAutoVisibility() };
@@ -57,7 +59,7 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 			if (management.state === 'ready') {
 				for (const [key, owner] of this.owners) {
 					const session = management.sessions.find(session => session.sessionId === owner.session.path.slice(1) && (session.providerId ?? 'local-agent-host') === owner.providerId);
-					if (!session || session.status === 'archived' || session.agentTree !== undefined && !session.chats.some(chat => chat.threadId === owner.chat.path.slice(1) && chat.status !== 'archived')) {
+					if (!session && !this.pins.entries.get().some(pin => isCanvasOwner(pin.identity, owner)) || session?.status === 'archived' || session?.agentTree !== undefined && !session.chats.some(chat => chat.threadId === owner.chat.path.slice(1) && chat.status !== 'archived')) {
 						this.owners.delete(key);
 						collection.removeOwner(owner);
 						this.removed.fire(owner);
@@ -69,21 +71,32 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 		this.contexts = derived(reader => {
 			changes.read(reader);
 			const visible = visibleOwners().filter(owner => this.owners.has(canvasOwnerKey(owner)));
-			return [...visible, ...[...this.owners.values()].filter(owner => !visible.some(current => isCanvasOwner(current, owner)))].map(owner => collection.createContext(owner));
+			const tracked = [...this.owners.values(), ...pins.entries.read(reader).map(pin => pin.identity)];
+			const owners = new Map([...visible, ...tracked].map(owner => [canvasOwnerKey(owner), owner]));
+			return [...owners.values()].map(owner => collection.createContext(owner));
 		});
 		this._register(Event.any(sessions.onDidChange, management.onDidChange)(updateOwners));
+		this._register(autorun(reader => {
+			pins.entries.read(reader);
+			pins.selected.read(reader);
+			this.changed.fire();
+		}));
 		updateOwners();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(CanvasesEnabledSettingId) || event.affectsConfiguration(ChatAIDisabledSettingId) || event.affectsConfiguration(SESSIONS_LAYOUT_SCOPE_SETTING)) { this.changed.fire(); }
 		}));
 	}
 
-	getContext(owner: ICanvasOwner, reader?: IReader) { return (reader ? this.contexts.read(reader) : this.contexts.get()).find(context => isCanvasOwner(context.owner, owner)); }
+	getContext(owner: ICanvasOwner, reader?: IReader) {
+		return this.contexts.read(reader).find(context => isCanvasOwner(context.owner, owner))
+			?? (this.pins.entries.read(reader).some(pin => isCanvasOwner(pin.identity, owner)) ? this.collection.createContext(owner) : undefined);
+	}
+	getTrackedCanvas(reference: ICanvasReference, reader?: IReader) { return this.pins.getTrackedCanvas(reference, reader); }
+	isPresentedElsewhere(reference: ICanvasReference, reader?: IReader) { return this.pins.isShown(reference, reader); }
 	getFrontendSessionResource(owner: ICanvasOwner, reader?: IReader): URI | undefined { return this.getContext(owner, reader)?.owner.session; }
 
 	isOwnerVisible(owner: ICanvasOwner): boolean {
-		return owner.providerId === 'local-agent-host'
-			&& this.owners.has(canvasOwnerKey(owner))
+		return this.owners.has(canvasOwnerKey(owner))
 			&& this.configuration.getValue<boolean>(CanvasesEnabledSettingId) !== false
 			&& this.configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true
 			&& this.sessions.visibleSelections.some(selection => selection.kind === 'session' && (selection.active.session.providerId ?? 'local-agent-host') === owner.providerId && selection.active.session.sessionId === owner.session.path.slice(1)
@@ -91,9 +104,8 @@ export class SessionCanvasContextService extends Disposable implements ICanvasCo
 	}
 
 	getEditorGroup(_owner: ICanvasOwner, input: CanvasInput, _restore: boolean): IEditorGroup | undefined {
-		return this.editors.groups.find(group => group.inputs.includes(input))
-			?? this.editors.groups.find(group => group === this.editors.activeGroup && !group.isLocked)
-			?? this.editors.groups.find(group => !group.isLocked);
+		// Only the editor host can choose a new group within the current working set.
+		return this.editors.groups.find(group => group.inputs.includes(input));
 	}
 }
 

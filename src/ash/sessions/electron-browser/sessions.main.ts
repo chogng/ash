@@ -241,6 +241,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.browserView',
 					'workbench.contrib.canvases',
 					'sessions.contrib.canvases',
+					'sessions.contrib.remoteCanvases',
 					'workbench.contrib.browserView.windowZoomSynchronizer',
 					'workbench.contrib.browserView.autoReload',
 					'workbench.contrib.sessionBrowserViewController',

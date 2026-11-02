@@ -8,7 +8,10 @@ export interface ICustomViewDescriptor {
 	readonly ctor: SyncDescriptor<AbstractCustomView>;
 	/** Restores the workspace beneath this page without dismissing the Custom View. */
 	readonly entryCommand?: string;
-	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; };
+	readonly actions?: { readonly menuId: MenuId; readonly primaryActionId?: string; readonly style?: 'toolbar'; };
+	/** Fill the available content area rather than sizing a scrolling document. */
+	readonly layout?: 'fill';
+	readonly acceptsState?: (state: string) => boolean;
 }
 
 /** The host owns chrome and scrolling; contributed views own only their content and lifetime. */

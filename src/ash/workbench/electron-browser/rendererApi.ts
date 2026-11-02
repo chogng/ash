@@ -1,3 +1,4 @@
+import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
 import { AppServerTcpService } from '../../platform/network/browser/appServerTcpService.js';
 import type { IFileSystemDirectory } from '../../platform/files/common/fileApi.js';
 import { canonicalAgentHostConnection, isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
@@ -279,7 +280,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (hostResources.isDisposed) { throw new CancellationError(); }
 				const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
 					clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-					capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
+					capabilities: { ...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
 				}));
 				scope.lease = lease;
 				hostResources.add(lease.client.onStateChange(state => {
@@ -318,7 +319,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					throwIfCancelled(signal);
 				};
 				api = {
-					...api, appServer: {
+					...api, browserHost: hostCapabilities.browser ? { register: (playwright, configuration, canvases, browserScope, resolveNetwork) => hostResources.add(registerAppServerBrowserHost(lease.client, playwright, mainProcessService, configuration, canvases, resolveNetwork, browserScope)) } : undefined, appServer: {
 						get connectionGeneration() { return connectionApi.connectionGeneration; },
 						get operatingSystem() { return connectionApi.operatingSystem; },
 						get userHome() { return connectionApi.userHome; },

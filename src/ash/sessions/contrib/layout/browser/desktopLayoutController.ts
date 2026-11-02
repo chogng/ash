@@ -306,6 +306,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 		if (files.filesDetailsOpen) { files.filesPart.setEditorVisible(true); }
 		if (!this.documentGroups.includes(this.editor.activeGroup) || !this.editor.isGroupVisible(this.editor.activeGroup.id)) {
 			const group = this.documentGroups.find(group => this.editor.isGroupVisible(group.id)) ?? this.documentGroups[0]!;
+			// Entry restoration can reapply a hidden group after an explicit document open.
+			this.editor.setGroupVisible(group.id, true);
 			this.editor.activateGroup(group.id);
 		}
 		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, false, this.documentGroups); }

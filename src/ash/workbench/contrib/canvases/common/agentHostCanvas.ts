@@ -5,7 +5,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { BrowserViewStorageScope, IBrowserViewService, normalizeBrowserViewUrl, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
+import { BrowserViewStorageScope, IBrowserViewService, normalizeBrowserViewUrl, type BrowserViewEvent, type IBrowserViewInfo, type IBrowserViewNetwork } from '../../../../platform/browserView/common/browserView.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
@@ -13,6 +13,7 @@ import { canvasOwnerKey, type ICanvas, type ICanvasContext, type ICanvasDefiniti
 import type { IAgentCanvasHost, IAgentCanvasOpenRequest } from '../../../../platform/agentHost/common/agentService.js';
 
 export interface ICanvasProvider {
+	readonly providerId?: string;
 	readonly definition: ICanvasDefinition;
 	readonly signal: AbortSignal;
 	open(owner: ICanvasOwner, instanceId: string, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string; }>;
@@ -24,12 +25,17 @@ interface CanvasSource { readonly url: string; readonly title?: string; readonly
 
 export const IAgentHostCanvasCollection = createServiceIdentifier<IAgentHostCanvasCollection>('agentHostCanvasCollection');
 export interface IAgentHostCanvasCollection extends IAgentCanvasHost {
-	beginDefinitionRefresh(): IDisposable;
+	listCanvases(sessionId: string, threadId: string, signal: AbortSignal, providerId?: string): ReturnType<IAgentCanvasHost['listCanvases']>;
+	openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal, providerId?: string): ReturnType<IAgentCanvasHost['openCanvasSource']>;
+	closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal, providerId?: string): Promise<void>;
+	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string; }, state: ICanvasOpenRequest, source?: CanvasSource, providerId?: string): void;
+	registerHost(providerId: string, activate: () => Promise<void>, resolveNetwork: (owner: ICanvasOwner) => IBrowserViewNetwork | undefined): IDisposable;
+	beginDefinitionRefresh(providerId?: string): IDisposable;
 	register(provider: ICanvasProvider): IDisposable;
 	suspendProvider(provider: ICanvasProvider): void;
-	retireExtension(extensionId: string): void;
-	settleExtension(extensionId: string): void;
-	reconcileExtensions(present: ReadonlySet<string>): void;
+	retireExtension(extensionId: string, providerId?: string): void;
+	settleExtension(extensionId: string, providerId?: string): void;
+	reconcileExtensions(present: ReadonlySet<string>, providerId?: string): void;
 	createContext(owner: ICanvasOwner): ICanvasContext;
 	removeOwner(owner: ICanvasOwner): void;
 	refreshProvider(provider: ICanvasProvider): Promise<void>;
@@ -39,7 +45,7 @@ export interface IAgentHostCanvasCollection extends IAgentCanvasHost {
 export class AgentHostCanvasCollection extends Disposable implements IAgentHostCanvasCollection {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly providers = new Map<string, ICanvasProvider>();
-	private readonly suspended = new Map<string, ICanvasProvider['definition']>();
+	private readonly suspended = new Map<string, { readonly definition: ICanvasDefinition; readonly providerId: string; }>();
 	private readonly pages = observableValue<readonly IBrowserViewInfo[] | undefined>(this, undefined);
 	private readonly requests = observableValue<ReadonlyMap<string, ReadonlyMap<string, ICanvasOpenRequest>>>(this, new Map());
 	private readonly contexts = new Map<string, ICanvasContext>();
@@ -52,12 +58,30 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	// Compare confirmed sources independently of the page's current route, including across hydration.
 	private readonly sourceHashes = new Map<string, string>();
 	private initialized = false;
-	private definitionLoads = 0;
+	private readonly definitionLoads = new Map<string, number>();
+	private readonly hosts = new Map<string, { activate: () => Promise<void>; resolveNetwork: (owner: ICanvasOwner) => IBrowserViewNetwork | undefined; }>();
+	private readonly hostsChanged = observableValue(this, 0);
 
-	beginDefinitionRefresh(): IDisposable {
-		this.definitionLoads++;
+	registerHost(providerId: string, activate: () => Promise<void>, resolveNetwork: (owner: ICanvasOwner) => IBrowserViewNetwork | undefined): IDisposable {
+		if (providerId === 'local-agent-host' || this.hosts.has(providerId)) { throw new Error('Canvas host is already registered'); }
+		const host = { activate, resolveNetwork };
+		this.hosts.set(providerId, host); this.hostsChanged.set(this.hostsChanged.get() + 1); this.changed.fire();
+		return toDisposable(() => {
+			if (this.hosts.get(providerId) !== host) { return; }
+			for (const provider of this.providers.values()) { if (provider.providerId === providerId) { this.suspendProvider(provider); } }
+			this.hosts.delete(providerId); this.hostsChanged.set(this.hostsChanged.get() + 1); this.changed.fire();
+		});
+	}
+
+	private async activate(providerId: string): Promise<void> {
+		if (providerId === 'local-agent-host') { await this.extensions.activateByEvent('onCanvas'); }
+		else { const host = this.hosts.get(providerId); if (!host) { throw new CancellationError(); } await host.activate(); }
+	}
+
+	beginDefinitionRefresh(providerId = 'local-agent-host'): IDisposable {
+		this.definitionLoads.set(providerId, (this.definitionLoads.get(providerId) ?? 0) + 1);
 		this.changed.fire();
-		return toDisposable(() => { this.definitionLoads--; this.changed.fire(); });
+		return toDisposable(() => { this.definitionLoads.set(providerId, (this.definitionLoads.get(providerId) ?? 1) - 1); this.changed.fire(); });
 	}
 
 	constructor(@IBrowserViewService private readonly browser: IBrowserViewService, @IExtensionService private readonly extensions: IExtensionService,
@@ -80,7 +104,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	register(provider: ICanvasProvider): IDisposable {
-		const key = JSON.stringify([provider.definition.extensionId, provider.definition.canvasId]);
+		const key = JSON.stringify([provider.providerId ?? 'local-agent-host', provider.definition.extensionId, provider.definition.canvasId]);
 		if (this.providers.has(key)) { throw new Error('Canvas provider is already registered'); }
 		this.providers.set(key, provider);
 		this.suspended.delete(key);
@@ -91,7 +115,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			this.providerRevisions.delete(provider);
 			this.changed.fire();
 			for (const page of this.pages.get() ?? []) {
-				if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
+				if ((page.canvas?.providerId ?? 'local-agent-host') === (provider.providerId ?? 'local-agent-host') && page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) {
 					void this.browser.destroyBrowserView(page.id).catch(() => { });
 				}
 			}
@@ -100,48 +124,48 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 
 	/** A disconnected provider has unknown membership. Keep opaque live identities, but never expose its old source. */
 	suspendProvider(provider: ICanvasProvider): void {
-		const key = JSON.stringify([provider.definition.extensionId, provider.definition.canvasId]);
+		const key = JSON.stringify([provider.providerId ?? 'local-agent-host', provider.definition.extensionId, provider.definition.canvasId]);
 		if (this.providers.get(key) !== provider) { return; }
 		this.providers.delete(key);
 		this.providerRevisions.delete(provider);
-		this.suspended.set(key, provider.definition);
+		this.suspended.set(key, { definition: provider.definition, providerId: provider.providerId ?? 'local-agent-host' });
 		const presentations = new Map(this.presentations.get());
 		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) { presentations.set(page.id, undefined); this.disconnectedPages.add(page.id); }
+			if ((page.canvas?.providerId ?? 'local-agent-host') === (provider.providerId ?? 'local-agent-host') && page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId) { presentations.set(page.id, undefined); this.disconnectedPages.add(page.id); }
 		}
 		this.presentations.set(presentations, undefined);
 		this.changed.fire();
 	}
 
-	retireExtension(extensionId: string): void {
-		for (const [key, definition] of this.suspended) { if (definition.extensionId === extensionId) { this.suspended.delete(key); } }
-		for (const page of this.pages.get() ?? []) { if (page.canvas?.extensionId === extensionId) { void this.browser.destroyBrowserView(page.id).catch(() => { }); } }
+	retireExtension(extensionId: string, providerId = 'local-agent-host'): void {
+		for (const [key, { definition, providerId: hostId }] of this.suspended) { if (hostId === providerId && definition.extensionId === extensionId) { this.suspended.delete(key); } }
+		for (const page of this.pages.get() ?? []) { if ((page.canvas?.providerId ?? 'local-agent-host') === providerId && page.canvas?.extensionId === extensionId) { void this.browser.destroyBrowserView(page.id).catch(() => { }); } }
 		this.changed.fire();
 	}
 
-	settleExtension(extensionId: string): void {
+	settleExtension(extensionId: string, providerId = 'local-agent-host'): void {
 		let changed = false;
-		for (const [key, definition] of this.suspended) {
-			if (definition.extensionId !== extensionId || this.providers.has(key)) { continue; }
+		for (const [key, { definition, providerId: hostId }] of this.suspended) {
+			if (hostId !== providerId || definition.extensionId !== extensionId || this.providers.has(key)) { continue; }
 			this.suspended.delete(key);
 			changed = true;
 			for (const page of this.pages.get() ?? []) {
-				if (page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) {
+				if ((page.canvas?.providerId ?? 'local-agent-host') === providerId && page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) {
 					void this.browser.destroyBrowserView(page.id).catch(() => { });
 				}
 			}
 		}
 		if (changed) { this.changed.fire(); }
 		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) {
+			if ((page.canvas?.providerId ?? 'local-agent-host') === providerId && page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([providerId, extensionId, page.canvas.canvasId]))) {
 				void this.browser.destroyBrowserView(page.id).catch(() => { });
 			}
 		}
 	}
 
-	reconcileExtensions(present: ReadonlySet<string>): void {
-		for (const extensionId of new Set((this.pages.get() ?? []).flatMap(page => page.canvas?.extensionId ? [page.canvas.extensionId] : []))) {
-			if (!present.has(extensionId)) { this.retireExtension(extensionId); }
+	reconcileExtensions(present: ReadonlySet<string>, providerId = 'local-agent-host'): void {
+		for (const extensionId of new Set((this.pages.get() ?? []).filter(page => (page.canvas?.providerId ?? 'local-agent-host') === providerId).flatMap(page => page.canvas?.extensionId ? [page.canvas.extensionId] : []))) {
+			if (!present.has(extensionId)) { this.retireExtension(extensionId, providerId); }
 		}
 	}
 
@@ -153,17 +177,19 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			context = {
 				owner,
 				canvases: derived(reader => {
+					this.hostsChanged.read(reader);
+					if (owner.providerId !== 'local-agent-host' && !this.hosts.has(owner.providerId)) { return undefined; }
 					const presentations = this.presentations.read(reader);
 					return this.pages.read(reader)?.filter(page => this.owns(page, owner)).map(page => new AgentHostCanvas(page, presentations.has(page.id) ? presentations.get(page.id) ?? null : undefined));
 				}),
 				openRequests: derived(reader => this.requests.read(reader).get(key) ?? new Map()),
-				definitionProvider: owner.providerId !== 'local-agent-host' ? undefined : {
+				definitionProvider: {
 					onDidChangeDefinitions: this.changed.event,
 					listCanvases: async () => {
-						await this.extensions.activateByEvent('onCanvas');
+						await this.activate(owner.providerId);
 						if (this.isDisposed) { throw new CancellationError(); }
-						if (this.definitionLoads || this.suspended.size) { return undefined; }
-						return [...this.providers.values()].filter(provider => !provider.signal.aborted).map(provider => provider.definition);
+						if (this.definitionLoads.get(owner.providerId) || [...this.suspended.values()].some(value => value.providerId === owner.providerId)) { return undefined; }
+						return [...this.providers.values()].filter(provider => (provider.providerId ?? 'local-agent-host') === owner.providerId && !provider.signal.aborted).map(provider => provider.definition);
 					},
 					openCanvas: (definition, instanceId) => this.open(owner, definition, instanceId),
 				},
@@ -174,18 +200,18 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		return context;
 	}
 
-	async listCanvases(sessionId: string, threadId: string, signal: AbortSignal) {
-		const definitions = await this.createContext(this.owner(sessionId, threadId)).definitionProvider!.listCanvases();
+	async listCanvases(sessionId: string, threadId: string, signal: AbortSignal, providerId = 'local-agent-host') {
+		const definitions = await this.createContext(this.owner(sessionId, threadId, providerId)).definitionProvider!.listCanvases();
 		signal.throwIfAborted();
 		return definitions?.map(definition => ({ id: { extensionId: definition.extensionId, canvasId: definition.canvasId }, displayName: definition.displayName, description: definition.description, requiresInput: definition.requiresInput }));
 	}
 
-	async openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal): Promise<CanvasSource> {
-		await this.extensions.activateByEvent('onCanvas');
+	async openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal, providerId = 'local-agent-host'): Promise<CanvasSource> {
+		await this.activate(providerId);
 		signal.throwIfAborted();
-		const provider = this.providers.get(JSON.stringify([request.definition.extensionId, request.definition.canvasId]));
+		const provider = this.providers.get(JSON.stringify([providerId, request.definition.extensionId, request.definition.canvasId]));
 		if (!provider || provider.signal.aborted || provider.definition.requiresInput) { throw new Error('CanvasProviderUnavailable'); }
-		const owner = this.owner(request.sessionId, request.threadId);
+		const owner = this.owner(request.sessionId, request.threadId, providerId);
 		const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
 		const operationSignal = AbortSignal.any([signal, provider.signal, ...(ownerSignal ? [ownerSignal] : [])]);
 		const source = await provider.open(owner, request.instanceId, operationSignal);
@@ -194,15 +220,15 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		return { ...source, title: source.title ?? provider.definition.displayName };
 	}
 
-	async closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal): Promise<void> {
-		const page = this.pages.get()?.find(page => page.id === targetId && page.owner.type === 'agent' && page.owner.sessionId === threadId);
+	async closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal, providerId = 'local-agent-host'): Promise<void> {
+		const page = this.pages.get()?.find(page => page.id === targetId && (page.canvas?.providerId ?? 'local-agent-host') === providerId && page.owner.type === 'agent' && page.owner.sessionId === threadId);
 		if (!page?.canvas?.extensionId || !page.canvas.canvasId) { return; }
-		const provider = this.providers.get(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]));
-		if (provider) { await provider.close(this.owner(page.canvas.sessionId, threadId), page.canvas.instanceId, AbortSignal.any([signal, provider.signal])); }
+		const provider = this.providers.get(JSON.stringify([page.canvas.providerId ?? 'local-agent-host', page.canvas.extensionId, page.canvas.canvasId]));
+		if (provider) { await provider.close(this.owner(page.canvas.sessionId, threadId, providerId), page.canvas.instanceId, AbortSignal.any([signal, provider.signal])); }
 	}
 
-	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string; }, state: ICanvasOpenRequest, source?: CanvasSource): void {
-		const owner = this.owner(request.sessionId, request.threadId);
+	acceptCanvasOpen(request: { sessionId: string; threadId: string; instanceId: string; }, state: ICanvasOpenRequest, source?: CanvasSource, providerId = 'local-agent-host'): void {
+		const owner = this.owner(request.sessionId, request.threadId, providerId);
 		this.createContext(owner);
 		if (state.succeeded && source) {
 			const page = this.pages.get()?.find(page => this.owns(page, owner) && page.canvas?.instanceId === request.instanceId);
@@ -211,8 +237,8 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		this.setRequest(owner, request.instanceId, state);
 	}
 
-	private owner(sessionId: string, threadId: string): ICanvasOwner {
-		return { providerId: 'local-agent-host', session: URI.from({ scheme: 'ash-session', path: '/' + sessionId }), chat: URI.from({ scheme: 'ash-thread', path: '/' + threadId }) };
+	private owner(sessionId: string, threadId: string, providerId = 'local-agent-host'): ICanvasOwner {
+		return { providerId, session: URI.from({ scheme: 'ash-session', path: '/' + sessionId }), chat: URI.from({ scheme: 'ash-thread', path: '/' + threadId }) };
 	}
 
 	removeOwner(owner: ICanvasOwner): void {
@@ -231,9 +257,9 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		this.providerRevisions.set(provider, revision);
 		this.changed.fire();
 		if (!provider.resolve) { return; }
-		await Promise.all((this.pages.get() ?? []).filter(page => page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId).map(async page => {
+		await Promise.all((this.pages.get() ?? []).filter(page => (page.canvas?.providerId ?? 'local-agent-host') === (provider.providerId ?? 'local-agent-host') && page.canvas?.extensionId === provider.definition.extensionId && page.canvas.canvasId === provider.definition.canvasId).map(async page => {
 			const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas!.threadId!;
-			const owner = this.owner(page.canvas!.sessionId, thread);
+			const owner = this.owner(page.canvas!.sessionId, thread, page.canvas!.providerId);
 			const ownerSignal = this.ownerControllers.get(canvasOwnerKey(owner))?.signal;
 			const signal = ownerSignal ? AbortSignal.any([provider.signal, ownerSignal]) : provider.signal;
 			let source = await provider.resolve!(owner, page.canvas!.instanceId, signal);
@@ -259,7 +285,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	private owns(page: IBrowserViewInfo, owner: ICanvasOwner): boolean {
-		return owner.providerId === 'local-agent-host' && page.canvas?.sessionId === owner.session.path.slice(1)
+		return owner.providerId === (page.canvas?.providerId ?? 'local-agent-host') && page.canvas?.sessionId === owner.session.path.slice(1)
 			&& (page.owner.type === 'agent' ? page.owner.sessionId : page.canvas.threadId) === owner.chat.path.slice(1);
 	}
 
@@ -269,7 +295,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const operationKey = JSON.stringify([canvasOwnerKey(owner), instanceId]);
 		const pending = this.operations.get(operationKey) ?? Promise.resolve();
 		const opening = pending.catch(() => { }).then(async () => {
-			const provider = this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId]));
+			const provider = this.providers.get(JSON.stringify([owner.providerId, definition.extensionId, definition.canvasId]));
 			if (!provider || provider.signal.aborted || definition.requiresInput || !context || this.contexts.get(canvasOwnerKey(owner)) !== context) { throw new CancellationError(); }
 			this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
 			const request = { id: crypto.randomUUID(), succeeded: false };
@@ -278,7 +304,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			const source = await provider.open(owner, instanceId, signal);
 			this.providerRevisions.set(provider, (this.providerRevisions.get(provider) ?? 0) + 1);
 			signal.throwIfAborted();
-			if (this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context || this.providers.get(JSON.stringify([definition.extensionId, definition.canvasId])) !== provider) { throw new CancellationError(); }
+			if (this.isDisposed || this.contexts.get(canvasOwnerKey(owner)) !== context || this.providers.get(JSON.stringify([owner.providerId, definition.extensionId, definition.canvasId])) !== provider) { throw new CancellationError(); }
 			const url = normalizeBrowserViewUrl(source.url);
 			if (url === 'about:blank') { throw new TypeError('Canvas requires an HTTP or HTTPS source'); }
 			const existing = this.pages.get()?.find(page => this.owns(page, owner) && page.canvas?.instanceId === instanceId && page.canvas.extensionId === definition.extensionId && page.canvas.canvasId === definition.canvasId);
@@ -288,10 +314,11 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			}
 			else {
 				// A user-selected extension page has user navigation authority, isolated from normal browser storage.
+				const network = this.hosts.get(owner.providerId)?.resolveNetwork(owner);
 				const info = await this.browser.getOrCreateBrowserView('browser_target_' + crypto.randomUUID(), {
-					initialUrl: url, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral },
+					initialUrl: url, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral, ...(network ? { network } : {}) },
 					canvas: {
-						sessionId: owner.session.path.slice(1), threadId: owner.chat.path.slice(1), instanceId, title: source.title ?? definition.displayName,
+						providerId: owner.providerId, sessionId: owner.session.path.slice(1), threadId: owner.chat.path.slice(1), instanceId, title: source.title ?? definition.displayName,
 						extensionId: definition.extensionId, canvasId: definition.canvasId
 					},
 				});
@@ -310,7 +337,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	private async close(owner: ICanvasOwner, canvas: ICanvas): Promise<void> {
 		const page = this.pages.get()?.find(page => page.id === canvas.resource.path.slice(1) && this.owns(page, owner));
 		if (!page?.canvas) { throw new CancellationError(); }
-		const provider = this.providers.get(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]));
+		const provider = this.providers.get(JSON.stringify([page.canvas.providerId ?? 'local-agent-host', page.canvas.extensionId, page.canvas.canvasId]));
 		if (provider && canvas.instanceId) { await provider.close(owner, canvas.instanceId, provider.signal); }
 		await this.browser.destroyBrowserView(page.id);
 	}
@@ -329,7 +356,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 	}
 
 	private hideUnknownSource(page: IBrowserViewInfo): void {
-		if (page.canvas?.extensionId && !this.providers.has(JSON.stringify([page.canvas.extensionId, page.canvas.canvasId]))) {
+		if (page.canvas?.extensionId && !this.providers.has(JSON.stringify([page.canvas.providerId ?? 'local-agent-host', page.canvas.extensionId, page.canvas.canvasId]))) {
 			this.disconnectedPages.add(page.id);
 			this.presentations.set(new Map(this.presentations.get()).set(page.id, undefined), undefined);
 		}
@@ -339,7 +366,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		const pages = this.pages.get() ?? [];
 		if ((event.type === 'created' || event.type === 'canvasOpened') && event.info.canvas) {
 			this.hideUnknownSource(event.info);
-			if (event.type === 'canvasOpened' && event.info.canvas.extensionId && this.providers.has(JSON.stringify([event.info.canvas.extensionId, event.info.canvas.canvasId]))) {
+			if (event.type === 'canvasOpened' && event.info.canvas.extensionId && this.providers.has(JSON.stringify([event.info.canvas.providerId ?? 'local-agent-host', event.info.canvas.extensionId, event.info.canvas.canvasId]))) {
 				this.disconnectedPages.delete(event.info.id);
 				this.setPresentation(event.info.id, { url: event.info.state.url, title: event.info.canvas.title });
 			}
@@ -347,7 +374,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			if (event.type === 'canvasOpened') {
 				const thread = event.info.owner.type === 'agent' ? event.info.owner.sessionId : event.info.canvas.threadId;
 				if (thread) {
-					const owner = this.owner(event.info.canvas.sessionId, thread);
+					const owner = this.owner(event.info.canvas.sessionId, thread, event.info.canvas.providerId);
 					// The typed renderer host publishes pending before navigation. Native-only callers have no pending request.
 					const previous = this.requests.get().get(canvasOwnerKey(owner))?.get(event.info.canvas.instanceId);
 					if (!previous || previous.succeeded) { this.setRequest(owner, event.info.canvas.instanceId, { id: crypto.randomUUID(), succeeded: true }); }
@@ -363,7 +390,7 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			if (page?.canvas) {
 				const thread = page.owner.type === 'agent' ? page.owner.sessionId : page.canvas.threadId;
 				if (thread) {
-					const key = canvasOwnerKey(this.owner(page.canvas.sessionId, thread));
+					const key = canvasOwnerKey(this.owner(page.canvas.sessionId, thread, page.canvas.providerId));
 					const all = new Map(this.requests.get());
 					const requests = new Map(all.get(key));
 					requests.delete(page.canvas.instanceId);
@@ -389,9 +416,13 @@ export class AgentHostCanvas implements ICanvas {
 	readonly title: string;
 	readonly source: URI | undefined;
 	readonly status: string | undefined;
+	readonly extensionId: string | undefined;
+	readonly canvasId: string | undefined;
 	constructor(info: IBrowserViewInfo, presentation?: CanvasSource | null) {
 		this.resource = URI.from({ scheme: 'agent-host-canvas', path: '/' + info.id });
 		this.instanceId = info.canvas?.instanceId;
+		this.extensionId = info.canvas?.extensionId;
+		this.canvasId = info.canvas?.canvasId;
 		this.title = presentation?.title ?? info.canvas?.title ?? info.state.title;
 		this.status = presentation?.status;
 		try { const url = normalizeBrowserViewUrl(presentation?.url ?? info.state.url); this.source = presentation === null || url === 'about:blank' ? undefined : URI.parse(url); } catch { this.source = undefined; }

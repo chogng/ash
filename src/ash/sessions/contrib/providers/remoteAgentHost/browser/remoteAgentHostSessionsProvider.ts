@@ -1,3 +1,5 @@
+import { agentHostConnectionAddress, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { DisposableMap, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -19,6 +21,7 @@ interface IRemoteSessionsProviderHost extends AppServerSessionsProviderHost {
 
 /** Publishes one host's Sessions and mounts their directories on that same connection. */
 export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
+	readonly ownsSessionFileSystem = true;
 	private readonly mounts = this._register(new DisposableMap<string, IDisposable>());
 
 	constructor(
@@ -71,4 +74,10 @@ export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
 			}));
 		}
 	}
+}
+
+/** Stable Sessions namespace shared by every domain presented for this host. */
+export function remoteAgentHostProviderId(info: IAgentHostConnectionInfo): string {
+	const connection = info.remoteConnection!;
+	return isSSHAgentHost(connection) ? `ssh-agent-host:${JSON.stringify([connection.host, connection.workspace])}` : `${connection.type}-agent-host:${connection.type === 'tunnel' ? info.directory!.uri.authority : agentHostConnectionAddress(connection)}`;
 }

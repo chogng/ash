@@ -26,7 +26,7 @@ export class WorkspacePickerActionItem extends ChatInputPickerActionViewItem {
 					const selected = delegate.getSelectedWorkspace();
 					const choices: IAction[] = delegate.getWorkspaces().map(workspace => ({
 						id: `workspace.${workspace.uri.toString()}`,
-						label: workspace.label || basename(workspace.uri), tooltip: workspace.uri.fsPath,
+						label: workspace.label || basename(workspace.uri), tooltip: workspace.uri.scheme === 'file' ? workspace.uri.fsPath : workspace.uri.toString(),
 						icon: workspace.isFolder ? Lxicon.folder : Lxicon.file,
 						enabled: action.enabled, checked: selected?.uri.toString() === workspace.uri.toString(),
 						run: () => { if (!this.isDisposed) { delegate.setSelectedWorkspace(workspace); } },

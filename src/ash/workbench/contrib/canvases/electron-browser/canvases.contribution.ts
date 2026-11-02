@@ -19,7 +19,8 @@ import { EditorInputSerializers, UnknownEditorInputSerializerError } from '../..
 import { CanvasInput, ICanvasService, ICanvasContextService } from '../common/canvas.js';
 import { CanvasAvailableContext, registerEditorCanvasActions } from '../browser/editorCanvasActions.js';
 import { CanvasService } from './canvasService.js';
-import { CanvasEditor, SessionCanvasFocusedContext } from './canvasEditor.js';
+import { CanvasEditor } from './canvasEditor.js';
+import { getFocusedCanvasView, SessionCanvasFocusedContext } from './canvasView.js';
 import { registerCanvasCommands } from './canvasCommands.js';
 import { AgentHostCanvasCollection, IAgentHostCanvasCollection } from '../common/agentHostCanvas.js';
 import { registerCanvasContextPicker } from '../browser/canvasContextPicker.js';
@@ -71,7 +72,8 @@ registerWorkbenchContribution('workbench.contrib.canvases', WorkbenchPhase.Block
 			when: ContextKeyExpr.has(SessionCanvasFocusedContext.key),
 			getProvider: services => {
 				const pane = services.get(IEditorService).activeEditorPane;
-				return pane instanceof CanvasEditor ? pane.createAccessibleProvider(type) : undefined;
+				return getFocusedCanvasView()?.createAccessibleProvider(type)
+					?? (pane instanceof CanvasEditor ? pane.createAccessibleProvider(type) : undefined);
 			},
 		}));
 	}

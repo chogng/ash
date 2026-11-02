@@ -221,6 +221,18 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.filesDetailsOpen, false);
 	});
 
+	test('an explicit Canvas reveal shows a document group hidden by entry restoration', async () => {
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		fixture.groupVisibility.set('documents', false);
+		fixture.activeInput = { resource: URI.parse('session-canvas:/live') };
+		fixture.revealActiveEditor.fire();
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.groupVisibility.get('documents'), true);
+		assert.equal(fixture.focused, 'editor');
+	});
+
 	test('Code restores explicitly opened Files inside the shared EditorPart', async () => {
 		using fixture = new EntryFixture({ code: { details: true, documents: true } });
 		fixture.storage.store('sessions.code.filesVisible', true, StorageScope.PROFILE, StorageTarget.MACHINE);
@@ -449,6 +461,7 @@ class EntryFixture extends Disposable {
 	public readonly conversationStarted = new DeferredPromise<void>();
 	public readonly navigationStarted = new DeferredPromise<void>();
 	public activeInput: IResourceEditorInput | undefined;
+	public readonly groupVisibility = new Map<string, boolean>();
 	public modalVisible = false;
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
@@ -486,13 +499,16 @@ class EntryFixture extends Disposable {
 			get filesDetailsVisible() { return fixture.filesDetailsOpen && fixture.visible.get('editor') === true; },
 			get fileEditorsVisible() { return true; },
 			openFiles: async () => { fixture.filesDetailsOpen = true; fixture.focused = 'files'; },
-			isGroupVisible: () => true,
+			isGroupVisible: (id: string) => this.groupVisibility.get(id) ?? true,
 			filesPart: { isEditorVisible: false, setEditorVisible() { }, hideDetails() { fixture.filesDetailsOpen = false; }, showDetails() { fixture.filesDetailsOpen = true; }, auxiliaryBar: { focus() { fixture.focused = 'files'; } }, fileGroups: [documentGroup] },
 			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,
 			get isModalEditorVisible() { return fixture.modalVisible; },
-			setGroupVisible: (id: string, visible: boolean) => this.groupChanges.push(id + ':' + visible),
+			setGroupVisible: (id: string, visible: boolean) => {
+				this.groupVisibility.set(id, visible);
+				this.groupChanges.push(id + ':' + visible);
+			},
 			activateGroup: (id: string) => this.groupChanges.push('activate:' + id),
 			focus: () => { this.focused = 'editor'; },
 		} as unknown as IEditorPart);

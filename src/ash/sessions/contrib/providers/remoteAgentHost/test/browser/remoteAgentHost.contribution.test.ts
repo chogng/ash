@@ -1,3 +1,5 @@
+import { SessionFileSystemContribution } from '../../../agentHost/browser/sessionFileSystemContribution.js';
+import { ISessionProviderScopeService } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { projectSession } from '../../../../../services/sessions/common/sessionIdentity.js';
 import { sessionWorkspaceUri } from '../../../../../common/sessionWorkspace.js';
 import { WSLAgentHostContribution } from '../../browser/wslAgentHost.contribution.js';
@@ -110,6 +112,8 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		directories: () => [{ uri: URI.file('/primary'), target: { type: 'environment', dirId: 'primary' } }],
 	}));
 	services.registerInstance(IAgentHostFileSystemService, lifetime.add(services.createInstance(AgentHostFileSystemService, primary, undefined)));
+	services.registerInstance(ISessionProviderScopeService, { getScope: () => { throw new Error('A remote provider already owns its filesystem routes'); } } as unknown as ISessionProviderScopeService);
+	lifetime.add(services.createInstance(SessionFileSystemContribution, 'local-agent-host'));
 	type HostEvent = Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0];
 	const hostEvents = new Map<string, Emitter<HostEvent>>();
 	const fileRequests: { host: string; operation: string; path: string; }[] = [];

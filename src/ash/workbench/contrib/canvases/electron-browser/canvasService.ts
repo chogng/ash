@@ -1,5 +1,5 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableValue, observableFromEvent } from '../../../../base/common/observable.js';
+import { autorun, observableValue, observableFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
@@ -118,11 +118,11 @@ export class CanvasService extends Disposable implements ICanvasService {
 		const chat = URI.from({ scheme: 'ash-thread', path: '/' + thread });
 		const session = URI.from({ scheme: 'ash-session', path: '/' + info.canvas.sessionId });
 		const canvas: ICanvas = { resource, instanceId: info.canvas.instanceId, title: info.canvas.title, source: info.state.url === 'about:blank' || info.canvas.extensionId ? undefined : URI.parse(info.state.url) };
-		if (this.contexts.getContext({ providerId: 'local-agent-host', session, chat })?.openRequests?.get().has(info.canvas.instanceId)) { requested = false; }
+		if (this.contexts.getContext({ providerId: info.canvas.providerId ?? 'local-agent-host', session, chat })?.openRequests?.get().has(info.canvas.instanceId)) { requested = false; }
 		let entry = this.live.get(info.id);
 		if (!entry) {
 			const lifetime = new DisposableStore();
-			const input = lifetime.add(this.instantiation.createInstance(CanvasInput, { providerId: 'local-agent-host', session, chat, canvas: resource }, canvas));
+			const input = lifetime.add(this.instantiation.createInstance(CanvasInput, { providerId: info.canvas.providerId ?? 'local-agent-host', session, chat, canvas: resource }, canvas));
 			const model = lifetime.add(this.instantiation.createInstance(BrowserViewModel, info));
 			entry = { input, model, lifetime, dismissed: false, requested };
 			if (this.contexts.workingSets) { lifetime.add(this.contexts.workingSets.registerEditorToRetain(input)); }
@@ -168,7 +168,8 @@ export class CanvasService extends Disposable implements ICanvasService {
 		const targets: ICanvasReopenTarget[] = [];
 		for (const entry of this.live.values()) {
 			const context = this.contexts.getContext(entry.input.reference);
-			const canvas = context?.canvases.get()?.find(canvas => canvas.resource.toString() === entry.input.reference.canvas.toString());
+			const canvas = this.contexts.getTrackedCanvas?.(entry.input.reference)
+				?? context?.canvases.get()?.find(canvas => canvas.resource.toString() === entry.input.reference.canvas.toString());
 			if (canvas) { entry.input.setCanvas(canvas); }
 			const request = canvas?.instanceId ? context?.openRequests?.get().get(canvas.instanceId) : undefined;
 			const isOpen = this.editorPart.groups.some(group => group.inputs.includes(entry.input));
@@ -185,7 +186,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 				void this.closeEditors(entry.input).catch(error => this.notifications.error(error));
 				continue;
 			}
-			if (!this.contexts.isOwnerVisible(entry.input.reference)) { continue; }
+			if (!this.contexts.isOwnerVisible(entry.input.reference) || this.contexts.isPresentedElsewhere?.(entry.input.reference)) { continue; }
 			const hasSource = !!entry.input.canvas.get().source;
 			// An admitted live page can restore its reconnecting placeholder before its provider confirms a source.
 			if (!hasSource && !entry.admitted) { continue; }
@@ -205,8 +206,14 @@ export class CanvasService extends Disposable implements ICanvasService {
 		this.reopenableCanvases.set(targets, undefined);
 	}
 
-	isOwnerPresentable(reference: ICanvasReference): boolean {
-		return !this.isDisposed && this.enabled.get() && this.contexts.isOwnerVisible(reference) && !!this.lookup(reference);
+	isOwnerPresentable(reference: ICanvasReference, reader?: IReader): boolean {
+		return this.isPresentable(reference, reader) && this.contexts.isOwnerVisible(reference, reader)
+			&& !this.contexts.isPresentedElsewhere?.(reference, reader);
+	}
+
+	isPresentable(reference: ICanvasReference, reader?: IReader): boolean {
+		return !this.isDisposed && this.enabled.read(reader) && !!this.lookup(reference)
+			&& (this.contexts.isOwnerVisible(reference, reader) || this.contexts.isPresentedElsewhere?.(reference, reader) === true);
 	}
 
 	async revealCanvas(reference: ICanvasReference): Promise<void> {
@@ -239,7 +246,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 
 	async closeCanvas(reference: ICanvasReference): Promise<void> {
 		const entry = this.lookup(reference);
-		if (!entry || !this.isOwnerPresentable(reference)) { throw new CancellationError(); }
+		if (!entry || !this.isPresentable(reference)) { throw new CancellationError(); }
 		const context = this.contexts.getContext(reference);
 		if (context?.closeCanvas) { await context.closeCanvas(entry.input.canvas.get()); }
 		else { await this.pages.destroyBrowserView(entry.model.id); }
@@ -251,7 +258,7 @@ export class CanvasService extends Disposable implements ICanvasService {
 
 	async resolveCanvasModel(reference: ICanvasReference, source: URI): Promise<ICanvasModelResolution> {
 		const entry = this.lookup(reference);
-		if (!entry || !this.isOwnerPresentable(reference) || entry.input.canvas.get().source?.toString() !== source.toString()) { throw new CancellationError(); }
+		if (!entry || !this.isPresentable(reference) || entry.input.canvas.get().source?.toString() !== source.toString()) { throw new CancellationError(); }
 		entry.admitted = true;
 		return { model: entry.model, reused: true };
 	}

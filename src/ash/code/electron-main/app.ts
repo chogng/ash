@@ -2087,8 +2087,9 @@ export class AshApplication extends Disposable {
 								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
 							}
 							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
+							// SSH owns a remote Workbench connection; its directory is granted on that connection.
 							const relay = resources.add(isSSHAgentHost(target)
-								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id })
+								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
 								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
 							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
 							return Object.assign(resources, { connection: target });

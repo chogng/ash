@@ -48,7 +48,7 @@ type SessionsViewReference =
 	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
 	| { readonly kind: 'untitled'; readonly untitledSessionId: string; };
 
-type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; };
+type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; readonly state?: string; };
 
 /** Dedicated Sessions-window view state layered over the canonical Session model service. */
 export class SessionsService extends Disposable implements ISessionsService {
@@ -80,7 +80,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			if (!opening) return;
 			// A custom-view open supersedes an in-flight Thread open without changing the covered selection.
 			this._navigationRevision++;
-			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.record({ kind: 'customView', id: opening.descriptor.id }, this.current);
+			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.record({ kind: 'customView', id: opening.descriptor.id, state: opening.state }, this.current);
 			this._onDidChange.fire();
 		}));
 	}
@@ -130,7 +130,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const opening = this.customViews.activeCustomViewOpen.get();
 			if (opening?.source === 'restore') {
 				if (this.activeSelection) this.record(referenceForSelection(this.activeSelection), state);
-				this.record({ kind: 'customView', id: opening.descriptor.id }, state);
+				this.record({ kind: 'customView', id: opening.descriptor.id, state: opening.state }, state);
 			}
 		}
 		this.syncFromSessionService();
@@ -289,8 +289,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		state.historyIndex = targetIndex;
 		try {
 			if (reference.kind === 'customView') {
-				this.customViews.showCustomView(reference.id, { source: 'history' });
-				if (this.customViews.activeCustomView.get()?.id !== reference.id) {
+				this.customViews.showCustomView(reference.id, { source: 'history', state: reference.state });
+				if (this.customViews.activeCustomView.get()?.id !== reference.id || this.customViews.activeCustomViewOpen.get()?.state !== reference.state) {
 					// A removed contribution cannot be a destination; discard its visit and continue in the same direction.
 					state.history.splice(targetIndex, 1);
 					state.historyIndex = previousIndex - (targetIndex < previousIndex ? 1 : 0);
@@ -368,7 +368,7 @@ function selectionKey(selection: SessionsViewSelection | undefined): string | un
 }
 
 function navigationKey(entry: NavigationEntry | undefined): string | undefined {
-	return entry?.kind === 'customView' ? `customView:${entry.id}` : referenceKey(entry);
+	return entry?.kind === 'customView' ? `customView:${JSON.stringify([entry.id, entry.state])}` : referenceKey(entry);
 }
 
 function referenceKey(reference: SessionsViewReference | undefined): string | undefined {

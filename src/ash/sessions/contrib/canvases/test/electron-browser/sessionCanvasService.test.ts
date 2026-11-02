@@ -10,13 +10,16 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import type { ICanvasOwner } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { CanvasInput, ICanvasOwner } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionCanvasContextService } from '../../electron-browser/sessionCanvasService.js';
 import { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { ISessionsLayoutService } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+
+import { IPinnedCanvasService } from '../../browser/pinnedCanvases.js';
 
 suite('Sessions Canvas ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -31,13 +34,21 @@ suite('Sessions Canvas ownership', () => {
 		const selection = { kind: 'session', active: { session: { sessionId: 'source-session' }, threadId: 'source-thread' } } as SessionsViewSelection;
 		const visibleSelections = [selection];
 		services.registerInstance(ISessionsService, { onDidChange: changed.event, visibleSelections } as unknown as ISessionsService);
-		services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
+		const backgroundGroup = { id: 1, inputs: [], isLocked: false };
+		const documentGroup = { id: 2, inputs: [] as CanvasInput[], isLocked: false };
+		services.registerInstance(IEditorPart, { groups: [backgroundGroup, documentGroup], activeGroup: backgroundGroup } as unknown as IEditorPart);
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IAgentHostCanvasCollection, { createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }) } as unknown as IAgentHostCanvasCollection);
 		services.registerInstance(ISessionsLayoutService, { editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }) } as unknown as ISessionsLayoutService);
 		services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, state: 'loading', sessions: [] } as unknown as ISessionsManagementService);
+		services.registerInstance(IPinnedCanvasService, { entries: constObservable([]), selected: constObservable(undefined) } as unknown as IPinnedCanvasService);
 		const context = resources.add(services.createInstance(SessionCanvasContextService));
 		const owner: ICanvasOwner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/source-session'), chat: URI.parse('ash-thread:/source-thread') };
+		const input = {} as CanvasInput;
+		assert.equal(context.getEditorGroup(owner, input, false), undefined, 'New Canvases must not select the active group of a background working set');
+		assert.equal(context.getEditorGroup(owner, input, true), undefined);
+		documentGroup.inputs.push(input);
+		assert.equal(context.getEditorGroup(owner, input, false), documentGroup as unknown as IEditorGroup);
 		assert.equal(context.isOwnerVisible(owner), true);
 		assert.equal(context.isOwnerVisible({ ...owner, session: URI.parse('ash-session:/other-session') }), false);
 		assert.equal(context.isOwnerVisible({ ...owner, providerId: 'remote-provider' }), false);

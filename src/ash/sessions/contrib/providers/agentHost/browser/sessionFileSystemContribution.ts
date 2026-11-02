@@ -30,6 +30,7 @@ export class SessionFileSystemContribution extends Disposable {
 		for (const session of this.sessions.sessions) {
 			if (!session.providerId || session.providerId === this.defaultProviderId || !this.providers.getProvider(session.providerId)) continue;
 			const provider = this.providers.getProvider(session.providerId)!;
+			if (provider.ownsSessionFileSystem) continue;
 			const environment = provider.currentWorkspace();
 			const environmentRoot = environment.type === 'ssh' || environment.type === 'local' || environment.type === 'provider'
 				? sessionWorkspaceUri(buildAgentHostSessionWorkspace(environment)!) : undefined;

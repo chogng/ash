@@ -89,3 +89,13 @@ test('Catalog replacement closes the Welcome menu and disposal removes delegate 
 	f.delegate.setSelectedWorkspace(f.choices[0]);
 	assert.equal(f.button.isConnected, false);
 });
+
+test('Remote workspace choices keep their authority in labels without converting them to local paths', async () => {
+	using f = fixture();
+	const uri = URI.parse('ash-remote://ssh+build/srv/project');
+	f.choices.push({ uri, label: 'Remote project', isFolder: true });
+	await f.open();
+	assert.equal(f.entries.find(entry => entry.item?.id === `workspace.${uri.toString()}`)?.item?.tooltip, uri.toString());
+	await f.choose(`workspace.${uri.toString()}`);
+	assert.equal(f.selected?.uri.toString(), uri.toString());
+});
