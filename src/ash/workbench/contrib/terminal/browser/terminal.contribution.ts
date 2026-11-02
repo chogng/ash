@@ -1,4 +1,6 @@
 import { TerminalEditingService } from './terminalEditingService.js';
+import { getFontSnippets } from '../../../../base/browser/fonts.js';
+import { registerTerminalConfiguration } from '../common/terminalConfiguration.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
@@ -32,6 +34,8 @@ import { TerminalMainContribution } from './terminalMainContribution.js';
 import { AgentHostOutputChannel } from './agentHostOutputChannel.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+
+void registerTerminalConfiguration(getFontSnippets);
 
 // Ash creates its view services with the Parts; host terminal requests need both owners ready.
 registerWorkbenchContribution(TerminalMainContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(TerminalMainContribution));

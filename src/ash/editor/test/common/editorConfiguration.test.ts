@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../base/common/async.js';
+import type { IJSONSchemaSnippet } from '../../../base/common/jsonSchema.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
 import { isMacintosh } from '../../../base/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
+import { createConfigurationSchema } from '../../../platform/configuration/common/configurationSchema.js';
 import {
 	EditorFontLigatures,
 	EditorAutoIndentStrategy,
@@ -20,10 +24,49 @@ import {
 import { EditorZoom } from '../../common/config/editorZoom.js';
 import { createBareFontInfoFromRawSettings } from '../../common/config/fontInfoFromSettings.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
-import { editorConfiguration, isDiffEditorConfigurationKey, isEditorConfigurationKey } from '../../common/config/editorConfigurationSchema.js';
+import { editorConfiguration, isDiffEditorConfigurationKey, isEditorConfigurationKey, registerEditorFontConfigurations } from '../../common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+
+suite('Editor font candidates', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('editor font candidates reach the registered schema without changing setting values or validation', async () => {
+		const key = CodeEditorConfiguration.fontFamily;
+		const originalSchema = editorConfiguration.properties[key];
+		const setting = configurationRegistry.getConfiguration(key)!;
+		const settingsSchema = createConfigurationSchema();
+		const pending = new DeferredPromise<IJSONSchemaSnippet[]>();
+		let schemaChanges = 0;
+		let configurationChanges = 0;
+		using schemaListener = configurationRegistry.onDidSchemaChange(() => schemaChanges++);
+		using configurationListener = configurationRegistry.onDidUpdateConfiguration(() => configurationChanges++);
+		try {
+			const registration = registerEditorFontConfigurations(() => pending.p);
+			assert.strictEqual(configurationRegistry.getConfiguration(key), setting);
+			assert.equal(settingsSchema.properties?.[key].default, '');
+			assert.equal(schemaChanges, 0);
+			const snippets = [{ body: 'Test Mono' }, { body: '字体 "测试"' }];
+			await pending.complete(snippets);
+			await registration;
+			assert.deepEqual(setting.schema?.defaultSnippets, snippets);
+			assert.deepEqual(settingsSchema.properties?.[key].defaultSnippets, snippets);
+			assert.equal(schemaChanges, 1);
+			snippets.push({ body: 'Later Font' });
+			assert.deepEqual(setting.schema?.defaultSnippets, [{ body: 'Test Mono' }, { body: '字体 "测试"' }]);
+			await registerEditorFontConfigurations(async () => []);
+			assert.deepEqual(settingsSchema.properties?.[key].defaultSnippets, []);
+			assert.equal(schemaChanges, 2);
+			assert.equal(configurationChanges, 0);
+			assert.equal(setting.defaultValue, '');
+			assert.equal(setting.parse('Custom Font, monospace'), 'Custom Font, monospace');
+			assert.throws(() => setting.parse('Invalid\nFont'), TypeError);
+		} finally {
+			editorConfiguration.properties[key] = originalSchema;
+		}
+	});
+});
 
 test('folding budgets normalize standalone inputs and expose the supported setting bounds', () => {
 	const option = EditorOptions.foldingMaximumRegions;

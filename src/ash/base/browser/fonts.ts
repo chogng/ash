@@ -1,4 +1,6 @@
-import { isMacintosh, isWindows } from '../common/platform.js';
+import type { IJSONSchemaSnippet } from '../common/jsonSchema.js';
+import { environment, isMacintosh, isWindows } from '../common/platform.js';
+import { mainWindow } from './window.js';
 
 /**
  * Platform-appropriate proportional font family for browser UI.
@@ -25,15 +27,24 @@ interface ILocalFontQueryWindow extends Window {
  * Unsupported runtimes and denied permission both produce an empty list.
  */
 export async function getFonts(): Promise<string[]> {
-	const queryLocalFonts =
-		(globalThis as unknown as ILocalFontQueryWindow).queryLocalFonts;
-	if (!queryLocalFonts) return [];
-
 	try {
-		const fonts = await queryLocalFonts.call(globalThis);
+		const targetWindow = mainWindow as ILocalFontQueryWindow | undefined;
+		if (typeof targetWindow?.queryLocalFonts !== 'function') {
+			return [];
+		}
+		const fonts = await targetWindow.queryLocalFonts();
 		return fonts.map((font) => font.family);
 	} catch (error) {
 		console.error(`Failed to query fonts: ${String(error)}`);
 		return [];
 	}
+}
+
+/** Supplies installed font names to settings completion in the desktop host. */
+export async function getFontSnippets(): Promise<IJSONSchemaSnippet[]> {
+	// Web font access requires a user gesture; configuration loading must not prompt.
+	if (environment.runtime !== 'electron') {
+		return [];
+	}
+	return (await getFonts()).map(family => ({ body: family }));
 }

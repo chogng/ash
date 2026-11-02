@@ -117,7 +117,10 @@ export interface IConfigurationKeyDefinition<T> {
 }
 
 export interface IConfigurationRegistry {
+	readonly onDidSchemaChange: Event<void>;
 	readonly onDidUpdateConfiguration: Event<{ properties: ReadonlySet<string>; defaultsOverrides?: boolean; }>;
+	/** Signals changed completion metadata without changing registered keys or defaults. */
+	notifyConfigurationSchemaUpdated(...configurations: IConfigurationNode[]): void;
 	updateConfigurations(configurations: { add: IConfigurationNode[]; remove: IConfigurationNode[]; }): void;
 	deltaConfiguration(delta: IConfigurationDelta): void;
 	getConfigurationDefaultsOverrides(): Map<string, IConfigurationDefaultOverrideValue>;
@@ -164,6 +167,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	private readonly configurations = new Map<string, IRegisteredConfiguration>();
 	private readonly nodes = new Map<IConfigurationNode, readonly string[]>();
 	private defaults: IConfigurationDefaults[] = [];
+	private schemaChangeEmitter: Emitter<void> | undefined;
 	private changeEmitter: Emitter<{ properties: ReadonlySet<string>; }> | undefined;
 	// The registry belongs to the realm. A temporary test registry's event channel
 	// belongs to its consumers and releases when its last subscription ends.
@@ -171,6 +175,15 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		const emitter: Emitter<{ properties: ReadonlySet<string>; }> = this.changeEmitter ??= new Emitter({ onDidRemoveLastListener: () => { this.changeEmitter = undefined; emitter.dispose(); } });
 		return emitter.event(listener, thisArgs, disposables);
 	};
+
+	public readonly onDidSchemaChange: Event<void> = (listener, thisArgs, disposables) => {
+		const emitter: Emitter<void> = this.schemaChangeEmitter ??= new Emitter({ onDidRemoveLastListener: () => { this.schemaChangeEmitter = undefined; emitter.dispose(); } });
+		return emitter.event(listener, thisArgs, disposables);
+	};
+
+	public notifyConfigurationSchemaUpdated(..._configurations: IConfigurationNode[]): void {
+		this.schemaChangeEmitter?.fire();
+	}
 
 	public updateConfigurations({ add, remove }: { add: IConfigurationNode[]; remove: IConfigurationNode[]; }): void {
 		this.deltaConfiguration({ addedConfigurations: add, removedConfigurations: remove });
@@ -235,7 +248,10 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		this.nodes.clear();
 		for (const [node, keys] of nodes) this.nodes.set(node, keys);
 		this.defaults = defaults;
-		if (properties.size) this.changeEmitter?.fire({ properties });
+		if (properties.size) {
+			this.schemaChangeEmitter?.fire();
+			this.changeEmitter?.fire({ properties });
+		}
 	}
 
 	public getConfigurationDefaultsOverrides(): Map<string, IConfigurationDefaultOverrideValue> {
@@ -266,6 +282,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 			agentsWindow: definition.agentsWindow ? Object.freeze({ ...definition.agentsWindow, default: definition.parse(definition.agentsWindow.default) }) : undefined,
 		});
 		this.configurations.set(definition.key, configuration as IRegisteredConfiguration);
+		this.schemaChangeEmitter?.fire();
 		this.changeEmitter?.fire({ properties: new Set([definition.key]) });
 		return definition.key;
 	}

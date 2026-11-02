@@ -533,12 +533,13 @@ export function isDiffEditorConfigurationKey(key: string): boolean {
 }
 
 /** Adds host-provided font snippets to the editor font-family setting. */
-export async function registerEditorFontConfigurations(getFontSnippets: () => Promise<IJSONSchemaSnippet[]>) {
+export async function registerEditorFontConfigurations(getFontSnippets: () => Promise<IJSONSchemaSnippet[]>): Promise<void> {
 	const snippets = await getFontSnippets();
 	const fontFamilySchema = properties['editor.fontFamily'];
 	if (!fontFamilySchema) return;
 	properties['editor.fontFamily'] = { ...fontFamilySchema, defaultSnippets: Object.freeze([...snippets]) };
 	cachedEditorConfigurationKeys = undefined;
+	configurationRegistry.notifyConfigurationSchemaUpdated();
 }
 
 function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; }): schema is IConfigurationPropertySchema {

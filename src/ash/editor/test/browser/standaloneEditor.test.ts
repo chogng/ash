@@ -5747,14 +5747,24 @@ suite('standalone browser component', () => {
 				const result = find.locator('.stanza-editor-find-result');
 				const ordinary = page.locator('#caller .view-overlays .cdr.findMatch');
 				const current = page.locator('#caller .view-overlays .cdr.currentFindMatch');
+				type MatchBounds = NonNullable<Awaited<ReturnType<typeof current.boundingBox>>>;
+				async function waitForCurrentMatchBounds(expected: Partial<MatchBounds> = {}): Promise<MatchBounds> {
+					let bounds: MatchBounds | null = null;
+					// The counter updates before the next-frame overlay projection, which replaces its nodes.
+					// Retry the geometry read itself before retaining a baseline for later navigation.
+					await expect.poll(async () => {
+						bounds = await current.boundingBox();
+						return bounds && bounds.width > 0 ? bounds : null;
+					}).toMatchObject(expected);
+					return bounds!;
+				}
 				await search.fill('alpha');
 				await expect(result).toHaveText('1 of 2');
 				await expect(ordinary).toHaveCount(overlap ? 2 : 1);
 				await expect(current).toHaveCount(1);
-				const first = (await current.boundingBox())!;
-				expect(first.width).toBeGreaterThan(0);
+				const first = await waitForCurrentMatchBounds();
 				if (overlap) {
-					expect(await ordinary.first().boundingBox()).toEqual(first);
+					await expect.poll(() => ordinary.first().boundingBox()).toEqual(first);
 				}
 				for (const [theme, background, activeBackground, outline] of [
 					['find-test-light', 'rgb(255, 0, 0)', 'color(srgb 0.7 0 0.3)', 'rgb(0, 0, 255)'],
@@ -5773,9 +5783,7 @@ suite('standalone browser component', () => {
 					await expect(result).toHaveText('2 of 2');
 					await search.press('Shift+Enter');
 					await expect(result).toHaveText('1 of 2');
-					const themedFirst = (await current.boundingBox())!;
-					expect(themedFirst).toMatchObject({ x: first.x, y: first.y, height: first.height });
-					expect(themedFirst.width).toBeGreaterThan(0);
+					const themedFirst = await waitForCurrentMatchBounds({ x: first.x, y: first.y, height: first.height });
 					if (overlap) {
 						// These absolute siblings share a stacking context; the last one paints on top.
 						await expect(current).toHaveCSS('z-index', 'auto');

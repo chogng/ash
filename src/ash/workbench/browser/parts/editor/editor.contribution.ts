@@ -25,6 +25,10 @@ import { IEditorPart } from './editorPart.js';
 import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from './editorStatus.js';
 import { DynamicEditorConfigurations } from './editorConfiguration.js';
+import { getFontSnippets } from '../../../../base/browser/fonts.js';
+import { registerEditorFontConfigurations } from '../../../../editor/common/config/editorConfigurationSchema.js';
+
+void registerEditorFontConfigurations(getFontSnippets);
 
 const outsideModalEditor = EditorPartModalVisibleContext.isEqualTo(false);
 
