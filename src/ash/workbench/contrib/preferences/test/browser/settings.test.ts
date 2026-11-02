@@ -1997,7 +1997,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(appearance.descriptor.label, '外观');
 		assert.equal(appearance.descriptor.description, '设置聊天消息、消息输入框和代码块的显示方式。');
 		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块']);
-		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.fontFamily', 'chat.fontSize', 'chat.upvoteAnimation']);
+		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.upvoteAnimation', 'chat.fontFamily', 'chat.fontSize']);
 		assert.deepEqual(
 			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
