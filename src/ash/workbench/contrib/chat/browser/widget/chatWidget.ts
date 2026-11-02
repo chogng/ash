@@ -52,7 +52,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
-import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -121,6 +121,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		editorService: IEditorService | undefined,
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
+		private readonly viewOptions: IChatWidgetViewOptions | undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IDialogService dialogs: IDialogService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
@@ -295,7 +296,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		};
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
-			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
+			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
 		this._register(widgets.register(this));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
@@ -432,6 +433,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const model = this.model;
 		const generation = model.composerGeneration;
 		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
+		if (this.viewOptions?.submitHandler && await this.viewOptions.submitHandler(text, mode, contexts, submissionSignal)) {
+			return;
+		}
+		if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) { throw canceled(); }
+
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {

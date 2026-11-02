@@ -69,7 +69,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 						throw error;
 					}
 				},
-			}, model), instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+			}, model), undefined, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;

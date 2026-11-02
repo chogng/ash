@@ -1,0 +1,48 @@
+import { basename } from 'node:path';
+import { expect, test } from '../../../automation/test.js';
+import { Workbench } from '../../../automation/workbench.js';
+import { Editor } from '../../../automation/editor.js';
+
+test('Welcome opens the selected workspace with a prefilled draft and releases its routing when moved to Chat', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+	test.setTimeout(120_000);
+	if (!('windows' in application)) { throw new Error('This scenario requires Electron windows'); }
+	await workbench.quickaccess.runCommand('workbench.action.openWelcome');
+	const emptyWindow = application.waitForEvent('window');
+	await workbench.page.getByRole('button', { name: 'Open new editor window', exact: true }).click();
+	const emptyPage = await emptyWindow;
+	const empty = new Workbench(emptyPage);
+	await empty.waitForReady();
+	const welcome = emptyPage.locator('.ash-agent-sessions-welcome:visible');
+	await expect(welcome).toBeVisible();
+	const chat = welcome.locator('.ash-chat:visible');
+	const input = new Editor(chat);
+	await input.waitForEditorFocus();
+	await emptyPage.keyboard.insertText('Inspect this selected project without sending yet');
+	const workspace = welcome.locator('.ash-chat-input-workspace-picker');
+	await workspace.press('ArrowDown');
+	const target = emptyPage.getByRole('menuitemradio', { name: basename(testWorkspace.directory), exact: true });
+	await expect(target).toBeVisible();
+	await emptyPage.keyboard.press('Escape');
+	await expect(workspace).toBeFocused();
+	await input.waitForEditorContents(text => text === 'Inspect this selected project without sending yet');
+	await workspace.press('ArrowDown');
+	await target.click();
+	await expect(workspace).toHaveText(basename(testWorkspace.directory));
+	await chat.locator('.stanza-editor-input').focus();
+	const destinationWindow = application.waitForEvent('window');
+	await emptyPage.keyboard.press('Enter');
+	const destinationPage = await destinationWindow;
+	const destination = new Workbench(destinationPage);
+	await destination.waitForReady();
+	const destinationWelcome = destinationPage.locator('.ash-agent-sessions-welcome:visible');
+	await expect(destinationWelcome).toBeVisible();
+	await new Editor(destinationWelcome.locator('.ash-chat:visible')).waitForEditorContents(text => text === 'Inspect this selected project without sending yet');
+	await expect(destinationWelcome.locator('.ash-chat-input-workspace-slot')).toBeHidden();
+	await expect(destinationWelcome.locator('.ash-chat')).not.toHaveAttribute('data-session-id', /.+/u);
+	await destinationPage.screenshot({ path: testInfo.outputPath('welcome-project-prefill.png') });
+	const chatId = await chat.getAttribute('id');
+	await welcome.getByRole('button', { name: 'Open in Chat View', exact: true }).click();
+	const moved = emptyPage.locator(`.ash-chat-view-pane:visible [id="${chatId}"]`);
+	await expect(moved).toBeVisible();
+	await expect(moved.locator('.ash-chat-input-workspace-slot')).toBeHidden();
+});

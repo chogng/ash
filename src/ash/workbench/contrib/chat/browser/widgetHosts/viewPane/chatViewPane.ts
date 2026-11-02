@@ -15,7 +15,7 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../../../../services/layout/browser/layoutService.js';
 import { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
-import type { IChatViewPane, IQuickChatSession } from '../../chat.js';
+import type { IChatViewPane, IQuickChatSession, IChatWidgetViewOptions } from '../../chat.js';
 import type { ChatWidget, IChatWidgetModel } from '../../widget/chatWidget.js';
 import { AgentSessionsControl } from '../../agentSessions/agentSessionsControl.js';
 import { AgentSessionsViewerOrientation } from '../../agentSessions/agentSessions.js';
@@ -288,7 +288,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	protected abstract activatePane(id: string): void;
 	protected abstract ensureConversationForVisibleChat(): void;
 	/** Borrows a distinct retained conversation without navigating the main Chat selection. */
-	public abstract createQuickChat(parent: HTMLElement, titleId: string): IQuickChatSession;
+	public abstract createEmbeddedChat(parent: HTMLElement, titleId: string, options?: IChatWidgetViewOptions): IQuickChatSession;
 	/** Invalidates pending work even when navigation returns to the same retained composer. */
 	protected abstract get selectionRevision(): number;
 	/** Restores a requested conversation through the product owner before an editor borrows it. */

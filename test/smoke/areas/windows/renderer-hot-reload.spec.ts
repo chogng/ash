@@ -156,7 +156,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 					return Object.assign(toDisposable(() => element.remove()), { element, render: () => undefined, setVisible: () => undefined, focus: () => editor.focus() });
 				};
 				const chat = scope.add(chatSurface === 'code'
-					? services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, createInput)
+					? services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, createInput, undefined)
 					: services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, createInput));
 				chat.setVisible(true);
 				const selections = Array.from({ length: 40 }, (_, index) => ({ kind: 'untitled', session: { untitledSessionId: `draft-${index}`, title: `Draft ${index}` } }));

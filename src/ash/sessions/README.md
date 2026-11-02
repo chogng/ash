@@ -71,6 +71,11 @@ editor and draft policy without constructing its parent. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
+Its workspace slot binds the draft and execution policy through `SessionWorkspacePicker`
+to the Sessions-owned `WorkspacePicker` in `sessionWorkspacePicker.ts`. That picker
+owns its trigger, folder history, choice list, cancellation and focus restoration.
+The Workbench Welcome workspace picker has a separate delegate and presentation;
+it does not own the Sessions execution environment.
 
 Shared notices, introductions and tips live under
 `workbench/contrib/chat/browser/widget/input/notices/`.
@@ -89,6 +94,17 @@ voice and dictation providers to that composer's visible lifetime and onboarding
 Voice introductions retain the profile acknowledgement preference and share one
 service across Chat, Cowork and floating voice controls. Escape and hiding an input
 release their presentation without acknowledging it; Got it records acknowledgement.
+
+Workbench `AgentSessionsWelcomePage` and Quick Chat borrow independent retained
+conversations through `IChatViewPane.createEmbeddedChat`. `SessionChatViewPane`
+retains each model, draft and widget while its host owns placement and visibility.
+Releasing a host removes its workspace delegate and submission route before the
+same widget returns to Chat. Welcome in an empty window owns the trusted recent
+workspace selection; its `IWorkspacePickerDelegate` passes through `ChatWidget`
+and `ChatInputPart` to the Workbench `WorkspacePickerActionItem`. A target submission
+opens a new workspace window with a validated, expiring draft handoff addressed to
+that workspace. The target prefills text, mode and captured context without sending.
+A failed open restores the source draft and cannot fall through to local execution.
 
 Quick Chat borrows a distinct retained conversation from `SessionChatViewPane`.
 Its background draft leaves foreground selection unchanged; hiding the overlay

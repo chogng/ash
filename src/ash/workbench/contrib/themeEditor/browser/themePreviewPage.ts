@@ -144,7 +144,7 @@ class ChatPreviewPane extends ChatViewPane {
 				this.paneHost, id, model, () => this.activatePane(this.entries[1]!.id),
 				this.contextMenuService, this.contextViewService,
 				this.commandService, this.accessibleViews, this.notifications, this.opener,
-				this.editorService, undefined, undefined,
+				this.editorService, undefined, undefined, undefined,
 			));
 			this.entries.push({ id, label, pane });
 		}
@@ -183,7 +183,7 @@ class ChatPreviewPane extends ChatViewPane {
 		this.changed.fire();
 	}
 	public override async openInNewWindow(): Promise<void> { throw chatUnavailable(); }
-	public override createQuickChat(): IQuickChatSession { throw chatUnavailable(); }
+	public override createEmbeddedChat(): IQuickChatSession { throw chatUnavailable(); }
 }
 
 if (chatPreview) {

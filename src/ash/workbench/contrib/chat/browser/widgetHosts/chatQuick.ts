@@ -140,7 +140,8 @@ export class QuickChatService extends Disposable implements IQuickChatService {
 			if (!wasVisible) this.views.closeView(CHAT_VIEW_ID);
 			if (request !== this.opening || this.isDisposed || !this.enabled) return;
 			if (!(view instanceof ChatViewPane)) throw new Error(localize('quickChat.unavailable', 'Quick Chat is unavailable in this window.'));
-			this.session = view.createQuickChat(this.content, this.titleId);
+			this.session = view.createEmbeddedChat(this.content, this.titleId);
+			this.session.widget.model.selectMode('ask');
 			const lifetime = new DisposableStore();
 			this.retiredSession.value = lifetime;
 			lifetime.add(this.session.widget.model.onDidChange(() => this.updateLayout()));

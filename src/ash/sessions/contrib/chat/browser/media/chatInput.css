@@ -107,21 +107,16 @@
 	display: none;
 }
 
-.ash-sessions-chat-input-workspace > span:last-child {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.ash-sessions-chat-input-workspace > .lxicon {
-	flex-shrink: 0;
-}
-
 .ash-sessions-permission-picker {
 	flex: 0 0 auto;
 }
 
 .ash-sessions-window .ash-chat-permission-menu {
 	border-radius: var(--ash-cornerRadius-xxLarge);
+}
+
+.ash-sessions-workspace-picker.ash-button {
+	min-width: 0;
+	max-width: 100%;
+	color: inherit;
 }

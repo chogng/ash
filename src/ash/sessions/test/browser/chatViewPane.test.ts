@@ -1,3 +1,5 @@
+import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
+import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { IVoiceModeOnboardingService } from '../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
@@ -157,6 +159,7 @@ const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleSer
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
+	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
 	} as unknown as IFileDialogService);
@@ -1448,6 +1451,8 @@ test('sending from one session preserves a later draft during first-session crea
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
 	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
@@ -1840,7 +1845,8 @@ test('failed first send keeps the untitled session and its input draft', async (
 		cancelable: true,
 		key: 'Enter',
 	}));
-	await waitFor(() => input.value === 'failed commit Keep this draft');
+	await waitFor(() => input.value === 'failed commit Keep this draft'
+		&& (pane.element.querySelector('.ash-chat-input-notification-message')?.textContent ?? '').includes('Cannot create Session'));
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
@@ -1850,7 +1856,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('empty'), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('has-conversation'), false);
-	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-status, .ash-chat-status-summary')?.textContent ?? '', /Cannot create Session/);
+	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-input-notification-message')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
 });
@@ -4805,7 +4811,7 @@ for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inl
 	const services = createInputServices(contextView, chat);
 	const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
 	using widget = kind === 'Code'
-		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
+		? new ChatWidget(document.body, 'ordered-snapshots', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
 		: new CoworkWidget(document.body, 'ordered-snapshots', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
 	widget.setVisible(true);
 	const first = new DeferredPromise<{ name: string; content: string; }>();
@@ -4847,7 +4853,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		}, undefined, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');
@@ -6218,7 +6224,7 @@ test('composer navigation keeps the first untitled materialization in the same i
 	using commands = new CommandService(new InstantiationService());
 	const contextMenus = { showContextMenu: () => { }, hideContextMenu: () => { } } as unknown as IContextMenuService;
 	const services = createInputServices(contextView, chat, undefined, contextMenus);
-	using widget = services.createInstance(ChatWidget, dom.window.document.body, 'materialization-fixture', model, () => { }, contextMenus, contextView, commands, unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined);
+	using widget = services.createInstance(ChatWidget, dom.window.document.body, 'materialization-fixture', model, () => { }, contextMenus, contextView, commands, unavailableAccessibleViewService, notifications, undefined, undefined, undefined, undefined, undefined);
 	widget.setVisible(true);
 	await model.initialize();
 	widget.addContext({ id: 'first-file', kind: 'file', name: 'first.txt', resolve: async () => ({ name: 'first.txt', content: 'First file contents' }) });
@@ -6806,4 +6812,46 @@ for (const close of ['discard', 'dispose'] as const) test(`IDE auxiliary window 
 	assert.equal(popup.isDisposed, true);
 	assert.equal(f.fake.createSessionRequests.length, 0);
 	assert.equal(f.fake.turnStartRequests.length, 0);
+});
+
+
+test('Welcome routes the accepted snapshot before model send and restores a rejected handoff', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using environment = toDisposable(() => dom.window.close());
+	dom.window.HTMLElement.prototype.scrollTo = () => { };
+	using contextView = new BrowserContextViewService(dom.window.document.body);
+	const fake = fakeApi({ sessions: [], createSession: session('should-not-exist', 'thread') });
+	using sessions = new SessionsManagementService(fake.api);
+	await sessions.initialize();
+	using chat = createChatService(fake.api);
+	const draft = sessions.createUntitledSession();
+	using model = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
+	await model.initialize();
+	using services = createInputServices(contextView, chat);
+	let reject = false;
+	const routed: { text: string; attachments: readonly string[]; }[] = [];
+	const submitHandler: NonNullable<IChatWidgetViewOptions['submitHandler']> = async (text, _mode, contexts) => {
+		assert.equal(await widget.captureDraft(), undefined, 'routing must use the accepted snapshot after the live input clears');
+		routed.push({ text, attachments: await Promise.all(contexts.map(async context => (await context.resolve()).content)) });
+		if (reject) { throw new Error('Cannot open chosen workspace'); }
+		return true;
+	};
+	using widget = services.createInstance(ChatWidget, dom.window.document.body, 'welcome-routing', model, () => { },
+		services.get(IContextMenuService), contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications,
+		undefined, undefined, undefined, undefined, { submitHandler });
+	widget.setVisible(true);
+	widget.appendToDraft('Route this accepted message');
+	widget.addContext({ id: 'file', kind: 'file', name: 'notes.txt', resolve: async () => ({ name: 'notes.txt', content: 'Original captured content' }) });
+	await widget.acceptInput();
+	assert.equal(routed.length, 1);
+	assert.ok(routed[0]!.text.includes('Route this accepted message'));
+	assert.deepEqual(routed[0]!.attachments, ['Original captured content']);
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(sessions.sessions.length, 0);
+	reject = true;
+	widget.appendToDraft('Keep the failed handoff');
+	await assert.rejects(widget.acceptInput(), /Cannot open chosen workspace/);
+	assert.equal((await widget.captureDraft())?.draft.text, 'Keep the failed handoff');
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(sessions.sessions.length, 0);
 });

@@ -1,5 +1,18 @@
 {
   "ash": {
+    "agentSessionsWelcome.title": "Agent 会话欢迎页",
+    "agentSessionsWelcome.heading": "你想处理什么工作？",
+    "agentSessionsWelcome.open": "打开 Agent 会话欢迎页",
+    "agentSessionsWelcome.openChat": "在聊天视图中打开",
+    "agentSessionsWelcome.history": "聊天历史",
+    "agentSessionsWelcome.unavailable": "此窗口中无法使用聊天。",
+    "agentSessionsWelcome.help": "Agent 会话欢迎页\n使用 Tab 聚焦消息输入框、工作区、在聊天视图中打开和聊天历史。按 Enter 在当前工作区发送消息。在空窗口中，先选择最近使用且受信任的工作区，再提交以打开该工作区并预填消息和附件。目标工作区不会自动发送。打开失败时，草稿会保留在这里。按 Enter、空格或方向键打开工作区列表；使用方向键选择，按 Escape 返回。“在聊天视图中打开”会将同一对话及草稿移入聊天视图。",
+    "chat.workspace.openFolder": "打开文件夹…",
+    "chat.workspace.choose": "选择工作区",
+    "chat.workspace.label": "工作区",
+    "chat.workspace.selected": "工作区：{0}",
+    "chat.embedded.focus": "聊天已在其他视图中打开",
+    "chat.workspace.help": "工作区选择器用于欢迎页的提交目标。在空窗口中，使用 Tab 聚焦工作区，按 Enter、空格或方向键打开列表。使用方向键选择最近使用且受信任的文件夹或工作区，按 Enter 确认，按 Escape 返回。选中目标后提交会打开目标工作区并预填草稿和附件，不会自动发送；打开失败会保留草稿。",
     "quickInput.executeCommand": "点击执行命令“{0}”",
     "quickInput.pin": "固定条目",
     "quickInput.unpin": "取消固定条目",

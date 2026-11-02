@@ -128,3 +128,18 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
+
+.ash-chat-input-workspace-slot {
+	display: flex;
+	min-width: 0;
+	max-width: 40%;
+}
+
+.ash-chat-input-workspace-slot[hidden] {
+	display: none;
+}
+
+.ash-chat-input-workspace-picker.ash-button {
+	min-width: 0;
+	max-width: 100%;
+}

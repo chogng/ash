@@ -16,14 +16,14 @@ test('Independent conversation workspace choices preserve drafts and defer workt
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await page.locator('[data-action-id="sessions.newSession"] button').click();
 	const active = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat:visible');
-	const workspace = () => active().locator('.ash-sessions-chat-input-workspace');
+	const workspace = () => active().locator('.ash-sessions-workspace-picker');
 	const id = await active().getAttribute('data-untitled-session-id');
 	expect(id).toBeTruthy();
 	const editor = new Editor(active());
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('Keep this independent worktree draft');
 	await workspace().focus();
-	await workspace().press('Enter');
+	await workspace().press('ArrowDown');
 	await page.getByRole('option').filter({ hasText: 'New worktree…' }).click();
 	const branch = page.getByRole('dialog', { name: 'New worktree…', exact: true }).getByRole('textbox');
 	await branch.fill('review/independent');

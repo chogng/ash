@@ -1,3 +1,4 @@
+import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
@@ -14,6 +15,28 @@ import type { IChatListItem } from './widget/chatListItems.js';
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;
+}
+
+/** The Welcome host owns the available targets and the current selection. */
+export interface IWorkspacePickerItem {
+	readonly uri: URI;
+	readonly label: string;
+	readonly isFolder: boolean;
+}
+
+export interface IWorkspacePickerDelegate {
+	getWorkspaces(): IWorkspacePickerItem[];
+	getSelectedWorkspace(): IWorkspacePickerItem | undefined;
+	setSelectedWorkspace(workspace: IWorkspacePickerItem | undefined): void;
+	readonly onDidChangeSelectedWorkspace: Event<IWorkspacePickerItem | undefined>;
+	readonly onDidChangeWorkspaces: Event<void>;
+	readonly openFolderCommand: string;
+}
+
+/** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
+export interface IChatWidgetViewOptions {
+	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
+	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
@@ -119,6 +142,8 @@ export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetS
 export interface IChatViewPane extends IView {
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;
+	/** Borrows an independent retained composer; releasing the mount preserves its model and draft. */
+	createEmbeddedChat(parent: HTMLElement, titleId: string, options?: IChatWidgetViewOptions): IQuickChatSession;
 	getOptimalWidth(): number;
 	getSessionsViewerOrientation(): AgentSessionsViewerOrientation;
 	getLastDimensions(orientation: AgentSessionsViewerOrientation): { height: number; width: number; } | undefined;

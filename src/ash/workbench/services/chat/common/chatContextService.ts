@@ -1,3 +1,5 @@
+import type { SessionMode } from '../../../../platform/agentHost/common/agent.js';
+import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/common/terminal.js';
@@ -42,4 +44,18 @@ export interface IChatContextTarget {
 	/** Captures and previews an image through the active composer’s attachment lifecycle. */
 	captureScreenshot(capture?: ChatImageCapture): Promise<void>;
 	acceptInput(value?: string): Promise<void>;
+}
+
+/** Serializes the accepted composer snapshot for a workspace or window handoff. */
+export async function captureChatDraft(text: string, mode: SessionMode, attachments: readonly ChatContextAttachment[]): Promise<NonNullable<IOpenAgentsWindowOptions['draft']>> {
+	const contexts = await Promise.all(attachments.map(async attachment => ({
+		id: attachment.id,
+		kind: attachment.kind,
+		name: attachment.name,
+		content: (await attachment.resolve()).content,
+		...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+		...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
+		...(attachment.reference ? { reference: attachment.reference } : {}),
+	})));
+	return { mode, text, contexts };
 }

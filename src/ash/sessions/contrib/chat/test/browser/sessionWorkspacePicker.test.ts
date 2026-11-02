@@ -12,6 +12,7 @@ import { IFileDialogService } from '../../../../../platform/dialogs/common/dialo
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IInputOptions, type IQuickPick, type IQuickPickItem, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
@@ -64,6 +65,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	services.registerInstance(IWorkspaceContextService, {
 		getWorkspace: () => ({ id: 'project', folders: [] }), onDidChangeWorkspaceFolders: Event.None,
 	} as unknown as IWorkspaceContextService);
+	services.registerInstance(IWorkspacesService, { getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, { showOpenDialog: () => dialog.p } as unknown as IFileDialogService);
 	services.registerInstance(IQuickInputService, {
 		createQuickPick: () => picker,

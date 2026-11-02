@@ -18,13 +18,14 @@ import '../../browser/gettingStarted.contribution.js';
 test('Startup editor setting opens Welcome only when the selected workspace permits it', async () => {
 	using configuration = new InMemoryConfigurationService();
 	const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(StartupEditorConfigurationKey);
-	assert.equal(setting?.defaultValue, 'welcomePage');
+	assert.equal(setting?.defaultValue, 'agentSessionsWelcomePage');
+	await configuration.updateValue(StartupEditorConfigurationKey, 'welcomePage');
 	assert.deepEqual(setting?.setting?.valueType, 'select');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		assert.equal(setting?.setting?.title, '启动时的编辑器');
-		assert.equal(setting?.setting?.options?.[2]?.label, '仅空工作台显示欢迎页');
+		assert.equal(setting?.setting?.options?.[3]?.label, '仅空工作台显示欢迎页');
 	} finally {
 		resetNlsResolver();
 	}

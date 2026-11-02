@@ -18,7 +18,7 @@ class WorkbenchSessionsManagementService extends SessionsManagementService {
 		const provider = instantiationService.createInstance(AppServerSessionsProvider, {
 			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
 			selectWorkspace: async folders => {
-				using selection = instantiationService.createInstance(WorkspacePicker);
+				using selection = instantiationService.createInstance(WorkspacePicker, {});
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);

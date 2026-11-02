@@ -1,3 +1,6 @@
+import type { IWorkspacePickerDelegate } from '../../chat.js';
+import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
+import { captureChatDraft } from '../../../../../services/chat/common/chatContextService.js';
 import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../common/chat.js';
 import type { IChatAcceptInputOptions } from '../../chat.js';
 import type { IContextKey } from '../../../../../../platform/contextkey/common/contextkey.js';
@@ -118,6 +121,7 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
+	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
 	readonly renderSecondaryToolbar?: boolean;
@@ -224,6 +228,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly conversation = observableValue<ChatInputState['conversation']>(this, undefined);
 	private readonly secondaryToolbarContainer: HTMLElement | undefined;
 	private readonly footerChanged = this._register(new Emitter<void>());
+	private workspaceWidget: WorkspacePickerActionItem | undefined;
+	private workspaceDelegate: IWorkspacePickerDelegate | undefined;
+	private workspaceHost: HTMLElement | undefined;
+	private readonly workspacePresentation = this._register(new MutableDisposable<WorkspacePickerActionItem>());
 	private permissionWidget: PermissionPickerActionItem | undefined;
 	private footerContextToolbar: WorkbenchToolBar | undefined;
 	private footerContextAction: IAction | undefined;
@@ -780,19 +788,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const mode = this.mode;
 		if (!text.trim() && attachments.length === 0) return undefined;
 		const revision = this.draftRevision;
-		const contexts = await Promise.all(attachments.map(async attachment => ({
-			id: attachment.id,
-			kind: attachment.kind,
-			name: attachment.name,
-			content: (await attachment.resolve()).content,
-			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
-			...(attachment.reference ? { reference: attachment.reference } : {}),
-		})));
+		const draft = await captureChatDraft(text, mode, attachments);
 		if (this.isDisposed || lifecycle.aborted) return undefined;
 		if (this.draftRevision !== revision || this.mode !== mode) throw new Error(localize('chat.draftChangedDuringHandoff', 'The draft changed while opening Agents Window. Try again.'));
 		return {
-			draft: { mode, text, contexts },
+			draft,
 			clear: () => {
 				if (this.isDisposed || lifecycle.aborted || this.draftRevision !== revision || this.mode !== mode) return;
 				this.setInputValue('');
@@ -964,6 +964,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected getAccessibilityHelpContent(): string {
 		return [
 			getChatInputAccessibilityHelp(this.screenshotContext.accessibilityHelp, !!this.secondaryToolbarContainer),
+			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 		].filter(Boolean).join('\n');
 	}
@@ -1010,6 +1011,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.invalidatePendingInput();
 			this.contextUsageWidget?.hide();
 			this.permissionWidget?.hide();
+			this.workspaceWidget?.hide();
 		}
 	}
 
@@ -1349,6 +1351,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			get enabled() { return owner.delegate.selectApprovalMode !== undefined; },
 			run: async () => this.permissionWidget?.show(),
 		};
+		this.workspaceHost = h(container.ownerDocument, 'div', { className: 'ash-chat-input-workspace-slot' });
+		container.append(this.workspaceHost);
+
 		const secondaryToolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenus, MenuId.ChatInputSecondary, {
 			ariaLabel: localize('chat.input.secondaryActions', 'Chat secondary actions'),
 			leadingActions: [this.attachAction, permissions],
@@ -1457,7 +1462,31 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		});
 	}
 
+	private renderWorkspacePicker(): void {
+		if (!this.workspaceHost) { return; }
+		const delegate = this.options.workspacePickerDelegate;
+		this.workspaceHost.hidden = !delegate;
+		if (delegate !== this.workspaceDelegate) {
+			this.workspacePresentation.clear();
+			this.workspaceDelegate = delegate;
+			this.workspaceWidget = undefined;
+			if (delegate) {
+				const owner = this;
+				const picker = this.instantiationService.createInstance(WorkspacePickerActionItem, {
+					id: 'workbench.action.chat.openWorkspacePicker', label: localize('chat.workspace.label', 'Workspace'),
+					tooltip: localize('chat.workspace.choose', 'Choose a workspace'), icon: Lxicon.folder,
+					get enabled() { return !owner.state.aiDisabled && owner.state.phase !== 'submitting'; },
+					run: () => picker.show(),
+				}, delegate, this.footerChanged.event);
+				this.workspacePresentation.value = this.workspaceWidget = picker;
+				picker.render(this.workspaceHost);
+			}
+		}
+		if (!this.visible || this.state.aiDisabled || this.state.phase === 'submitting') { this.workspaceWidget?.hide(); }
+	}
+
 	private renderFooter(): void {
+		this.renderWorkspacePicker();
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
 		const showWhenEmpty = this.options.layout === 'compact';
 		const showMeter = showWhenEmpty || this.state.contextUsage !== undefined;

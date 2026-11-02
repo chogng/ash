@@ -204,7 +204,6 @@
     "quickChat.close": "关闭",
     "quickChat.closeCommand": "关闭快捷聊天",
     "quickChat.openInView": "在聊天视图中打开",
-    "quickChat.focus": "此对话已在快捷聊天中打开",
     "quickChat.resize": "调整快捷聊天大小",
     "quickChat.unavailable": "此窗口暂不支持快捷聊天。",
     "quickChat.failed": "无法打开快捷聊天：{0}",

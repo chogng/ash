@@ -516,7 +516,7 @@ export abstract class Workbench extends Disposable {
 		const provider = primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: async folders => {
-				using selection = services.createInstance(WorkspacePicker);
+				using selection = services.createInstance(WorkspacePicker, {});
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);

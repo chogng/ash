@@ -30,7 +30,7 @@ registerAction2(class NewDevContainerSession extends Action2 {
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace());
-		using selection = accessor.get(IInstantiationService).createInstance(WorkspacePicker);
+		using selection = accessor.get(IInstantiationService).createInstance(WorkspacePicker, {});
 		const source = workspace.type === 'local' ? workspace
 			: workspace.type === 'provider' && workspace.providerId === 'ash.dev-containers' ? { type: 'local' as const, root: workspace.workspace }
 				: await selection.pick(workspace.type === 'multiple' ? workspace.folders : [], target => target.type === 'local');

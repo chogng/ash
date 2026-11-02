@@ -36,6 +36,7 @@ import '../contrib/quickaccess/browser/quickAccess.contribution.js';
 import '../contrib/themes/browser/themes.contribution.js';
 import '../contrib/themeEditor/browser/themeEditor.contribution.js';
 import '../contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js';
+import '../contrib/welcomeAgentSessions/browser/agentSessionsWelcome.contribution.js';
 import '../contrib/search/browser/searchQuickAccess.contribution.js';
 import { registerRemoteViews } from '../contrib/remote/browser/remote.contribution.js';
 import '../contrib/sash/browser/sash.contribution.js';
