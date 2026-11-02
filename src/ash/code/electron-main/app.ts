@@ -18,7 +18,7 @@ import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, TerminalWindowTransferHost } from '../../platform/native/electron-main/nativeHostMainService.js';
-import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
+import { ChecksumService, checksumChannel } from '../../platform/checksum/electron-main/checksumService.js';
 import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
 import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -152,7 +152,7 @@ import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState }
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
 import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
 import { spawn } from 'node:child_process';
-import { hostLogExecutable } from '../../../../.build/desktop/hostLogs.js';
+import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
@@ -683,7 +683,7 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IThemeMainService, this.themeMainService);
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
-		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, new ChecksumService()));
+		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(fileURLToPath(new URL(`../../../../${hostIntegrityExecutable}`, import.meta.url))))));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;

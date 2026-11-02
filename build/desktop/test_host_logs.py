@@ -15,7 +15,12 @@ class HostLogPublicationTests(unittest.TestCase):
             with (
                 patch.object(host_logs, "ROOT", root),
                 patch.object(
-                    host_logs, "build_binaries", return_value={"ash-host-logs": binary}
+                    host_logs,
+                    "build_binaries",
+                    return_value={
+                        "ash-host-logs": binary,
+                        "ash-host-integrity": binary,
+                    },
                 ),
             ):
                 host_logs.main()

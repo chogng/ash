@@ -29,6 +29,27 @@ test('packaging publishes final desktop assets without hashing metadata or user 
 	await assert.rejects(writeApplicationChecksums(root), /omit an entrypoint/);
 });
 
+test('macOS checksums record native helper bytes after signing', { skip: process.platform !== 'darwin' }, async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-signed-checksums-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	for (const path of ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html']) {
+		await mkdir(join(root, path, '..'), { recursive: true });
+		await writeFile(join(root, path), 'fixture');
+	}
+	await mkdir(join(root, 'resources'));
+	await writeFile(join(root, 'package.json'), '{}');
+	const helper = 'dist/main/helper';
+	await copyFile('/usr/bin/true', join(root, helper));
+	await writeApplicationChecksums(root);
+	const original = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).checksums[helper];
+	const signature = spawnSync('/usr/bin/codesign', ['--force', '--sign', '-', '--identifier', 'ash.integrity.fixture', join(root, helper)], { encoding: 'utf8' });
+	assert.equal(signature.status, 0, signature.stderr);
+	const actual = createHash('sha256').update(await readFile(join(root, helper))).digest('hex');
+	assert.notEqual(actual, original, 'Signing changes the bytes covered by the installation manifest');
+	await writeApplicationChecksums(root);
+	assert.equal(JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).checksums[helper], actual);
+});
+
 for (const mode of ['build', 'watch'] as const) {
 	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: process.platform === 'win32' ? 60_000 : 30_000 }, async t => {
 		const temporary = await realpath(await mkdtemp(join(tmpdir(), 'ash-host-')));
@@ -178,19 +199,25 @@ for (const mode of ['build', 'watch'] as const) {
 	});
 }
 
-test('packaging selects the current Rust logging executable and excludes old running generations', async t => {
+test('packaging selects the current Rust host executables and excludes old running generations', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-host-log-package-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const source = join(root, 'main');
 	await mkdir(join(source, '.build/desktop'), { recursive: true });
 	await writeFile(join(source, 'package.json'), '{"type":"module"}');
-	await writeFile(join(source, '.build/desktop/hostLogs.js'), 'export const hostLogExecutable = "host-logs/current/ash-host-logs.exe";');
+	await writeFile(join(source, '.build/desktop/hostLogs.js'), 'export const hostLogExecutable = "host-logs/current/ash-host-logs.exe"; export const hostIntegrityExecutable = "host-integrity/current/ash-host-integrity.exe";');
 	for (const generation of ['old', 'current']) {
 		await mkdir(join(source, 'host-logs', generation), { recursive: true });
 		await writeFile(join(source, 'host-logs', generation, 'ash-host-logs.exe'), generation);
+	}
+	for (const generation of ['old', 'current']) {
+		await mkdir(join(source, 'host-integrity', generation), { recursive: true });
+		await writeFile(join(source, 'host-integrity', generation, 'ash-host-integrity.exe'), generation);
 	}
 	const destination = join(root, 'package');
 	await copyHostOutput(source, destination);
 	assert.equal(await readFile(join(destination, 'host-logs/current/ash-host-logs.exe'), 'utf8'), 'current');
 	await assert.rejects(stat(join(destination, 'host-logs/old')), { code: 'ENOENT' });
+	assert.equal(await readFile(join(destination, 'host-integrity/current/ash-host-integrity.exe'), 'utf8'), 'current');
+	await assert.rejects(stat(join(destination, 'host-integrity/old')), { code: 'ENOENT' });
 });

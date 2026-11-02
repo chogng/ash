@@ -133,6 +133,9 @@ try {
 			'-B', join(repositoryRoot, 'build', 'sign.py'),
 			'--package-dir', join(bundlePath, 'Contents', 'Resources'), '--target', target, '--verify-only',
 		], repositoryRoot);
+		// Packager has signed nested Mach-O files, including the Rust host helpers.
+		// Hash their final bytes before sealing the updated package.json in the app.
+		await writeApplicationChecksums(join(bundlePath, 'Contents', 'Resources', 'app'));
 		await run('codesign', ['--force', '--sign', signingIdentity!, '--timestamp', '--options', 'runtime', '--preserve-metadata=entitlements,requirements,flags', bundlePath], repositoryRoot);
 		await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
 	}

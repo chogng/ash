@@ -998,6 +998,8 @@ Electron adapter 仅传递有界、顺序的私有管道帧；`crates/host-logs`
 
 日志 helper 是 Electron 过渡期的宿主基础设施，初始化早于业务窗口。Rust 产品宿主接管后直接复用 Rust 模块，移除 helper 进程适配。helper 故障拒绝未完成请求并报告到宿主控制台，不重放未知结果的写入，也不切回 Node 文件实现。已有 JSONL 和历史会话文件继续可读，后端原始日志保持其 daemon owner。
 
+安装完整性校验由独立 `ash-host-integrity` executable 负责清单验证、顺序文件扫描和 SHA-256；Electron 的 checksum channel 只绑定安装根目录、缓存当次结果并转换 URI。helper 与日志一样按内容摘要发布，打包仅携带选定版本，不依赖 App Server 或 CLI 产品。扫描通过目录 capability 限制在安装根目录内，仅接受普通文件，特殊文件不会阻塞等待；macOS 对签名后的最终文件重新生成清单，再封存应用签名。开发模式不扫描安装目录；缺失文件返回失败比较，非法清单或执行失败使检查失败，应用释放服务时终止未结束的扫描。
+
 开发构建日志属于 `build/` 工具，不由产品 `src/` 提供 writer；开发工具链的运行时迁移与默认产品退出 Node 分开验收。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：

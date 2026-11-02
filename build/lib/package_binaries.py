@@ -20,6 +20,7 @@ from build.protocol.generate import generate_protocol
 
 
 _BINARIES = {
+    "ash-host-integrity": ("ash-host-integrity", "--host-integrity-bin"),
     "ash-host-logs": ("ash-host-logs", "--host-logs-bin"),
     "ash-livekit-client": ("ash-livekit-client", "--livekit-client-bin"),
     "ash-realtime-voice": ("ash-realtime-voice", "--recognizer-bin"),
