@@ -1,6 +1,5 @@
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
-import { IRendererHostService } from '../../platform/renderer/common/rendererHost.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
 import { ElectronAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
@@ -177,7 +176,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				createBrowserHost: documentClient
 					? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IRendererHostService), services.get(IWorkspaceContextService));
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService));
 						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),

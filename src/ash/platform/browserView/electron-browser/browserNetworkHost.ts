@@ -2,8 +2,7 @@ import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffe
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
-import type { IAgentHostConnectionsService } from '../../agentHost/common/agentHostConnectionsService.js';
-import type { IRendererHost } from '../../renderer/common/rendererHost.js';
+import type { IAgentHostConnectionInfo, IAgentHostConnectionsService } from '../../agentHost/common/agentHostConnectionsService.js';
 import type { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 import { getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
 import { ASH_REMOTE_SCHEME, getProviderRemoteWorkspace } from '../../remote/common/remote.js';
@@ -12,8 +11,9 @@ import { validateBrowserViewNetwork } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
 
 /** Resolves native proxy streams onto existing renderer-owned backend connections. No credentials cross IPC. */
-export function registerBrowserNetworkHost(main: IMainProcessService, hosts: IAgentHostConnectionsService, ambient: IRendererHost, workspace: IWorkspaceContextService) {
+export function registerBrowserNetworkHost(main: IMainProcessService, hosts: IAgentHostConnectionsService, workspace: IWorkspaceContextService) {
 	const lifetime = new DisposableStore();
+	const ambient = hosts.ambientConnection;
 	const streams = new Map<string, { api: ITcpService; generation: number; target?: TcpExecutionTarget; }>();
 	lifetime.add(toDisposable(() => {
 		for (const [id, stream] of streams) { if (stream.api.generation === stream.generation) { void stream.api.close(id, stream.target).catch(() => { }); } }
@@ -23,9 +23,15 @@ export function registerBrowserNetworkHost(main: IMainProcessService, hosts: IAg
 		const network = validateBrowserViewNetwork(value);
 		const runtime = getProviderRemoteWorkspace(URI.from({ scheme: ASH_REMOTE_SCHEME, authority: network.authority, path: '/' }));
 		const authority = runtime?.hostAuthority ?? (runtime ? 'local' : network.authority);
-		const info = hosts.connections.find(info => info.directory?.uri.authority === authority);
+		let info: IAgentHostConnectionInfo | undefined;
+		try {
+			info = hosts.resolveConnection(URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: runtime ? '/' : network.root ?? '/' }));
+		} catch {
+			throw new Error('BrowserRemoteNetworkUnavailable');
+		}
 		const local = authority === 'local' || authority === getWorkspaceRemoteAuthority(workspace.getWorkspace());
-		const host = info?.connection ?? (local || authority.startsWith('ssh+') ? ambient : undefined);
+		let host = info?.connection;
+		if (!info && (local || authority.startsWith('ssh+'))) { host = ambient; }
 		const tcp = authority === 'local' && getWorkspaceRemoteAuthority(workspace.getWorkspace()) ? ambient.localTcp : host?.tcp;
 		if (!tcp || info && info.state !== 'ready') { throw new Error('BrowserRemoteNetworkUnavailable'); }
 		const target: TcpExecutionTarget | undefined = runtime

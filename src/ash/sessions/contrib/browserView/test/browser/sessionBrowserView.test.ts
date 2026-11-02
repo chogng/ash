@@ -159,17 +159,17 @@ suite('Session browser networks', () => {
 		f.selection.set(selected(f.catalog[0]!));
 		f.windowRemote = 'ssh+window-host';
 		assert.equal(f.views.resolveNetwork({ type: 'user' }), undefined);
-		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-two' }), { authority: 'ssh+host-c' });
+		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-two' }), { authority: 'ssh+host-c', root: '/other' });
 		assert.throws(() => f.views.resolveNetwork({ type: 'agent', sessionId: 'removed-thread' }), /BrowserOwnerNetworkUnavailable/);
 		f.catalog = [{ ...second, workspace: { authorityId: 'wsl+abc', root: '/repo' } }];
-		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-two' }), { authority: 'wsl+abc' });
+		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-two' }), { authority: 'wsl+abc', root: '/repo' });
 	});
 
 	test('workspace-less remote sessions use the provider domain and ambiguous or container drafts never fall back to the source network', () => {
 		using f = fixture();
 		f.catalog = [{ ...first, providerId: 'remote-provider', workspace: null }];
 		f.providerWorkspace = { type: 'ssh', host: 'provider-host', root: '/repo' };
-		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-one' }), { authority: 'ssh+provider-host' });
+		assert.deepEqual(f.views.resolveNetwork({ type: 'agent', sessionId: 'thread-one' }), { authority: 'ssh+provider-host', root: '/repo' });
 		const container: IUntitledChatSession = { ...draft('container', 'source-host', '/repo'), workspace: { type: 'provider', providerId: 'container', workspace: 'runtime', root: '/workspace', hostAuthority: 'ssh+source-host' } };
 		f.selection.set({ kind: 'untitled', session: container });
 		assert.equal(f.views.resolveNetwork({ type: 'user' })!.authority.startsWith('provider-host+'), true);
@@ -250,7 +250,7 @@ suite('Session browser networks', () => {
 		const input = await pending;
 		assert.deepEqual(input.model!.info.session, {
 			scope: BrowserViewStorageScope.Workspace,
-			network: { authority: 'ssh+host-a' }, affinity: '["ssh+host-a","/project"]',
+			network: { authority: 'ssh+host-a', root: '/project' }, affinity: '["ssh+host-a","/project"]',
 		});
 		assert.equal(f.opened.length, 0);
 		assert.equal(f.views.getContextualBrowserViews().size, 0);
@@ -276,7 +276,7 @@ suite('Session browser networks', () => {
 		assert.equal(f.replacements[0]!.from, visible);
 		assert.deepEqual(f.replacements[0]!.to.serialize(), {
 			...visible.serialize(), id: f.replacements[0]!.to.id,
-			session: { scope: BrowserViewStorageScope.Workspace, network: { authority: 'ssh+host-c' }, affinity: '["ssh+host-c","/changed"]' },
+			session: { scope: BrowserViewStorageScope.Workspace, network: { authority: 'ssh+host-c', root: '/changed' }, affinity: '["ssh+host-c","/changed"]' },
 		});
 		assert.equal(hidden.model!.info.session.scope, BrowserViewStorageScope.Workspace);
 		assert.equal(other.model!.info.session.scope, BrowserViewStorageScope.Workspace);
@@ -298,7 +298,7 @@ suite('Session browser networks', () => {
 		await flush();
 		assert.equal(f.replacements.length, 1);
 		assert.equal(f.replacements[0]!.from, input);
-		assert.deepEqual(f.replacements[0]!.to.model!.info.session, { scope: BrowserViewStorageScope.Workspace, network: { authority: 'ssh+host-b' }, affinity: '["ssh+host-b","/runtime"]' });
+		assert.deepEqual(f.replacements[0]!.to.model!.info.session, { scope: BrowserViewStorageScope.Workspace, network: { authority: 'ssh+host-b', root: '/runtime' }, affinity: '["ssh+host-b","/runtime"]' });
 		f.catalog = [{ ...first, workspace: { authorityId: 'ssh+host-c', root: '/later' } }];
 		f.catalogChanged.fire();
 		await flush();
@@ -402,7 +402,7 @@ function fixture() {
 		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ILogService, new NullLoggerService()],
 		[ISessionsProvidersService, { getProvider: () => f.providerWorkspace ? { currentWorkspace: () => f.providerWorkspace } : undefined } as unknown as ISessionsProvidersService],
-		[IAgentHostConnectionsService, { _serviceBrand: undefined, onDidChangeConnections: Event.None, connections: [] }], [ISessionsManagementService, management], [ISessionsService, sessions],
+		[IAgentHostConnectionsService, { _serviceBrand: undefined, onDidChangeConnections: Event.None, connections: [], resolveConnection: () => undefined } as unknown as IAgentHostConnectionsService], [ISessionsManagementService, management], [ISessionsService, sessions],
 	)));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
 	services.registerInstance(IBrowserViewWorkbenchService, views);
