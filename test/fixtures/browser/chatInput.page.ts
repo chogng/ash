@@ -1,3 +1,14 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
+import { constObservable } from '../../../src/ash/base/common/observable.js';
+import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
+import { IChatSlashCommandService, ChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { IChatSideChatService, ChatSideChatService } from '../../../src/ash/workbench/contrib/chat/common/chatSideChatService.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
+import { ChatQueuePickerRendering } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatQueuePickerActionItem.js';
+import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
@@ -12,7 +23,7 @@ import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
@@ -82,9 +93,16 @@ import type { ChatContextUsage, ModelRef } from '../../../src/ash/workbench/serv
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import '../../../src/ash/workbench/contrib/chat/browser/widget/media/chat.css';
 import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatInputTipPresenter } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
+import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
+import { registerChatActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatActions.js';
+import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { ChatInputSessionLinkProvider } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/editor/chatInputSessionLinkProvider.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { CopyTextProvider } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/editor/chatPasteProviders.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -106,7 +124,7 @@ import { TestNotificationService } from './notificationFixture.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { createTestDictationBackend, installTestDictationAudio, registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -130,6 +148,16 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 
 declare global {
 	interface Window { ashChatInputIntegration: {
+		showIntroduction(): void;
+		triggerInputSuggestions(): Promise<unknown>;
+		hostCompletionRequests(): readonly { text: string; offset: number; }[];
+		setInputReadOnly(readOnly: boolean): void;
+		setAgent(agent: ChatInputState['selectedAgent'], mode?: ChatInputState['mode']): void;
+		showAgentHover(): void;
+		agentHoverAccessibility(): { help?: string; content?: string; };
+		setCatalogError(message: string | undefined): void;
+		toggleNoticeFocus(): Promise<unknown>;
+		noticeAccessibility(): { help?: string; content?: string; };
 		dictationState(): { stops: number; errors: string[]; };
 		emitDictation(text: string, final: boolean): void;
 		finishDictation(text: string, error?: string): void;
@@ -137,7 +165,10 @@ declare global {
 		finishSubmission(error?: string): void;
 		replaceDraftOnClear(): void;
 		recoveryState(): { pending: boolean; drafts: NonNullable<Parameters<ChatInputPart['restoreDraft']>[0]>[]; };
-		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+		setRunning(running: boolean): void;
+		setQueueDefault(value: 'queue' | 'steer'): Promise<void>;
+		queueState(): unknown;
+		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; addDeferredImageContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -174,6 +205,7 @@ let historyEntries: MessageHistoryEntry[] = [
 	{ id: '1', text: 'first input', kind: 'agent', submittedAtMs: 1 },
 ];
 const historyWrites: string[] = [];
+const queueEvents: unknown[] = [];
 const historySubmissions: { text: string; skills: unknown; }[] = [];
 const historyReads: MessageHistoryQuery[] = [];
 const historyWaits = new Map<string, () => void>();
@@ -208,9 +240,37 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
+contextKeys.createKey('chatIsEnabled', true);
+const composerHidden = resources.add(new Emitter<void>());
+const composerChanged = resources.add(new Emitter<void>());
+let composerVisible = true;
+const composerWidget = {
+	domNode: document.querySelector('main')!, get input() { return part; }, get visible() { return composerVisible; }, sessionId: 'input-session', threadId: 'input-thread',
+	onDidHide: composerHidden.event, onDidChangeViewModel: composerChanged.event,
+	acceptInput: ((text, options) => part.acceptInput(text, options)) satisfies IChatWidget['acceptInput'],
+} as unknown as IChatWidget;
+services.registerInstance(IChatWidgetService, { get lastFocusedWidget() { return composerWidget; }, getAllWidgets: () => [composerWidget] } as unknown as IChatWidgetService);
+if (!services.has(IActionViewItemService)) {
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+	services.registerSingleton(IActionViewItemService, () => services.createInstance(descriptor) as IActionViewItemService);
+}
+services.registerSingleton(IChatSlashCommandService, () => new ChatSlashCommandService());
+services.registerSingleton(IChatSideChatService, () => new ChatSideChatService());
+resources.add(services.createInstance(ChatQueuePickerRendering));
+if (new URLSearchParams(location.search).has('sideChat')) {
+	resources.add(services.get(IChatSideChatService).registerProvider({
+		canAskInSideChat: () => true,
+		askInSideChat: async (_resource, query) => { queueEvents.push({ kind: 'sideChat', query }); },
+		observeSideChatOrigin: () => constObservable(undefined),
+		revealSideChatSource: async () => { },
+	}));
+	resources.add(services.createInstance(BtwSlashCommandContribution));
+}
+
+
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
 const footerStatusVisible = contextKeys.createKey<boolean>('test.chat.status.visible', false);
 const footerStatus = new URLSearchParams(location.search).has('footerStatus')
@@ -591,6 +651,10 @@ services.registerInstance(IFileService, {
 		return resource.path === '/workspace' ? [
 			{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
 			{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
+			...(new URLSearchParams(location.search).has('completionSources') ? [
+				{ resource: URI.file('/workspace/drop-pending.ts'), name: 'drop-pending.ts', kind: FileKind.File },
+				{ resource: URI.file('/workspace/drop-missing.ts'), name: 'drop-missing.ts', kind: FileKind.File },
+			] : []),
 			...(dropSources ? [{ resource: URI.file('/workspace/drop-folder'), name: 'drop-folder', kind: FileKind.Directory }] : []),
 			...(new URLSearchParams(location.search).has('workspaceImage') ? [{ resource: URI.file('/workspace/picture.PNG'), name: 'picture.PNG', kind: FileKind.File }] : []),
 		] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }];
@@ -610,6 +674,34 @@ services.registerInstance(IFileService, {
 	},
 } as unknown as IFileService);
 services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
+// Deterministic host boundary for composer admission tests. Catalog/search semantics
+// are exercised through the real Rust request in the Desktop smoke suite.
+const hostInputCompletions = new URLSearchParams(location.search).has('hostInputCompletions');
+const hostCompletionRequests: { text: string; offset: number; }[] = [];
+services.registerInstance(IAgentHostInputCompletionService, {
+	onDidChangeConnection: Event.None, getTriggerCharacters: () => hostInputCompletions ? ['@', '#'] : [],
+	complete: async (request, signal) => {
+		if (!hostInputCompletions) return [];
+		hostCompletionRequests.push({ text: request.text, offset: request.offset });
+		const token = /(?:^|\s)([@#])([^\s]*)$/u.exec(request.text.slice(0, request.offset));
+		if (!token) return [];
+		const query = token[2]!.replace(/^(file|folder):/u, '');
+		const start = request.offset - token[2]!.length - 1;
+		const end = request.offset + request.text.slice(request.offset).search(/\s|$/u);
+		const items: AgentHostInputCompletionItem[] = [];
+		for (const directory of request.directories) {
+			const add = (resource: URI, path: string, isDirectory: boolean) => items.push({ label: `${token[1]}${path}${isDirectory ? '/' : ''}`, insertText: `${token[1]}${path} `, start, end, preselect: items.length === 0, value: { kind: 'resource', resource, isDirectory } });
+			if (!token[2]!.startsWith('folder:')) {
+				const result = await services.get(IFileSearchService).fuzzy(directory, { query, maxResults: 50 }, signal);
+				for (const file of result.matches) add(file.resource, file.path, false);
+			}
+			for (const entry of await services.get(IFileService).readDirectory(directory.resource)) {
+				if (entry.kind === FileKind.Directory && entry.name.startsWith(query)) add(entry.resource, entry.name, true);
+			}
+		}
+		return items;
+	},
+});
 // Attachment Quick Access uses the same file-query owner as Search. This fixture
 // has no shared file models or content query scenario.
 services.registerInstance(IContentSearchService, { search: async () => { throw new Error('Chat context fixture does not run content searches'); } });
@@ -622,7 +714,7 @@ services.registerInstance(IFileTextModelService, {
 	acquire: async () => { throw new Error('Chat context fixture has no shared file models'); },
 });
 services.registerInstance(ISearchService, resources.add(services.createInstance(SearchService)));
-services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 services.registerInstance(IPathService, services.createInstance(BrowserPathService));
 
 const submission = document.createElement('output');
@@ -634,19 +726,22 @@ document.body.append(errorOutput);
 resources.add(notifications.model.onDidAdd(item => { errorOutput.textContent = item.message; }));
 
 if (new URLSearchParams(location.search).has('contextHover') || new URLSearchParams(location.search).has('inlineCode')) {
-	const hover = resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
+	const hover = services.has(IHoverService) ? services.get(IHoverService) : resources.add(new HoverService(services.get(IConfigurationService), services.get(IContextViewService), {
 		contextMenuStyle: 'custom',
 		showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
 	}));
 	resources.add(setHoverDelegate(hover));
+	if (!services.has(IHoverService)) services.registerInstance(IHoverService, hover);
 }
 
 let workspaceChangesReads = 0;
 let releaseWorkspaceChanges: ((changes: ChatInputState['changes']) => void) | undefined;
 let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmission');
 let finishSubmission: ((error?: string) => void) | undefined;
+const cowork = ['cowork', 'project'].includes(new URLSearchParams(location.search).get('surface') ?? '');
 const delegate: ChatInputDelegate = {
-	send: async (_text, _mode, _skills, contexts) => {
+	send: async (_text, _mode, _skills, contexts, _signal, queue) => {
+		queueEvents.push({ kind: 'send', text: _text, queue });
 		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
 		if (holdNextSubmission) {
@@ -660,7 +755,7 @@ const delegate: ChatInputDelegate = {
 			});
 		}
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
-	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
+	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, ...(cowork ? {} : { executeServerCommand: async () => { } }), interrupt: async () => { queueEvents.push({ kind: 'interrupt' }); },
 	openChanges: async () => { recordDestination({ changes: true }); },
 	readWorkspaceChanges: async () => { workspaceChangesReads++; return new Promise(resolve => { releaseWorkspaceChanges = resolve; }); },
 	selectModel: async model => {
@@ -678,9 +773,9 @@ const delegate: ChatInputDelegate = {
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
-const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
+resources.add(services.createInstance(ChatInputSessionLinkProvider));
 resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
 resources.add(languageFeatures.documentPasteEditProvider.register({ scheme: '*', hasAccessToAllModels: true }, services.createInstance(CopyTextProvider)));
 if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture')) {
@@ -688,15 +783,24 @@ if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture'))
 	resources.add(registerChatContextActions(services.get(IImageEditorService), services.get(ICommandService)));
 }
 let inlineEditor: ChatInputEditor | undefined;
-const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, options) } : ChatInputEditors;
+const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;
 const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
 
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+let part!: ChatInputPart;
+part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
 }));
+if (new URLSearchParams(location.search).has('notices')) {
+	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
+	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
+	const slot = document.createElement('div');
+	part.element.prepend(slot);
+	resources.add(services.createInstance(ChatInputTipPresenter, { container: slot, isEligible: () => true, focusInput: () => part.focus() }, part.noticeHost));
+	registerChatActions();
+}
 if (inlineCode) {
 	if (snapshotFixture) resources.add(languageFeatures.syntaxProvider.register({
 		id: 'test.snapshot.syntax', languageIds: ['typescript'],
@@ -853,6 +957,42 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	setAgent: (selectedAgent, mode = 'agent') => {
+		state = { ...state, selectedAgent, mode, canSelectAgent: true };
+		part.render(state);
+	},
+	showAgentHover: () => services.get(IHoverService).showManagedHover(document.activeElement as HTMLElement),
+	agentHoverAccessibility: () => {
+		const result: { help?: string; content?: string; } = {};
+		for (const entry of AccessibleViewRegistry.getImplementations()) {
+			if (!entry.name.startsWith('hover-')) continue;
+			const provider = entry.getProvider(services);
+			if (!provider) continue;
+			try {
+				result[entry.type === AccessibleViewType.Help ? 'help' : 'content'] = provider.provideContent();
+			} finally {
+				provider.dispose();
+			}
+		}
+		return result;
+	},
+	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
+	hostCompletionRequests: () => [...hostCompletionRequests],
+	setInputReadOnly: readOnly => inlineEditor!.setReadOnly(readOnly),
+	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
+	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
+	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),
+	noticeAccessibility: () => {
+		const result: { help?: string; content?: string; } = {};
+		for (const entry of AccessibleViewRegistry.getImplementations()) {
+			if (!entry.name.startsWith('chatInputNotice-')) continue;
+			const provider = entry.getProvider(services);
+			if (!provider) continue;
+			try { result[entry.type === AccessibleViewType.Help ? 'help' : 'content'] = provider.provideContent(); }
+			finally { provider.dispose(); }
+		}
+		return result;
+	},
 	finishSubmission: error => finishSubmission?.(error),
 	replaceDraftOnClear: () => { replaceDraftOnClear = true; },
 	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
@@ -873,7 +1013,7 @@ window.ashChatInputIntegration = {
 	releaseWorkspaceChanges: changes => releaseWorkspaceChanges?.(changes),
 	workspaceChangesReads: () => workspaceChangesReads,
 	setChangesError: changesError => { state = { ...state, changes: undefined, changesError }; part.render(state); },
-	setVisible: visible => part.setVisible(visible),
+	setVisible: visible => { composerVisible = visible; if (!visible) composerHidden.fire(); part.setVisible(visible); },
 	inputAccessibility: () => {
 		for (const entry of AccessibleViewRegistry.getImplementations()) {
 			if (entry.type !== AccessibleViewType.Help || !entry.name.startsWith('chatAttachments-')) continue;
@@ -902,6 +1042,9 @@ window.ashChatInputIntegration = {
 	setFooterStatus: visible => footerStatusVisible.set(visible),
 	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),
+	setRunning: running => { state = { ...state, canInterrupt: running, interaction: undefined }; part.render(state); },
+	setQueueDefault: value => services.get(IConfigurationService).updateValue('chat.requestQueuing.defaultAction', value),
+	queueState: () => queueEvents,
 	dropState: () => ({ text: part.inputEditor!.getModel()!.getValue(), pending: part.attachmentModel.hasPendingContext, reads: [...dropReads] }),
 	setDropSourceText: text => { dropSourceText = text; },
 	replaceDropDraft: () => {
@@ -910,6 +1053,7 @@ window.ashChatInputIntegration = {
 		state = { ...state, draftIdentity: { id: 'drop-after', generation: 2 } };
 		part.render(state);
 		part.appendToDraft('Replacement draft');
+		composerChanged.fire();
 	},
 	releaseDropRead: () => { const release = finishDropRead; finishDropRead = undefined; release?.(); },
 	holdNextHistoryRead: () => { holdHistoryRead = true; },
@@ -919,7 +1063,18 @@ window.ashChatInputIntegration = {
 		const pending = new Promise<{ name: string; content: string; }>(resolve => { releaseReferencePreview = () => resolve({ name: 'draft.txt', content }); });
 		part.addContext({ id: 'deferred-context', kind: 'file', name: 'draft.txt', resource: URI.file('/workspace/draft.txt'), resolve: () => pending });
 	},
+	addDeferredImageContext: content => {
+		const pending = new Promise<{ name: string; content: string; }>(resolve => { releaseReferencePreview = () => resolve({ name: 'draft.png', content }); });
+		part.addContext({ id: 'deferred-image', kind: 'image', name: 'draft.png', resolve: () => pending });
+	},
 	releaseReferencePreview: () => releaseReferencePreview?.(),
+	inputLinkAtCursor: () => {
+		const editor = inlineEditor?.codeEditor;
+		const position = editor?.getPosition();
+		return editor && position ? LinkDetector.get(editor)?.getLinkOccurrence(position)?.target : undefined;
+	},
+	openInputLink: () => services.get(ICommandService).executeCommand('editor.action.openLink'),
+	setSlashCommands: slashCommands => { state = { ...state, slashCommands }; part.render(state); },
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },

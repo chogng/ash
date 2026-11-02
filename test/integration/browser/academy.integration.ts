@@ -17,7 +17,7 @@ import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
 import { IExtensionApi, normalizeExtensionCatalog } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';

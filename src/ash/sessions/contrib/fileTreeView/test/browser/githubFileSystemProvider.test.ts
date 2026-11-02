@@ -387,6 +387,7 @@ function testWidget(model: ChatAttachmentModel, focus: () => void = () => { }): 
 		focus: () => { },
 		reveal: () => { },
 		focusResponseItem: () => { },
+		startEditing: () => { throw new Error('Unexpected queue editor'); },
 		startVoiceConversation: async () => { throw new Error('Context must not start voice'); },
 	};
 }

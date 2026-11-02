@@ -17,7 +17,7 @@ import { IContentSearchService } from '../../../platform/search/common/search.js
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -48,7 +48,7 @@ test('Session files preserve their original directory through selection, directo
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
-		const fileHost: IRendererHost = {
+		const fileHost: IWorkbenchHost = {
 			...host, fileSearch: {
 				glob: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; },
 				fuzzy: async (directory, query, signal) => { calls.push({ target: directory.target, query, aborted: signal?.aborted }); return { matches: [], totalMatches: 0 }; },
@@ -170,7 +170,7 @@ test('Workbench file and content search retain Session directory authorization a
 			async read(params) { calls.push(params); return { searchId: params.searchId, matches: [], nextMatch: 0, completed: true, limitHit: false, error: null }; },
 			async cancel(params) { calls.push(params); },
 		},
-	} satisfies IRendererHost, () => []);
+	} satisfies IWorkbenchHost, () => []);
 	services.registerInstance(IContentSearchService, files);
 	services.registerInstance(IFileSearchService, files);
 	services.registerInstance(IFileTextModelService, editing.models);
@@ -207,7 +207,7 @@ test('restored file identity waits for backend routing independently of Session 
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
-		const fileHost: IRendererHost = { ...host, fs: { ...host.fs, resolvePath: async resource => { if (resource.path.startsWith('/outside/')) { throw new Error('PermissionRequired'); } return directory.p; }, readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; } } };
+		const fileHost: IWorkbenchHost = { ...host, fs: { ...host.fs, resolvePath: async resource => { if (resource.path.startsWith('/outside/')) { throw new Error('PermissionRequired'); } return directory.p; }, readPathCaseSensitivity: async params => { calls.push(params); return { scopes: [{ path: '.', sensitivity: 'sensitive' }] }; } } };
 		using files = services.createInstance(SessionFileService, fileHost, () => []);
 		await sessions.initialize();
 		const resource = URI.file('/managed/first/main.ts');

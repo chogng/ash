@@ -787,7 +787,7 @@ suite('Terminal process identity and raw input', () => {
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
 		const started = deferred<void>();
-		const acknowledgement = deferred<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
+		const acknowledgement = deferred<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue>();
 		const input: string[] = [];
 		const instance = await services.get(ITerminalService).createTerminal({
 			dimensions: { cols: 80, rows: 24 }, deferStart: true,

@@ -23,6 +23,8 @@ import { BrowserStorageService } from '../../../../workbench/services/storage/br
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
 import { Menus } from '../../../browser/menus.js';
 import { TitlebarPart } from '../../../browser/parts/titlebarPart.js';
+import { registerTestComponentServices } from '../../../../workbench/test/common/testEditorServices.js';
+import { registerTestTitlebarServices } from '../../../../workbench/test/common/testTitlebarServices.js';
 
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
@@ -61,7 +63,7 @@ for (const [id, title, icon] of [
 		command: { id, title, icon }, group: 'navigation',
 	}));
 }
-const titlebar = resources.add(services.createInstance(TitlebarPart, root, document.body.dataset.os === 'mac' ? 'actions-only' : 'application-menu'));
+const titlebar = resources.add(registerTestTitlebarServices(registerTestComponentServices(services, document)).createInstance(TitlebarPart, root, document.body.dataset.os === 'mac' ? 'actions-only' : 'application-menu'));
 titlebar.domNode.classList.add('ash-electron-titlebar');
 titlebar.domNode.style.cssText = 'height: 36px; flex: 0 0 auto; --ash-sessions-titlebar-sidebar-width: 260px;';
 const nativeGeometry = document.createElement('style');

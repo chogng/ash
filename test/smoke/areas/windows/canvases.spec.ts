@@ -1,7 +1,13 @@
 import { createServer } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { ElectronApplication } from '@playwright/test';
+import { join, resolve } from 'node:path';
+import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { createSshFixture } from '../../../automation/ssh.js';
+import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
+import { threadIdentity } from '../../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
+import { appServerRequest } from '../../../../src/ash/platform/agentHost/browser/appServerRequest.js';
+import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
@@ -166,7 +172,7 @@ exports.activate = context => {
 		await expect(details.getByRole('switch')).toBeChecked();
 		await workbench.quickaccess.runCommand('workbench.action.chat.open');
 		await workbench.quickaccess.runCommand('workbench.action.chat.new');
-		const newChatMenu = () => page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button').click();
+		const newChatMenu = () => page.locator('.ash-chat-title-actions [data-action-id="submenu.ChatNewMenu"] .ash-split-action-dropdown button').click();
 		const menus = new Menus(page);
 		expect((await menus.inspect(application, newChatMenu)).map(item => item.label)).not.toContain('Canvas');
 		await expect(page.locator('.ash-chat-title-actions [data-action-id="workbench.action.chat.openCanvas"], .ash-chat-secondary-toolbar [data-action-id="workbench.action.chat.openCanvas"]')).toHaveCount(0);
@@ -174,7 +180,7 @@ exports.activate = context => {
 		await page.locator('.ash-agent-session-row').filter({ hasText: source.title }).click();
 		await expect(page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
 		await expect.poll(async () => (await menus.inspect(application, newChatMenu)).some(item => item.label === 'Canvas')).toBe(true);
-		const dropdown = page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button');
+		const dropdown = page.locator('.ash-chat-title-actions [data-action-id="submenu.ChatNewMenu"] .ash-split-action-dropdown button');
 		await dropdown.focus();
 		expect((await menus.inspect(application, () => dropdown.press('Enter'))).find(item => item.label === 'Canvas')).toMatchObject({ enabled: true });
 		await testInfo.attach('canvas-new-chat-menu', { body: await page.screenshot(), contentType: 'image/png' });
@@ -221,9 +227,35 @@ exports.activate = context => {
 		await installMainChannelTestClient(agents);
 		const agentViews = () => agents.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 		const agentNative = (await agentViews()).find(view => view.canvas?.canvasId === 'board')!;
-		await new Menus(agents).select(application, () => agents.locator('[data-part="editor"] .ash-editor-title-control:visible').getByRole('button', { name: 'Add tab', exact: true }).click(), ['Canvas', 'Fixture board']);
+		await agentCommands.runCommand('workbench.action.chat.openCanvas');
+		await agentCommands.select(agentNative.canvas!.title);
 		expect((await agentViews()).filter(view => view.canvas?.canvasId === 'board').map(view => view.id)).toEqual([agentNative.id]);
 		expect(agentNative.host.windowId).not.toBe(native.host.windowId);
+		await agentCommands.runCommand('workbench.action.agentSessions.addCanvasToSidebar');
+		const pin = agents.locator('[data-action-id^="sessions.pinnedCanvas."]').filter({ hasText: agentNative.canvas!.title }).first();
+		await expect(pin).toBeVisible();
+		await pin.click();
+		const fullPage = agents.locator('[data-custom-view-id="sessions.customView.canvas"]');
+		await expect(fullPage).toBeVisible();
+		await expect(fullPage.locator('h1')).toHaveText(agentNative.canvas!.title);
+		await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
+		const fullBounds = await fullPage.locator('.ash-session-canvas-page').boundingBox();
+		expect(fullBounds!.height).toBeGreaterThan(300);
+		await expectPinnedCanvasBounds(application as ElectronApplication, agents, agentNative);
+		await testInfo.attach('pinned-canvas-full-page', { body: await agents.screenshot(), contentType: 'image/png' });
+		await fullPage.getByRole('button', { name: 'Go to Chat', exact: true }).click();
+		await expect(fullPage).toHaveCount(0);
+		await agents.locator('.ash-sessions-list-item').filter({ hasText: peer.title }).first().click();
+		await expect(agents.locator(`[data-thread-id="${peer.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
+		await pin.click();
+		await expect(fullPage).toBeVisible();
+		await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
+		await fullPage.getByRole('button', { name: 'Remove from Sidebar', exact: true }).click();
+		await expect(fullPage).toHaveCount(0);
+		await expect(pin).toHaveCount(0);
+		await expect(agents.locator(`[data-thread-id="${peer.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
+		expect((await agentViews()).some(view => view.id === agentNative.id)).toBe(true);
+		await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
 		await agentCommands.runCommand('acme.canvas.pending');
 		await expect(agents.locator('.ash-session-canvas-message:visible')).toContainText('reconnecting');
 		await agents.locator('.ash-sessions-list-item').filter({ hasText: peer.title }).first().click();
@@ -295,7 +327,7 @@ exports.activate = context => {
 		const threadId = source.threads[0]!.threadId;
 		await expect(page.locator(`[data-thread-id="${threadId}"]:visible`).first()).toBeVisible();
 		const menus = new Menus(page);
-		const openMenu = () => page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button').click();
+		const openMenu = () => page.locator('.ash-chat-title-actions [data-action-id="submenu.ChatNewMenu"] .ash-split-action-dropdown button').click();
 		await expect.poll(async () => (await menus.inspect(application, openMenu)).some(item => item.label === 'Canvas')).toBe(true);
 		await menus.select(application, openMenu, ['Canvas', 'Fixture board']);
 		await expect(page.getByRole('tab', { name: 'Fixture board', exact: true })).toHaveCount(1);
@@ -326,3 +358,108 @@ exports.activate = context => {
 		await connection.close(); origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
 	}
 });
+
+
+test('a secondary SSH host presents and pins its own registered Canvas and reconnects the same native identity', { tag: ['@electron-app-server', '@darwin'] }, async ({ }, testInfo) => {
+	test.setTimeout(180_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const ssh = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'), process.env.ASH_TEST_SSH_ADDRESS);
+	const origin = createServer((_request, response) => { response.setHeader('Content-Type', 'text/html'); response.end('<title>Remote Canvas</title><button>Remote provider button</button>'); });
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	let seed: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
+		const port = (origin.address() as import('node:net').AddressInfo).port;
+		const localRoot = join(ssh.root, 'local-workspace'), remoteRoot = join(ssh.root, 'remote-workspace');
+		await Promise.all([mkdir(localRoot), mkdir(remoteRoot)]);
+		const extension = join(remoteRoot, 'remote-canvas');
+		await mkdir(join(extension, '.ash-plugin'), { recursive: true });
+		await writeFile(join(extension, '.ash-plugin/plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/remote-canvas', version: '1.0.0', displayName: 'Remote Canvas fixture', compatibility: { ash: '>=0.1.0' }, permissions: [], contributions: { editorExtensions: [{ id: 'canvas', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDemand', capability: 'dataChannel' }], capabilities: ['dataChannel'] }] } }));
+		await writeEditorExtensionFixture(extension, `const { window } = require('@ash/sdk'); exports.activate = context => { context.subscriptions.push(window.registerCanvasProvider('board', { openCanvas: source => ({ url: 'http://127.0.0.1:${port}/?thread=' + encodeURIComponent(source.threadId), title: 'Remote board' }), resolveCanvas: source => ({ url: 'http://127.0.0.1:${port}/?thread=' + encodeURIComponent(source.threadId), title: 'Remote board' }), closeCanvas() {} })); };`);
+		const manifest = JSON.parse(await readFile(join(extension, 'package.json'), 'utf8'));
+		manifest.activationEvents = ['onDemand:dataChannel'];
+		manifest.contributes.canvases = [{ id: 'board', displayName: 'Remote board', description: 'SSH Canvas fixture' }];
+		await writeFile(join(extension, 'package.json'), JSON.stringify(manifest));
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(ssh.root, 'desktop'), workspaceDirectory: localRoot, workspacePermissions: 'development',
+			environment: { ...process.env, ASH_SSH_PATH: ssh.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') }
+		});
+		const ide = desktop.driver.workbench;
+		seed = await connectProfile(desktop.application, undefined, remoteRoot, ide.page, { profileRoot: join(ssh.root, 'remote-profile'), directoryGrantsHost: true });
+		const grants = await appServerRequest(seed.client, 'config/directoryGrants/list', {});
+		await appServerRequest(seed.client, 'config/directoryGrants/set', { commandId: 'canvas-remote-grant', expectedRevision: grants.revision, path: remoteRoot, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository', 'mutateRepository', 'discoverPlugins'] });
+		const plugins = await appServerRequest(seed.client, 'plugin/list', {});
+		const installed = await appServerRequest(seed.client, 'plugin/installLocal', { commandId: 'canvas-remote-install', expectedRevision: plugins.revision, path: 'remote-canvas', dirId: null });
+		const enabled = await appServerRequest(seed.client, 'plugin/enable', { commandId: 'canvas-remote-enable', expectedRevision: installed.command.revision, id: installed.id, version: installed.version, digest: installed.digest });
+		await appServerRequest(seed.client, 'plugin/grant', { commandId: 'canvas-remote-authorize', expectedRevision: enabled.revision, id: installed.id, version: installed.version, digest: installed.digest });
+		const source = (await appServerRequest(seed.client, 'session/create', { commandId: 'canvas-remote-session', title: 'SSH Canvas conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot } })).session;
+		await ide.page.evaluate(connection => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection:save', { connection }), { name: 'canvas-ssh-host', host: ssh.host, workspace: remoteRoot });
+		const agents = await ide.openAgentsWindow('electron');
+		const commands = new QuickAccess(agents);
+		const codeMode = agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		if (!await codeMode.isVisible()) { await agents.locator('[data-part="titlebar"]').getByRole('button', { name: 'Show sidebar', exact: true }).click(); }
+		await codeMode.click();
+		const connectHost = async () => {
+			await commands.runCommand('sessions.action.manageAgentHosts');
+			await commands.select('Connect a Saved SSH Host…');
+			await commands.select('canvas-ssh-host');
+		};
+		await connectHost();
+		await agents.locator('.ash-sessions-list-item').filter({ hasText: source.title }).first().click();
+		const remoteThread = threadIdentity(`ssh-agent-host:${JSON.stringify([ssh.host, remoteRoot])}`, source.threads[0]!.threadId, 'local-agent-host');
+		await expect(agents.locator(`[data-thread-id=${JSON.stringify(remoteThread)}]:visible`).first()).toBeVisible();
+		await commands.runCommand('workbench.action.chat.openCanvas'); await commands.select('Remote board');
+		await expect(agents.locator('.ash-session-canvas:visible')).toBeVisible();
+		await installMainChannelTestClient(agents);
+		const views = () => agents.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+		const native = (await views()).find(view => view.canvas?.canvasId === 'board')!;
+		expect(native.canvas!.providerId).toContain('ssh-agent-host:');
+		expect(native.canvas!.sessionId).not.toBe(source.sessionId);
+		expect(native.state.url).toContain(encodeURIComponent(source.threads[0]!.threadId));
+		expect('network' in native.session && native.session.network?.authority).toContain(ssh.host);
+		await expect.poll(async () => (await views()).find(view => view.id === native.id)?.state.visible).toBe(true);
+		await commands.runCommand('workbench.action.agentSessions.addCanvasToSidebar');
+		const pin = agents.locator('[data-action-id^="sessions.pinnedCanvas."]').filter({ hasText: 'Remote board' }).first();
+		await pin.click();
+		const fullPage = agents.locator('[data-custom-view-id="sessions.customView.canvas"]');
+		await expect(fullPage).toBeVisible();
+		await fullPage.locator('.ash-session-canvas-page').focus(); await agents.keyboard.press('Alt+F2');
+		await expect(agents.getByRole('dialog').getByRole('textbox')).toHaveValue(/Remote provider button/);
+		await agents.keyboard.press('Escape');
+		await commands.runCommand('sessions.action.manageAgentHosts'); await commands.select('canvas-ssh-host');
+		await expect(fullPage.getByRole('status').filter({ hasText: /reconnect/ })).toBeVisible();
+		await expect(pin).toBeVisible();
+		await fullPage.getByRole('button', { name: 'Reconnect Canvas', exact: true }).click();
+		await commands.select('Connect a Saved SSH Host…'); await commands.select('canvas-ssh-host');
+		await expect.poll(async () => (await views()).find(view => view.id === native.id)?.state.visible, { timeout: 30_000 }).toBe(true);
+		expect((await views()).filter(view => view.canvas?.canvasId === 'board').map(view => view.id)).toEqual([native.id]);
+		await expectPinnedCanvasBounds(desktop.application, agents, native);
+		await testInfo.attach('remote-pinned-canvas', { body: await agents.screenshot(), contentType: 'image/png' });
+		await fullPage.getByRole('button', { name: 'Close Canvas', exact: true }).click();
+		await expect.poll(async () => (await views()).some(view => view.id === native.id)).toBe(false);
+		await expect(pin).toHaveCount(0);
+	} catch (error) {
+		if (desktop) {
+			const diagnostics = testInfo.outputPath('remote-canvas-diagnostics.json');
+			await writeFile(diagnostics, JSON.stringify({ pageErrors: desktop.diagnostics.pageErrors, consoleErrors: desktop.diagnostics.consoleErrors, pages: await Promise.all(desktop.application.context().pages().map(async page => ({ url: page.url(), text: await page.locator('body').innerText().catch(() => '') }))) }, null, 2));
+			await testInfo.attach('remote-canvas-diagnostics', { path: diagnostics, contentType: 'application/json' });
+		}
+		throw error;
+	} finally {
+		await seed?.close(); await desktop?.close();
+		origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
+		await ssh.close();
+	}
+});
+
+
+async function expectPinnedCanvasBounds(application: ElectronApplication, page: Page, info: IBrowserViewInfo): Promise<void> {
+	await expect.poll(async () => {
+		const expected = await page.locator('[data-custom-view-id="sessions.customView.canvas"] .ash-session-canvas-page').boundingBox();
+		const actual = await application.evaluate(({ BrowserWindow }, info) => {
+			const view = BrowserWindow.fromId(info.host.windowId)?.contentView.children.find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL() === info.state.url);
+			return view?.getBounds();
+		}, info);
+		return expected && actual ? Math.abs(expected.x - actual.x) + Math.abs(expected.y - actual.y) + Math.abs(expected.width - actual.width) + Math.abs(expected.height - actual.height) : Number.POSITIVE_INFINITY;
+	}).toBeLessThan(4);
+}

@@ -1,3 +1,6 @@
+import { ChatQueueEditor } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatSideChatWidget } from '../../../../../workbench/contrib/chat/browser/chatSideChat.js';
+import { IVoiceModeOnboardingService } from '../../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
@@ -15,7 +18,7 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/c
 import './media/chat.css';
 import './media/chatListWidget.css';
 import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -23,11 +26,11 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../../workbench/services/chat/common/modelCatalog.js';
-import type { IChatListItem } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../../workbench/services/chat/common/chatContextService.js';
 import { getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import type { ChatContextAttachment } from '../../../../../workbench/services/chat/common/chatContextService.js';
@@ -43,6 +46,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface ICoworkWidgetModel extends IDisposable {
+	readonly thread?: import('../../../../../workbench/services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
@@ -54,7 +58,6 @@ export interface ICoworkWidgetModel extends IDisposable {
 	readonly inputState: ChatInputState;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
 	refreshChanges(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -78,6 +81,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	public readonly input: IChatInputPart;
+	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	private readonly goalElement: HTMLDivElement;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
@@ -94,11 +98,12 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		editorService: IEditorService | undefined,
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: (container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -171,8 +176,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				get isConnected() { return voice.isConnected; },
 				toggle: () => this.runVoice(() => {
 					if (voice.isActive) return voice.disconnect();
-					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
-					return voice.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+					return this.startVoiceConversation();
 				}),
 				interrupt: () => this.runVoice(() => voice.stopSpeaking()),
 			},
@@ -180,9 +184,6 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: (invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
-				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
 			interrupt: () => this.model.interrupt(),
 			openChanges: async revision => {
 				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
@@ -200,6 +201,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		};
 		this.input = this._register(createInputPart(this.element, inputDelegate));
 		this._register(widgets.register(this));
+		this._register(instantiationService.createInstance(ChatSideChatWidget, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -297,10 +299,22 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
-		return this.input.acceptInput(value, options);
+		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	startVoiceConversation(): Promise<void> { return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal)); }
+	public async startEditing(requestId: string): Promise<void> {
+		if (this.queueEditor.value || !this.visible) return;
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		this.queueEditor.value = editor;
+		try { await editor.show(); }
+		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
+	}
+
+	startVoiceConversation(): Promise<void> {
+		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));
+		this.voiceOnboarding.showIfNeeded();
+		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+	}
 
 	private reportVoiceError(error: unknown): void { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.voice.requestFailed', 'The voice request failed: {0}', String(error))); }
 	private async runVoice(operation: () => Promise<void>): Promise<void> { try { await operation(); } catch (error) { this.reportVoiceError(error); } }

@@ -59,6 +59,23 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('creator') || new URL(location.href).searchParams.has('catalog')) {
+	// Layout scenarios need a successful catalog, rather than transient errors
+	// from an intentionally disconnected host changing the notice lane's height.
+	const model = { provider: 'fixture', model: 'layout-model' };
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		accounts: { ...disconnectedApi.accounts, read: async () => ({ revision: '1', accounts: [] }) },
+		model: {
+			...disconnectedApi.model,
+			listModels: async () => ({ models: [{ model, displayName: 'Layout fixture', longContext: null }] }),
+			listProviders: async () => ({ providers: [] }),
+			readDefaults: async () => ({ revision: 1, model, reasoningEffort: null, commitMessageModel: null, commitMessageEnabled: false, codeReviewModel: null }),
+		},
+	} };
+}
+const projectChanges = new Emitter<void>();
+window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {
 	const updatedAt = new URL(location.href).searchParams.get('projectUpdatedAt');
 	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
@@ -72,7 +89,7 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	globalThis.ashWebWorkbenchHost = {
 		api: {
 			...globalThis.ashWebWorkbenchHost!.api,
-			projects: { ...disconnectedApi.projects, list: async () => [project], read: async () => project },
+			projects: { ...disconnectedApi.projects, onDidChange: projectChanges.event, list: async () => [project], read: async () => project },
 			automation: {
 				onDidChange: Event.None,
 				list: async () => [{
@@ -191,6 +208,7 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			refreshProject(): void;
 			completeCustomizeDetails(): void;
 			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
 			readonly errors: readonly string[];
@@ -210,6 +228,7 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
+	refreshProject: () => projectChanges.fire(),
 	completeCustomizeDetails: () => completeCustomizeDetails(),
 	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },
 	errors, errorDetails, multiHost,

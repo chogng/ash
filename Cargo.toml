@@ -27,6 +27,8 @@ members = [
     "crates/task-delivery-contract",
     "crates/analytics",
     "crates/diagnostics",
+    "crates/host-logs",
+    "crates/host-integrity",
     "crates/response-debug-context",
     "crates/feedback",
     "crates/feedback-contract",
@@ -326,6 +328,7 @@ task-delivery = { package = "ash-task-delivery", path = "crates/task-delivery" }
 analytics = { package = "ash-analytics", path = "crates/analytics" }
 response-debug-context = { package = "ash-response-debug-context", path = "crates/response-debug-context" }
 diagnostics = { package = "ash-diagnostics", path = "crates/diagnostics" }
+ash-host-logs = { path = "crates/host-logs" }
 feedback = { package = "ash-feedback", path = "crates/feedback" }
 feedback-contract = { package = "ash-feedback-contract", path = "crates/feedback-contract" }
 features = { package = "ash-features", path = "crates/features" }

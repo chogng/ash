@@ -1,6 +1,7 @@
 import type { Icon } from './icon.js';
 import { Emitter, type Event } from './event.js';
 import { Disposable } from './lifecycle.js';
+import { isLinux, isWindows } from './platform.js';
 
 /** A resolved action that can be presented by menus, toolbars, and buttons. */
 export interface IAction {
@@ -12,8 +13,64 @@ export interface IAction {
 	readonly enabled: boolean;
 	readonly checked?: boolean;
 	readonly badge?: string;
+	readonly alt?: IAction;
+	readonly onDidChange?: Event<IActionChangeEvent | void>;
 
 	run(...args: readonly unknown[]): unknown;
+}
+
+export interface IActionChangeEvent {
+	readonly label?: string;
+	readonly tooltip?: string;
+	readonly class?: string;
+	readonly enabled?: boolean;
+	readonly checked?: boolean;
+	readonly icon?: Icon;
+}
+
+/** Chooses the executable action from the activation's current modifiers. */
+export function getActionForAltMode(action: IAction, modifiers: { readonly altKey?: boolean; readonly shiftKey?: boolean; }): IAction {
+	return action.enabled && action.alt?.enabled && (modifiers.altKey || ((isWindows || isLinux) && modifiers.shiftKey))
+		? action.alt : action;
+}
+
+/** Mutable action state with synchronous notifications for retained views. */
+export class Action extends Disposable implements IAction {
+	private readonly changed = this._register(new Emitter<IActionChangeEvent>());
+	readonly onDidChange = this.changed.event;
+	private state: { label: string; tooltip: string; class: string | undefined; enabled: boolean; checked: boolean | undefined; icon: Icon | undefined; };
+
+	constructor(
+		readonly id: string,
+		label = '',
+		cssClass = '',
+		enabled = true,
+		private readonly callback?: (event?: unknown) => unknown,
+	) {
+		super();
+		this.state = { label, tooltip: '', class: cssClass, enabled, checked: undefined, icon: undefined };
+	}
+
+	get label(): string { return this.state.label; }
+	set label(value: string) { this.change('label', value); }
+	get tooltip(): string { return this.state.tooltip; }
+	set tooltip(value: string) { this.change('tooltip', value); }
+	get class(): string | undefined { return this.state.class; }
+	set class(value: string | undefined) { this.change('class', value); }
+	get enabled(): boolean { return this.state.enabled; }
+	set enabled(value: boolean) { this.change('enabled', value); }
+	get checked(): boolean | undefined { return this.state.checked; }
+	set checked(value: boolean | undefined) { this.change('checked', value); }
+	get icon(): Icon | undefined { return this.state.icon; }
+	set icon(value: Icon | undefined) { this.change('icon', value); }
+
+	run(event?: unknown): unknown { return this.callback?.(event); }
+
+	private change<K extends keyof Action['state']>(key: K, value: Action['state'][K]): void {
+		if (this.state[key] === value) return;
+		this.state[key] = value;
+		this.changed.fire({ [key]: value });
+	}
 }
 
 export interface IRunEvent {

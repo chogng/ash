@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
-import type { IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
+import type { FileInvalidation, IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
 import { InMemoryFileSystemProvider } from '../../common/inMemoryFilesystemProvider.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
@@ -16,7 +16,6 @@ import { createDisconnectedFileApi } from '../../../../platform/files/browser/fi
 import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../agentHost/common/agentHostFileSystemProvider.js';
 import { workspaceResourceFromPath } from '../../../workspace/common/workspace.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from '../../../../platform/files/common/files.js';
-import type { FsChanged } from '../../../../../../.build/protocol/typescript/index.js';
 import { workspaceRelativePath, type IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../workbench/services/configuration/test/common/testServices.js';
 import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
@@ -127,7 +126,7 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	const source = root.joinPathSegment(originalName);
 	const target = root.joinPathSegment(renamedName);
 	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
-	using changes = new Emitter<FsChanged>();
+	using changes = new Emitter<FileInvalidation>();
 	const requests: unknown[] = [];
 	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
@@ -504,7 +503,7 @@ test('AgentHostFileSystemProvider reads connection-owned binary resources in bou
 test('AgentHostFileSystemProvider maps App Server invalidations to workspace resources', () => {
 	const root = URI.parse('file:///C:/project');
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: 'workspace', uri: root });
-	using changes = new Emitter<FsChanged>();
+	using changes = new Emitter<FileInvalidation>();
 	using service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
@@ -565,6 +564,7 @@ function unavailableFileApi() {
 	return {
 		connectionGeneration: 0,
 		onDidChangeConnection: Event.None,
+		onDidChangeFiles: Event.None,
 		resolvePath: async () => { throw new Error('Resource has no authorized directory'); },
 		readPathCaseSensitivity: async () => { throw new Error('unavailable'); },
 		getMetadata: async () => { throw new Error('unavailable'); },
@@ -1102,7 +1102,7 @@ test('shared resource routing keeps conversation files independent of Workspace 
 	const calls: unknown[] = [];
 	let writable = true;
 	let resolutions = 0;
-	using changes = new Emitter<FsChanged>();
+	using changes = new Emitter<FileInvalidation>();
 	using provider = new AgentHostFileSystemProvider({
 		directories: () => workspace.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),

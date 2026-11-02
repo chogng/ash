@@ -94,7 +94,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				const executed: string[] = [];
 				const completed = new DeferredPromise<void>();
 				services.registerInstance(ITaskService, {
-					tasks: catalog, refresh: async () => catalog, onDidChangeTasks: Event.None,
+					tasks: catalog, getWorkspaceTasks: async () => catalog, refresh: async () => catalog, onDidChangeTasks: Event.None,
 					run: async (task: IWorkspaceTask) => { executed.push(task.id); void completed.complete(undefined); },
 				} as unknown as ITaskService);
 				services.registerInstance(IQuickInputService, { createQuickPick: () => { void completed.error(new Error('A unique default must run directly')); return picker; } } as unknown as IQuickInputService);
@@ -130,7 +130,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 				onDidChangeTasks: changes.event, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
 				registerTaskProvider: () => Disposable.None,
 				registerTaskProviders: () => ({ dispose() { }, [Symbol.dispose]() { }, replace() { } }),
-				refresh: async () => catalog,
+				getWorkspaceTasks: async () => catalog, refresh: async () => catalog,
 				run: async task => {
 					executed.push(task);
 					if (failure) throw new Error('Unsupported execution setting');
@@ -182,7 +182,7 @@ suite('Configure Tasks command', () => {
 			await files.createDirectory(root);
 			services.registerInstance(IWorkspaceContextService, workspace);
 			services.registerInstance(IFileService, files);
-			services.registerInstance(ITaskService, { tasks: [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
+			services.registerInstance(ITaskService, { tasks: [], getWorkspaceTasks: async () => [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
 			services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(INotificationService, {} as INotificationService);
@@ -222,7 +222,7 @@ suite('Configure Tasks command', () => {
 			const second = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
 			using workspace = new TestWorkspaceService({ id: 'workspace', folders: scenario === 'no-folder' ? [] : scenario === 'multi-root' || scenario === 'cancel' ? [first, second] : [first] });
 			services.registerInstance(IWorkspaceContextService, workspace);
-			services.registerInstance(ITaskService, { tasks: [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
+			services.registerInstance(ITaskService, { tasks: [], getWorkspaceTasks: async () => [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
 			services.registerInstance(IQuickInputService, {
 				createQuickPick: () => {
 					const picker = new Picker();

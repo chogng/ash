@@ -83,6 +83,7 @@ fn thread(messages: &[&str]) -> Thread {
                     }],
                     plan: None,
                     pending_interaction: None,
+                    started_tool_call_ids: None,
                     error: None,
                 }
             })

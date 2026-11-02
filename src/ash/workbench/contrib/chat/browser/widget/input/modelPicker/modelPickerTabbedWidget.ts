@@ -196,16 +196,15 @@ export class TabbedModelPicker extends Disposable {
 						}
 					}
 				}));
-				const menu = resources.add(new Menu(container, {
-					buttonStyles: defaultButtonStyles, keybindingLabelStyles: defaultKeybindingLabelStyles,
-					actions: [{ ...manageModels, run: () => { this.hide(); return manageModels.run(); } }],
+				const menu = resources.add(new Menu(container, [{ ...manageModels, run: () => { this.hide(); return manageModels.run(); } }], {
+					buttonStyles: defaultButtonStyles, keybindingLabelStyles: defaultKeybindingLabelStyles
 				}, defaultMenuStyles));
 				const refreshAutomatic = (): void => {
 					const hasModels = this.delegate.getModels().length > 0;
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
 					automatic.element.hidden = !hasModels;
 					automatic.checked = this.delegate.isAutomaticModel();
-					menu.element.hidden = !hasModels || this.delegate.isAutomaticModel();
+					menu.getContainer().hidden = !hasModels || this.delegate.isAutomaticModel();
 				};
 				refreshAutomatic();
 				resources.add(this.delegate.onDidChangePresentation(refreshAutomatic));

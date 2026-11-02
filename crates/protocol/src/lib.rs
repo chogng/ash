@@ -117,6 +117,7 @@ pub use interaction::AgentRequest;
 pub use interaction::AgentRequestEnvelope;
 pub use interaction::AgentResponse;
 pub use interaction::AgentResponseEnvelope;
+pub use interaction::CommandInterpretation;
 pub use interaction::DirectoryCapability;
 pub use interaction::DynamicToolCall;
 pub use interaction::DynamicToolOutput;

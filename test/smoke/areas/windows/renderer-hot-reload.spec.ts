@@ -156,7 +156,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 					return Object.assign(toDisposable(() => element.remove()), { element, render: () => undefined, setVisible: () => undefined, focus: () => editor.focus() });
 				};
 				const chat = scope.add(chatSurface === 'code'
-					? services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, createInput)
+					? services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, createInput, undefined)
 					: services.createInstance(ChatWidget, host, 'hot-reload-chat', conversation, () => opened.push('chat'), undefined, undefined, undefined, undefined, createInput));
 				chat.setVisible(true);
 				const selections = Array.from({ length: 40 }, (_, index) => ({ kind: 'untitled', session: { untitledSessionId: `draft-${index}`, title: `Draft ${index}` } }));
@@ -339,6 +339,7 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
 			const { IChatTipService, ChatTipService } = await import(moduleUrl('workbench/contrib/chat/browser/chatTipService.ts'));
 			const { ChatInputTipPresenter } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.ts'));
+			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHost.ts'));
 			const scope = new DisposableStore();
 			const services = scope.add(new InstantiationService());
 			const storage = scope.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'widget-hmr', backend: localStorage, flushInterval: 0 }));
@@ -351,7 +352,8 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const editor = globalThis.stanza.editor.getEditors()[0]!;
 			const model = editor.getModel()!;
 			model.setValue('kept through widget reload');
-			const presenter = scope.add(services.createInstance(ChatInputTipPresenter, { container: host, isEligible: () => true, focusInput: () => editor.focus() })) as ChatInputTipPresenter;
+			const noticeHost = scope.add(new ChatInputNoticeHost(() => editor.focus()));
+			const presenter = scope.add(services.createInstance(ChatInputTipPresenter, { container: host, isEligible: () => true, focusInput: () => editor.focus() }, noticeHost)) as ChatInputTipPresenter;
 			editor.focus();
 			editor.setSelection({ startLineNumber: 1, startColumn: 5, endLineNumber: 1, endColumn: 9 });
 			globalThis.widgetHotReloadEvidence = { scope, presenter, editor, model, root: editor.getDomNode(), host, document, previous: presenter.current!.domNode, previousButton: presenter.current!.domNode.querySelector<HTMLButtonElement>('button')! };

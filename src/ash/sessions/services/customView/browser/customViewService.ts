@@ -9,13 +9,14 @@ import type { ICustomViewDescriptor } from './customView.js';
 export interface ICustomViewOpenRequest {
 	readonly descriptor: ICustomViewDescriptor;
 	readonly source: 'explicit' | 'history' | 'restore';
+	readonly state?: string;
 }
 
 export interface ICustomViewService {
 	readonly activeCustomView: IObservable<ICustomViewDescriptor | undefined>;
 	readonly activeCustomViewOpen: IObservable<ICustomViewOpenRequest | undefined>;
 	registerCustomView(descriptor: ICustomViewDescriptor, options?: { readonly restore?: boolean; }): IDisposable;
-	showCustomView(id: string, options?: { readonly source: 'history'; }): void;
+	showCustomView(id: string, options?: { readonly source?: 'history'; readonly state?: string; }): void;
 	hideCustomView(tx?: ITransaction): void;
 }
 
@@ -49,15 +50,16 @@ export class CustomViewService extends Disposable implements ICustomViewService 
 		});
 	}
 
-	showCustomView(id: string, options?: { readonly source: 'history'; }): void {
+	showCustomView(id: string, options?: { readonly source?: 'history'; readonly state?: string; }): void {
 		const descriptor = this.descriptors.get(id);
 		if (!descriptor) {
 			this.log.warn(`Custom view is not registered: ${id}`);
 			return;
 		}
+		if (descriptor.acceptsState && (options?.state === undefined || !descriptor.acceptsState(options.state))) { return; }
 		this.desired = id;
 		this.storage.store(activeViewKey, id, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		this.opening.set({ descriptor, source: options?.source ?? 'explicit' }, undefined);
+		this.opening.set({ descriptor, source: options?.source ?? 'explicit', ...(options?.state !== undefined ? { state: options.state } : {}) }, undefined);
 	}
 
 	hideCustomView(tx?: ITransaction): void {

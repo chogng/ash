@@ -1,5 +1,4 @@
 import { ChatRequestQueueKind } from '../../../../workbench/services/chat/common/chatService.js';
-import { updateAdvisorConfig } from '../../../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -10,13 +9,13 @@ import { ILanguageModelsConfigurationService } from '../common/languageModelsCon
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
+import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../../../workbench/services/chat/common/chatService.js';
@@ -77,7 +76,6 @@ export class CoworkWidgetModel extends Disposable {
 	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
-	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
@@ -153,7 +151,7 @@ export class CoworkWidgetModel extends Disposable {
 			approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode ?? this.defaultApprovalMode.get(),
 			models: this._models,
 			modelsError: this.modelsError,
-			slashCommands: this._slashCommands,
+			slashCommands: [],
 			skillSelectors: this._skillSelectors,
 			selectedModel: this.selectedModel,
 			selectedReasoningEffort: this.selectedReasoningEffort,
@@ -196,10 +194,6 @@ export class CoworkWidgetModel extends Disposable {
 
 	get models(): readonly ModelCatalogEntry[] {
 		return this._models;
-	}
-
-	get slashCommands(): readonly SlashCommandDefinition[] {
-		return this._slashCommands;
 	}
 
 	get skillSelectors(): readonly SkillSelectorDefinition[] {
@@ -394,14 +388,15 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	/** Materializes the existing Untitled owner without submitting an empty model Turn. */
-	async prepareConversation(): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
+	async prepareConversation(signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
 		this.assertAIEnabled();
+		if (signal?.aborted) throw canceled();
 		const identity = this.threadId ?? this.untitledSessionId;
-		await this.initialize();
-		if (this.isDisposed || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
+		await (signal ? raceCancellationError(this.initialize(), signal) : this.initialize());
+		if (this.isDisposed || signal?.aborted || identity !== (this.threadId ?? this.untitledSessionId)) throw canceled();
 		this.assertAIEnabled();
-		const active = await this.ensureActiveSession();
-		if (this.isDisposed || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
+		const active = await this.ensureActiveSession(signal);
+		if (this.isDisposed || signal?.aborted || this.sessionId !== active.session.sessionId || this.threadId !== active.threadId) throw canceled();
 		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
 
@@ -437,6 +432,7 @@ export class CoworkWidgetModel extends Disposable {
 				// Reference offsets belong to the exact composer text, including leading whitespace.
 				text,
 				mode,
+				commandInterpretation: 'literal' as const,
 				approvalMode: this.inputState.approvalMode,
 				model: this.isAutomaticModel ? undefined : this.selectedModel,
 				reasoningEffort: this.selectedReasoningEffort,
@@ -486,88 +482,6 @@ export class CoworkWidgetModel extends Disposable {
 
 	private get composerIdentity(): string {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
-	}
-
-	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void> {
-		this.assertAIEnabled();
-		if (name !== 'compact' && name !== 'advisor') {
-			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ''}`, this.mode, undefined, undefined, { signal: submissionSignal });
-			return;
-		}
-		const operation = this.captureOperation({ signal: submissionSignal });
-		const stateRequest = ++this.stateRequest;
-		try {
-			this.setState('submitting');
-			this.requireCurrentOperation(operation);
-			const argument = argumentsText.trim();
-			const isModelSelection = /^[^/\s]+\/\S+$/.test(argument);
-			const isAdvisorConfigArgument = argument === 'off' || argument === 'clear' || isModelSelection;
-			if (name === 'advisor' && isAdvisorConfigArgument) {
-				const current = await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation);
-				this.requireCurrentOperation(operation);
-				if (argument === 'clear') {
-					await this.chatService.saveAdvisorDefault(updateAdvisorConfig(current, { type: 'clear' }));
-					this.requireCurrentOperation(operation);
-				} else if (argument === 'off') {
-					if (current) await this.chatService.saveAdvisorDefault(updateAdvisorConfig(current, { type: 'setEnabled', enabled: false }));
-					this.requireCurrentOperation(operation);
-				} else {
-					const models = await this.awaitOperationPreparation(this.languageModels.listAdvisorModels(), operation);
-					this.requireCurrentOperation(operation);
-					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
-					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
-					const config = updateAdvisorConfig(current, { type: 'selectModel', model: chosen });
-					await this.chatService.saveAdvisorDefault(config);
-					this.requireCurrentOperation(operation);
-				}
-				if (stateRequest === this.stateRequest) this.setState('ready');
-				return;
-			}
-			const advisorDefault = name === 'advisor' ? await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation) : null;
-			this.requireCurrentOperation(operation);
-			if (name === 'advisor' && !argument) throw new Error(localize('chat.advisor.questionRequired', 'Enter a question after /advisor'));
-			if (name === 'advisor' && this.selection.kind === 'untitled' && (!advisorDefault || !advisorDefault.enabled)) {
-				throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
-			}
-			const active = await this.ensureActiveSession();
-			if (this.isDisposed || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
-			operation.identity = active.threadId;
-			if (this._thread?.threadId !== active.threadId) {
-				await this.awaitOperationPreparation(this.subscribe(active), operation);
-				this.requireCurrentOperation(operation);
-			}
-			const thread = this._thread;
-			if (!thread || thread.threadId !== active.threadId) {
-				throw new Error('Chat Thread is not available');
-			}
-			if (name === 'advisor') {
-				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence, isNewSession: thread.turns.length === 0 };
-				if (activeTurn(thread)) throw new Error(localize('chat.advisor.turnActive', 'Wait for the active Turn to finish before starting a consultation'));
-				if (!advisorDefault || !advisorDefault.enabled) throw new Error(localize('chat.advisor.configure', 'Configure an advisor model in Chat Settings before asking for a second opinion'));
-				await this.chatService.consultAdvisor({ ...options, question: argument });
-				this.requireCurrentOperation(operation);
-				await this.refreshThread();
-				this.requireCurrentOperation(operation);
-				return;
-			}
-			if (activeTurn(thread)) {
-				throw new Error('Context can be compacted only when the active Turn has finished');
-			}
-			await this.chatService.compactContext({
-				sessionId: active.session.sessionId,
-				threadId: active.threadId,
-				expectedSequence: thread.sequence,
-				...(argumentsText.trim() ? { retentionPrompt: argumentsText.trim() } : {}),
-			});
-			this.requireCurrentOperation(operation);
-			await this.refreshThread();
-			this.requireCurrentOperation(operation);
-		} catch (error) {
-			if (!this.isCurrentTarget(operation) || stateRequest !== this.stateRequest) throw error;
-			if (operation.signal?.aborted || isCancellationError(error)) { this.recoverCancelledSubmission(operation, stateRequest); throw error; }
-			this.setError(error);
-			throw error;
-		}
 	}
 
 	async retryFailedTurn(turnId: string): Promise<void> {
@@ -662,7 +576,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private async loadCatalogs(): Promise<void> {
-		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode()]);
+		const [models] = await Promise.allSettled([this.modelEntries(), this.loadSkillSelectors(), this.loadDefaultApprovalMode()]);
 		if (this.isDisposed) return;
 		if (models.status === 'fulfilled') {
 			this._models = models.value;
@@ -671,7 +585,6 @@ export class CoworkWidgetModel extends Disposable {
 		} else {
 			this.modelsError = String(models.reason);
 		}
-		if (slashCommands.status === 'fulfilled') this._slashCommands = slashCommands.value;
 		this._onDidChange.fire();
 	}
 
@@ -1045,12 +958,6 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 
-	private async awaitOperationPreparation<T>(pending: Promise<T>, operation: ReturnType<CoworkWidgetModel['captureOperation']>): Promise<T> {
-		const result = operation.signal ? await raceCancellationError(pending, operation.signal) : await pending;
-		this.requireCurrentOperation(operation);
-		return result;
-	}
-
 	private isCurrentTarget(operation: ReturnType<CoworkWidgetModel['captureOperation']>): boolean {
 		return !this.isDisposed && operation.generation === this.composerGeneration && operation.identity === this.composerIdentity;
 	}
@@ -1068,10 +975,10 @@ export class CoworkWidgetModel extends Disposable {
 		if (!this.isCurrentOperation(operation)) throw canceled();
 	}
 
-	private async ensureActiveSession(): Promise<IActiveSessionThread> {
+	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
-		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
+		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal);
 		if (this.isDisposed || this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== untitledSession.untitledSessionId) {
 			// Keep the completed durable session, but never replace a newer conversation selection.
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);

@@ -1,3 +1,8 @@
+import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+import { IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { ChatHistoryModel } from '../../browser/chatHistoryModel.js';
+import { IFileService } from '../../../platform/files/common/files.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerCodeEditorServices } from '../../../editor/test/browser/testCodeEditor.js';
@@ -6,7 +11,7 @@ import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widge
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ImageEditorService } from '../../../workbench/services/imageEditor/browser/imageEditorService.js';
-import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -40,13 +45,13 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { type IMenu, IMenuService } from '../../../platform/actions/common/actions.js';
 import { IContextViewService, IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
-import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
-import { Position, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
+import type { ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
+import { Position, IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
-import type { ISessionsManagementService, SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService, type SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 
@@ -124,24 +129,15 @@ test('opens a local Chat conversation before the backend session request settles
 	services.registerInstance(IContextMenuService, {} as IContextMenuService);
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
-	using view = new SessionChatViewPane(
-		document.body,
-		{ id: 'workbench.chat', title: 'Chat' },
-		chat,
-		sessionService,
-		emptyMenuService(),
-		{} as IContextMenuService,
-		contextViewService,
-		{} as ICommandService,
-		layoutService,
-		files,
-		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService,
-		notifications,
-		services,
-		services.get(IConfigurationService),
-		services.get(IStorageService),
-		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService), services.get(IContextKeyService), emptyEditorGroupsService,
-	);
+	using viewServices = services.createChild();
+	viewServices.registerInstance(IChatService, chat);
+	viewServices.registerInstance(ISessionsManagementService, sessionService);
+	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);
+	viewServices.registerInstance(IFileService, files);
+	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
+	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(ChatHistoryModel));
+	using view = viewServices.createInstance(SessionChatViewPane, document.body, { id: 'workbench.chat', title: 'Chat' });
 
 	assert.deepEqual(escaped, []);
 	assert.equal(sessionService.untitledSessions.length, 1);
@@ -171,6 +167,7 @@ class PendingSessionService implements ISessionsManagementService {
 	whenDirectoriesReady(): Promise<void> { return Promise.resolve(); }
 
 	initialize(): Promise<void> { return this.pendingInitialization; }
+	refresh(): Promise<void> { return this.initialize(); }
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 

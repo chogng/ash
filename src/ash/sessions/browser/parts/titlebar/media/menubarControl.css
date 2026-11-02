@@ -8,7 +8,7 @@
 	color: var(--ash-titleBar-foreground);
 }
 
-.ash-menubar.ash-sessions-titlebar-actions {
+.ash-titlebar-left-actions.ash-sessions-titlebar-actions {
 	--ash-actionBar-gap: var(--ash-spacing-size20);
 	--ash-menubar-action-radius: var(--ash-cornerRadius-large);
 }

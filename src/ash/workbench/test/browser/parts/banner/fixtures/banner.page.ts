@@ -175,7 +175,7 @@ const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRec
 		}
 	},
 };
-services.registerInstance(IAppServerApi, { get connectionGeneration() { return connectionGeneration; }, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
+services.registerInstance(IAppServerApi, { isAvailable: true, get connectionGeneration() { return connectionGeneration; }, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
 const permissionChanges = resources.add(new Emitter<void>());
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: managementAllowed, localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [] }) });
 services.registerInstance(IWorkspaceTrustApi, {

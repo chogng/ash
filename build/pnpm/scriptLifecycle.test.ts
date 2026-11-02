@@ -78,10 +78,10 @@ test('aggregate, test and typecheck commands prepare inputs once and stop on pre
 	for (const path of ['test/unit/browser', 'build/desktop', 'node_modules/mocha/bin', 'node_modules/@ash/typescript-compiler/bin', '.build/desktop/test/src', 'src/ash/base/common/marked', 'src/ash/base/browser/dompurify']) {
 		await mkdir(join(directory, path), { recursive: true });
 	}
-	await copyFile(join(root, 'test/unit/mocha.ts'), join(directory, 'test/unit/mocha.ts'));
+	for (const name of ['mocha', 'coverage']) await copyFile(join(root, `test/unit/${name}.ts`), join(directory, `test/unit/${name}.ts`));
 	await copyFile(join(root, 'build/processes.ts'), join(directory, 'build/processes.ts'));
 	await copyFile(join(root, '.nvmrc'), join(directory, '.nvmrc'));
-	await writeFile(join(directory, 'test/unit/impact.ts'), `
+	await writeFile(join(directory, 'test/unit/impactWorker.ts'), `
 		export function planAffectedTests(root, base) {
 			if (base === 'empty') return { files: [], full: false, reason: 'no changed inputs' };
 			throw new Error('Unexpected impact analysis');

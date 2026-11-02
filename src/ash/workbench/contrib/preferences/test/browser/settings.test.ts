@@ -1,3 +1,4 @@
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
@@ -54,7 +55,7 @@ import { IFileTextModelService } from '../../../../services/textmodelResolver/co
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -67,8 +68,8 @@ import { ILanguageServerService } from '../../../../../platform/language/common/
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
-import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
-import { createDisconnectedAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/models/common/agentModels.js';
+import { createDisconnectedAgentModelsService } from '../../../../../platform/models/browser/appServerAgentModels.js';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
@@ -91,7 +92,6 @@ import type {
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
@@ -1995,20 +1995,25 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
 		const appearance = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-appearance')!;
 		assert.equal(appearance.descriptor.label, '外观');
-		assert.equal(appearance.descriptor.description, '设置消息输入框和回复中代码块的显示方式。');
-		assert.deepEqual(appearance.groups.map(group => group.title), ['消息输入', '代码块']);
+		assert.equal(appearance.descriptor.description, '设置聊天消息、消息输入框和代码块的显示方式。');
+		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块']);
+		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.upvoteAnimation', 'chat.fontFamily', 'chat.fontSize']);
 		assert.deepEqual(
-			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
 				['chat.input.lineHeight', '行高', 20],
 			],
 		);
+		assert.deepEqual(
+			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			[['chat.upvoteAnimation', '有用回复动画', 'floatingThumbs'], ['chat.fontFamily', '字体', 'default'], ['chat.fontSize', '字号', 13]],
+		);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 		assert.deepEqual(
-			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
+			appearance.groups[2]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -2059,6 +2064,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'updates',
 			'network',
 			'interaction',
+			'chat-usage',
 			'chat-appearance',
 			'agents',
 			'teams',
@@ -3422,9 +3428,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="chat-code-blocks"]'), null);
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
-		['Appearance', 'Message input', 'Code blocks'],
+		['Appearance', 'Messages', 'Message input', 'Code blocks'],
 	);
-	for (const key of ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
+	for (const key of ['chat.fontFamily', 'chat.fontSize', 'chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap', 'chat.upvoteAnimation']) {
 		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
 	}
 	await preferences.openSettings({ section: 'extensions' });
@@ -4049,7 +4055,8 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 4);
+	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 5);
+	assert.ok(root.querySelector('[data-settings-item-id="chat.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="terminal.integrated.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.input.fontFamily"]'));
 	assert.ok(root.querySelector('[data-settings-item-id="chat.editor.fontFamily"]'));
@@ -4299,7 +4306,7 @@ test('Models Settings separates its model, subscription and API cards and saves 
 	document.body.replaceChildren();
 	const root = h(document, 'div');
 	document.body.append(root);
-	const saved: import('../../../../../platform/agentHost/common/agentModels.js').CustomModelProvider[] = [];
+	const saved: import('../../../../../platform/models/common/agentModels.js').CustomModelProvider[] = [];
 	const keys: string[] = [];
 	let removed = 0;
 	let failed = false;

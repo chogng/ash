@@ -1,8 +1,11 @@
+import type { FileSearchDirectory } from '../../search/common/fileSearch.js';
 import type { SkillReference } from './appServerApi.js';
 import type { URI } from '../../../base/common/uri.js';
-import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
+import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from '../../models/common/agentModels.js';
 import type { ApprovalMode } from './approvalModes.js';
 import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
+
+export type CommandInterpretation = 'product' | 'literal';
 
 export type SessionMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
 
@@ -55,6 +58,7 @@ interface SessionOperations {
 		readonly threadId: string;
 		readonly expectedSequence: number;
 		readonly mode: SessionMode;
+		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
 		readonly reasoningEffort?: ModelReasoningEffort | null;
@@ -96,6 +100,8 @@ export interface SessionReadParams {
 export interface SessionCreateParams {
 	readonly commandId: string;
 	readonly title: string;
+	/** A new branch for this conversation's managed worktree; omitted keeps the default target. */
+	readonly branchName?: string;
 	readonly executionTarget:
 	| { readonly type: 'local'; readonly root: string; }
 	| { readonly type: 'ssh'; readonly host: string; readonly root: string; }
@@ -116,6 +122,12 @@ export interface AgentSessionActivity {
 	readonly statusChangedAtUnixMs: number;
 	readonly activity?: { readonly type: 'operation' | 'question' | 'failure'; readonly text: string; } | null;
 	readonly summary?: string | null;
+}
+
+/** Invalidates a Session's catalog entry and, when needed, its execution tree. */
+export interface AgentSessionChange {
+	readonly sessionId: SessionId;
+	readonly agentTreeChanged: boolean;
 }
 
 export interface AgentSession {
@@ -232,6 +244,7 @@ export type TurnInteractionResolveResult = TurnInterruptResult;
 export type AdvisorConfigureResult = TurnInterruptResult;
 
 export interface QueueEnqueueParams extends SessionMutationParams {
+	readonly commandInterpretation?: CommandInterpretation;
 	readonly threadId: string;
 	readonly mode: SessionMode;
 	readonly model?: ModelRef | null;
@@ -241,6 +254,7 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 }
 
 export interface QueuedMessage {
+	readonly steerTurnId?: string;
 	readonly sessionId: string;
 	readonly threadId: string;
 	/** The durable enqueue command is also the message's stable identity. */
@@ -263,6 +277,7 @@ export interface QueueMessageTarget extends QueueListParams {
 export type QueueMessageEdit =
 	| { readonly type: 'pause' | 'resume'; }
 	| { readonly type: 'replaceText'; readonly text: string; }
+	| { readonly type: 'replaceTextWithDelivery'; readonly text: string; readonly delivery: { readonly type: 'queued' | 'immediate'; } | { readonly type: 'steering'; readonly turnId: string; }; }
 	| { readonly type: 'send'; };
 
 export interface QueueListParams extends SessionReadParams {
@@ -514,6 +529,15 @@ export interface Turn {
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly plan?: PlanUpdate | null;
+	/** Durable execution-start evidence; results and pending interactions take precedence. */
+	readonly startedToolCallIds?: readonly string[] | null;
+	/** Readable wait metadata; only an owner-directed offer grants access to the actionable request. */
+	readonly pendingInteraction?: {
+		readonly requestId: string;
+		readonly itemId?: string | null;
+		readonly kind: AgentRequest['type'];
+		readonly deadline?: { readonly expiresAtUnixMs: number; } | null;
+	} | null;
 	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
 	readonly error?: TurnError | null;
@@ -547,6 +571,11 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| {
+		readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number;
+		readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number;
+		readonly selection?: string | null;
+	}
 	| {
 		readonly type: 'message';
 		readonly parentThreadId: ThreadId;
@@ -686,6 +715,7 @@ export interface AgentInteractionOffer {
 }
 
 export type ThreadCommittedEvent =
+	| { readonly type: 'toolExecutionStarted'; readonly turnId: string; readonly toolCallId: string; }
 	| { readonly type: 'interactionResolved' | 'interactionCancelled'; readonly turnId: string; readonly requestId: string; }
 	| { readonly type: 'turnCompleted' | 'turnFailed' | 'turnInterrupted'; readonly turnId: string; }
 	| { readonly type: 'interactionRequested'; readonly interaction: TurnInteraction; }
@@ -730,7 +760,6 @@ export type ThreadCommittedEvent =
 		| 'itemCompleted'
 		| 'planUpdated'
 		| 'hookRunUpdated'
-		| 'toolExecutionStarted'
 		| 'toolExecutionEscalated'
 		| 'turnCancelling'
 		| 'delegationRequested'
@@ -995,4 +1024,24 @@ export interface AgentWireLogPage {
 	readonly cursor: number;
 	readonly hasMore: boolean;
 	readonly droppedFrames: number;
+}
+
+/** Input coordinates are UTF-16 offsets, matching text models across product hosts. */
+export interface AgentHostInputCompletionRequest {
+	readonly text: string;
+	readonly offset: number;
+	readonly sessionId?: string;
+	readonly threadId?: string;
+	readonly directories: readonly FileSearchDirectory[];
+}
+
+export interface AgentHostInputCompletionItem {
+	readonly label: string;
+	readonly insertText: string;
+	readonly start: number;
+	readonly end: number;
+	readonly detail?: string;
+	readonly preselect: boolean;
+	readonly value: { readonly kind: 'command'; } | { readonly kind: 'skill'; readonly skill: SkillReference; }
+	| { readonly kind: 'resource'; readonly resource: URI; readonly isDirectory: boolean; };
 }

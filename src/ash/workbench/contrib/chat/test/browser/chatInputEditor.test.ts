@@ -4,6 +4,10 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import assert from 'node:assert/strict';
 import { setup, teardown, test, suite, suiteSetup, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import type { } from '../../../../../../../test/fixtures/browser/chatInput.page.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -25,7 +29,7 @@ const { ChatInputEditor } = await import('../../browser/widget/input/chatInputEd
 await import('../../browser/chat.shared.contribution.js');
 const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
+const { BuiltinDynamicCompletions, createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
 const { DesktopSlashCommands, SlashCommandCatalog } = await import('../../common/slashCommands.js');
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import('../../../../../editor/common/core/position.js');
@@ -45,6 +49,9 @@ const { ChatPasteProvidersFeature, CHAT_ATTACHMENT_MIME_TYPE, CopyTextProvider }
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { ILanguageFeaturesService } = await import('../../../../../editor/common/services/languageFeatures.js');
 const { CopyPasteController } = await import('../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js');
+const { ChatInputSessionLinkProvider } = await import('../../browser/widget/input/editor/chatInputSessionLinkProvider.js');
+const { buildOpenSessionLinkUri } = await import('../../../../../platform/agentHost/common/openSessionLink.js');
+const { createLanguageFeatureRequest, createLanguageCompletionInvokeContext } = await import('../../../../../editor/common/languages.js');
 const { SelectAllCommand } = await import('../../../../../editor/browser/editorExtensions.js');
 const { URI } = await import('../../../../../base/common/uri.js');
 const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
@@ -56,8 +63,72 @@ const { ChatReferenceAttachmentWidgetContribution } = await import('../../browse
 const { noFileIconTheme } = await import('../../../../../platform/theme/common/themeService.js');
 const { Emitter, Event: AshEvent } = await import('../../../../../base/common/event.js');
 const { ModifierKeyEmitter } = await import('../../../../../base/browser/dom.js');
+const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
+const { MenuId, MenusRegistry } = await import('../../../../../platform/actions/common/actions.js');
+const { ChatContextKeys } = await import('../../common/actions/chatContextKeys.js');
+const { IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
+const { DocumentPasteTriggerKind } = await import('../../../../../editor/common/languages.js');
+const { VSDataTransfer, createStringDataTransferItem } = await import('../../../../../base/common/dataTransfer.js');
+const { CancellationToken } = await import('../../../../../base/common/cancellation.js');
+const { DeferredPromise } = await import('../../../../../base/common/async.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('automatic HTML paste retains Markdown through undo, redo and switching to plain text', async () => {
+	using resources = new DisposableStore();
+	const target = createSnapshotComposer(resources);
+	const clipboard = new SnapshotClipboard();
+	clipboard.setData('text/plain', 'Title\nsource.ts');
+	clipboard.setData('text/html', '<h2>Title</h2><p><code>source.ts</code></p>');
+	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
+	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
+	assert.equal(target.editor.value, '## Title\n\n`source.ts`');
+	assert.equal(target.references.variables.length, 0);
+	target.editor.getModel().undo();
+	assert.equal(target.editor.value, '');
+	target.editor.getModel().redo();
+	assert.equal(target.editor.value, '## Title\n\n`source.ts`');
+	// Re-paste after undo so the selector owns the transaction it replaces.
+	target.editor.getModel().undo();
+	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
+	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
+	const document = target.editor.element.ownerDocument;
+	document.querySelector<HTMLButtonElement>('.stanza-editor-post-edit-selector button')!.click();
+	const plain = [...document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text')!;
+	assert.ok(plain);
+	plain.click();
+	await waitFor(() => target.editor.value === 'Title\nsource.ts');
+	assert.equal(target.references.variables.length, 0);
+});
+
+test('HTML paste only runs automatically for its owning live draft and defers to captured references', async () => {
+	using resources = new DisposableStore();
+	const target = createSnapshotComposer(resources);
+	const model = target.editor.getModel();
+	const provider = target.services.get(ILanguageFeaturesService).documentPasteEditProvider.ordered(model)
+		.find(candidate => candidate.providedPasteEditKinds?.some(kind => kind.value === 'chat.paste.html'))!;
+	assert.ok(provider);
+	const transfer = new VSDataTransfer();
+	transfer.append('text/html', createStringDataTransferItem('<strong>Rich</strong>'));
+	const provide = (triggerKind = DocumentPasteTriggerKind.Automatic) => provider.provideDocumentPasteEdits!(model, [new Range(1, 1, 1, 1)], transfer, { triggerKind }, CancellationToken.None);
+	assert.equal(await provide(DocumentPasteTriggerKind.PasteAs), undefined);
+	transfer.append(CHAT_ATTACHMENT_MIME_TYPE, createStringDataTransferItem('captured reference'));
+	assert.equal(await provide(), undefined);
+	transfer.delete(CHAT_ATTACHMENT_MIME_TYPE);
+	transfer.append('application/vnd.code.additional-editor-data', createStringDataTransferItem('copied code'));
+	assert.equal(await provide(), undefined);
+	transfer.delete('application/vnd.code.additional-editor-data');
+	transfer.append('vscode-editor-data', createStringDataTransferItem('{"version":1}'));
+	assert.equal(await provide(), undefined);
+	transfer.delete('vscode-editor-data');
+	const waiting = new DeferredPromise<string>();
+	transfer.replace('text/html', createStringDataTransferItem(waiting.p));
+	const pending = provide();
+	target.lifecycle.abort();
+	await waiting.complete('<strong>Late</strong>');
+	assert.equal(await pending, undefined);
+	assert.equal(target.editor.value, '');
+});
 
 for (const method of ['copy', 'cut'] as const) {
 	test(`Code ${method} offers a reference snapshot after the source changes, while default paste stays plain`, async () => {
@@ -92,12 +163,13 @@ for (const method of ['copy', 'cut'] as const) {
 		assert.equal(target.editor.value, 'Before source.ts (2) after');
 		assert.deepEqual(reference.reference, { start: 7, end: 20 });
 		assert.equal(reference.kind, 'codeSelection');
-		assert.ok((await reference.resolve()).content.endsWith('\n\nconst unsaved = 42;\n'));
+		assert.equal((await reference.resolve()).content, `Source: ${reference.resource!.toString()}\n\nconst unsaved = 42;\n`);
 		target.editor.getModel().undo();
 		assert.equal(target.editor.value, 'Before  after');
 		assert.deepEqual(target.references.variables, []);
 		target.editor.getModel().redo();
 		assert.equal(target.references.variables[0], reference);
+		assert.equal((await reference.resolve()).content, `Source: ${reference.resource!.toString()}\n\nconst unsaved = 42;\n`);
 	});
 }
 
@@ -990,7 +1062,7 @@ test('Chat completion providers use one-based editor positions and ranges', asyn
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: skillModel.createVersionedSnapshot(),
 	}, new AbortController().signal);
-	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
+	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 10));
 });
 
 test('Chat slash provider finds description text without preselecting it', async () => {
@@ -1165,6 +1237,140 @@ test('Chat command completion replaces the whole command and preserves arguments
 	assert.equal(editor.value, '/history argument');
 });
 
+test('Command hints follow catalog updates without entering the draft or undo history', async () => {
+	using resources = new DisposableStore();
+	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
+	resources.add(toDisposable(() => dom.window.close()));
+	resources.add(setARIAContainer(dom.window.document.body));
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const catalog = new SlashCommandCatalog([], [{ name: 'review', description: 'Review code', argumentMode: 'optional', argumentHint: '<path>' }]);
+	const editor = resources.add(createChatInputServices(resources).createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message',
+		slashCommands: catalog, skills: new SkillSelectorCatalog(),
+	}));
+	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
+	editor.layout();
+	const hints = () => editor.getModel().getAllDecorations()
+		.filter(decoration => decoration.options.description === 'inputEditorCommandArgumentHint')
+		.map(decoration => decoration.options.after?.content);
+	const input = requiredElement<HTMLElement>(editor.element, '.stanza-editor-input');
+	let submissions = 0;
+	resources.add(editor.onDidSubmit(() => submissions++));
+	editor.focus();
+	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
+	await waitFor(() => completionLabels(editor.element).includes('/review'));
+	for (const character of 'rev') input.dispatchEvent(beforeInputEvent(dom.window, character));
+	await waitFor(() => completionLabels(editor.element).includes('/review'));
+	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));
+	assert.equal(editor.value, '/review ');
+	assert.equal(submissions, 0);
+	assert.deepEqual(hints(), ['<path>']);
+	const selection = editor.getSelection();
+	catalog.setServerCommands([{ name: 'review', description: 'Review code', argumentMode: 'optional', argumentHint: '<revision>' }]);
+	assert.deepEqual(hints(), ['<revision>']);
+	assert.deepEqual(editor.getSelection(), selection);
+	input.dispatchEvent(beforeInputEvent(dom.window, 'x'));
+	assert.equal(editor.value, '/review x');
+	assert.deepEqual(hints(), []);
+	editor.getModel().undo();
+	assert.equal(editor.value, '/review ');
+	assert.deepEqual(hints(), ['<revision>']);
+	editor.setReadOnly(true);
+	assert.deepEqual(hints(), []);
+	editor.setReadOnly(false);
+	assert.deepEqual(hints(), ['<revision>']);
+	catalog.setServerCommands([]);
+	assert.deepEqual(hints(), []);
+	editor.dispose();
+	catalog.setServerCommands([{ name: 'review', description: 'Review code', argumentMode: 'optional', argumentHint: 'Retired editor' }]);
+});
+
+test('Command completion respects whitespace trimmed by submission and rejects leading message text', async () => {
+	using resources = new DisposableStore();
+	const composer = createSnapshotComposer(resources);
+	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+	const provider = createChatCommandCompletionProvider(catalog);
+	for (const text of ['  /ne', '\n\t/ne', '\n  /ne']) {
+		composer.editor.value = text;
+		const model = composer.editor.getModel();
+		const position = model.getPositionAt(text.length);
+		const result = await provider.provideCompletions({
+			requestId: 1, languageId: 'ash-chat-input', position,
+			context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
+		}, new AbortController().signal);
+		assert.equal(result?.items[0]?.insertText, '/new ');
+		composer.editor.codeEditor.executeEdits('completion', [{ range: result!.items[0]!.range, text: result!.items[0]!.insertText }]);
+		assert.equal(composer.editor.value, text.slice(0, text.indexOf('/')) + '/new ');
+	}
+	composer.editor.value = 'Message\n/ne';
+	const result = await provider.provideCompletions({
+		requestId: 2, languageId: 'ash-chat-input', position: new Position(2, 4),
+		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: composer.editor.getModel().createVersionedSnapshot(),
+	}, new AbortController().signal);
+	assert.deepEqual(result?.items, []);
+});
+
+test('Skill completion consumes its existing separator while preserving following text', async () => {
+	using resources = new DisposableStore();
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	resources.add(toDisposable(() => dom.window.close()));
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const services = createChatInputServices(resources);
+	const skills = new SkillSelectorCatalog();
+	skills.setSkills([{
+		name: 'commit', description: 'Commit changes', source: 'user',
+		skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:commit' } },
+	}]);
+	const editor = resources.add(services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []), skills,
+	}));
+	editor.value = 'Use $com next';
+	editor.focus();
+	editor.setSelection({ anchor: 8, active: 8 });
+	await services.get(ICommandService).executeCommand('editor.action.triggerSuggest');
+	await waitFor(() => completionLabels(editor.element).includes('$commit'));
+	requiredElement<HTMLElement>(editor.element, '.stanza-editor-input').dispatchEvent(keyboardEvent(dom.window, 'Enter'));
+	assert.equal(editor.value, 'Use $commit next');
+});
+
+test('Session link detection uses its captured snapshot and leaves nested, malformed and non-Chat links alone', () => {
+	using unregistered = new InstantiationService();
+	assert.throws(() => unregistered.createInstance(ChatInputSessionLinkProvider), /Unknown service/);
+	using resources = new DisposableStore();
+	const composer = createSnapshotComposer(resources);
+	const model = composer.editor.getModel();
+	const features = composer.services.get(ILanguageFeaturesService);
+	const provider = features.linkProvider.ordered(model).find(provider => provider instanceof ChatInputSessionLinkProvider)!;
+	assert.ok(provider);
+	const menu = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => 'command' in item && item.command.id === 'editor.action.openLink')!;
+	const context = composer.services.get(IContextKeyService);
+	const enabled = ChatContextKeys.enabled.bindTo(context);
+	enabled.set(false);
+	assert.equal(context.contextMatchesRules(menu.when), false);
+	enabled.set(true);
+	// Opening the Command Palette moves focus out of the message; the action must remain discoverable.
+	ChatContextKeys.inChatInput.bindTo(context).set(false);
+	assert.equal(context.contextMatchesRules(menu.when), true);
+	const target = buildOpenSessionLinkUri('session / &', 'thread? =', 'local').toString();
+	composer.editor.value = `(${target})\nhttps://example.test/?next=${target}\nprefix${target}\n${target}&threadId=forged\n${target}#fragment\n${target}\n"${target}"`;
+	const cancellation = new AbortController();
+	const request = createLanguageFeatureRequest(model, model.getLanguageId(), cancellation.signal);
+	composer.editor.value = 'Changed after the request';
+	assert.deepEqual(provider.provideLinks(request, cancellation.signal), [
+		{ range: new Range(1, 2, 1, target.length + 2), target, tooltip: 'Open conversation' },
+		{ range: new Range(6, 1, 6, target.length + 1), target, tooltip: 'Open conversation' },
+		{ range: new Range(7, 2, 7, target.length + 2), target, tooltip: 'Open conversation' },
+	]);
+	cancellation.abort();
+	assert.deepEqual(provider.provideLinks(request, cancellation.signal), []);
+	using file = new TextModel(target, { languageId: 'typescript' });
+	assert.ok(!features.linkProvider.ordered(file).includes(provider));
+	provider.dispose();
+	assert.ok(!features.linkProvider.ordered(model).includes(provider));
+	assert.ok(!MenusRegistry.getMenuItems(MenuId.CommandPalette).includes(menu));
+});
+
 test('Chat input starts with two lines and grows and shrinks with content', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -1240,5 +1446,279 @@ function createChatInputServices(
 		startVoiceConversation: async () => { throw new Error('Unexpected voice start'); },
 	});
 	resources.add(services.createInstance(ChatReferenceAttachmentWidgetContribution));
+	resources.add(services.createInstance(ChatInputSessionLinkProvider));
 	return services;
 }
+
+suite('Chat command hint browser behavior', () => {
+	const browser = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+		test(`command hints preserve text, focus, undo and theme in ${locale}, ${theme}`, async () => {
+			const { page } = browser;
+			const hint = locale === 'zh-CN' ? '<文件路径>' : '<file path>';
+			await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&theme=${theme}`);
+			await page.evaluate(hint => window.ashChatInputIntegration.setSlashCommands([
+				{ name: 'review', description: 'Review code', argumentMode: 'optional', argumentHint: hint },
+			]), hint);
+			const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+			await message.pressSequentially('/rev');
+			await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: '/review' })).toBeVisible();
+			await message.press('Enter');
+			const placeholder = page.locator('.ash-chat-command-argument-hint');
+			await expect(placeholder).toHaveText(hint);
+			await expect(message).toBeFocused();
+			const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			assert.ok(help.help?.includes(locale === 'zh-CN' ? '斜杠命令接受参数时' : 'After a slash command that accepts arguments'));
+			assert.ok(help.help?.includes(locale === 'zh-CN' ? '在 IDE 聊天输入框中' : 'In IDE Chat'));
+			assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), '/review ');
+			const colors = await placeholder.evaluate(element => {
+				const probe = element.ownerDocument.createElement('span');
+				probe.style.color = 'var(--ash-input-placeholderForeground)';
+				element.parentElement!.append(probe);
+				const expected = getComputedStyle(probe).color;
+				probe.remove();
+				return { actual: getComputedStyle(element).color, expected, pointer: getComputedStyle(element).pointerEvents };
+			});
+			assert.deepEqual(colors, { actual: colors.expected, expected: colors.expected, pointer: 'none' });
+			await expect(page.locator('.ash-aria-live')).toContainText(locale === 'zh-CN' ? `命令参数：${hint}` : `Command arguments: ${hint}`);
+			await message.pressSequentially('main.ts');
+			await expect(placeholder).toHaveCount(0);
+			await message.press('ControlOrMeta+z');
+			await expect(placeholder).toHaveText(hint);
+			assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), '/review ');
+			await page.evaluate(() => window.ashChatInputIntegration.setSlashCommands([
+				{ name: 'review', description: 'Review code', argumentMode: 'optional', argumentHint: '<revision>' },
+			]));
+			await expect(placeholder).toHaveText('<revision>');
+			await expect(message).toBeFocused();
+			await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+			await page.evaluate(() => window.ashChatInputIntegration.dispose());
+			await expect(placeholder).toHaveCount(0);
+		});
+	}
+
+	test('conversation links open through the editor command without sending or changing the draft', async () => {
+		const { page } = browser;
+		await page.goto('/chatInput.html?inlineCode=1');
+		const target = buildOpenSessionLinkUri('session / &', 'thread? =', 'local').toString();
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await message.pressSequentially(target);
+		await message.press('Home');
+		await message.press('ArrowRight');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.inputLinkAtCursor())).toBe(target);
+		await page.evaluate(() => window.ashChatInputIntegration.openInputLink());
+		await expect(page.getByLabel('Opened sources')).toHaveText(JSON.stringify([{
+			resource: target, options: { openToSide: false, fromUserGesture: true, allowContributedOpeners: true },
+		}]));
+		assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), target);
+		await expect(message).toBeFocused();
+		await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+	});
+});
+
+
+function createContextComposer(resources: DisposableStore) {
+	const target = createSnapshotComposer(resources);
+	let fail = false;
+	let pending: Promise<void> | undefined;
+	let reads = 0;
+	const context = resources.add(new BuiltinDynamicCompletions(target.editor, {
+		getAttachments: () => target.references.getInputState(),
+		getSessionId: () => undefined,
+		acquire: (prepare, signal) => target.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, target.lifecycle.signal]), attachments => attachments.map(attachment => target.references.addReference(attachment, false))),
+	}, target.services.get(ILanguageFeaturesService), {
+		fileSearch: async () => ({ results: [{ resource: URI.file('/workspace/中文 notes.ts') }], messages: [] }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[3], {
+		getWorkspace: () => ({ folders: [{ uri: URI.file('/workspace'), name: 'workspace' }] }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[4], {
+		groups: [{ inputs: [{ resource: URI.file('/workspace/open.ts'), initialText: 'Unsaved text' }] }],
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[5], {
+		hasProvider: () => true,
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[6], {
+		resolveResourceAttachContext: async (resource: import('../../../../../base/common/uri.js').URI) => {
+			reads++;
+			await pending;
+			if (fail) throw new Error('Read failed');
+			return { id: resource.toString(), name: 'source', kind: 'file', resource, resolve: async () => ({ name: 'source', content: 'Captured source' }) };
+		},
+		resolveEditorAttachContext: async () => ({ id: 'open', kind: 'file', name: 'open.ts', resolve: async () => ({ name: 'open.ts', content: 'Unsaved text' }) }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[7], { getTriggerCharacters: () => [] } as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[8]));
+	const registry = target.services.get(ILanguageFeaturesService).completionProvider;
+	const metadata = registry.providerCatalog.providers.find(provider => provider.id.startsWith('ash.chat.context.'))!;
+	const provider = registry.getProvider(metadata.id)!;
+	const suggest = async (text: string, resource = target.editor.getModel().uri, offset = text.length) => {
+		target.editor.value = text;
+		return provider.provideCompletions({ requestId: 1, languageId: 'ash-chat-input', resource, position: target.editor.getModel().getPositionAt(offset), context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: target.editor.getModel().createVersionedSnapshot() }, new AbortController().signal);
+	};
+	const accept = async (item: import('../../../../../editor/common/languages.js').LanguageCompletionProviderItem) => {
+		const model = target.editor.getModel();
+		target.editor.codeEditor.executeEdits('test.completion', [{ range: item.range, text: item.insertText }]);
+		await provider.executeCompletionCommand!({ languageId: 'ash-chat-input', resource: model.uri, snapshot: model.createVersionedSnapshot(), command: item.command! }, new AbortController().signal);
+	};
+	return { ...target, context, provider, suggest, accept, setFailure: () => { fail = true; }, defer: (value: Promise<void>) => { pending = value; }, get reads() { return reads; } };
+}
+
+test('Context completion keeps @ and # separate from commands and Skills and scoped to its own input', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	for (const prefix of ['@', '#']) {
+		const result = await fixture.suggest(`Read ${prefix}notes`);
+		assert.equal(result?.items[0]?.label, '中文 notes.ts');
+		assert.deepEqual(result?.items[0]?.range, new Range(1, 6, 1, 12));
+	}
+	for (const text of ['mail@example', '/notes', '$notes']) assert.deepEqual((await fixture.suggest(text))?.items, []);
+	assert.equal(await fixture.suggest('@notes', URI.file('/another-input')), undefined);
+	assert.equal(fixture.reads, 0);
+	fixture.context.dispose();
+	assert.equal(await fixture.suggest('@notes'), undefined);
+});
+
+test('Context completion captures a reference without sending and restores it through undo and redo', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const item = (await fixture.suggest('Read @notes'))!.items[0]!;
+	await fixture.accept(item);
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts ');
+	assert.deepEqual(fixture.references.variables[0]?.reference, { start: 5, end: 16 });
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+	fixture.editor.getModel().undo();
+	assert.equal(fixture.editor.value, 'Read @notes');
+	assert.equal(fixture.references.variables.length, 0);
+	fixture.editor.getModel().redo();
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+});
+
+test('Context completion resolves an open editor snapshot and a directory through their existing owners', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	await fixture.accept((await fixture.suggest('@open'))!.items[0]!);
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Unsaved text');
+	const result = await fixture.suggest('@workspace');
+	assert.equal(result!.items.find(item => item.label === 'workspace')!.kind, 'folder');
+});
+
+test('Context completion leaves read failures unbound and cancels late reads after a draft switch', async () => {
+	using resources = new DisposableStore();
+	const failure = createContextComposer(resources);
+	failure.setFailure();
+	await assert.rejects(failure.accept((await failure.suggest('@notes'))!.items[0]!), /Read failed/);
+	assert.equal(failure.references.variables.length, 0);
+	failure.context.dispose();
+	const fixture = createContextComposer(resources);
+	const read = new DeferredPromise<void>();
+	fixture.defer(read.p);
+	const pending = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 1);
+	fixture.lifecycle.abort();
+	fixture.editor.value = 'Next draft';
+	await assert.rejects(pending, /cancelled/);
+	await read.complete();
+	assert.equal(fixture.references.variables.length, 0);
+	assert.equal(fixture.editor.value, 'Next draft');
+});
+
+suite('Chat context completion browser behavior', () => {
+	const browser = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const surface of ['code', 'cowork', 'project']) for (const prefix of ['@', '#']) test(`context suggestions accept without sending in ${locale} ${surface} ${prefix}`, async () => {
+		const { page } = browser;
+		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&surface=${surface}`);
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await message.pressSequentially(`${prefix}edited`);
+		const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+		assert.ok(help.help?.includes(locale === 'zh-CN' ? '在词首输入 @ 或 #' : 'Type @ or #'));
+		await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: 'edited.ts' })).toBeVisible();
+		await message.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('edited.ts ');
+		await expect(page.getByRole('status', { name: 'Submission' })).toBeEmpty();
+		await message.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(`${prefix}edited`);
+		await message.press('Escape');
+		await message.press('ControlOrMeta+Shift+z');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('edited.ts ');
+		await message.press('Enter');
+		await expect(page.getByRole('status', { name: 'Submission' })).toContainText('Unsaved editor text');
+	});
+});
+
+
+test('Context completion ignores a retired snapshot instead of reading ranges from the replacement draft', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	fixture.editor.value = 'Read @notes';
+	const model = fixture.editor.getModel();
+	const request = {
+		requestId: 1, languageId: 'ash-chat-input', resource: model.uri,
+		position: model.getPositionAt(model.getValueLength()),
+		context: createLanguageCompletionInvokeContext(), snapshot: model.createVersionedSnapshot(),
+	};
+	fixture.editor.value = 'Replacement draft';
+	assert.equal(await fixture.provider.provideCompletions(request, new AbortController().signal), undefined);
+	assert.equal(fixture.editor.value, 'Replacement draft');
+	assert.equal(fixture.reads, 0);
+});
+
+test('Context completion replaces its whole token and reuses the separator before following text', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const result = await fixture.suggest('Read @notes now', fixture.editor.getModel().uri, 'Read @not'.length);
+	await fixture.accept(result!.items[0]!);
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts now');
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+});
+
+
+test('Context completion follows edits outside a pending label and rejects a changed label', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const read = new DeferredPromise<void>();
+	fixture.defer(read.p);
+	const pending = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 1);
+	fixture.editor.codeEditor.executeEdits('test.prefix', [{ range: new Range(1, 1, 1, 1), text: 'Read ' }]);
+	await read.complete();
+	await pending;
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts ');
+	assert.deepEqual(fixture.references.variables[0]?.reference, { start: 5, end: 16 });
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+	const changed = new DeferredPromise<void>();
+	fixture.defer(changed.p);
+	const rejected = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 2);
+	fixture.editor.codeEditor.executeEdits('test.label', [{ range: new Range(1, 1, 1, 2), text: 'X' }]);
+	await changed.complete();
+	await assert.rejects(rejected, /cancelled/);
+	assert.equal(fixture.references.variables.length, 0);
+});
+
+
+suite('Chat command scope browser behavior', () => {
+	const browser = useBrowserTests();
+	for (const surface of ['cowork', 'project']) for (const locale of ['en', 'zh-CN']) test(`${surface} has literal slash input while Skills and contexts remain enabled in ${locale}`, async () => {
+		const { page } = browser;
+		await page.goto(`/chatInput.html?inlineCode=1&surface=${surface}&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.setSlashCommands([{ name: 'advisor', description: 'Consult', argumentMode: 'optional', argumentHint: '<question>' }]));
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		for (const text of ['/advisor Question', '/advisor off', '/compact', '/config', '/unknown']) {
+			await message.press('ControlOrMeta+a');
+			await message.pressSequentially(text);
+			await expect(page.locator('.stanza-editor-completion-option')).toHaveCount(0);
+			await expect(page.locator('.ash-chat-command-argument-hint')).toHaveCount(0);
+			const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			assert.ok(!help.help?.includes(locale === 'zh-CN' ? '斜杠命令接受参数时' : 'After a slash command that accepts arguments'));
+			const submissions = async () => (await page.evaluate(() => window.ashChatInputIntegration.historyState()) as { submissions: { text: string; }[]; }).submissions;
+			const before = (await submissions()).length;
+			await message.press('Enter');
+			await expect.poll(async () => (await submissions()).length).toBe(before + 1);
+			assert.equal((await submissions()).at(-1)?.text, text);
+		}
+		await page.evaluate(() => window.ashChatInputIntegration.setHistorySkill('sha256:retained-skill'));
+		await message.pressSequentially('$com');
+		await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: '$commit' })).toBeVisible();
+		await message.press('Enter');
+		await message.press('Enter');
+		await expect.poll(async () => {
+			const state = await page.evaluate(() => window.ashChatInputIntegration.historyState()) as { submissions: { skills?: unknown; }[]; };
+			return state.submissions.at(-1)?.skills;
+		}).toEqual([{ id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:retained-skill' } }]);
+	});
+});

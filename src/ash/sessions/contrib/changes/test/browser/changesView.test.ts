@@ -405,12 +405,12 @@ suite('changes browser component', () => {
 		await page.evaluate(() => window.ashChangesIntegration.visible(true));
 		await expect(page.getByRole('treeitem')).toHaveCount(1);
 		await turn.selectOption('');
-		await expect(page.getByRole('treeitem')).toHaveCount(7);
+		await expect(page.getByRole('treeitem')).toHaveCount(6);
 		await mode.selectOption('list');
 		await page.evaluate(() => window.ashChangesIntegration.selectSession('other'));
 		await expect(page.getByRole('treeitem').filter({ hasText: 'Reviewed' })).toHaveCount(0);
 		await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
-		await expect(page.getByRole('treeitem').filter({ hasText: 'Reviewed' })).toHaveCount(1);
+		await expect(page.getByRole('treeitem').filter({ hasText: 'Reviewed' })).toHaveCount(0);
 		await page.evaluate(() => window.ashChangesIntegration.revision(2));
 		await expect(page.getByRole('treeitem').filter({ hasText: 'Reviewed' })).toHaveCount(0);
 		await page.setViewportSize({ width: 320, height: 600 });
@@ -421,6 +421,47 @@ suite('changes browser component', () => {
 			await page.keyboard.press('Shift+Tab');
 			await expect(mode).not.toHaveCSS('outline-style', 'none');
 		}
+		expect(errors).toEqual([]);
+	});
+
+	for (const locale of ['en', 'zh-CN'] as const) test(`Conversation Changes follows checkpoint net changes across repositories and history moves (${locale})`, async function () {
+		const { page } = browserTests;
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/changes.html?locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => {
+			window.ashChangesIntegration.multipleTurns();
+			window.ashChangesIntegration.checkpoint({ sequence: 8, revision: 'net-empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] });
+		});
+		const picker = page.getByRole('combobox', { name: locale === 'en' ? 'Changes from Turn' : '选择回合更改' });
+		await expect(picker.locator('option').first()).toHaveText(locale === 'en' ? 'Conversation Changes' : '对话更改');
+		await expect(page.getByRole('treeitem')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: locale === 'en' ? 'Review all changes' : '查看全部更改', exact: true })).toBeDisabled();
+		await picker.selectOption('second');
+		await expect(page.getByRole('treeitem')).toHaveCount(1);
+		await picker.selectOption('');
+		await expect(page.getByRole('treeitem')).toHaveCount(0);
+		await page.evaluate(() => window.ashChangesIntegration.checkpoint({
+			sequence: 9, revision: 'two-repositories', statistics: { files: 2, additions: 7, deletions: 3 }, repositories: [
+				{ repositoryId: 'first', files: [{ path: 'same.txt', kind: 'modified', binary: false, additions: 4, deletions: 1 }] },
+				{ repositoryId: 'second', files: [{ path: 'same.txt', kind: 'deleted', binary: false, additions: 3, deletions: 2 }] },
+			], warnings: []
+		}));
+		await expect(page.getByRole('treeitem')).toHaveCount(2);
+		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText(locale === 'en' ? '2 files +7 −3' : '2 个文件 +7 −3');
+		await page.getByRole('treeitem').filter({ hasText: locale === 'en' ? 'Repository 2' : '仓库 2' }).click();
+		await page.getByRole('tree').press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.summaryReads())).toContainEqual({ sessionId: 'session', threadId: 'thread', revision: 'two-repositories', repositoryId: 'second', path: 'same.txt' });
+		await page.getByRole('button', { name: locale === 'en' ? 'Mark reviewed' : '标记已审阅', exact: true }).click();
+		await expect(page.getByRole('treeitem').filter({ hasText: locale === 'en' ? 'Reviewed' : '已审阅' })).toHaveCount(1);
+		await page.evaluate(() => window.ashChangesIntegration.rebuild());
+		await expect(page.getByRole('treeitem').filter({ hasText: locale === 'en' ? 'Reviewed' : '已审阅' })).toHaveCount(1);
+		await page.evaluate(() => window.ashChangesIntegration.checkpoint({ sequence: 10, revision: 'rewound', statistics: { files: 1, additions: 1, deletions: 0 }, repositories: [{ repositoryId: 'second', files: [{ path: 'same.txt', kind: 'modified', binary: false, additions: 1, deletions: 0 }] }], warnings: ['Synthetic checkpoint warning'] }));
+		await expect(page.getByRole('treeitem')).toHaveCount(1);
+		await expect(page.getByRole('treeitem')).not.toContainText(locale === 'en' ? 'Reviewed' : '已审阅');
+		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText(locale === 'en' ? '1 file +1 −0' : '1 个文件 +1 −0');
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.content())).toContain('Synthetic checkpoint warning');
 		expect(errors).toEqual([]);
 	});
 
@@ -478,7 +519,7 @@ suite('changes browser component', () => {
 		await tree.focus();
 		await tree.press('ArrowDown');
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.opened())).toBe(1);
-		await expect(page.getByRole('button', { name: 'Preview selected changes' })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Preview selected changes' })).toBeDisabled();
 		await page.evaluate(() => window.ashChangesIntegration.fail(false));
 		await expect(file).toHaveAttribute('aria-selected', 'true');
 		await expect(tree).toBeFocused();

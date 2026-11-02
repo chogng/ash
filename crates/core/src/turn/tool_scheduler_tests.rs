@@ -1898,6 +1898,46 @@ struct Fixture {
 }
 
 #[test]
+fn tool_execution_start_is_published_before_a_silent_tool_executes() {
+    struct ObserveStart {
+        tools: Arc<ReviewTool>,
+        seen: std::sync::atomic::AtomicBool,
+    }
+    impl crate::ThreadUpdateSink for ObserveStart {
+        fn publish(&self, update: ash_protocol::ThreadUpdateEnvelope) {
+            if matches!(
+                update.update,
+                ash_protocol::ThreadUpdate::Committed {
+                    event: ash_protocol::ThreadEvent::ToolExecutionStarted { .. }
+                }
+            ) {
+                assert!(self.tools.authorizations.lock().unwrap().is_empty());
+                self.seen.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+    }
+    let mut fixture = fixture_with(
+        Arc::new(ReviewTool::default()),
+        Arc::new(ExecAllowPolicy::new()),
+    );
+    let updates = Arc::new(ObserveStart {
+        tools: fixture.tools.clone(),
+        seen: Default::default(),
+    });
+    fixture.scheduler = fixture.scheduler.with_thread_updates(updates.clone());
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert!(updates.seen.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(fixture.tools.authorizations.lock().unwrap().len(), 1);
+}
+
+#[test]
 fn analysis_sandbox_denial_never_reviews_or_retries_outside_the_sandbox() {
     let policy = Arc::new(ReviewingPolicy {
         base: Arc::new(AskPolicy),

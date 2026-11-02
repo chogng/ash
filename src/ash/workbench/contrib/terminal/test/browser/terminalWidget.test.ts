@@ -102,7 +102,8 @@ suite('terminal browser component', () => {
 					stream.feedModel('UNEXECUTED_DRAFT');
 				}, prompt);
 				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('UNEXECUTED_DRAFT|');
-				const startup = '\x1b[1m\x1b[7m%\x1b[0m' + ' '.repeat(79) + '\r \rfixture> ';
+				const columns = await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().cols);
+				const startup = '\x1b[1m\x1b[7m%\x1b[0m' + ' '.repeat(columns - 1) + '\r \rfixture> ';
 				const revived = await page.evaluate(startup => window.ashTerminalStreamIntegration.checkpoint(true, startup), startup);
 				expect(revived).toBe('$ echo 中文🙂\nresult 中文🙂\n\n\nfixture>');
 				const reconnected = await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(false));

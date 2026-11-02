@@ -12,8 +12,7 @@ import { getPathForFile } from '../../../../../platform/dnd/browser/dnd.js';
 import { FileKind, IFileService } from '../../../../../platform/files/common/files.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { extractSelection } from '../../../../../platform/opener/common/opener.js';
-import { IChatAttachmentResolveService } from '../attachments/chatAttachmentResolveService.js';
-import { createChatFileAttachments } from './input/editor/chatPasteProviders.js';
+import { IChatAttachmentResolveService, createChatFileAttachments } from '../attachments/chatAttachmentResolveService.js';
 import type { IChatInputPart } from './input/chatInputPart.js';
 
 interface ResourceDrop {

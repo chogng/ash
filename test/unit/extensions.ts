@@ -6,7 +6,6 @@ await runUnitTests([
 	'src/ash/platform/commands/test/common/commands.test.js',
 	'src/ash/platform/extensions/test/**/*.test.js',
 	'src/ash/platform/extensionResourceLoader/test/**/*.test.js',
-	'src/ash/platform/agentHost/test/browser/extensionHostProtocol.test.js',
 	'src/ash/workbench/services/extensions/test/**/*.test.js',
 
 

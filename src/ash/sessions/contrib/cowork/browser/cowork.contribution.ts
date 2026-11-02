@@ -40,7 +40,7 @@ export class CoworkPaneFactory extends Disposable {
 			scope.registerSingleton(ILanguageModelsConfigurationService, () => scope.createInstance(LanguageModelsConfigurationService, CoworkModelPreferences));
 			const model = scope.createInstance(CoworkWidgetModel, this.chat, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, this.sessions);
 			const pane = scope.createInstance<CoworkWidget<CoworkWidgetModel>>(CoworkWidget, container, panelId, model, createNewSession, this.commands, undefined, undefined, undefined,
-				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => scope.createInstance(NewCoworkInputWidget, inputContainer, delegate, model));
+				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => scope.createInstance(NewCoworkInputWidget, inputContainer, delegate, model, 'conversation'));
 			return new ScopedSessionConversationPane(pane, scope, model);
 		} catch (error) { scope.dispose(); throw error; }
 	}

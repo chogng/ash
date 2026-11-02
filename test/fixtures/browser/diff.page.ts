@@ -1,3 +1,5 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
@@ -101,7 +103,7 @@ import gitEnglish from '../../../extensions/git/package.nls.json' with { type: '
 import gitChinese from '../../../extensions/git/package.nls.zh-CN.json' with { type: 'json' };
 import { MainThreadEditorChanges } from '../../../src/ash/workbench/api/browser/mainThreadEditorChanges.js';
 import { parseExtensionEditorInput } from '../../../src/ash/workbench/api/browser/mainThreadEditorInput.js';
-import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 async function invokeRustGit(registrationId: string, operation: string, payload: unknown) { return window.__rustGitRequest('invoke', { registrationId, operation, payload, deadlineUnixMillis: Date.now() + 10000 }); }
 async function createGitMultiDiffEditorInput(_fixture: typeof titleGit, scope: string) {
 	const value = await invokeRustGit('ash.scm', 'scm', { method: 'multiDiff', providerId: titleGitStatus.repositoryId, resource: `ash-scm://ash.git/${titleGitStatus.repositoryId}?scope=${scope}` });
@@ -125,7 +127,7 @@ import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/
 import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -284,7 +286,7 @@ let focusedHistoryView: string | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
-		if (!editorServices.has(IRendererHostService)) { editorServices.registerInstance(IRendererHostService, createDisconnectedRendererApi()); }
+		if (!editorServices.has(IAppServerApi)) { registerTestWorkbenchHostServices(editorServices, createDisconnectedRendererApi()); }
 		const parentServices = resources.add(createTestEditorServices(undefined, editorServices));
 		if (!editorServices.has(IFileService)) { editorServices.registerInstance(IFileService, parentServices.get(IFileService)); }
 		sessionServices = resources.add(parentServices.createChild());

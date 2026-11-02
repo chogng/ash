@@ -1,3 +1,5 @@
+import { registerTestWorkbenchHostServices } from '../../../workbench/test/common/workbenchHostTestServices.js';
+import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
@@ -6,7 +8,7 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
@@ -23,6 +25,7 @@ import { IFileService, FileSystemProviderCapabilities } from '../../../platform/
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
 import { UriIdentityService } from '../../../platform/uriIdentity/common/uriIdentityService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
@@ -31,7 +34,7 @@ import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -57,9 +60,11 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
-import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
-import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
+import { getWindowById, getWindowId } from '../../../base/browser/window.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
@@ -90,9 +95,15 @@ suiteTeardown(() => {
 
 test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const dom = browserEnvironment;
+	using windowLifetime = toDisposable(() => {
+		// jsdom.close() does not dispatch the browser lifecycle that retires window monitors.
+		dom.window.dispatchEvent(new dom.window.PageTransitionEvent('pagehide'));
+		getWindowById(getWindowId(dom.window as unknown as Window)!)?.disposables.dispose();
+	});
+	using resources = new DisposableStore();
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	dom.window.document.body.replaceChildren();
-	const onDidChange = new Emitter<void>();
+	const onDidChange = resources.add(new Emitter<void>());
 	let untitledSessions: readonly IUntitledChatSession[] = [];
 	let nextUntitledSessionId = 0;
 	let activeUntitledSessionId: string | undefined;
@@ -108,6 +119,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		error: undefined,
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
+		async refresh() { },
 		async listAgents() { return []; },
 		async openThread() { },
 		selectThread() { },
@@ -162,9 +174,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			throw new Error('Session restoration is unavailable');
 		},
 	};
-	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
-	const transcriptUpdates = new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>();
-	const ready = new Emitter<void>();
+	const threadUpdates = resources.add(new Emitter<ThreadUpdateEnvelope>());
+	const transcriptUpdates = resources.add(new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>());
+	const ready = resources.add(new Emitter<void>());
 	const chatService: IChatService & ILanguageModelsService = {
 		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
 		renameThread: async () => { throw new Error('Unexpected rename'); },
@@ -238,7 +250,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async commitTurnChange() { return []; },
 		async discardThreadChanges() { return []; },
 	};
-	const contextMenuEvents = new Emitter<void>();
+	const contextMenuEvents = resources.add(new Emitter<void>());
 	const contextMenuService: IContextMenuService = {
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: contextMenuEvents.event,
@@ -252,18 +264,17 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		hide() { },
 		layout() { },
 	};
-	const commandEvents = new Emitter<ICommandEvent>();
+	const commandEvents = resources.add(new Emitter<ICommandEvent>());
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
 		async executeCommand() { throw new Error('No commands registered'); },
 	};
-	using resources = new DisposableStore();
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const services = resources.add(editorRoot.createChild());
 	services.registerInstance(IHostService, new TestHostService());
-	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -297,6 +308,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}));
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
+	services.registerInstance(IWorkspacesService, {
+		onDidChangeRecentlyOpened: Event.None,
+		getRecentlyOpened: async () => ({ workspaces: [] }),
+	} as unknown as IWorkspacesService);
 
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(INotificationService, notifications);
@@ -346,7 +361,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		const selection = viewService.getSelection();
 		part.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
 	};
-	const partListener = viewService.onDidChange(updatePart);
+	using partListener = viewService.onDidChange(updatePart);
 	updatePart();
 
 	await part.captureActiveDraft();
@@ -394,7 +409,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, separateDraft);
-	assert.deepEqual(readNewChatDraftState(storage, `untitled:${second.untitledSessionId}`), separateDraft);
+	assert.deepEqual(readNewChatDraftState(storage, `untitled:${second.untitledSessionId}`, chatInputStatePersistence), separateDraft);
 	viewService.activateSelection(selected);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 1);
@@ -432,34 +447,25 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
-
-	partListener.dispose();
-	part.dispose();
-	viewService.dispose();
-	contextMenuEvents.dispose();
-	commandEvents.dispose();
-	threadUpdates.dispose();
-	ready.dispose();
-	onDidChange.dispose();
 });
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {
 	const ownerWindow = browserEnvironment.window as unknown as Window;
 	using storage = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
 	const draft = { mode: 'debug' as const, text: 'Review this', contexts: [{ id: 'image', kind: 'image', name: 'image.png', content: 'data:image/png;base64,aGVsbG8=' }, { id: 'file', kind: 'file', name: 'brief.ts', content: 'const answer = 42;', resource: 'file:///workspace/brief.ts' }] };
-	writeNewChatDraftState(storage, draft, 'untitled:first');
-	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1');
+	writeNewChatDraftState(storage, draft, 'untitled:first', chatInputStatePersistence);
+	writeNewChatDraftState(storage, { mode: 'plan', text: 'Thread draft', contexts: [] }, 'thread-1', chatInputStatePersistence);
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'workspace-a', flushInterval: 0 });
-	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first'), draft);
-	assert.deepEqual(readNewChatDraftState(restored, 'thread-1'), { mode: 'plan', text: 'Thread draft', contexts: [] });
-	assert.equal(readNewChatDraftState(restored, 'thread-2'), undefined);
+	assert.deepEqual(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), draft);
+	assert.deepEqual(readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence), { mode: 'plan', text: 'Thread draft', contexts: [] });
+	assert.equal(readNewChatDraftState(restored, 'thread-2', chatInputStatePersistence), undefined);
 	restored.switchWorkspace('workspace-b');
-	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
+	assert.equal(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), undefined);
 	restored.switchWorkspace('workspace-a');
-	writeNewChatDraftState(restored, undefined, 'untitled:first');
-	assert.equal(readNewChatDraftState(restored, 'untitled:first'), undefined);
-	assert.equal(readNewChatDraftState(restored, 'thread-1')?.text, 'Thread draft');
+	writeNewChatDraftState(restored, undefined, 'untitled:first', chatInputStatePersistence);
+	assert.equal(readNewChatDraftState(restored, 'untitled:first', chatInputStatePersistence), undefined);
+	assert.equal(readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence)?.text, 'Thread draft');
 });
 
 test('legacy drafts merge by session identity and conflicting content survives until recovery', async () => {
@@ -470,57 +476,13 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	storage.store('sessions.draftState:thread-1', JSON.stringify(chatDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.codeDraftState:thread-1', JSON.stringify(codeDraft), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	storage.store('sessions.activityBar.activePage', 'code', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-	const recovered = migrateNewChatDraftState(storage);
-	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1'), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
+	const recovered = migrateNewChatDraftState(storage, chatInputStatePersistence);
+	assert.deepEqual({ selected: readNewChatDraftState(storage, 'thread-1', chatInputStatePersistence), recovered }, { selected: codeDraft, recovered: [{ draft: chatDraft, key: 'sessions.draftState:thread-1' }] });
 	assert.equal(storage.get(recovered[0]!.key, StorageScope.WORKSPACE), JSON.stringify(chatDraft));
-	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered');
+	writeNewChatDraftState(storage, recovered[0]!.draft, 'untitled:recovered', chatInputStatePersistence);
 	storage.remove(recovered[0]!.key, StorageScope.WORKSPACE);
-	assert.deepEqual(migrateNewChatDraftState(storage), []);
+	assert.deepEqual(migrateNewChatDraftState(storage, chatInputStatePersistence), []);
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
-	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
-});
-
-test('Sessions file picker forwards the original files to the shared composer', () => {
-	const container = document.createElement('div');
-	const batches: (readonly File[])[] = [];
-	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt', { type: 'text/plain' })];
-	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
-	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
-	Object.defineProperty(picker, 'files', { value: files });
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	assert.deepEqual(batches, [files]);
-	assert.equal(batches[0]![0], files[0]);
-	assert.equal(picker.value, '');
-});
-
-test('Closing the Sessions file picker removes its event source and rejects later acquisition', async () => {
-	const container = document.createElement('div');
-	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt')];
-	let reads = 0;
-	using attachments = new NewChatContextAttachments(container, async () => { reads++; });
-	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
-	attachments.dispose();
-	await attachments.attachFiles(files);
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	assert.equal(reads, 0);
-	assert.equal(container.childElementCount, 0);
-});
-
-test('Sessions file paste reaches the shared composer once and text paste stays editable', () => {
-	const container = document.createElement('div');
-	const batches: (readonly File[])[] = [];
-	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
-	using target = new NewChatInputPasteTarget(container, attachments);
-	const files = [new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })];
-	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
-	Object.defineProperty(paste, 'clipboardData', { value: { files } });
-	container.dispatchEvent(paste);
-	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(batches, [files]);
-	const text = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
-	Object.defineProperty(text, 'clipboardData', { value: { files: [] } });
-	container.dispatchEvent(text);
-	assert.equal(text.defaultPrevented, false);
-	assert.equal(batches.length, 1);
+	assert.deepEqual([readNewChatDraftState(restored, 'thread-1', chatInputStatePersistence), readNewChatDraftState(restored, 'untitled:recovered', chatInputStatePersistence)], [codeDraft, chatDraft]);
 });

@@ -1,7 +1,7 @@
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { raceCancellationError, TaskQueue } from '../../../../base/common/async.js';
 import { ProcessPropertyType } from '../../../../platform/terminal/common/terminal.js';
-import type { JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { localize } from '../../../../nls.js';
 import { BasePty } from '../common/basePty.js';
 import { Emitter } from '../../../../base/common/event.js';

@@ -86,7 +86,7 @@ export class ToolBar extends Disposable {
 				return options.actionViewItemProvider?.(action, actionOptions);
 			},
 		}));
-		this.element = this.actionBar.element;
+		this.element = this.actionBar.domNode;
 		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
 		this.onDidChangeDropdownVisibility = this.actionBar.onDidChangeDropdownVisibility;
 		this._register(this.onDidChangeDropdownVisibility(visible => {
@@ -171,7 +171,7 @@ export class ToolBar extends Disposable {
 		// A restored custom view can have a new label width; measure it once more before settling.
 		for (let pass = 0; pass < 2; pass++) {
 			for (let index = 0; index < this.renderedActions.length; index++) {
-				this.actionWidths.set(this.renderedActions[index]!, this.actionBar.getItemWidth(index));
+				this.actionWidths.set(this.renderedActions[index]!, this.actionBar.getWidth(index));
 			}
 			const fits = (actions: readonly IAction[]): boolean => {
 				const itemWidths = actions.reduce((total, action) => total + (this.actionWidths.get(action) ?? 0), 0);

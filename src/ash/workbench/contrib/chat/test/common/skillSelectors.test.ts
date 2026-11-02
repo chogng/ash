@@ -38,3 +38,14 @@ test('Skill selector rejects invalid and ambiguous entries', () => {
 	assert.throws(() => catalog.setSkills([{ ...commit, name: 'Invalid' }]), /Invalid Skill name/);
 	assert.throws(() => catalog.setSkills([commit, { ...commit }]), /Duplicate Skill selector name/);
 });
+
+
+test('Skill selector retains captured host digests across edits and catalog refreshes', () => {
+	const catalog = new SkillSelectorCatalog();
+	const newer = { ...commit, skill: { ...commit.skill, version: { type: 'pinnedDigest' as const, digest: 'new' } } };
+	catalog.setSkills([newer]);
+	assert.deepEqual(catalog.referencesIn('$commit more text', [commit.skill]), [commit.skill]);
+	assert.deepEqual(catalog.referencesIn('removed token', [commit.skill]), []);
+	catalog.setSkills([]);
+	assert.deepEqual(catalog.referencesIn('$commit more text', [commit.skill]), [commit.skill]);
+});

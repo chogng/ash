@@ -4,6 +4,8 @@ mod app_tools_tests;
 mod audio_tests;
 #[path = "file_elevation_tests.rs"]
 mod file_elevation_tests;
+#[path = "input_completions_tests.rs"]
+mod input_completions_tests;
 
 use super::*;
 

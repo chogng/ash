@@ -49,6 +49,7 @@ export class DebugStorage extends Disposable {
 	readonly onDidChangeState = this.changeEmitter.event;
 	private current: WorkspaceRead;
 	private readonly contexts = new Set<WorkspaceRead>();
+	private connectionGeneration = 0;
 
 	constructor(
 		@IDebugAdapterProcessService private readonly backend: IDebugAdapterProcessService | undefined,
@@ -66,7 +67,10 @@ export class DebugStorage extends Disposable {
 			if (previous.pending === 0) this.contexts.delete(previous);
 			this.changeEmitter.fire(this.current.state);
 		}));
-		this._register(backend?.onConnectionState(state => { if (state === 'ready') void this.reload().catch(error => this.report(error)); }) ?? Disposable.None);
+		this._register(backend?.onConnectionState(state => {
+			this.connectionGeneration++;
+			if (state === 'ready') { void this.reload().catch(error => this.report(error)); }
+		}) ?? Disposable.None);
 		this._register(lifecycle.onWillShutdown(event => {
 			if ([...this.contexts].some(context => context.pending > 0)) event.join(() => this.flush(), localize('debug.workspaceSave', 'Save debug workspace definitions'), () => [...this.contexts].every(context => context.pending === 0));
 		}));
@@ -115,9 +119,18 @@ export class DebugStorage extends Disposable {
 		if (!this.backend || current.blocked) return;
 		const queue = current.queue;
 		await queue;
-		if (this.isDisposed || this.current !== current || queue !== current.queue) return;
-		const result = await this.backend.readWorkspaceState(current.id);
-		if (this.isDisposed || this.current !== current || queue !== current.queue || (current.snapshot !== undefined && result.snapshot.revision <= current.snapshot.revision)) return;
+		const generation = this.connectionGeneration;
+		if (await this.backend.getConnectionState() !== 'ready' || this.isDisposed || this.current !== current || queue !== current.queue || generation !== this.connectionGeneration) { return; }
+		let result;
+		try {
+			result = await this.backend.readWorkspaceState(current.id);
+		} catch (error) {
+			// Closing a connection retires its reads. The next ready event reloads
+			// the snapshot; writes remain queued separately and are never replayed.
+			if (this.isDisposed || generation !== this.connectionGeneration) { return; }
+			throw error;
+		}
+		if (this.isDisposed || this.current !== current || queue !== current.queue || generation !== this.connectionGeneration || (current.snapshot !== undefined && result.snapshot.revision <= current.snapshot.revision)) { return; }
 		current.snapshot = result.snapshot;
 		current.state = fromDomain(result.snapshot.state);
 		this.changeEmitter.fire(current.state);

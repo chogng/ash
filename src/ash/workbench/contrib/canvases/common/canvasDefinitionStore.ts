@@ -1,3 +1,4 @@
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -48,7 +49,11 @@ export class CanvasDefinitionStore extends Disposable {
 				const definitions = result.filter(source.includeDefinition ?? isOpenableExtensionCanvasDefinition).sort(compareCanvasDefinitions);
 				if (JSON.stringify(definitions) !== JSON.stringify(this.definitions.get())) { this.definitions.set(definitions, undefined); }
 			}
-		} catch (error) { if (!this.isDisposed) { this.log.error(this.logPrefix, 'Could not list Canvas definitions', error); } }
+		} catch (error) {
+			if (!isCancellationError(error) && !this.isDisposed && generation === this.generation && source === this.source) {
+				this.log.error(this.logPrefix, 'Could not list Canvas definitions', error);
+			}
+		}
 		finally {
 			if (this.runningGeneration === generation) {
 				this.runningGeneration = -1;

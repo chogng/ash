@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { expectIconFontLoaded } from '../../../../../../../test/automation/iconFonts.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -9,7 +10,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import '../../../../services/path/browser/pathService.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -1043,7 +1044,7 @@ function createExplorerService(workspace: TestWorkspaceService): ExplorerService
 function createFileActionServices(os: OperatingSystem = OperatingSystem.Linux): InstantiationService {
 	const host = createDisconnectedRendererApi();
 	const services = configurations.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
-	services.registerInstance(IRendererHostService, { ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } });
+	registerTestWorkbenchHostServices(services, { ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } });
 	services.registerInstance(IConfigurationService, configurations.add(new InMemoryConfigurationService()));
 	return services;
 }
@@ -1234,14 +1235,14 @@ suite('fileMenus browser component', () => {
 
 		await page.goto('/fileMenus.html?applicationMenu');
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
-		const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
+		const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menuitem', { name: 'Application menu' });
 		await expect(trigger).toHaveCount(1);
 		await expect(trigger).toHaveAccessibleName('Application menu');
 		await expect(trigger.locator('.ash-icon')).toBeVisible();
 		await expect(trigger.locator('.ash-button-label')).toBeHidden();
 		await expect(trigger).toHaveCSS('width', '22px');
 		await expect(trigger).toHaveCSS('height', '22px');
-		await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(0);
+		await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(1);
 		const adjacentAction = page.getByRole('button', { name: 'Toggle sidebar', exact: true });
 		const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);
 		expect(triggerBounds).not.toBeNull();
@@ -1264,9 +1265,9 @@ suite('fileMenus browser component', () => {
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
 		await trigger.press('Enter');
-		await expect(mainMenu).toBeFocused();
+		await expect(mainMenu.getByRole('menuitem').first()).toBeFocused();
 		await expect(editMenuItem).toHaveAttribute('aria-expanded', 'false');
-		await expect(mainMenu.locator('.ash-action-view-item.focused')).toHaveCount(0);
+		await expect(mainMenu.locator('.ash-action-view-item.focused')).toHaveCount(1);
 		await page.mouse.move(bounds!.x + bounds!.width / 2 + 2, bounds!.y + bounds!.height / 2);
 		await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
 	});
@@ -1276,7 +1277,7 @@ suite('fileMenus browser component', () => {
 
 		await page.goto('/fileMenus.html?applicationMenu');
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
-		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menuitem', { name: 'Application menu' }).click();
 		const mainMenu = page.getByRole('menu').first();
 		const fileItem = mainMenu.getByRole('menuitem', { name: 'File' });
 		await fileItem.hover();
@@ -1297,7 +1298,7 @@ suite('fileMenus browser component', () => {
 
 		await page.goto('/fileMenus.html?applicationMenu');
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
-		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menuitem', { name: 'Application menu' }).click();
 		const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
 		await fileItem.hover();
 		await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
@@ -1325,7 +1326,7 @@ suite('fileMenus browser component', () => {
 
 		await page.goto('/fileMenus.html?applicationMenu');
 		await page.waitForFunction(() => !!window.ashFileMenusIntegration);
-		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menuitem', { name: 'Application menu' }).click();
 		const view = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
 		await view.hover();
 		await expect(view).toHaveAttribute('aria-expanded', 'true');

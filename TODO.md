@@ -4,6 +4,17 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Roadmap · Rust 运行时与 Node 退场
+
+最终目标是让 Rust 承担产品宿主、核心执行与基础设施，移除产品对 Node 运行时的依赖。迁移以实际调用链、打包依赖和进程退出为完成条件；把 Node 文件操作包成 Rust 原生模块、改目录名或另建一套平行业务后端，都不等于 Node 退场。浏览器 JavaScript／TypeScript 与 Node 是不同运行时：界面可以继续使用浏览器能力，Rust 可逐步进入前端计算与渲染流程，不要求先整体重写 UI。
+
+以下是已确定的发展方向，按可验证切片推进，不承诺整阶段已经实现。当前 Electron 是过渡宿主；构建工具使用 Node 与产品启动依赖 Node 分开核对。
+
+- [ ] **产品基础设施迁入 Rust** · 沿实际消费者迁移日志、存储、文件与网络 IO、进程和后台资源管理。每个切片同时删除旧 Node owner、注册与线上消费者，覆盖启动失败、取消、重连、多窗口及退出；日志落盘不能依赖它所诊断的 App Server 业务连接。Electron 仅保留尚未迁走的宿主适配。
+- [ ] **扩展与工具运行时去 Node** · 逐项核对扩展、语言服务器及 Electron run-as-Node 的消费者，将已需能力迁到 Rust、Rust/V8、浏览器 Worker 或原生程序。保留作者契约、权限、调试和资源回收语义；无法等价支持的 Node API 依赖须明确迁移或支持范围，不能通过兼容层继续隐式启动 Node。
+- [ ] **Rust 产品宿主替换 Electron／Node 启动链** · 闭合窗口、浏览器嵌入、系统集成、原生 IPC、更新、打包和跨平台生命周期，再替换过渡宿主。日志等 Rust 基础模块由 Rust 宿主直接拥有；过渡期内部 helper 随之退出。验收默认产品启动与主要工作流不加载或启动 Node，不能以仍需 Electron Main 的实现宣称完成。
+- [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
+
 ## Rust 后端生命周期 · Windows 验收
 
 - [ ] **验收 · Windows 用户实机** · 同步当前 Rust 改动和新增的 guard／watchdog／managed fixture 源文件，在已配置的 Windows 开发环境执行下列命令，保留完整输出、Windows 版本、架构及实际执行／跳过的测试数。macOS 原生测试及 Linux／Windows 交叉编译不能替代此项；Windows 的 Unix 专属 session/SIGSTOP 用例按 cfg 不执行。
@@ -29,6 +40,12 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **验收** · 将编辑器和会话分别弹出到辅助窗口，重复上述缩放与最大化恢复；检查编辑内容、状态栏与根容器边界对齐，切换紧凑模式后菜单、键盘操作和焦点恢复正常。记录 Windows 版本、显示缩放、应用缩放、窗口类型及复现步骤；验收通过后移除此节。
 
 同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。Windows 分数缩放实机尚未验证；本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
+
+## 上下文菜单 · 原生窗口按钮避让
+
+- [ ] **验证／修复候选 · 上下文菜单避让原生窗口按钮**：`src/ash/platform/windows/electron-main/windowImpl.ts` 的自定义标题栏已启用 Window Controls Overlay，但 `src/ash/base/browser/ui/contextview/contextview.ts` 只按完整 viewport 执行 `layout2d`，未消费当前窗口的原生按钮占用区域；当 Activity Bar 位于顶部时，标题栏账户／管理入口的右键菜单沿 CompositeBar 传入指针锚点；若锚点位于按钮高度内，菜单向右仍在 viewport 内却跨入按钮区，现有标题栏 padding 不会约束这个独立 popup。子菜单也须按自身锚点核验，不能泛称所有顶端菜单均受影响。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.144.0 尚不包含），先在原生 Windows 自定义标题栏复核顶端右键菜单／子菜单的遮挡与点击，再沿共享 ContextView 补窄范围避让。本项为静态布局链确认，尚未运行 Ash 原生窗口复现，不把上游模拟几何测试当作 Ash 实机验收。
+  - 范围与前提：沿现有 `base/browser/browser.ts` 的 `isWCOEnabled`／`getWCOTitlebarAreaRect` 读取目标窗口的实时可见性与几何；`base/browser/ui/menu/menu.ts` 的子菜单已复用 ContextView，不新增第二套菜单定位器。优先向标题栏下方放置，空间不足时评估横向避让及视口内回退；保留 visualViewport 偏移、缩放与容器坐标转换，不硬编码按钮宽度、不改变原生标题栏策略。WCO 隐藏、system 标题栏、全屏或 API 不可用时保持原布局。
+  - 验收：扩展 `src/ash/base/test/browser/contextview.test.ts`、`src/ash/platform/contextview/test/browser/contextViewService.test.ts` 及菜单测试，覆盖左右按钮区、顶端指针／元素锚点、多级子菜单、主／辅助窗口不同几何、窄窗口和超高菜单、缩放／滚动、可见性变化及无 WCO；保留键盘焦点、Escape、点击与取消语义。实际 Windows 主窗口与弹出窗口检查菜单不被按钮遮住且可点击，其他平台按真实可用 API 记录范围；此项不代替已有窗口缩放布局验收。
 
 ## Connectors 面板 · 点击后窗口无响应
 
@@ -84,6 +101,12 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 - [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。
 
+## Ash Code · `/fork` 拒绝时保留草稿
+
+- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
+  - 范围与风险：仅修现有 `/fork` 提交链，复用 composer 的完整 draft／附件绑定；本地拒绝后保留文本、光标、附件占位及后续编辑能力，校验通过后仅消耗一次。保持运行中禁止 fork 和只接受文本参数的现有规则，不顺带允许图片／Skill、放宽状态门禁或移植 Codex 的 MCP／side-conversation 产品语义。不要把已发出的 RPC 失败自动恢复为可重试 fork，避免结果未知时重复创建会话；其他 slash 命令及普通 queue／steer 行为保持回归。
+  - 验收：扩展 `crates/tui/src/app/state_tests.rs` 的 `fork_rejects_image_arguments_before_session_creation`，并在 composer submission 测试覆盖空闲非法附件、运行中纯文本／带附件拒绝、修正后再次提交和成功清空；断言拒绝不产生 SessionCommand、不调用 fork RPC、草稿和附件绑定保持且可继续编辑，纯文本历史不重复。覆盖 Inline／Fullscreen 与取消任务后再次提交；保留 `crates/tui/src/sessions/completion_tests.rs` 中成功 fork 不切换当前会话、无 prompt 不启动任务、有 prompt 仅启动一次的既有语义。
+
 ## Ash Code · 粘贴路径的图片探测
 
 - [ ] **修复候选 · 非普通文件路径粘贴不阻塞输入**：`crates/tui/src/thread/composer/input/state.rs` 在粘贴处理中同步调用 `attachments.rs` 的图片探测；后者先 `File::open` 再检查已打开文件的 `is_file`，无写入端的 FIFO 可在检查前等待。参考 [粘贴图片路径的普通文件门禁](https://github.com/openai/codex/pull/57774)（2026-10-28 已合并，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），在打开探测前排除已知非普通文件，使其仍作为可编辑文本粘贴。本项为静态调用链确认，未运行 Ash FIFO 复现；不泛化为所有慢文件系统均不会阻塞。
@@ -131,7 +154,9 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Chat / Speech · TODO
 
-- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 创建助手 Markdown 时未传入目录基址，`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
+- [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。
+
+- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
   - 前提与范围：复用 `ISessionWorkspace` 的 `authorityId`／`root`、既有本地／SSH URI 和 `openChatMarkdownLink` 打开边界；优先采用所属 Thread 的执行目录，不能用父 Session 的目录覆盖子 agent／worktree；目录 URI 须保留目录基址语义。先明确历史回复所属目录的来源，目录未水合、历史来源不确定或 provider 不支持时不猜测回退本机。来源 Session／Thread／目录变化时使对应渲染基址失效；不全局放宽 file scheme、不将模型 Markdown 标为可信，也不新增第二份工作区状态。
   - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatListWidget.test.ts` 和 `widget/chatContentMarkdownRenderer.test.ts` 补实时／历史恢复、切换会话及线程、流式重渲染、空格／Unicode／父目录路径、本地与 SSH 同名文件场景，并从真实 Chat 点击验证目标执行环境。复用现有打开与文件权限检查，不跨连接；外链和已有会话链接保持可用，脚本与未信任 command 仍拒绝，缺少来源的链接不伪造可打开地址。
 
@@ -178,7 +203,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 测量入口与约束见[审计与测量](docs/ash-app-server-data-path-audit.md)。以下先量化，再决定方案，不能把隔离 microbenchmark 当成整条 Desktop 收益。
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
-- [ ] **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 在面板显示时为当前已加载条目建立 row，`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本排到下一帧；隐藏面板已只保留最新投影，代码块派生文档已按视口及焦点／选区准入，但 Markdown 首次解析尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
+- [ ] **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 在面板显示时为当前已加载条目建立 `ChatListItemRenderer`，由 `chatListRenderer.ts` 创建 Markdown（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff)）；`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本排到下一帧；隐藏面板已只保留最新投影，代码块派生文档已按视口及焦点／选区准入，但 Markdown 首次解析尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
   - 仅在测量显示屏幕外解析占据实质成本后，评估现有 row／block owner 的首次激活，保留完整原文与唯一 transcript；否则记录结果并停止，不预设全列表虚拟化或另建缓存。使用普通文本、代码及工具 Markdown 的重复样本，覆盖恢复滚动／阅读锚点、异步高度变化、流式尾部、复制／搜索／导出、辅助阅读与焦点；成本下降且上述行为不退化才采用。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 

@@ -60,6 +60,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	private readonly stateEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly providers = new Map<string, OwnedTaskProvider>();
 	private currentTasks: readonly IWorkspaceTask[] = Object.freeze([]);
+	private workspaceTasks: readonly IWorkspaceTask[] | undefined;
 	private activeRefresh: AbortController | undefined;
 	private activatingProviders: AbortController | undefined;
 	private refreshGeneration = 0;
@@ -101,6 +102,15 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		this._register(fileService.onDidChangeFiles(event => {
 			if ((this.loaded || this.activeRefresh !== undefined) && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
 		}));
+		this._register(extensions.onDidChange(() => {
+			// A newly installed task extension may not have registered its provider
+			// yet. The next query must activate it before reusing a provider-free catalog.
+			this.workspaceTasks = undefined;
+			if (this.activeRefresh && this.activeRefresh !== this.activatingProviders) {
+				this.activeRefresh.abort();
+				void this.refreshTasks().catch(error => this.reportError(error));
+			}
+		}));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.workspaceGeneration++;
 			for (const picker of this.buildVariablePickers) picker.dispose();
@@ -111,6 +121,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			this.latestRun = undefined;
 			this.activeRefresh?.abort();
 			this.refreshGeneration += 1;
+			this.workspaceTasks = undefined;
 			this.loaded = false;
 			this.setTasks(Object.freeze([]));
 		}));
@@ -120,6 +131,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			this.dispatches.clear();
 			this.activeRefresh?.abort();
 			this.activeRefresh = undefined;
+			this.workspaceTasks = undefined;
 			this.providers.clear();
 			this.retainedRuns.clear();
 			this.latestRun = undefined;
@@ -356,9 +368,27 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		return registration;
 	}
 
+	getWorkspaceTasks(): Promise<readonly IWorkspaceTask[]> {
+		this.assertNotDisposed();
+		// Providers are dynamic and have no change event. Only configuration tasks
+		// can be reused between queries; concurrent queries still share discovery.
+		if (!this.activeRefresh && this.workspaceTasks && this.loaded && this.providers.size === 0) {
+			return Promise.resolve(this.currentTasks);
+		}
+		return this.refreshTasks();
+	}
+
 	refresh(): Promise<readonly IWorkspaceTask[]> {
 		this.assertNotDisposed();
+		this.workspaceTasks = undefined;
 		this.activeRefresh?.abort();
+		return this.refreshTasks();
+	}
+
+	private refreshTasks(): Promise<readonly IWorkspaceTask[]> {
+		if (this.activeRefresh && !this.activeRefresh.signal.aborted && this.latestRefresh) {
+			return this.waitForCurrentRefresh(this.latestRefresh);
+		}
 		const controller = new AbortController();
 		this.activeRefresh = controller;
 		const generation = ++this.refreshGeneration;
@@ -387,28 +417,28 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			finally { if (this.activatingProviders === controller) this.activatingProviders = undefined; }
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
-			this.log('debug', 'discovery', `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
-			const [folderGroups, providerGroups] = await Promise.all([
-				Promise.all(folders.map(async folder => {
+			this.log('trace', 'discovery', `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
+			const [discovered, providerGroups] = await Promise.all([
+				this.workspaceTasks ?? Promise.all(folders.map(async folder => {
 					const tasks = await this.discoverWorkspaceTasks(folder.uri);
 					return tasks.map(task => Object.freeze({
 						...task,
 						id: multiRoot ? `${folder.id}:${task.id}` : task.id,
 						dirId: folder.id,
 					}));
-				})),
+				})).then(groups => groups.flat()),
 				Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal))),
 			]);
-			const discovered = folderGroups.flat();
 			const providerTasks = providerGroups.flat();
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
+			this.workspaceTasks = discovered;
 			this.loaded = true;
 			this.setTasks(mergeTasks(discovered, providerTasks));
-			this.log('information', 'discovery', `Discovered ${this.currentTasks.length} workspace task(s).`);
+			this.log('trace', 'discovery', `Discovered ${this.currentTasks.length} workspace task(s).`);
 			return this.currentTasks;
 		} catch (error) {
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
-			this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`);
+			if (!isCancellationError(error)) { this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`); }
 			throw error;
 		} finally {
 			if (this.activeRefresh === controller) this.activeRefresh = undefined;
@@ -732,7 +762,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		if (this.activeRefresh && this.activeRefresh === this.activatingProviders) return;
 		this.activeRefresh?.abort();
 		this.refreshGeneration += 1;
-		if (refresh) void this.refresh().catch(error => this.reportError(error));
+		if (refresh) void this.refreshTasks().catch(error => this.reportError(error));
 	}
 
 	private async provideTasks(provider: TaskProvider, signal: AbortSignal): Promise<readonly IWorkspaceTask[]> {
@@ -765,10 +795,12 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		if (severity === 'error') this.logService.error(logCategory, text);
 		else if (severity === 'warning') this.logService.warn(logCategory, text);
 		else if (severity === 'debug') this.logService.debug(logCategory, text);
+		else if (severity === 'trace') this.logService.trace(logCategory, text);
 		else this.logService.info(logCategory, text);
 	}
 
 	private reportError(error: unknown): void {
+		if (isCancellationError(error)) { return; }
 		this.logService.error('tasks.discovery', 'Could not refresh workspace tasks', error);
 	}
 
@@ -985,7 +1017,7 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 		return { tasks: defaults.length ? defaults : grouped, isDefault: defaults.length > 0 };
 	};
 	const run = (task: IWorkspaceTask): Promise<unknown> => tasks.run(task);
-	void tasks.refresh().then(() => {
+	void tasks.getWorkspaceTasks().then(() => {
 		const selection = candidates(tasks.tasks);
 		const available = selection.tasks;
 		if (selection.isDefault && available.length === 1) return run(available[0]!);
@@ -1065,7 +1097,7 @@ registerAction2(class ConfigureTasksAction extends Action2 {
 			notifications.info(localize('tasks.configure.openFolder', 'Open a folder to configure tasks.'));
 			return;
 		}
-		await tasks.refresh();
+		await tasks.getWorkspaceTasks();
 		let selectedTask: IWorkspaceTask | null | undefined;
 		if (tasks.tasks.length) {
 			using picker = instantiation.createInstance(TaskQuickPick, (catalog: readonly IWorkspaceTask[]) => catalog);

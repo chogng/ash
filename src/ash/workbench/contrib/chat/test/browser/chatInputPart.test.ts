@@ -1,3 +1,11 @@
+import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
+import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { IChatWidgetService, type IChatWidget } from '../../browser/chat.js';
+import { ChatQueuePickerRendering } from '../../browser/widget/input/chatQueuePickerActionItem.js';
+import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { readFileSync } from 'node:fs';
@@ -45,7 +53,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';
@@ -61,6 +69,7 @@ import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
+import { IChatInputNotificationService } from '../../browser/widget/input/notices/chatInputNotificationService.js';
 import { IChatPasteTargetService } from '../../browser/chat.js';
 import { ChatPasteTargetService } from '../../browser/attachments/chatPasteTargetService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../browser/attachments/chatAttachmentResolveService.js';
@@ -99,6 +108,8 @@ suiteTeardown(() => sharedNotifications.dispose());
 
 class ObservableInputPart extends ChatInputPart {
 	readonly onDidChangeInputForTest = this.onDidChangeInput;
+	inputNotificationsForTest!: IChatInputNotificationService;
+	clientCommandsForTest!: IChatSlashCommandService;
 }
 
 function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact'): ObservableInputPart {
@@ -135,7 +146,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new TestQuickInputService({ container: document.body }));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+	partServices.registerInstance(ICommandService, { executeCommand: async (id: string, context?: unknown) => { const handler = CommandsRegistry.getCommand(id); if (handler) return handler(partServices, context); } } as ICommandService);
 	partServices.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
 	partServices.registerInstance(INotificationService, notifications);
@@ -176,10 +187,50 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	let part!: ObservableInputPart;
+	if (!partServices.has(IChatSlashCommandService)) partServices.registerSingleton(IChatSlashCommandService, () => new ChatSlashCommandService());
+	if (!partServices.has(IChatSideChatService)) partServices.registerSingleton(IChatSideChatService, () => new ChatSideChatService());
+	const widget = { sessionId: 'input-test-session', threadId: 'input-test-thread', get input() { return part; }, visible: true, onDidHide: AshEvent.None, onDidChangeViewModel: AshEvent.None, acceptInput: ((text, options) => part.acceptInput(text, options)) satisfies IChatWidget['acceptInput'] } as unknown as IChatWidget;
+	partServices.registerInstance(IChatWidgetService, { lastFocusedWidget: widget, getAllWidgets: () => [widget] } as unknown as IChatWidgetService);
+	if (!partServices.has(IActionViewItemService)) {
+		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+		partServices.registerSingleton(IActionViewItemService, () => partServices.createInstance(descriptor) as IActionViewItemService);
+	}
+	if (!partServices.get(IActionViewItemService).lookUp(MenuId.ChatExecute, MenuId.ChatExecuteQueue)) inputResources.add(partServices.createInstance(ChatQueuePickerRendering));
+	part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	part.inputNotificationsForTest = partServices.get(IChatInputNotificationService);
+	part.clientCommandsForTest = partServices.get(IChatSlashCommandService);
 	part.render(state);
 	return part;
 }
+
+test('Chat working logo follows the current input state without replacing the status text or mark', () => {
+	using part = inputPart(sharedNotifications);
+	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const logo = part.element.querySelector<HTMLElement>('.ash-chat-working-logo')!;
+	const status = logo.parentElement!;
+	assert.equal(logo.getAttribute('aria-hidden'), 'true');
+	assert.equal(logo.hidden, true);
+	part.render({ ...ready, phase: 'submitting' });
+	assert.equal(logo.hidden, false);
+	assert.equal(status.textContent, 'Working…');
+	part.render({ ...ready, canInterrupt: true, queuedMessages: 2 });
+	assert.equal(logo.hidden, false);
+	assert.equal(status.textContent, '2 messages queued');
+	part.setVisible(false);
+	assert.equal(logo.hidden, true);
+	part.setVisible(true);
+	assert.equal(logo.hidden, false);
+	for (const state of [ready, { ...ready, canInterrupt: true, inputBlocked: true }, { ...ready, canInterrupt: true, aiDisabled: true }, { ...ready, canInterrupt: true, error: 'Disconnected' }]) {
+		part.render(state);
+		assert.equal(logo.hidden, true);
+		assert.equal(part.element.querySelector('.ash-chat-working-logo'), logo);
+	}
+	part.render(ready);
+	assert.equal(status.hidden, true);
+	part.dispose();
+	assert.equal(logo.isConnected, false);
+});
 
 test('Chat mode picker loads Agents before opening the shared action widget and dispatches its selection', async () => {
 	using resources = new DisposableStore();
@@ -506,12 +557,11 @@ test('Chat dictation startup failure appears in notifications and leaves input s
 	using notifications = new TestNotificationService();
 	using part = inputPart(notifications, { start: async () => { throw new Error('HTTP 403'); } });
 	const failure = new DeferredPromise<void>();
-	using notification = notifications.model.onDidAdd(() => { void failure.complete(); });
+	using notification = part.inputNotificationsForTest.onDidChange(() => { void failure.complete(); });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.click();
 	await failure.p;
-	assert.deepEqual(notifications.model.getNotifications().map(item => ({ severity: item.severity, message: item.message })), [
-		{ severity: Severity.Error, message: 'Dictation failed: Error: HTTP 403' },
-	]);
+	assert.equal(part.element.querySelector('.ash-chat-input-notification-message')?.textContent, 'Dictation failed: Error: HTTP 403');
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	assert.equal(part.element.querySelector('.ash-chat-status-summary')?.textContent, 'Loading chat…');
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')?.disabled, false);
 });
@@ -670,8 +720,8 @@ for (const layout of [undefined, 'compact'] as const) test(`Failed dictation fin
 	await assert.rejects(part.acceptInput(), /transcription failed/u);
 	assert.deepEqual(sent, []);
 	assert.equal(part.element.querySelector('textarea')!.value, 'Existing draft');
-	assert.equal(notifications.model.getNotifications().length, 1);
-	assert.match(notifications.model.getNotifications()[0]!.message, /Dictation failed: .*transcription failed/u);
+	assert.match(part.element.querySelector('.ash-chat-input-notification-message')!.textContent!, /Dictation failed: .*transcription failed/u);
+	assert.deepEqual(notifications.model.getNotifications(), []);
 	await part.acceptInput();
 	assert.deepEqual(sent, ['Existing draft']);
 });
@@ -1579,6 +1629,339 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Host input completions attach a captured file, undo and send in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?hostInputCompletions&inlineCode&locale=${locale}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.focus();
+			const help = await page.evaluate(() => window.ashChatInputIntegration.inputAccessibility());
+			assert.match(help!, locale === 'zh-CN' ? /输入 @ 或 #/u : /Type @ or #/u);
+			await input.pressSequentially('Review #bri please');
+			await input.press('Home');
+			for (let index = 0; index < 'Review #bri'.length; index++) {
+				await input.press('ArrowRight');
+			}
+			await page.evaluate(() => window.ashChatInputIntegration.triggerInputSuggestions());
+			const suggestion = page.getByRole('option').filter({ has: page.locator('.stanza-editor-completion-label', { hasText: '#brief.txt' }) });
+			await expect(suggestion).toBeVisible();
+			await expect(input).toHaveAttribute('aria-activedescendant', await suggestion.getAttribute('id') ?? 'missing');
+			await input.press('Tab');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review brief.txt please');
+			await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review #bri please');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+			await input.press('ControlOrMeta+Shift+z');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
+			await input.press('End');
+			await input.press('Enter');
+			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'brief.txt', content: 'Workspace file content' }]));
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+		});
+	}
+
+	test('Host input completions capture a directory manifest and dismiss with Escape', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('#folder:src');
+		await expect(page.getByRole('option').filter({ hasText: '#src/' })).toBeVisible();
+		await input.press('Escape');
+		await expect(page.getByRole('option')).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.triggerInputSuggestions());
+		await expect(page.getByRole('option').filter({ hasText: '#src/' })).toBeVisible();
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('src ');
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'src', content: 'Directory: file:///workspace/src\nFiles:\nnested.txt' }]));
+	});
+
+	test('Host input completions make Send wait for the captured resource', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('@drop-pending');
+		await expect(page.getByRole('option').filter({ hasText: '@drop-pending.ts' })).toBeVisible();
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+		await page.evaluate(() => window.ashChatInputIntegration.releaseDropRead());
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'drop-pending.ts', content: 'first captured line\nsecond captured line\nthird captured line' }]));
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+	});
+
+	for (const retirement of ['edit', 'cursor', 'draft'] as const) {
+		test(`Host input completions cannot replace a ${retirement} changed draft`, async () => {
+			const { page } = browserTests;
+			await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.pressSequentially('#drop-pending');
+			await expect(page.getByRole('option').filter({ hasText: '#drop-pending.ts' })).toBeVisible();
+			await input.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+			if (retirement === 'edit') {
+				await input.pressSequentially(' changed');
+			}
+			if (retirement === 'cursor') {
+				await input.press('Home');
+				await input.press('End');
+			}
+			if (retirement === 'draft') {
+				await page.evaluate(() => window.ashChatInputIntegration.replaceDropDraft());
+			}
+			const text = await page.evaluate(() => window.ashChatInputIntegration.dropState().text);
+			await page.evaluate(() => window.ashChatInputIntegration.releaseDropRead());
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(text);
+			await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+		});
+	}
+
+	test('Host input completions leave the typed query intact when capture fails', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('#drop-missing');
+		await expect(page.getByRole('option').filter({ hasText: '#drop-missing.ts' })).toBeVisible();
+		await input.press('Enter');
+		await expect(page.getByLabel('Context error', { exact: true })).toContainText('Missing dropped source');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('#drop-missing');
+		await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+	});
+
+	test('Working logo reuses its cached atlas and replaces it for DPI and size changes', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+		const logo = page.locator('.ash-chat-working-logo');
+		const sheet = logo.locator('.ash-chat-working-logo-atlas');
+		await expect(logo).toHaveClass(/atlas/);
+		const mask = () => sheet.evaluate(element => getComputedStyle(element).maskImage);
+		const original = await mask();
+		const bounds = await logo.boundingBox();
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.setFooterPhase('ready');
+			window.ashChatInputIntegration.setFooterPhase('submitting');
+		});
+		await expect(logo).toHaveClass(/atlas/);
+		expect(await mask()).toBe(original);
+		const cdp = await browserTests.context.newCDPSession(page);
+		try {
+			await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 2, mobile: false });
+			await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBe(2);
+			await expect.poll(mask).not.toBe(original);
+			const highDpi = await mask();
+			const resized = await logo.boundingBox();
+			expect(resized!.width).toBe(bounds!.width);
+			expect(resized!.height).toBe(bounds!.height);
+			await logo.evaluate(element => { element.style.width = element.style.height = '16px'; });
+			await expect.poll(mask).not.toBe(highDpi);
+			await logo.evaluate(element => { element.style.width = element.style.height = ''; });
+			await expect.poll(mask).toBe(highDpi);
+		} finally { await cdp.detach(); }
+	});
+	test('Working logo keeps font playback after atlas failure and retries on the next activation', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(() => {
+			const toBlob = HTMLCanvasElement.prototype.toBlob;
+			HTMLCanvasElement.prototype.toBlob = function (callback) {
+				HTMLCanvasElement.prototype.toBlob = toBlob;
+				callback(null);
+			};
+		});
+		const failure = page.waitForEvent('console', message => message.type() === 'warning' && message.text().includes('Working logo atlas unavailable'));
+		await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+		await failure;
+		const logo = page.locator('.ash-chat-working-logo');
+		await expect(logo).toBeVisible();
+		await expect(logo).not.toHaveClass(/atlas/);
+		await expect.poll(() => logo.locator('.ash-icon-font-layer').first().evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+		await expect(logo.locator('.ash-icon')).toHaveCSS('visibility', 'visible');
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.setFooterPhase('ready');
+			window.ashChatInputIntegration.setFooterPhase('submitting');
+		});
+		await expect(logo).toHaveClass(/atlas/);
+	});
+	for (const [locale, theme] of [['en', 'light'], ['en', 'dark'], ['zh-CN', 'hcDark']]) {
+		test(`Working logo animates and respects visibility and reduced motion in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+			const logo = page.locator('.ash-chat-working-logo');
+			const mark = logo.locator('.ash-icon');
+			await expect(logo).toBeVisible();
+			await expect(logo).toHaveAttribute('aria-hidden', 'true');
+			await expect(logo.locator('..')).toHaveText(locale === 'en' ? 'Working…' : '正在运行…');
+			await expect(logo).toHaveClass(/atlas/);
+			const sheet = logo.locator('.ash-chat-working-logo-atlas');
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+			const frames = await sheet.evaluate(element => {
+				const animation = element.getAnimations()[0];
+				animation.pause();
+				const frames = [0, 1200, 2300].map(time => {
+					animation.currentTime = time;
+					return getComputedStyle(element).transform;
+				});
+				animation.play();
+				return frames;
+			});
+			expect(new Set(frames).size).toBe(3);
+			await expect(mark).toHaveCSS('visibility', 'hidden');
+			await expect(mark.locator('.ash-icon-font-layer')).toHaveCount(9);
+			await expect(mark).toHaveClass(/ash-icon-ash-titlebar-mark/);
+			const appearance = await logo.evaluate(element => {
+				const rect = element.getBoundingClientRect();
+				return { width: rect.width, height: rect.height, color: getComputedStyle(element).color, statusColor: getComputedStyle(element.parentElement!).color };
+			});
+			expect(appearance.width).toBeGreaterThan(0);
+			expect(appearance.width).toBe(appearance.height);
+			expect(appearance.color).toBe(appearance.statusColor);
+			await expect(sheet).toHaveCSS('background-color', appearance.statusColor);
+			await expect(sheet).toHaveCSS('mask-image', /blob:/);
+			await sheet.evaluate(element => {
+				const animation = element.getAnimations()[0];
+				animation.pause();
+				animation.currentTime = 1200;
+			});
+			await logo.locator('..').screenshot({ path: browserTests.info.outputPath(`atlas-working-logo-${locale}-${theme}.png`) });
+			await sheet.evaluate(element => element.getAnimations()[0].play());
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect(logo).toBeHidden();
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('paused');
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(true));
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect.poll(() => mark.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+			await expect(sheet).toHaveCount(0);
+			await expect(mark).toHaveCSS('visibility', 'visible');
+			await expect(mark.locator('.ash-icon-font-layer').first()).toHaveCSS('opacity', '1');
+			await expect(logo).toBeVisible();
+			await logo.locator('..').screenshot({ path: browserTests.info.outputPath(`working-logo-${locale}-${theme}.png`) });
+			await page.emulateMedia({ reducedMotion: 'no-preference' });
+			await expect(logo).toHaveClass(/atlas/);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(logo).toBeHidden();
+			await expect.poll(() => logo.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+			await page.evaluate(() => window.ashChatInputIntegration.dispose());
+			await expect(logo).toHaveCount(0);
+		});
+	}
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Catalog notifications open the real model picker and preserve dismissal in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&notices&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-container .stanza-editor-input');
+			await input.pressSequentially('Unsent notification draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Model discovery failed'));
+			const notification = page.locator('.ash-chat-input-notice-notification');
+			await expect(notification).toBeVisible();
+			await expect(notification).toHaveClass(/severity-warning/);
+			const choose = notification.getByRole('button', { name: locale === 'en' ? 'Choose a model' : '选择模型', exact: true });
+			await choose.focus();
+			await choose.press('Enter');
+			await expect(page.locator('.ash-chat-model-picker')).toBeVisible();
+			await expect(notification).toBeHidden();
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.ash-chat-input-model-action')).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.refresh());
+			await expect(notification).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError(undefined));
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Model discovery failed again'));
+			await expect(notification).toBeVisible();
+			const dismiss = notification.getByRole('button', { name: locale === 'en' ? 'Dismiss notification' : '关闭通知', exact: true });
+			await dismiss.focus();
+			const bounds = await notification.boundingBox();
+			const button = await dismiss.boundingBox();
+			expect(button!.x + button!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+			await dismiss.press('Enter');
+			await expect(notification).toBeHidden();
+			await expect(page.locator('.ash-chat-input-tip')).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(input).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Unsent notification draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError(undefined));
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Configure the model connection'));
+			const setup = notification.getByRole('button', { name: locale === 'en' ? 'Set Up Chat' : '设置 Chat', exact: true });
+			await setup.focus();
+			await setup.press('Enter');
+			await expect(page.getByLabel('Opened sources')).toHaveText('[{"command":"workbench.action.chat.triggerSetup"}]');
+			await expect(notification).toBeHidden();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Unsent notification draft');
+		});
+	}
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Input notices arbitrate errors, introductions and tips with keyboard focus in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&notices&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-container .stanza-editor-input');
+			const tip = page.locator('.ash-chat-input-tip');
+			const notification = page.locator('.ash-chat-input-notice-notification');
+			const introduction = page.locator('.ash-dictation-onboarding');
+			await expect(tip).toBeVisible();
+			await input.pressSequentially('Retained draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'Connection was lost'));
+			await expect(notification).toBeVisible();
+			await expect(notification).toHaveText('Connection was lost');
+			await expect(tip).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.showIntroduction());
+			await expect(introduction).toHaveCount(0);
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(notification).toBeFocused();
+			const accessible = await page.evaluate(() => window.ashChatInputIntegration.noticeAccessibility());
+			expect(accessible.content).toBe('Connection was lost');
+			expect(accessible.help).toContain(locale === 'en' ? 'Notifications take priority' : '通知优先于');
+			await notification.press('Escape');
+			await expect(input).toBeFocused();
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(notification).toBeHidden();
+			await expect(introduction).toBeVisible();
+			await expect(introduction).toHaveAccessibleName(locale === 'en' ? 'Dictation introduction' : '听写入门');
+			await expect(tip).toBeHidden();
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'A second error'));
+			await expect(introduction).toBeHidden();
+			await expect(notification).toBeFocused();
+			await expect(tip).toBeHidden();
+			const geometry = await notification.evaluate(element => {
+				const notice = element.getBoundingClientRect();
+				const editor = element.parentElement!.querySelector('.ash-chat-input-container')!.getBoundingClientRect();
+				const style = getComputedStyle(element);
+				return { bottom: notice.bottom, inputTop: editor.top, width: notice.width, parentWidth: element.parentElement!.getBoundingClientRect().width, border: style.borderTopStyle, color: style.color, background: style.backgroundColor, outline: style.outlineStyle };
+			});
+			expect(geometry.bottom).toBeLessThanOrEqual(geometry.inputTop);
+			expect(geometry.width).toBeLessThanOrEqual(geometry.parentWidth);
+			expect(geometry.border).toBe('solid');
+			expect(geometry.color).not.toBe(geometry.background);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(introduction).toBeVisible();
+			await introduction.getByRole('button', { name: locale === 'en' ? 'Done' : '完成', exact: true }).press('Escape');
+			await expect(introduction).toHaveCount(0);
+			await expect(input).toBeFocused();
+			await expect(tip).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(tip).toBeFocused();
+			expect((await page.evaluate(() => window.ashChatInputIntegration.noticeAccessibility())).content).toContain(locale === 'en' ? 'Tip:' : '提示：');
+			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
+			await expect(input).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Retained draft');
+			await page.evaluate(() => window.ashChatInputIntegration.showIntroduction());
+			await expect(introduction).toBeVisible();
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect(introduction).toHaveCount(0);
+			await tip.screenshot({ path: browserTests.info.outputPath(`input-notices-${locale}-${theme}.png`) });
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) for (const nextDraft of ['restore', 'typed', 'reentrant', 'emptied'] as const) test(`Compact failed submission preserves the owned draft and selection (${nextDraft}, ${locale})`, async () => {
 		const { page } = browserTests;
 		await page.goto(`/chatInput.html?inlineCode&compact&holdSubmission&locale=${locale}`);
@@ -1691,7 +2074,7 @@ suite('chatInput browser component', () => {
 		if (outcome === 'success') {
 			await expect.poll(submissions).toEqual(['Complete recognized task']);
 		} else if (outcome === 'failure') {
-			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().errors)).toEqual([expect.stringMatching(/Transcription unavailable/u)]);
+			await expect(page.locator('.ash-chat-input-notification-message')).toContainText('Transcription unavailable');
 			await expect(composer.locator('.view-lines')).toHaveText('Keep this draft');
 			expect(await submissions()).toEqual([]);
 			await input.press('Enter');
@@ -2786,6 +3169,20 @@ suite('chatInput browser component', () => {
 				await page.keyboard.press('Enter');
 				const picker = page.locator('.ash-action-widget');
 				await expect(picker).toBeVisible();
+				await expect(picker.getByRole('menuitemradio')).toHaveCount(3);
+				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
+				for (const label of await picker.locator('.ash-button-label').all()) {
+					await expect(label).toHaveCSS('font-weight', '600');
+				}
+				await expect(picker.locator('.ash-action-widget-summary')).toHaveCount(3);
+				await page.keyboard.press('End');
+				await expect(picker.getByRole('menuitemradio').nth(2)).toBeFocused();
+				await page.keyboard.press('ArrowDown');
+				await expect(picker.getByRole('menuitemradio').nth(0)).toBeFocused();
+				await page.keyboard.press('Escape');
+				await expect(picker).toBeHidden();
+				await permissions.press('ArrowDown');
+				await expect(picker).toBeVisible();
 				await expect(picker.locator('input')).toHaveCount(0);
 				await expect(page.getByRole('combobox', { name: locale === 'en' ? 'Permissions' : '权限' })).toHaveCount(0);
 				await expect(permissions).toHaveAttribute('aria-expanded', 'true');
@@ -2801,7 +3198,7 @@ suite('chatInput browser component', () => {
 				await expect(permissions).toBeFocused();
 				await expect(permissions).toHaveAttribute('aria-expanded', 'false');
 				await permissions.click();
-				await picker.getByRole('menuitemradio', { name: locale === 'en' ? 'Auto' : '自动', exact: true }).click();
+				await page.keyboard.press('1');
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toBeVisible();
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toHaveText(locale === 'en' ? 'Auto' : '自动');
 				await expect(picker).toBeHidden();
@@ -2864,7 +3261,8 @@ suite('chatInput browser component', () => {
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
 				await expect(footer.locator('.ash-chat-status-summary')).toHaveText(locale === 'en' ? 'Working…' : '正在运行…');
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('error', 'Connection was lost'));
-				await expect(footer.locator('.ash-chat-status-summary')).toHaveText('Connection was lost');
+				await expect(page.locator('.ash-chat-input-notice-notification')).toHaveText('Connection was lost');
+				await expect(footer.locator('.ash-chat-status-summary')).toBeHidden();
 				await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
 				await expect(footer.locator('.ash-chat-status-summary')).toBeHidden();
 				if (locale === 'en' && theme === 'light') {
@@ -4247,6 +4645,53 @@ for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]
 	});
 }
 
+test('Stop and Send waits for interruption and restores draft and attachments on failure', async () => {
+	const started = new DeferredPromise<void>();
+	const stopped = new DeferredPromise<void>();
+	const calls: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		interrupt: async () => { calls.push('interrupt'); started.complete(); await stopped.p; },
+		send: async (text, _mode, _skills, contexts) => {
+			calls.push(text);
+			assert.equal(contexts?.[0]?.id, 'note');
+			throw new Error('Synthetic send failure');
+		},
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Captured stop draft');
+	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+	const captured = await part.captureDraft();
+	const pending = assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), /Synthetic send failure/);
+	await started.p;
+	assert.deepEqual(calls, ['interrupt']);
+	stopped.complete();
+	await pending;
+	assert.deepEqual(calls, ['interrupt', captured!.draft.text]);
+	const restored = await part.captureDraft();
+	assert.equal(restored?.draft.text, captured!.draft.text);
+	assert.equal(restored?.draft.contexts?.[0]?.id, 'note');
+});
+
+test('Stop and Send cannot submit into a successor conversation after interruption', async () => {
+	const started = new DeferredPromise<void>();
+	const stopped = new DeferredPromise<void>();
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		interrupt: async () => { started.complete(); await stopped.p; },
+		send: async () => { sends++; },
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Old conversation');
+	const pending = assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), error => isCancellationError(error));
+	await started.p;
+	part.invalidatePendingInput();
+	edit(part, 'Successor draft');
+	stopped.complete();
+	await pending;
+	assert.equal(sends, 0);
+	assert.equal((await part.captureDraft())?.draft.text, 'Successor draft');
+});
+
 test('Explicit queue intent cannot execute a slash command or change a hidden draft', async () => {
 	let commands = 0;
 	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async () => { commands++; } });
@@ -4316,4 +4761,25 @@ test('Confirmation focus toggles through the owning input without answering or c
 	assert.equal(part.focusConfirmation(), true); assert.equal(document.activeElement, part.element.querySelector('textarea'));
 	assert.equal(answered, false); assert.equal(part.element.querySelector('textarea')!.value, 'Keep this draft');
 	part.setVisible(false); assert.equal(part.focusConfirmation(), false);
+});
+
+
+test('/btw composer captures the untrimmed question and shifts frozen reference offsets while preserving a failed draft', async () => {
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, '/btw Question');
+	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+	const captured = (await part.captureDraft())!.draft;
+	using handler = part.clientCommandsForTest.registerSlashCommand({ command: 'btw', detail: 'Side question', executeDuringRequest: true }, async (prompt, resource, options) => {
+		assert.equal(resource.path, '/input-test-session/input-test-thread');
+		assert.equal(prompt, captured.text.slice(5));
+		const reference = captured.contexts![0].reference!;
+		assert.deepEqual(options?.attachedContext?.[0]?.reference, { start: reference.start - 5, end: reference.end - 5 });
+		assert.equal((await options!.attachedContext![0]!.resolve()).content, 'Captured context');
+		throw new Error('Synthetic side chat failure');
+	});
+	await assert.rejects(part.acceptInput(), /Synthetic side chat failure/);
+	assert.equal(sends, 0);
+	assert.deepEqual((await part.captureDraft())!.draft, captured);
 });

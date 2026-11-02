@@ -1442,7 +1442,7 @@ fn remote_extension_start_is_connection_owned_and_close_retires_only_its_fleet()
         )
         .unwrap(),
     );
-    let first = server.browser_connection();
+    let first = server.open_connection(crate::server::ConnectionAuthority::RemoteHost);
     let second = server.browser_connection();
     let untrusted = server.connection();
     assert!(

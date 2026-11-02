@@ -25,6 +25,10 @@ Workbench 拥有跨领域的 Renderer 服务装配：`browser/webRendererApi.ts`
 
 会话命名经现有 Session/Thread 领域 API 进入 Core 的 Thread title 事件，Session 标题由后端根 Thread 派生。首次提交接受后，Chat 用首条文本的空白归一化结果（最多 80 个字符）请求初始名称；此操作失败不影响已接受的请求，也不重放消息。手动命名和自动命名都带命令收据，Core 在持久化边界阻止迟到的自动名称覆盖手动名称。命令面板中的“重命名会话”和“重命名对话”分别操作根 Thread 和捕获的当前 Thread，目录订阅负责跨窗口更新。归档会话的永久删除使用现有 Session Delete 清理流程；前端先选择归档会话并确认，再更新目录代次，避免迟到的读取重新插入已删除会话。
 
+`platform/agentHost/common/agentService.ts` 的 `IAgentConnection` 聚合一条后端连接已有的领域端口；注册表、文件路由和 Sessions Provider scope 借用这个契约。`workbench/browser/rendererApi.ts` 的 `IWorkbenchHost` 只作为启动装配参数，不注册为全局服务。消费者分别注入 `IAppServerApi`、`IRemoteAgentHostService`、`IWorkbenchEnvironmentService` 等领域服务；本机目录和 profile 目录随窗口环境提供，临时断连不改变 `IAppServerApi.isAvailable` 表示的宿主支持能力。额外 SSH、WSL、Tunnel 连接的创建、复用和释放由 `platform/agentHost/electron-browser/remoteAgentHostService.ts` 唯一拥有，`AgentHostConnectionsService` 只提供包含当前窗口连接的查询投影。远端 Provider scope 只覆盖 `IAgentConnection` 及对应领域服务，窗口服务仍从父作用域取得，不创建另一份连接表或业务状态。
+
+文件变更由文件 adapter 转成 `IFileApi.onDidChangeFiles` 领域事件，`AgentHostFileSystemProvider` 直接订阅所属连接并将相对路径投影到授权目录；Provider 释放时一并释放监听。Workbench 与 Sessions 的文件消费者不解析原始文件协议通知。窗口目录授权恢复产生的重新扫描仍由窗口 owner 提供，作为连接事件之外的附加失效信号。
+
 ## 目录按职责选择
 
 | 位置                                                                                                    | 放什么                                                               | 不放什么                                               |

@@ -10,7 +10,7 @@ import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDispos
 import { localize } from '../../../../../../nls.js';
 import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
 import { type ChatContentPart } from '../../../../../../platform/agentHost/common/agent.js';
-import type { IChatListItem } from '../chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { IWebviewService, type IWebviewElement } from '../../../../webview/browser/webview.js';
 import { EditorPanes } from '../../../../../browser/editor.js';
 import type { IEditorPane } from '../../../../../common/editor.js';

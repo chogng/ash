@@ -1,3 +1,5 @@
+import { AgentSessionsWelcomeInput } from '../../welcomeAgentSessions/browser/agentSessionsWelcomeInput.js';
+import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
@@ -5,7 +7,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { createGettingStartedInput } from './gettingStartedInput.js';
 
 export const StartupEditorConfigurationKey = 'workbench.startupEditor';
-export type StartupEditor = 'none' | 'welcomePage' | 'welcomePageInEmptyWorkbench';
+export type StartupEditor = 'none' | 'welcomePage' | 'welcomePageInEmptyWorkbench' | 'agentSessionsWelcomePage';
 
 export class StartupPageRunnerContribution extends Disposable {
 	constructor(
@@ -26,6 +28,7 @@ export class StartupPageRunnerContribution extends Disposable {
 		if (startupEditor === 'none') return;
 		if (startupEditor === 'welcomePageInEmptyWorkbench' && this.workspaceContext.getWorkbenchState() !== WorkbenchState.EMPTY) return;
 		if (this.editorService.visibleEditors.length > 0) return;
-		await this.editorService.openEditor(createGettingStartedInput());
+		await this.editorService.openEditor(startupEditor === 'agentSessionsWelcomePage' && !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)
+			? new AgentSessionsWelcomeInput() : createGettingStartedInput());
 	}
 }

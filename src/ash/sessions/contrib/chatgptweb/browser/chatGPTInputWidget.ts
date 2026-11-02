@@ -16,7 +16,7 @@ import { SlashCommandCatalog } from '../../../../workbench/contrib/chat/common/s
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
 import { IChatGPTService, type ChatGPTAttachment } from './chatGPTService.js';
-import { ModelPickerWidget } from '../../chat/browser/modelPickerWidget.js';
+import { ModelPickerWidget } from './modelPickerWidget.js';
 import '../../../common/theme.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTInputWidget.css';

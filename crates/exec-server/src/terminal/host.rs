@@ -143,7 +143,7 @@ type Reply = Result<Response, TerminalError>;
 
 /// One authorization facade's transport, not a second owner of terminal state.
 pub(super) struct Client {
-    stream: Mutex<BufReader<IpcStream>>,
+    stream: Mutex<Option<BufReader<IpcStream>>>,
     disconnected: AtomicBool,
     connection: Option<ConnectionOptions>,
     // Revocation objects cannot cross a process boundary. Retain their proofs
@@ -157,7 +157,19 @@ struct ConnectionOptions {
 }
 
 impl Client {
-    pub(super) fn connect(profile: &Path, executable: &Path) -> Result<Self, TerminalError> {
+    pub(super) fn lazy(profile: &Path, executable: &Path) -> Self {
+        Self {
+            stream: Mutex::new(None),
+            disconnected: AtomicBool::new(true),
+            connection: Some(ConnectionOptions {
+                profile: profile.into(),
+                executable: executable.into(),
+            }),
+            authorizations: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn connect(profile: &Path, executable: &Path) -> Result<Self, TerminalError> {
         Self::connect_with_guard(profile, executable, None)
     }
 
@@ -223,7 +235,7 @@ impl Client {
             Err(error) => return Err(operation_failed(error)),
         };
         let client = Self {
-            stream: Mutex::new(BufReader::new(stream)),
+            stream: Mutex::new(Some(BufReader::new(stream))),
             disconnected: AtomicBool::new(false),
             connection: Some(ConnectionOptions {
                 profile: profile.into(),
@@ -266,8 +278,8 @@ impl Client {
             | Operation::Terminate
             | Operation::Retire(_) => None,
         };
-        // Starting a new shell and explicitly attaching a lease may establish a
-        // new owner connection. Existing process operations never migrate by ID.
+        // Configuration reads, shell creation and explicit reattachment may
+        // establish an owner connection. Existing process operations never migrate by ID.
         if configuration.is_some()
             || matches!(
                 &operation,
@@ -367,6 +379,7 @@ impl Client {
         operation: Operation,
     ) -> Result<T, TerminalError> {
         let mut stream = self.stream.lock().map_err(|_| TerminalError::Busy)?;
+        let stream = stream.as_mut().ok_or(TerminalError::OperationFailed)?;
         let reply = (|| {
             write_frame(
                 stream.get_mut(),
@@ -378,7 +391,7 @@ impl Client {
                 },
             )
             .map_err(operation_failed)?;
-            read_frame::<Result<T, TerminalError>>(&mut *stream).map_err(operation_failed)
+            read_frame::<Result<T, TerminalError>>(stream).map_err(operation_failed)
         })();
         match reply {
             Ok(reply) => reply,
@@ -1027,7 +1040,11 @@ pub fn run_owner(profile: &Path) -> Result<(), String> {
     });
     let client = Client::connect_with_guard(profile, &executable, Some(token))
         .map_err(|e| format!("{e:?}"))?;
-    let mut stream = client.stream.into_inner().map_err(|e| e.to_string())?;
+    let mut stream = client
+        .stream
+        .into_inner()
+        .map_err(|e| e.to_string())?
+        .ok_or("terminal lifetime connection is unavailable")?;
     stream
         .get_mut()
         .set_read_timeout(None)

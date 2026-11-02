@@ -19,7 +19,8 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
-import { pickChatContextItem } from '../../../browser/actions/chatContext.js';
+import { pickChatContextItem, ScreenshotContextValuePick } from '../../../browser/actions/chatContext.js';
+import { ImageEditorService } from '../../../../../services/imageEditor/browser/imageEditorService.js';
 
 function pickerHost(resources: DisposableStore): TestQuickInputService {
 	const container = document.createElement('div');
@@ -73,6 +74,27 @@ test('Escape cancels an unresolved context catalog and ignores its late result',
 
 suite('Registered attachment source contracts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('user screenshots use the image editor while an explicit capture never falls back to desktop selection', async () => {
+		const requests: AbortSignal[] = [];
+		class ManualImageEditors extends ImageEditorService {
+			constructor() { super(); }
+			async capture(signal: AbortSignal) { requests.push(signal); return undefined; }
+		}
+		using editors = new ManualImageEditors();
+		const screenshot = new ScreenshotContextValuePick(editors);
+		const signal = new AbortController().signal;
+		assert.equal(await screenshot.asAttachment(undefined, signal), undefined);
+		assert.deepEqual(requests, [signal]);
+		let targeted = 0;
+		assert.equal(await screenshot.asAttachment(undefined, signal, async requestSignal => {
+			assert.equal(requestSignal, signal);
+			targeted++;
+			return undefined;
+		}), undefined);
+		assert.equal(targeted, 1);
+		assert.deepEqual(requests, [signal], 'A missing target image must not start a manual screenshot');
+	});
 
 	function item(name: string): IChatContextPickerPickItem {
 		return { label: name, asAttachment: () => ({ id: name, kind: 'source', name, resolve: async () => ({ name, content: `Captured ${name}` }) }) };

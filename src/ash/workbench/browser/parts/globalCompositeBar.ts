@@ -26,7 +26,7 @@ import { ILifecycleService, LifecyclePhase } from '../../services/lifecycle/comm
 import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
-import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 
 /** Account and management actions shared by the Activity Bar and title bar. */
 export class GlobalCompositeBar extends Disposable {
@@ -53,7 +53,7 @@ export class GlobalCompositeBar extends Disposable {
 		@ILocalizationService private readonly localizationService: ILocalizationService,
 		@ILogService private readonly logService: ILogService,
 		@IStorageService private readonly storageService: IStorageService,
-		@IRendererHostService private readonly host: IRendererHost,
+		@IAppServerApi private readonly appServer: IAppServerApi,
 		@ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -83,7 +83,7 @@ export class GlobalCompositeBar extends Disposable {
 			this.updateAccounts(state);
 			if (this.accountsInitialized) void this.notifyOfEphemeralStorage();
 		}));
-		if (host.hasAppServer) {
+		if (appServer.isAvailable) {
 			void this.lifecycle.when(LifecyclePhase.Restored).then(() => {
 				if (this.isDisposed) return;
 				this._register(runWhenWindowIdle(this.domNode.ownerDocument.defaultView!, () => { void this.initializeAccounts(); }));
@@ -140,7 +140,7 @@ export class GlobalCompositeBar extends Disposable {
 		const accountsLabel = this.label('workbench.accounts', 'Accounts');
 		const manageLabel = this.label('workbench.manage', 'Manage');
 		return [
-			...(this.accountsVisible && this.host.hasAppServer ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() { } }] : []),
+			...(this.accountsVisible && this.appServer.isAvailable ? [{ id: 'ash.activityBar.accounts', label: accountsLabel, tooltip: accountsLabel, icon: Lxicon.account, enabled: true, run() { } }] : []),
 			{ id: 'ash.activityBar.manage', label: manageLabel, tooltip: manageLabel, icon: Lxicon.gear, enabled: true, run() { } },
 		];
 	}

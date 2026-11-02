@@ -4,7 +4,7 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/dictation/common/dictation.js';
 import { DeferredPromise, raceCancellation } from '../../../../../base/common/async.js';
 import { VSBuffer, encodeBase64 } from '../../../../../base/common/buffer.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';

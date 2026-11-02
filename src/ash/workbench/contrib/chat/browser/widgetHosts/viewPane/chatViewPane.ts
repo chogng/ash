@@ -15,12 +15,10 @@ import { INotificationService } from '../../../../../../platform/notification/co
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
 import { IWorkbenchLayoutService } from '../../../../../services/layout/browser/layoutService.js';
 import { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
-import type { IChatViewPane, IQuickChatSession } from '../../chat.js';
+import type { IChatViewPane, IQuickChatSession, IChatWidgetViewOptions } from '../../chat.js';
 import type { ChatWidget, IChatWidgetModel } from '../../widget/chatWidget.js';
-import { AgentSessionsControl } from '../../agentSessions/agentSessionsControl.js';
+import { AgentSessionsControl, type IAgentSessionsControlOptions } from '../../agentSessions/agentSessionsControl.js';
 import { AgentSessionsViewerOrientation } from '../../agentSessions/agentSessions.js';
-import { registerAgentSessionsAccessibility } from '../../agentSessions/agentSessionsAccessibility.js';
-import type { IAgentSessionsModel } from '../../agentSessions/agentSessionsModel.js';
 import {
 	SHOW_CHAT_HISTORY_COMMAND_ID,
 	AGENT_SESSIONS_PRESENTATION_SETTING,
@@ -72,7 +70,6 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	protected readonly paneHost: HTMLDivElement;
 	private readonly body: HTMLDivElement;
 	private readonly sessionsSidebar: HTMLElement;
-	private readonly newSessionButton: HTMLButtonElement;
 	private sessionsControl!: AgentSessionsControl;
 	private readonly sessionsSash: Sash;
 	protected sessionsSidebarWidth = defaultSessionsSidebarWidth;
@@ -189,18 +186,9 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		this.sessionsSidebar.hidden = true;
 		this.sessionsSidebar.id = `${viewId}-sessions`;
 		this.sessionsSidebar.setAttribute('aria-label', localize('chat.sessions.sidebar', 'Agent sessions'));
-		const sessionsHeader = h(container.ownerDocument, 'header');
-		const sessionsTitle = h(container.ownerDocument, 'h2');
-		sessionsTitle.textContent = localize('chat.sessions.title', 'Sessions');
-		this.newSessionButton = h(container.ownerDocument, 'button');
-		this.newSessionButton.type = 'button';
-		this.newSessionButton.className = 'ash-chat-sessions-new';
-		this.newSessionButton.textContent = localize('chat.sessions.new', 'New Session');
-		sessionsHeader.append(sessionsTitle, this.newSessionButton);
-		this.sessionsSidebar.append(sessionsHeader);
 		this.body.append(this.sessionsSidebar, this.paneHost);
 		this._register(toDisposable(() => this.sessionsSidebar.remove()));
-		this._register(registerAgentSessionsAccessibility(this.sessionsSidebar, contextKeyService));
+		this._register(contextKeyService.createScoped(this.sessionsSidebar)).createKey('agentSessionsSidebarFocused', true);
 		this.sessionsSash = this._register(new Sash(this.body, {
 			getVerticalSashLeft: () => this.chatBodyWidth - this.effectiveSessionsSidebarWidth,
 			getVerticalSashTop: () => 0,
@@ -264,18 +252,22 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	}
 
 	/** Connects a product-owned catalog after the adapter has initialized its state. */
-	protected initializeSessionsControl(model: IAgentSessionsModel, onNewSession: () => void): void {
+	protected initializeSessionsControl(onNewSession: () => void, getActions: IAgentSessionsControlOptions['getActions'], onDidOpenSession: (preserveFocus: boolean) => void): void {
 		this.onNewSession = onNewSession;
 		const createNewSession = () => {
 			onNewSession();
 			this.hideSessionsAfterSelection();
 			this.activePane?.focus();
 		};
-		this._register(addDisposableListener(this.newSessionButton, 'click', createNewSession));
-		this.sessionsControl = this._register(this.instantiationService.createInstance(AgentSessionsControl, this.sessionsSidebar, model));
-		this._register(observeElementSize(this.sessionsControl.domNode, size => this.sessionsControl.layout(size.height, size.width)));
+		this.sessionsControl = this._register(this.instantiationService.createInstance(AgentSessionsControl, this.sessionsSidebar, { getActions }));
+		this._register(observeElementSize(this.sessionsControl.element, size => this.sessionsControl.layout(size.height, size.width)));
 		this.sessionsControl.setVisible(false);
 		this._register(this.sessionsControl.onDidRequestNewSession(createNewSession));
+		this._register(this.sessionsControl.onDidOpenSession(event => onDidOpenSession(event.preserveFocus)));
+		this._register(this.sessionsControl.onDidRequestToggleLayout(() => {
+			const command = this.sessionsSideBySide ? 'agentSessions.hideAgentSessionsSidebar' : 'agentSessions.showAgentSessionsSidebar';
+			void this.commandService.executeCommand(command).catch(onUnexpectedError);
+		}));
 		this._register(this.onDidChangeBodyVisibility(() => this.updateSessionsControlVisibility()));
 	}
 
@@ -288,11 +280,11 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	protected abstract activatePane(id: string): void;
 	protected abstract ensureConversationForVisibleChat(): void;
 	/** Borrows a distinct retained conversation without navigating the main Chat selection. */
-	public abstract createQuickChat(parent: HTMLElement, titleId: string): IQuickChatSession;
+	public abstract createEmbeddedChat(parent: HTMLElement, titleId: string, options?: IChatWidgetViewOptions): IQuickChatSession;
 	/** Invalidates pending work even when navigation returns to the same retained composer. */
 	protected abstract get selectionRevision(): number;
 	/** Restores a requested conversation through the product owner before an editor borrows it. */
-	protected abstract restoreEditorPane(id: string): Promise<void>;
+	protected abstract restoreEditorPane(id: string, signal: AbortSignal): Promise<void>;
 
 	private getDraggedSession(): DraggedEditorIdentifier | undefined {
 		const dragged = this.editorTransfer.getData(DraggedEditorIdentifier.prototype)?.[0];
@@ -302,7 +294,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	/** Moves one tab without moving the shared Chat frame or changing the conversation lifetime. */
 	public async moveSessionToEditor(id: string): Promise<void> {
 		const entry = this.renderedPanes.find(entry => entry.id === id);
-		if (this.sessionsPresentation !== AgentSessionsPresentation.Tabs || this.editorMount || !entry || entry.detached) return;
+		if (this.editorMount || !entry || entry.detached) return;
 		await this.editorService!.openEditor(new ChatEditorInput(entry.id, entry.label), { pinned: true });
 	}
 
@@ -320,7 +312,6 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 
 	/** A close releases the editor's lease; only then can the tab be selected and ordered in the side bar. */
 	public async moveSessionToSideBar(resource: URI, target?: string, position: 'before' | 'after' = 'after'): Promise<void> {
-		if (this.sessionsPresentation !== AgentSessionsPresentation.Tabs) return;
 		const mounted = [...this.sessionEditors].find(([, mount]) => mount.input.resource.toString() === resource.toString());
 		if (!mounted) return;
 		const [pane] = mounted;
@@ -341,9 +332,10 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	}
 
 	/** Borrows the original widget; selection, draft storage and execution remain with the product adapter. */
-	public async attachSessionEditor(input: ChatEditorInput, parent: HTMLElement): Promise<IDisposable & { readonly widget: ChatWidget<TModel>; setVisible(visible: boolean): void; }> {
+	public async attachSessionEditor(input: ChatEditorInput, parent: HTMLElement, signal: AbortSignal): Promise<IDisposable & { readonly widget: ChatWidget<TModel>; setVisible(visible: boolean): void; }> {
 		if (input.paneId === undefined) throw new TypeError('A session editor requires a conversation');
-		await this.restoreEditorPane(input.paneId);
+		await this.restoreEditorPane(input.paneId, signal);
+		signal.throwIfAborted();
 		if (this.isDisposed) throw new Error('Chat view is disposed');
 		const entry = this.renderedPanes.find(entry => entry.id === input.paneId);
 		if (!entry || entry.detached) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
@@ -379,6 +371,22 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 			},
 			dispose: () => lease.dispose(),
 		};
+	}
+
+	/** The product callback creates the draft; this host only projects its editor identity. */
+	public createNewChatEditorInput(source?: ChatEditorInput): ChatEditorInput {
+		// An inactive editor can belong to another host than the foreground Chat.
+		if (source?.paneId !== undefined) {
+			if (!this.renderedPanes.some(entry => entry.id === source.paneId)) {
+				throw new Error(localize('chat.sessions.editorUnavailable', 'This chat is no longer available in the editor.'));
+			}
+			this.activatePane(source.paneId);
+		}
+		this.onNewSession();
+		this.syncSessions();
+		const entry = this.renderedPanes.find(candidate => candidate.pane === this.activePane);
+		if (!entry) throw new Error(localize('chat.sessions.newUnavailable', 'A new chat could not be opened.'));
+		return new ChatEditorInput(entry.id, entry.label);
 	}
 
 	public async moveToEditor(): Promise<void> {

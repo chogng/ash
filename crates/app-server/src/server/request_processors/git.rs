@@ -1274,13 +1274,13 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .git_runtime_service()?
             .readable_source_for(repository_id)
             .map_err(git_error)?;
-        let dirs = self
-            .dir_services
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))?;
-        let worktrees = dirs
-            .runtime
-            .block_on(dirs.worktrees.list(&source))
+        // Listing is authorized by GitRuntime and does not require a conversation's managed dirs.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
+        let worktrees = runtime
+            .block_on(worktree::WorktreeManager::list_existing(&source))
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
             .into_iter()
             .map(|worktree| {

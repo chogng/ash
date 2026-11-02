@@ -150,7 +150,8 @@ for (const boundary of ['readiness', 'initialization'] as const) {
 import { app, BrowserWindow } from 'electron/main';
 import { writeFileSync } from 'node:fs';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
-import { LoggerService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/log/node/loggerService.js')).href)};
+import { LoggerService } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/log/electron-main/loggerService.js')).href)};
+import { startElectronApplication } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)};
 bootstrapElectronMain();
 app.setAppPath(${JSON.stringify(desktop)});
 const events = [];
@@ -161,12 +162,13 @@ LoggerService.prototype.close = async function() {
 	await close.call(this);
 };
 app.on('quit', () => writeFileSync(${JSON.stringify(resultPath)}, JSON.stringify({ events, windows: BrowserWindow.getAllWindows().length })));
-void app.whenReady().then(async () => {
-	const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
+const electronReady = app.whenReady();
+void (async () => {
 	if (${JSON.stringify(boundary)} === 'readiness') {
 		let releaseReady;
 		app.whenReady = () => new Promise(resolve => { releaseReady = resolve; });
 		await startElectronApplication();
+		await electronReady;
 		events.push('quit-before-ready');
 		app.quit();
 		releaseReady();
@@ -179,7 +181,7 @@ void app.whenReady().then(async () => {
 		};
 		await startElectronApplication();
 	}
-});
+})();
 `);
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 		const result = await runUntilExit({ ...configuration, args: configuration.args.map(argument => argument === desktop ? entry : argument) });
@@ -440,6 +442,8 @@ async function runUntilExit(configuration: ElectronConfiguration): Promise<{ cod
 		}, { timeout: 15_000, message: 'Startup failure must terminate the Electron process' }).not.toBeNull();
 		await closed;
 		return { code: child.exitCode, output };
+	} catch (error) {
+		throw new Error(`${String(error)}\nElectron output:\n${output}`, { cause: error });
 	} finally {
 		if (child.exitCode === null && child.signalCode === null) { child.kill(); }
 		await closed;

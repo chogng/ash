@@ -9,7 +9,7 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
-import { readDevelopmentAppServerGeneration } from '../../../../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
+import { readDevelopmentAppServerGeneration } from '../../../../src/ash/platform/app-server-daemon/node/developmentAppServerGeneration.js';
 import { developmentAppServerGenerationPath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const desktop = resolve(import.meta.dirname, '../../../..');

@@ -7,8 +7,10 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { CancellationError } from '../../../../base/common/errors.js';
 import { AppServerGitHubService } from '../../../github/browser/appServerGitHubService.js';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerConnectionRecovery, AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import { createAppServerAgentSessionService } from '../../browser/appServerAgentService.js';
+import type { AgentSessionChange } from '../../common/agent.js';
 import type { LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
@@ -18,7 +20,12 @@ import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, W
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
-import { createAppServerExtensionHostApi } from '../../browser/extensionHostApi.js';
+import { createAppServerExtensionHostApi } from '../../../extensions/browser/extensionHostApi.js';
+import { createAppServerFileApi } from '../../../files/browser/fileApi.js';
+import type { FileInvalidation } from '../../../files/common/fileApi.js';
+import { URI } from '../../../../base/common/uri.js';
+import { createAppServerResourceApi } from '../../browser/appServerApi.js';
+import { AgentHostFileSystemProvider } from '../../common/agentHostFileSystemProvider.js';
 import { TestAppServerDecodePort } from '../common/testAppServerDecoder.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -68,6 +75,99 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('File domain invalidations reach only their filesystem connection and release with their consumers', async () => {
+	const transport = new ProtocolTransport();
+	const otherTransport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	const otherClient = new AppServerProtocolClient(otherTransport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	cleanup.add(toDisposable(() => otherClient.dispose()));
+	const files = createAppServerFileApi(client);
+	const otherFiles = createAppServerFileApi(otherClient);
+	const receiver = { changes: [] as FileInvalidation[] };
+	using subscriptions = new DisposableStore();
+	files.onDidChangeFiles(function (this: typeof receiver, event) { this.changes.push(event); }, receiver, subscriptions);
+	const root = URI.parse('ash-remote://ssh+first/repo');
+	const otherRoot = URI.parse('ash-remote://ssh+second/repo');
+	using provider = new AgentHostFileSystemProvider({
+		api: files, resourceApi: createAppServerResourceApi(client),
+		directories: () => [{ uri: root, target: { type: 'environment', dirId: 'same' } }],
+	});
+	using otherProvider = new AgentHostFileSystemProvider({
+		api: otherFiles, resourceApi: createAppServerResourceApi(otherClient),
+		directories: () => [{ uri: otherRoot, target: { type: 'environment', dirId: 'same' } }],
+	});
+	const observed: (readonly string[] | undefined)[] = [];
+	const otherObserved: (readonly string[] | undefined)[] = [];
+	cleanup.add(provider.onDidChangeFiles(event => observed.push(event.resources?.map(resource => resource.toString()))));
+	cleanup.add(otherProvider.onDidChangeFiles(event => otherObserved.push(event.resources?.map(resource => resource.toString()))));
+	await Promise.all([client.connect(), otherClient.connect()]);
+	const changed = { method: 'fs/changed', params: { type: 'pathsChanged', dirId: 'same', paths: ['main.ts'] } };
+	transport.frame(changed);
+	transport.frame({ method: 'queue/changed', params: {} });
+	assert.deepEqual(receiver.changes, [changed.params]);
+	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()]]);
+	assert.deepEqual(otherObserved, []);
+	client.disconnect();
+	transport.frame(changed);
+	assert.equal(receiver.changes.length, 1);
+	await client.connect();
+	transport.frame({ method: 'fs/changed', params: { type: 'rescanRequired', dirId: 'same' } });
+	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()], undefined]);
+	subscriptions.dispose();
+	transport.frame(changed);
+	assert.equal(receiver.changes.length, 2);
+	assert.equal(observed.length, 3);
+	provider.dispose();
+	transport.frame(changed);
+	assert.equal(observed.length, 3);
+	otherTransport.frame(changed);
+	assert.deepEqual(otherObserved, [[otherRoot.joinPathSegment('main.ts').toString()]]);
+});
+
+test('Session domain events stay on their connection across reconnects and listener disposal', async () => {
+	const transport = new ProtocolTransport();
+	const otherTransport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	const otherClient = new AppServerProtocolClient(otherTransport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	cleanup.add(toDisposable(() => otherClient.dispose()));
+	const sessions = createAppServerAgentSessionService(client);
+	const otherSessions = createAppServerAgentSessionService(otherClient);
+	const receiver = { changed: [] as AgentSessionChange[], deleted: [] as string[] };
+	const otherChanges: AgentSessionChange[] = [];
+	using subscriptions = new DisposableStore();
+	sessions.onDidChangeSession(function (this: typeof receiver, event) { this.changed.push(event); }, receiver, subscriptions);
+	sessions.onDidDeleteSession(function (this: typeof receiver, sessionId) { this.deleted.push(sessionId); }, receiver, subscriptions);
+	cleanup.add(otherSessions.onDidChangeSession(event => otherChanges.push(event)));
+	await Promise.all([client.connect(), otherClient.connect()]);
+	const changed = { method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: true } };
+	const deleted = { method: 'session/deleted', params: { sessionId: 'same' } };
+	transport.frame(changed);
+	transport.frame(deleted);
+	transport.frame({ method: 'queue/changed', params: {} });
+	assert.deepEqual(receiver, { changed: [{ sessionId: 'same', agentTreeChanged: true }], deleted: ['same'] });
+	assert.deepEqual(otherChanges, []);
+	otherTransport.frame({ method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: false } });
+	assert.deepEqual(otherChanges, [{ sessionId: 'same', agentTreeChanged: false }]);
+	client.disconnect();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.equal(receiver.changed.length, 1);
+	assert.equal(receiver.deleted.length, 1);
+	await client.connect();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.deepEqual(receiver, { changed: [changed.params, changed.params], deleted: ['same', 'same'] });
+	subscriptions.dispose();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.equal(receiver.changed.length, 2);
+	assert.equal(receiver.deleted.length, 2);
+});
 
 test('extension results wake through decoded completion notifications and stop waiting on disconnect', async () => {
 	for (const outcome of ['complete', 'disconnect'] as const) {

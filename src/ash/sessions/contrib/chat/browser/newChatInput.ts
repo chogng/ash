@@ -1,8 +1,12 @@
+import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -13,15 +17,17 @@ import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { IChatInputNoticeHubService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { IChatInputNotificationService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
-import { NewChatContextAttachments } from './newChatContextAttachments.js';
-import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
-import { approvalModeDefinition } from '../../../../platform/agentHost/common/approvalModes.js';
-import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
+import { PermissionPickerActionItem } from '../../../../workbench/contrib/chat/browser/widget/input/permissionPickerActionItem.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
+import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
+import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
@@ -30,9 +36,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 
 /** Applies Sessions editor, attachment and draft policy to the shared input. */
 export class NewChatInputWidget extends ChatInputPart {
-	private readonly contextAttachments: NewChatContextAttachments;
-	private readonly permissionButton: HTMLButtonElement;
-	private readonly permissionPicker: NewChatPermissionPicker;
+	private readonly permissionPicker: PermissionPickerActionItem;
 
 	constructor(
 		container: HTMLElement,
@@ -51,6 +55,15 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IChatInputNoticeHubService noticeHub: IChatInputNoticeHubService,
+		@IChatInputNotificationService inputNotifications: IChatInputNotificationService,
+		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
+		@IActionViewItemService presentations: IActionViewItemService,
+		@IChatWidgetService chatWidgets: IChatWidgetService,
+		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
+		@ICommandService commands: ICommandService,
+		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
@@ -59,39 +72,55 @@ export class NewChatInputWidget extends ChatInputPart {
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),
-		}, [{
-			id: 'ash.chat.input.attach',
-			get label() { return localize('chat.attach.files', 'Attach files'); },
-			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
-			icon: Lxicon.add,
-			enabled: true,
-			run: () => this.contextAttachments.showPicker(),
-		}], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys);
-		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
-		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
-		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
+		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
 		const footer = this.inputFooter!;
-		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
-		this.permissionButton.type = 'button';
-		this.permissionButton.setAttribute('aria-haspopup', 'menu');
-		this.permissionButton.setAttribute('aria-expanded', 'false');
-		footer.prepend(this.permissionButton);
+		const owner = this;
+		const permissionHost = h(container.ownerDocument, 'div');
+		permissionHost.className = 'ash-sessions-permission-picker';
+		footer.prepend(permissionHost);
 		this.createContextUsageToolbar(footer, contextMenus);
-		this.permissionPicker = this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
-		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
+		this.permissionPicker = this._register(instantiationService.createInstance(PermissionPickerActionItem, {
+			id: 'sessions.chat.permissions',
+			get label() {
+				const definition = approvalModeDefinition(owner.model.inputState.approvalMode);
+				return localize(definition.label.key, definition.label.text);
+			},
+			get tooltip() {
+				const definition = approvalModeDefinition(owner.model.inputState.approvalMode);
+				return localize('sessions.chat.permission.label', 'Permissions: {0}', localize(definition.label.key, definition.label.text));
+			},
+			get enabled() { return !owner.model.inputState.aiDisabled && owner.model.inputState.phase !== 'submitting'; },
+			run: () => this.permissionPicker.show(),
+		}, model.onDidChange, {
+			getActions: () => [...approvalModeDefinitions.map(definition => ({
+				id: definition.id,
+				label: localize(definition.label.key, definition.label.text),
+				tooltip: localize(definition.description.key, definition.description.text),
+				enabled: true,
+				checked: definition.id === model.inputState.approvalMode,
+				run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
+			})), ...(approvalEnvironment ? [{
+				id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
+				label: localize('approvalEnvironment.title', 'Prepare review environment…'),
+				enabled: true,
+				run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
+			}] : [])],
+		}));
+		this.permissionPicker.render(permissionHost);
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
 			if (hint) announceStatus(hint);
 		}));
 		this.bindDraftStorage(model, {
-			read: identity => readNewChatDraftState(storage, identity),
-			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
+			read: identity => readNewChatDraftState(storage, identity, chatInputStatePersistence),
+			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
-		this._register(model.onDidChange(() => this.updatePermission()));
-		this.updatePermission();
+	}
+
+	protected override getAccessibilityHelpContent(): string {
+		return super.getAccessibilityHelpContent() + '\n' + getSessionsChatAccessibilityHelp();
 	}
 
 	/** Composition slots owned by this input; the Sessions widget places surrounding surfaces. */
@@ -113,15 +142,6 @@ export class NewChatInputWidget extends ChatInputPart {
 
 	public override openPermissionPicker(): void {
 		if (!this.isDisposed && this.visible && !this.model.inputState.aiDisabled) this.permissionPicker.show();
-	}
-
-	private updatePermission(): void {
-		const permission = this.model.inputState.approvalMode;
-		const definition = approvalModeDefinition(permission);
-		const label = localize(definition.label.key, definition.label.text);
-		this.permissionButton.textContent = label;
-		this.permissionButton.setAttribute('aria-label', localize('sessions.chat.permission.label', 'Permissions: {0}', label));
-		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';
 	}
 
 }

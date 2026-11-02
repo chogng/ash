@@ -299,6 +299,7 @@ fn turn_metadata(turn: &ash_protocol::Turn) -> ash_protocol::Turn {
         items: Vec::new(),
         plan: turn.plan.clone(),
         pending_interaction: turn.pending_interaction.clone(),
+        started_tool_call_ids: turn.started_tool_call_ids.clone(),
         error: turn.error.clone(),
     }
 }

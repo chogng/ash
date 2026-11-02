@@ -1,12 +1,9 @@
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
-import { isNode } from '../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import {
 	getFlatContextMenuActions,
-	resolveAlternativeMenuActions,
-	shouldUseAlternativeMenuActions,
 } from '../../actions/browser/menuEntryActionViewItem.js';
 import { MenuId, IMenuService } from '../../actions/common/actions.js';
 import { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
@@ -76,13 +73,7 @@ export function transformContextMenuDelegate(
 	return {
 		...delegate,
 		getActions: () => {
-			const targetWindow = getAnchorWindow(delegate.getAnchor());
-			const explicit = delegate.getActions
-				? resolveAlternativeMenuActions(
-					delegate.getActions(),
-					shouldUseAlternativeMenuActions(targetWindow),
-				)
-				: [];
+			const explicit = delegate.getActions?.() ?? [];
 			if (!('menuId' in delegate) || !(delegate.menuId instanceof MenuId)) {
 				return trimSeparators(explicit);
 			}
@@ -92,17 +83,10 @@ export function transformContextMenuDelegate(
 					delegate.menuActionOptions,
 					delegate.contextKeyService ?? globalContextKeyService,
 				),
-				undefined,
-				targetWindow,
 			);
 			return trimSeparators(Separator.join([...explicit], [...contributed]));
 		},
 	};
-}
-
-function getAnchorWindow(anchor: ReturnType<IContextMenuDelegate['getAnchor']>): Window {
-	if (isNode(anchor)) return anchor.ownerDocument.defaultView ?? window;
-	return anchor.targetWindow ?? window;
 }
 
 function trimSeparators(actions: readonly IAction[]): readonly IAction[] {

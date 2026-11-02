@@ -1,3 +1,4 @@
+import { URI } from '../../../../base/common/uri.js';
 import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
 import type { ServerNotification, SessionThreadReadResult, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
@@ -11,7 +12,7 @@ import type { AppServerConnectionState } from '../../common/appServerApi.js';
 import { AppServerRemoteError } from '../../common/appServerError.js';
 import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
-import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
+import { createAppServerAgentHostInputCompletionService, createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
 
 test('Agent role catalog maps source paths to the owning local or SSH editor resource', async () => {
 	const methods: string[] = [];
@@ -206,6 +207,41 @@ function messageSnapshot(text: string, sequence = 1): SessionThreadReadResult {
 		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: sequence, revision: sequence, entries: [{ type: 'item', entryId: 'item:answer', turnId: 'turn', item: { ...item }, transient: false }] },
 	};
 }
+
+for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test(`Thread ${operation} preserves detached pending interaction metadata without offering approval`, async () => {
+	const wire = messageSnapshot('Pending tool');
+	const pending = { requestId: 'approval-request', itemId: 'tool-item', kind: 'approval' as const, deadline: { expiresAtUnixMs: 1000 } };
+	wire.thread.turns[0].status = 'waitingForApproval';
+	wire.thread.turns[0].pendingInteraction = pending;
+	wire.thread.turns[0].startedToolCallIds = ['tool-call'];
+	using notifications = new Emitter<ServerNotification>();
+	const connection = {
+		onNotification: notifications.event,
+		async request(): Promise<unknown> {
+			const projection = { ...wire, updates: [] };
+			return operation === 'sessionSubscribe'
+				? { session: { sessionId: 'session', title: 'Pending tool', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [projection] }
+				: projection;
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerAgentThreadService(connection);
+	const offers: unknown[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	const params = { sessionId: 'session', threadId: 'thread' };
+	const result = operation === 'read' ? await api.read(params) : operation === 'subscribe' ? await api.subscribe({ ...params, afterSequence: 0 }) : (await createAppServerAgentSessionService(connection).subscribe({ sessionId: 'session' })).threadSnapshots[0];
+	const mapped = result.thread.turns[0].pendingInteraction;
+	assert.deepEqual(result.thread.turns[0].startedToolCallIds, ['tool-call']);
+	wire.thread.turns[0].startedToolCallIds.push('other-call');
+	assert.deepEqual(result.thread.turns[0].startedToolCallIds, ['tool-call']);
+	assert.deepEqual(mapped, pending);
+	assert.notEqual(mapped, pending);
+	assert.notEqual(mapped?.deadline, pending.deadline);
+	pending.itemId = 'another-item';
+	pending.deadline.expiresAtUnixMs = 2000;
+	assert.equal(mapped?.itemId, 'tool-item');
+	assert.equal(mapped?.deadline?.expiresAtUnixMs, 1000);
+	assert.deepEqual(offers, []);
+});
 
 for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test(`Thread ${operation} retains detached Item shells when immutable body values agree`, async () => {
 	const wire = messageSnapshot('Original body'.repeat(1024));
@@ -911,4 +947,94 @@ test('Queue adapters preserve durable identity and revision and map guarded muta
 	}
 	failure = new Error('Disconnected');
 	await assert.rejects(api.editQueued(target, { type: 'pause' }), error => error === failure);
+});
+
+suite('Host input completion connection ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	const request = { text: '😀 #file', offset: 8, directories: [{ resource: URI.parse('ash-remote://ssh+test/project'), target: { type: 'workspace' as const, dirId: 'granted' } }] };
+	const item = { label: '#file.ts', insertText: '#file.ts ', start: 3, end: 8, preselect: true, value: { kind: 'resource', directory: 0, path: 'file.ts', isDirectory: false } };
+
+	test('uses advertised triggers and maps authorized relative paths to the originating host URI', async () => {
+		using changed = new Emitter<AppServerConnectionState>();
+		let sent: unknown;
+		const api = createAppServerAgentHostInputCompletionService({
+			state: 'ready', generation: 1, onStateChange: changed.event, capabilities: { inputCompletions: { version: 1, triggerCharacters: ['#'] } },
+			request: async (method: { method: string; }, params: unknown) => { assert.equal(method.method, 'chat/input/completions'); sent = params; return { items: [item] }; },
+		} as unknown as AppServerProtocolClient);
+		assert.deepEqual(api.getTriggerCharacters(), ['#']);
+		const receiver = { changes: 0 };
+		using subscription = api.onDidChangeConnection(function (this: typeof receiver) { this.changes++; }, receiver);
+		changed.fire('ready');
+		assert.equal(receiver.changes, 1);
+		subscription.dispose();
+		const found = await api.complete(request, new AbortController().signal);
+		assert.deepEqual(sent, { text: request.text, offset: request.offset, directories: [request.directories[0]!.target], operationId: (sent as { operationId: string; }).operationId });
+		assert.equal(found[0]!.value.kind, 'resource');
+		assert.equal(found[0]!.value.kind === 'resource' && found[0]!.value.resource.toString(), 'ash-remote://ssh+test/project/file.ts');
+		assert.equal(changed.hasListeners(), false);
+	});
+
+	test('preserves a pinned skill reference when converting a host completion into a domain candidate', async () => {
+		using changed = new Emitter<AppServerConnectionState>();
+		const skill = { id: { source: 'host', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'a'.repeat(64) } };
+		const candidate = {
+			label: '/review', insertText: '/review ', start: 0, end: 3,
+			preselect: false, detail: null, value: { kind: 'skill', skill },
+		};
+		const api = createAppServerAgentHostInputCompletionService({
+			state: 'ready', generation: 1, onStateChange: changed.event,
+			capabilities: { inputCompletions: { version: 1, triggerCharacters: ['/'] } },
+			request: async () => ({ items: [candidate] }),
+		} as unknown as AppServerProtocolClient);
+		const found = await api.complete({ text: '/re', offset: 3, directories: [] }, new AbortController().signal);
+		assert.deepEqual(found, [{
+			label: '/review', insertText: '/review ', start: 0, end: 3,
+			preselect: false, detail: undefined, value: { kind: 'skill', skill },
+		}]);
+		assert.equal(changed.hasListeners(), false);
+	});
+
+	for (const replacement of [false, true]) {
+		test(`cancels on the owning connection and retires results after replacement ${replacement}`, async () => {
+			using changed = new Emitter<AppServerConnectionState>();
+			const response = new DeferredPromise<unknown>();
+			const calls: { method: string; operationId: string; }[] = [];
+			const connection = {
+				state: 'ready' as AppServerConnectionState, generation: 1, onStateChange: changed.event, capabilities: { inputCompletions: { version: 1, triggerCharacters: ['#'] } },
+				request: (method: { method: string; }, params: { operationId: string; }) => { calls.push({ method: method.method, operationId: params.operationId }); return calls.length === 1 ? response.p : Promise.resolve(null); },
+			};
+			const api = createAppServerAgentHostInputCompletionService(connection as unknown as AppServerProtocolClient);
+			const controller = new AbortController();
+			const pending = api.complete(request, controller.signal);
+			const rejected = assert.rejects(pending, isCancellationError);
+			if (replacement) { connection.state = 'restarting'; changed.fire(connection.state); connection.generation++; connection.state = 'ready'; changed.fire(connection.state); }
+			controller.abort();
+			assert.equal(calls.length, replacement ? 1 : 2);
+			if (!replacement) assert.equal(calls[0]!.operationId, calls[1]!.operationId);
+			await response.complete({ items: [item] });
+			await rejected;
+			assert.equal(changed.hasListeners(), false);
+		});
+	}
+
+	for (const invalid of [{ ...item, end: 99 }, { ...item, value: { ...item.value, directory: 9 } }, { ...item, value: { ...item.value, path: '../outside' } }, { ...item, value: { kind: 'skill', skill: { id: { source: 'host', name: 'review' }, version: { type: 'followLatest' } } } }]) {
+		test(`rejects an invalid host candidate ${JSON.stringify(invalid.value)}/${invalid.end}`, async () => {
+			using changed = new Emitter<AppServerConnectionState>();
+			const api = createAppServerAgentHostInputCompletionService({ state: 'ready', generation: 1, onStateChange: changed.event, capabilities: { inputCompletions: { version: 1, triggerCharacters: ['#'] } }, request: async () => ({ items: [invalid] }) } as unknown as AppServerProtocolClient);
+			await assert.rejects(api.complete(request, new AbortController().signal), TypeError);
+			assert.equal(changed.hasListeners(), false);
+		});
+	}
+});
+
+test('Turn adapters retain the owning composer literal command interpretation across RPC', async () => {
+	const requests: unknown[] = [];
+	const service = createAppServerAgentTurnService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return { type: 'turn', value: { turnId: 'turn', sequence: 1 } };
+		},
+	} as unknown as AppServerProtocolClient);
+	await service.start({ commandId: 'literal', sessionId: 'session', threadId: 'thread', expectedSequence: 0, mode: 'agent', commandInterpretation: 'literal', input: [{ type: 'text', text: '/init' }] });
+	assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ method: 'session/request', params: { commandId: 'literal', sessionId: 'session', request: { type: 'startTurn', commandInterpretation: 'literal', threadId: 'thread', expectedSequence: 0, mode: 'agent', input: [{ type: 'text', text: '/init' }] } } }]);
 });

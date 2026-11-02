@@ -12,8 +12,8 @@ import { IExtensionService } from '../../../src/ash/workbench/services/extension
 import { AppServerExtensionService } from '../../../src/ash/workbench/services/extensions/browser/appServerExtensionService.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
-import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
 import { WebWorkerExtensionHost } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { MainThreadImageEditors } from '../../../src/ash/workbench/api/browser/mainThreadImageEditors.js';
 import { MainThreadLocalization } from '../../../src/ash/workbench/api/browser/mainThreadLocalization.js';

@@ -1,6 +1,5 @@
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
-import { IRendererHostService } from '../../platform/renderer/common/rendererHost.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { IBrowserViewWorkbenchService } from '../../workbench/contrib/browserView/common/browserView.js';
 import { ElectronAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
@@ -55,7 +54,7 @@ import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-brows
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { parseWorkspace } from '../../platform/workspace/common/workspace.js';
-import { selectionFromWorkspace } from '../browser/workspaceSelection.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import { NativeWorkbenchStorageService } from '../../workbench/services/storage/electron-browser/storageService.js';
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
@@ -177,7 +176,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				createBrowserHost: documentClient
 					? services => {
 						const browsers = services.get(IBrowserViewWorkbenchService);
-						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IRendererHostService), services.get(IWorkspaceContextService));
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
 						const browserHost = registerAppServerBrowserHost(
 							documentClient!,
 							services.get(IPlaywrightService),
@@ -199,6 +198,9 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'chat.queuePickerRendering',
+					'workbench.contrib.btwSlashCommand',
+					'workbench.contrib.chatSideChat',
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
@@ -229,7 +231,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
-					'workbench.contrib.chatEnablement',
+					'workbench.contrib.chatSetup',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
@@ -241,6 +243,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.browserView',
 					'workbench.contrib.canvases',
 					'sessions.contrib.canvases',
+					'sessions.contrib.remoteCanvases',
 					'workbench.contrib.browserView.windowZoomSynchronizer',
 					'workbench.contrib.browserView.autoReload',
 					'workbench.contrib.sessionBrowserViewController',

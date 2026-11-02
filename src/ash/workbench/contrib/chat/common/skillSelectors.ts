@@ -46,7 +46,7 @@ export class SkillSelectorCatalog {
 		return this.entries.filter(skill => skill.name.startsWith(prefix));
 	}
 
-	public referencesIn(text: string): readonly SkillReference[] {
+	public referencesIn(text: string, captured: readonly SkillReference[] = []): readonly SkillReference[] {
 		const references: SkillReference[] = [];
 		const selectedNames = new Set<string>();
 		for (const match of text.matchAll(SKILL_TOKEN)) {
@@ -54,12 +54,12 @@ export class SkillSelectorCatalog {
 			if (selectedNames.has(name)) {
 				continue;
 			}
-			const entry = this.entriesByName.get(name);
-			if (!entry) {
+			const reference = captured.find(reference => reference.id.name === name) ?? this.entriesByName.get(name)?.skill;
+			if (!reference) {
 				continue;
 			}
 			selectedNames.add(name);
-			references.push(entry.skill);
+			references.push(reference);
 		}
 		return Object.freeze(references);
 	}

@@ -264,6 +264,7 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
     let command_id = ash_protocol::CommandId::new("handoff-queued").unwrap();
     let message = store
         .enqueue(&queue::QueueInput {
+            command_interpretation: ash_protocol::CommandInterpretation::Product,
             command_id: command_id.clone(),
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),

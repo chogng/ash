@@ -3,7 +3,6 @@ import { type IAppServerApi } from '../../agentHost/common/appServerApi.js';
 import { type AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
 import { type DebugSessionAdmission, type DebugSessionRelation, type DebugConsoleSnapshot, type DebugWorkspaceState, type DebugWorkspaceResult, type DebugWorkspaceEdit, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugInspection, type DebugInspectionResult, type DebugSessionInitializeOptions, type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService, type IDebugAdapterProcessStartOptions } from '../common/debugAdapterProcessService.js';
-import { type RendererHostCapabilities } from '../../renderer/common/rendererHost.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { localize } from '../../../nls.js';
 
@@ -113,7 +112,7 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 }
 
 /** Code product contribution for the connected Vite renderer host. */
-export function createAppServerDebugAdapterCapability(connection: AppServerProtocolClient, appServer: IAppServerApi): RendererHostCapabilities {
+export function createAppServerDebugAdapterCapability(connection: AppServerProtocolClient, appServer: IAppServerApi): { readonly debugAdapter: IDebugAdapterProcessService; } {
 	return { debugAdapter: new AppServerDebugAdapterProcessService(connection, appServer) };
 }
 

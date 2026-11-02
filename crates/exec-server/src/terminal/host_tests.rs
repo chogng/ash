@@ -2,6 +2,34 @@ use super::*;
 
 const TEST_LIFETIME: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+#[test]
+fn unused_hosted_facades_do_not_start_a_terminal_host() {
+    let root = tempfile::tempdir().unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    // An absent executable makes any eager spawn fail. A workspace must still
+    // create its configuration facade and query idle state without starting it.
+    let service = TerminalService::hosted(
+        grant.authorize(Permission::ExecuteCommands).unwrap(),
+        root.path(),
+        &root.path().join("not-started-terminal-host"),
+    )
+    .unwrap();
+    let _ = service.profiles();
+    assert_eq!(service.active_count(), 0);
+    service.close_owner(1);
+    service.terminate_all();
+    assert_eq!(service.active_count(), 0);
+    assert_eq!(
+        service.environment_snapshot(),
+        Err(TerminalError::OperationFailed),
+        "the first operation requiring the host must still report a launch failure"
+    );
+}
+
 struct Peer {
     service: Option<TerminalService>,
     grant: Grant,
@@ -43,7 +71,7 @@ impl Peer {
         let mut service =
             TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
         service.backend = TerminalBackend::Hosted(Client {
-            stream: Mutex::new(BufReader::new(stream)),
+            stream: Mutex::new(Some(BufReader::new(stream))),
             disconnected: AtomicBool::new(false),
             connection: None,
             authorizations: Mutex::default(),

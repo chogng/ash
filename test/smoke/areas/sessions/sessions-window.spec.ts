@@ -1143,7 +1143,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
 	const permissions = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
-	const permissionMenu = page.getByRole('menu', { name: 'Permissions', exact: true });
+	const permissionMenu = page.locator('.ash-chat-permission-menu');
 	await expect(permissionMenu.getByRole('menuitemradio')).toHaveCount(3);
 	await expect(permissionMenu.getByRole('menuitemradio', { name: 'Manual', exact: true })).toHaveAttribute(
 		'aria-checked',
@@ -1152,8 +1152,8 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(permissionMenu.getByRole('menuitemradio', { name: 'Auto', exact: true })).toHaveAccessibleDescription(
 		'Review operations automatically; ask you when uncertain',
 	);
-	await expect(permissionMenu.locator('.ash-sessions-permission-shortcut')).toHaveText(['1', '2', '3']);
-	await expect(permissionMenu.getByRole('menuitem', { name: 'Review model…', exact: true })).toBeVisible();
+	await expect(permissionMenu.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
+	await expect(permissionMenu.getByRole('menuitem')).toHaveCount(0);
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/press 1, 2, or 3/u);
 	await page.keyboard.press('Escape');
@@ -3280,13 +3280,11 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	let composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').first();
 	let editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep this draft');
-	await composer
-		.locator('input[type="file"]')
-		.setInputFiles({
-			name: 'context.ts',
-			mimeType: 'text/plain',
-			buffer: Buffer.from('export const code = true;'),
-		});
+	await composer.getByRole('button', { name: 'Add context', exact: true }).click();
+	const upload = page.waitForEvent('filechooser');
+	await page.getByRole('dialog', { name: 'Search attachments', exact: true }).getByRole('combobox').fill('Attach files');
+	await page.keyboard.press('Enter');
+	await (await upload).setFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const code = true;') });
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('context.ts');
 	const originalInput = await editor.input.elementHandle();
 	const identity = await page

@@ -14,7 +14,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
-import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 
 /** Formats resources using their execution owner's path conventions. */
 export class LabelService extends Disposable implements ILabelService {
@@ -26,10 +26,10 @@ export class LabelService extends Disposable implements ILabelService {
 	constructor(
 		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@IPathService private readonly paths: IPathService,
-		@IRendererHostService private readonly host: IRendererHost,
+		@IAppServerApi private readonly appServer: IAppServerApi,
 	) {
 		super();
-		const subscription = host.appServer.onConnectionState(() => this.formatterChangeEmitter.fire({ scheme: Schemas.file }));
+		const subscription = appServer.onConnectionState(() => this.formatterChangeEmitter.fire({ scheme: Schemas.file }));
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
@@ -92,7 +92,7 @@ export class LabelService extends Disposable implements ILabelService {
 		if (resource && (resource.scheme !== Schemas.file || resource.path.startsWith('/@browser/'))) {
 			return OperatingSystem.Linux;
 		}
-		return this.host.hasAppServer ? this.host.appServer.operatingSystem ?? OperatingSystem.Linux : operatingSystem;
+		return this.appServer.isAvailable ? this.appServer.operatingSystem ?? OperatingSystem.Linux : operatingSystem;
 	}
 
 	registerFormatter(formatter: ResourceLabelFormatter): IDisposable {

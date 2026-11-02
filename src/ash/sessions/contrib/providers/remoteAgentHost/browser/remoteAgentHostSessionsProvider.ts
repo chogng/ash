@@ -1,11 +1,12 @@
-import { DisposableMap, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { agentHostConnectionAddress, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { DisposableMap, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
-import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
+import { IAgentSessionService, IAgentTurnService, IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
@@ -19,6 +20,7 @@ interface IRemoteSessionsProviderHost extends AppServerSessionsProviderHost {
 
 /** Publishes one host's Sessions and mounts their directories on that same connection. */
 export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
+	readonly ownsSessionFileSystem = true;
 	private readonly mounts = this._register(new DisposableMap<string, IDisposable>());
 
 	constructor(
@@ -27,14 +29,13 @@ export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
 		@IAgentSessionService sessionApi: IAgentSessionService,
 		@IAgentModelsService modelApi: IAgentModelsService,
 		@IAgentTurnService turnApi: IAgentTurnService,
-		@IServerEventApi events: IServerEventApi,
-		@IRendererHostService private readonly hostApi: IRendererHost,
+		@IAgentConnection private readonly hostApi: IAgentConnection,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IDevContainerAgentHostService containers: IDevContainerAgentHostService,
 		@IAgentHostFileSystemService private readonly files: IAgentHostFileSystemService,
 		@ISessionsManagementService private readonly management: ISessionsManagementService,
 	) {
-		super(remoteHost, appServer, sessionApi, modelApi, turnApi, events, hostApi, instantiation, containers);
+		super(remoteHost, appServer, sessionApi, modelApi, turnApi, hostApi, instantiation, containers);
 		this._register(management.onDidChange(() => this.synchronizeDirectories()));
 		this.synchronizeDirectories();
 	}
@@ -62,13 +63,13 @@ export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
 			this.mounts.set(key, this.files.registerAuthority(directory.uri.authority, {
 				api: this.hostApi.fs, resourceApi: this.hostApi.resource,
 				directories: () => [directory],
-				onDidChange: listener => {
-					const subscription = this.hostApi.events.subscribe(event => {
-						if (event.method === 'fs/changed') listener(event.params);
-					});
-					return toDisposable(() => subscription.dispose());
-				},
 			}));
 		}
 	}
+}
+
+/** Stable Sessions namespace shared by every domain presented for this host. */
+export function remoteAgentHostProviderId(info: IAgentHostConnectionInfo): string {
+	const connection = info.remoteConnection!;
+	return isSSHAgentHost(connection) ? `ssh-agent-host:${JSON.stringify([connection.host, connection.workspace])}` : `${connection.type}-agent-host:${connection.type === 'tunnel' ? info.directory!.uri.authority : agentHostConnectionAddress(connection)}`;
 }

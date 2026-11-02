@@ -1,4 +1,4 @@
-import { BrowserPathService } from '../../services/path/browser/pathService.js';
+import { createTestPathService, testAppServerApi } from '../common/workbenchHostTestServices.js';
 import { createDisconnectedRendererApi } from '../../browser/rendererApi.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
 import { IUntitledTextEditorService } from '../../services/untitled/common/untitledTextEditorService.js';
@@ -172,6 +172,6 @@ test('untitled resource labels follow the draft name and keep the resource ident
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api, appServer: { ...api.appServer, operatingSystem: os, isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }

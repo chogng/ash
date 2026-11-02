@@ -5,6 +5,7 @@ import { cp, mkdtemp, readFile, readdir, rm, stat, unlink, writeFile } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test, type TestContext } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { createLogger, createServer, type HMRPayload } from 'vite';
 import { localizationPlugin } from '../../resources/localization.ts';
@@ -15,11 +16,24 @@ import { productIconsPlugin } from './productIconsPlugin.ts';
 const repository = resolve(import.meta.dirname, '../../..');
 const execute = promisify(execFile);
 
-async function iconFixture(t: TestContext) {
+async function iconFixture(t: TestContext, minimal = false) {
 	const root = await mkdtemp(join(tmpdir(), 'ash-resource-watch-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const sourceDirectory = join(root, 'icons');
 	await cp(join(repository, 'resources/icons'), sourceDirectory, { recursive: true });
+	if (minimal) {
+		// Exercise the real compiler and both faces with its required variable glyphs.
+		const names = ['add', 'code', 'projects', 'clockface'];
+		for (const file of await readdir(sourceDirectory)) {
+			if (file.endsWith('.svg') && !names.includes(file.slice(0, -4))) { await unlink(join(sourceDirectory, file)); }
+		}
+		const profilePath = join(sourceDirectory, 'font/sessions.json');
+		const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+		for (const field of ['outlinedFills', 'outlineShapes', 'omitShapes', 'insetStrokes', 'sourceWidths']) {
+			profile[field] = Object.fromEntries(Object.entries(profile[field] ?? {}).filter(([name]) => names.includes(name)));
+		}
+		await writeFile(profilePath, JSON.stringify(profile));
+	}
 	return { root, sourceDirectory, outputFile: join(root, 'icons.ts'), fontDirectory: join(root, 'fonts') };
 }
 
@@ -114,18 +128,7 @@ test('Vite middleware server closes the icon watcher through the plugin lifecycl
 });
 
 test('failed resource preparation during a Vite restart keeps HTTP available and source repair recovers', { timeout: 90_000 }, async t => {
-	const fixture = await iconFixture(t);
-	// Keep the real compiler and both font faces, with only its four required variable glyphs.
-	const names = ['add', 'code', 'projects', 'clockface'];
-	for (const file of await readdir(fixture.sourceDirectory)) {
-		if (file.endsWith('.svg') && !names.includes(file.slice(0, -4))) { await unlink(join(fixture.sourceDirectory, file)); }
-	}
-	const profilePath = join(fixture.sourceDirectory, 'font/sessions.json');
-	const profile = JSON.parse(await readFile(profilePath, 'utf8'));
-	for (const field of ['outlinedFills', 'outlineShapes', 'omitShapes', 'insetStrokes', 'sourceWidths']) {
-		profile[field] = Object.fromEntries(Object.entries(profile[field] ?? {}).filter(([name]) => names.includes(name)));
-	}
-	await writeFile(profilePath, JSON.stringify(profile));
+	const fixture = await iconFixture(t, true);
 	await writeFile(join(fixture.root, 'index.html'), '<html><body>Resource server is available</body></html>');
 	const events = new EventEmitter();
 	const logger = createLogger('silent');
@@ -167,7 +170,7 @@ test('failed resource preparation during a Vite restart keeps HTTP available and
 });
 
 test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last good outputs on failure, and recover', { timeout: 180_000 }, async t => {
-	const fixture = await iconFixture(t);
+	const fixture = await iconFixture(t, true);
 	const events = new EventEmitter();
 	const reloads: unknown[] = [];
 	async function nextReload(): Promise<unknown[]> {
@@ -207,6 +210,12 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 		}
 	};
 	await server.listen();
+	// Initial discovery ignores existing files; wait for the source subscription
+	// before importing SVGs, even if the watcher's ready event already fired.
+	const subscribed = () => ['add.svg', 'code.svg', 'projects.svg', 'clockface.svg'].every(name => server.watcher.getWatched()[fixture.sourceDirectory]?.includes(name));
+	const watchDeadline = Date.now() + 10_000;
+	while (!subscribed() && Date.now() < watchDeadline) await delay(20);
+	assert.ok(subscribed(), 'The SVG source directory must be watched before imports');
 	const original = JSON.parse(await readFile(join(fixture.sourceDirectory, 'font/manifest.json'), 'utf8'));
 	const paths = [
 		fixture.outputFile,

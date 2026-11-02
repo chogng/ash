@@ -2,8 +2,8 @@ import { extensionHostTaskSnapshot, extensionHostWorkflowProviderId, normalizeTa
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, DisposableMap } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/extensions/browser/extensionHostProtocol.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../common/extHost.protocol.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ITaskService } from '../../contrib/tasks/common/taskService.js';
@@ -91,7 +91,7 @@ export class MainThreadTask extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		if (operation.operation === 'fetchTasks') {
-			const catalog = await this.tasks.refresh();
+			const catalog = await this.tasks.getWorkspaceTasks();
 			throwIfCancelled(signal);
 			const tasks = catalog.filter(task => (operation.version === null || operation.version === (task.configuration?.version ?? '2.0.0')) && (operation.taskType === null || operation.taskType === this.definition(task).type));
 			return { result: 'tasks', sequence: this.sequence, tasks: tasks.map(task => extensionHostTaskSnapshot(task, this.workspace)), executions: this.tasks.activeRuns.map(run => this.executionSnapshot(run)) };

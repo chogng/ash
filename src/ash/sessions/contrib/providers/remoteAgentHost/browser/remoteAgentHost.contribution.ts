@@ -1,12 +1,11 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
-import { agentHostConnectionAddress } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { RemoteAgentHostSessionsProvider } from './remoteAgentHostSessionsProvider.js';
+import { RemoteAgentHostSessionsProvider, remoteAgentHostProviderId } from './remoteAgentHostSessionsProvider.js';
 import { createAgentHostSessionScope } from '../../agentHost/browser/agentHostSessionScope.js';
 import { WSLAgentHostContribution } from './wslAgentHost.contribution.js';
 import { TunnelAgentHostContribution } from './tunnelAgentHost.contribution.js';
@@ -24,14 +23,14 @@ export class RemoteAgentHostContribution extends Disposable {
 	private readonly scopes = new Map<string, DisposableStore>();
 	private readonly scopeLifetimes = this._register(new DisposableStore());
 	constructor(
-		@IRendererHostService private readonly renderer: IRendererHost,
+		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IAgentHostConnectionsService private readonly hosts: IAgentHostConnectionsService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		if (!renderer.agentHosts) return;
+		if (!remoteHosts.isAvailable) return;
 		this._register(toDisposable(() => this.scopes.clear()));
 		this._register(hosts.onDidChangeConnections(() => this.synchronizeScopes()));
 		this.synchronizeScopes();
@@ -56,7 +55,7 @@ export class RemoteAgentHostContribution extends Disposable {
 				this.scopes.delete(info.authority);
 				this.scopeLifetimes.delete(resources);
 				resources.dispose();
-				this.renderer.agentHosts!.disconnect(info.id);
+				this.remoteHosts.disconnect(info.id);
 				if (!isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			}
 		}
@@ -65,12 +64,12 @@ export class RemoteAgentHostContribution extends Disposable {
 	private registerScope(info: IAgentHostConnectionInfo, resources: DisposableStore): void {
 		const connection = info.remoteConnection!;
 		const api = info.connection!;
-		resources.add(toDisposable(() => this.renderer.agentHosts?.disconnect(info.id)));
+		resources.add(toDisposable(() => this.remoteHosts.disconnect(info.id)));
 		const root = info.directory!.uri;
 		// This contribution is the scope owner. Its providers borrow only this connection's domains.
 		const services = createAgentHostSessionScope(this.instantiation, api, resources);
 		const provider = resources.add(services.createInstance(RemoteAgentHostSessionsProvider, {
-			id: isSSHAgentHost(connection) ? `ssh-agent-host:${JSON.stringify([connection.host, connection.workspace])}` : `${connection.type}-agent-host:${connection.type === 'tunnel' ? root.authority : agentHostConnectionAddress(connection)}`, label: connection.name,
+			id: remoteAgentHostProviderId(info), label: connection.name,
 			root, directory: info.directory!,
 			workspace: () => isSSHAgentHost(connection) ? { type: 'ssh', host: connection.host, root: connection.workspace } : { type: 'remote', authority: root.authority, root: connection.workspace },
 			selectWorkspace: async () => undefined,

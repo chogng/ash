@@ -1,3 +1,4 @@
+import { copyHostOutput } from './host.ts';
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
@@ -70,7 +71,8 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 	metadata.main = 'dist/main/src/main.js';
 	await writeFile(join(appStage, 'package.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 	for (const part of ['main', 'preload', 'renderer']) {
-		await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
+		if (part === 'main') await copyHostOutput(join(buildRoot, part), join(appStage, 'dist', part));
+		else await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
 	}
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 

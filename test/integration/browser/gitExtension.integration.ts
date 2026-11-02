@@ -39,9 +39,9 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { withEnabledBuiltInExtensions } from '../../../src/ash/platform/extensions/browser/extensionApi.js';
 import { createBuiltinExtensionFixture } from '../../fixtures/browser/builtinExtensionsFixture.js';
 import { WebWorkerExtensionHost as BrowserExtensionHostApi } from '../../../src/ash/workbench/services/extensions/browser/webWorkerExtensionHost.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
 import { createExtensionHostInitialization } from '../../../src/ash/workbench/services/extensions/common/extensionHostProtocol.js';
-import { type ExtensionClientSource, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { type ExtensionClientSource, type JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { type ExtensionClientOperation, type ExtensionClientResult } from '../../../src/ash/workbench/api/common/extHost.protocol.js';
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
@@ -92,7 +92,7 @@ import scmChineseMessages from '../../../extensions/language-pack-zh-cn/translat
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
-import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { normalizeExtensionHostPayload } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
@@ -275,7 +275,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
+}, { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
 	{ groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart,
 	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };

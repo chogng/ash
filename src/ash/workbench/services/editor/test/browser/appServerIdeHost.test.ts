@@ -99,10 +99,10 @@ test('IDE registration and context use the live editor model and filter unrelate
 	using cleanup = f.lifetime;
 	const registration = f.transport.requests[0]!.params as { windowKey: string; };
 	assert.match(registration.windowKey, /^[0-9a-f]{32}$/i);
-	assert.deepEqual(f.transport.requests[0]!.params, { type: 'register', title: 'Project', roots: ['/project'], windowKey: registration.windowKey });
+	assert.deepEqual(f.transport.requests[0]!.params, { type: 'register', title: 'Project', roots: [URI.file('/project').fsPath], windowKey: registration.windowKey });
 	assert.equal(await f.host.readTerminalWindowKey(), registration.windowKey);
 	const first = await f.transport.call({ type: 'context', roots: ['/project'] });
-	assert.deepEqual(first.result, { type: 'context', context: { activeFile: { path: '/project/lib.rs', version: 1, selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }] }, openTabs: ['/project/lib.rs'], dirtyFiles: ['/project/lib.rs'] } });
+	assert.deepEqual(first.result, { type: 'context', context: { activeFile: { path: URI.file('/project/lib.rs').fsPath, version: 1, selections: [{ startLine: 1, startColumn: 1, endLine: 1, endColumn: 8, text: 'unsaved', truncated: false }] }, openTabs: [URI.file('/project/lib.rs').fsPath], dirtyFiles: [URI.file('/project/lib.rs').fsPath] } });
 	f.model.setValue('changed selection');
 	const second = await f.transport.call({ type: 'context', roots: ['/project'] });
 	const result = second.result as { context: { activeFile: { version: number; selections: Array<{ text: string; }>; }; }; };
@@ -116,7 +116,7 @@ test('IDE display uses the existing file and diff editor owners and rejects anot
 	const f = await fixture();
 	using cleanup = f.lifetime;
 	assert.deepEqual((await f.transport.call({ type: 'openFile', path: '/project/lib.rs', line: 4 })).result, { type: 'opened' });
-	assert.equal(f.opened[0]!.input.resource.fsPath, '/project/lib.rs');
+	assert.equal(f.opened[0]!.input.resource.fsPath, URI.file('/project/lib.rs').fsPath);
 	assert.equal(f.opened[0]!.options!.selection!.startLineNumber, 4);
 	assert.deepEqual((await f.transport.call({ type: 'openReview', original: '/project/old.rs', modified: '/project/lib.rs' })).result, { type: 'opened' });
 	assert.ok(isDiffEditorInput(f.opened[1]!.input));

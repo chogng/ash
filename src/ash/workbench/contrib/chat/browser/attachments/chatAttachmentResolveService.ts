@@ -1,3 +1,8 @@
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { createUuid } from '../../../../../base/common/uuid.js';
+import { getMediaMime, Mimes } from '../../../../../base/common/mime.js';
+import { getPathForFile } from '../../../../../platform/dnd/browser/dnd.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import type { LanguageWorkspaceSymbol } from '../../../../../editor/common/languages.js';
 import { withSelection } from '../../../../../platform/opener/common/opener.js';
@@ -7,7 +12,7 @@ import { CancellationError } from '../../../../../base/common/errors.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { basename, extUri } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
-import type { URI } from '../../../../../base/common/uri.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -239,4 +244,67 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		const kind = isDirectory ? 'directory' : selection?.endLineNumber === undefined ? 'file' : 'codeSelection';
 		return { id: `file:${extUri.getComparisonKey(resource)}`, kind, resource, name, resolve: async () => ({ name, content }) };
 	}
+}
+
+/** Captures browser/native files for both file selection and drag-and-drop admission. */
+export async function createChatFileAttachments(
+	files: readonly File[],
+	signal: AbortSignal,
+	supportsImages: () => boolean,
+	attachments: Pick<IChatAttachmentResolveService, 'resolveImageAttachContext'>,
+): Promise<readonly ChatContextAttachment[]> {
+	const batch = new AbortController();
+	signal = AbortSignal.any([signal, batch.signal]);
+	try {
+		const prepared = await Promise.all(files.map(async file => {
+			if (signal.aborted) throw new CancellationError();
+			const path = getPathForFile(file);
+			const source = path ? { resource: URI.file(path) } : {};
+			// Native file transfers can omit MIME or supply only a generic binary type.
+			const mimeType = !file.type || file.type === Mimes.binary ? getMediaMime(file.name) : file.type;
+			const image = /^image\/(png|jpeg|gif|webp)$/u.test(mimeType ?? '');
+			if (image && !supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+			// Bound image allocation before reading; image processing also bounds the encoded result.
+			if (image && file.size > 20 * 1024 * 1024) throw new Error(localize('chat.image.tooLarge', '{0} exceeds the 20 MB image limit', file.name));
+			const bytes = await readFile(file, signal);
+			if (!bytes.length) throw new Error(localize('chat.attach.empty', '{0} is empty', file.name));
+			if (image) {
+				const [attachment] = await attachments.resolveImageAttachContext([{ name: file.name, data: bytes, mimeType, ...source }], signal);
+				if (signal.aborted) throw new CancellationError();
+				if (!supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+				return attachment!;
+			}
+			let content: string;
+			try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+			catch { throw new Error(localize('chat.attach.binary', '{0} must be a UTF-8 text file or a PNG, JPEG, GIF, or WebP image', file.name)); }
+			if (content.includes('\0') || !content.trim()) throw new Error(localize('chat.context.invalidText', '{0} must contain nonempty UTF-8 text', file.name));
+			return { id: createUuid(), kind: 'file', name: file.name, ...source, resolve: async () => ({ name: file.name, content }) };
+		}));
+		// A text read can outlive image decoding; apply the current policy to the complete batch.
+		if (signal.aborted) throw new CancellationError();
+		if (prepared.some(attachment => attachment.kind === 'image') && !supportsImages()) {
+			throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+		}
+		return prepared;
+	} catch (error) {
+		batch.abort();
+		throw error;
+	}
+}
+
+function readFile(file: File, signal: AbortSignal): Promise<Uint8Array> {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) { reject(new CancellationError()); return; }
+		const reader = new FileReader();
+		const resources = new DisposableStore();
+		const finish = (bytes?: Uint8Array, error?: unknown): void => {
+			resources.dispose();
+			if (bytes) resolve(bytes); else reject(error);
+		};
+		resources.add(addDisposableListener(reader, 'load', () => finish(new Uint8Array(reader.result as ArrayBuffer))));
+		resources.add(addDisposableListener(reader, 'error', () => finish(undefined, reader.error)));
+		resources.add(addDisposableListener(reader, 'abort', () => finish(undefined, new CancellationError())));
+		resources.add(addDisposableListener(signal, 'abort', () => reader.abort()));
+		try { reader.readAsArrayBuffer(file); } catch (error) { finish(undefined, error); }
+	});
 }

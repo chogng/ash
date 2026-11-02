@@ -75,7 +75,11 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await page.keyboard.insertText('Prepare a presentation');
 	const coworkInput = await editor.input.elementHandle();
 	const composer = conversation.locator('.ash-sessions-cowork-input');
-	await composer.locator('input[type="file"]').setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
+	await composer.getByRole('button', { name: 'Add context', exact: true }).click();
+	const upload = page.waitForEvent('filechooser');
+	await page.getByRole('dialog', { name: 'Search attachments', exact: true }).getByRole('combobox').fill('Attach files');
+	await page.keyboard.press('Enter');
+	await (await upload).setFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	const identity = await conversation.locator('.ash-cowork').getAttribute('data-untitled-session-id');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();

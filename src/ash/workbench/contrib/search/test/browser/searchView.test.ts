@@ -1,9 +1,9 @@
+import { createTestPathService, testAppServerApi } from '../../../../test/common/workbenchHostTestServices.js';
 import { expect } from '@playwright/test';
 import type { ActivityBarPosition } from '../../../../common/configuration.js';
 import type { ViewContainerLocation } from '../../../../common/views.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
-import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
@@ -1603,8 +1603,8 @@ test('Expand All palette follows late batches, preserves hidden retained state a
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api, appServer: { ...api.appServer, operatingSystem: os, isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }
 
 suite('search browser component', () => {

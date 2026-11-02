@@ -1,3 +1,4 @@
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { JSDOM } from 'jsdom';
@@ -10,8 +11,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/automations/common/automation.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
@@ -134,7 +134,7 @@ function fixture() {
 			},
 		};
 		const scope = resources.add(new InstantiationService());
-		scope.registerInstance(IRendererHostService, { automation: backend } as unknown as IRendererHost);
+		scope.registerInstance(IAgentConnection, { automation: backend } as IAgentConnection);
 		const store = resources.add(scope.createInstance(AgentHostAutomationStore, id, connection));
 		const registration = resources.add(registry.registerProvider({ id, label: id, order: 0, automations: store } as unknown as ISessionsProvider));
 		return {

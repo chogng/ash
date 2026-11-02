@@ -8,6 +8,12 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID } from '../../common/chat.js';
+import { clearChatEditor } from './chatClear.js';
+import { ActiveEditorContext } from '../../../../common/contextkeys.js';
+import { ChatEditorInput } from '../widgetHosts/editor/chatEditorInput.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { resolveCommandsContext } from '../../../../browser/parts/editor/editorCommandsContext.js';
 
 export class NewChatAction extends Action2 {
 	constructor() {
@@ -37,6 +43,24 @@ export class NewChatAction extends Action2 {
 
 export function registerNewChatActions(): void {
 	registerAction2(NewChatAction);
+	registerAction2(class NewChatEditorAction extends Action2 {
+		constructor() {
+			const when = ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID));
+			super({
+				id: 'workbench.action.chatEditor.newChat',
+				title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),
+				icon: Lxicon.add, precondition: when,
+				menu: { id: MenuId.EditorTitle, group: 'navigation', order: 0, when },
+			});
+		}
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return;
+			const group = context === undefined ? undefined : resolveCommandsContext([context], accessor.get(IEditorGroupsService)).groupedEditors[0]?.group;
+			const target = group?.activeInput;
+			if (context !== undefined && !(target instanceof ChatEditorInput)) return;
+			await clearChatEditor(accessor, target as ChatEditorInput | undefined);
+		}
+	});
 	MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
 		submenu: MenuId.ChatNewMenu,
 		title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),

@@ -12,7 +12,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { IChatService, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary } from '../../../../../workbench/services/chat/common/chatService.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
@@ -29,6 +29,13 @@ import { IEditorGroupsService } from '../../../../../workbench/services/editor/c
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from '../../../../../base/common/event.js';
+import { EditorPanes } from '../../../../../workbench/browser/editor.js';
+import { EditorPane, EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
+import type { MultiDiffEditorInput } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+
+const emptySummary: ThreadChangesSummary = { sequence: 1, revision: 'empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] };
 
 suite('Changes editor overlapping opens', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -42,14 +49,14 @@ suite('Changes editor overlapping opens', () => {
 		using configuration = new InMemoryConfigurationService();
 		services.registerInstance(IConfigurationService, configuration);
 		using changes = new Emitter<{ sessionId: string; threadId: string; }>();
-		const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
+		const pending = new DeferredPromise<ThreadChangesSummary>();
 		let requests = 0;
 		const counts: (number | undefined)[] = [];
 		services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => { counts.push(count); } } as unknown as ISessionChangesService);
 		services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'a' }] } as unknown as ISessionsManagementService);
 		services.registerInstance(IChatService, {
-			onDidUpdateTurnChanges: changes.event, onDidBecomeReady: Event.None,
-			listTurnChanges: async () => ++requests === 1 ? pending.p : [],
+			onDidUpdateThread: Event.None, onDidUpdateTurnChanges: changes.event, onDidBecomeReady: Event.None,
+			readThreadChanges: async () => ++requests === 1 ? pending.p : emptySummary,
 		} as unknown as IChatService);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		using pane = services.createInstance(SessionChangesEditor, {});
@@ -89,7 +96,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	using context = new ContextKeyService();
 	using changes = new Emitter<{ sessionId: string; threadId: string; }>();
 	using ready = new Emitter<void>();
-	const pending = new DeferredPromise<readonly TurnChangeSetSummary[]>();
+	const pending = new DeferredPromise<ThreadChangesSummary>();
 	let requests = 0;
 	let failed = false;
 	services.registerInstance(IConfigurationService, configuration);
@@ -97,9 +104,9 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'a' }] } as unknown as ISessionsManagementService);
 	services.registerInstance(IChatService, {
-		onDidUpdateTurnChanges: changes.event,
+		onDidUpdateThread: Event.None, onDidUpdateTurnChanges: changes.event,
 		onDidBecomeReady: ready.event,
-		listTurnChanges: () => ++requests === 1 ? pending.p : failed ? Promise.reject(new Error('Unavailable')) : Promise.resolve([]),
+		readThreadChanges: () => ++requests === 1 ? pending.p : failed ? Promise.reject(new Error('Unavailable')) : Promise.resolve(emptySummary),
 	} as unknown as IChatService);
 	using pane = registerTestComponentServices(services).createInstance(SessionChangesEditor, {});
 	pane.create(dom.window.document.body);
@@ -110,11 +117,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	pane.setVisible(true);
 	assert.equal(await decorations!.provideDecorations(resource, CancellationToken.None), undefined);
 	pane.setVisible(false);
-	await pending.complete([{
-		changeSetId: 'change-a', sessionId: 'a', threadId: 'a-thread', turnId: 'turn-a', repositoryId: 'repository-a',
-		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], revision: 1,
-		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
-	}]);
+	await pending.complete({ ...emptySummary, revision: 'late', statistics: { files: 1, additions: 1, deletions: 0 } });
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(requests, 1);
 	assert.equal(pane.getAccessibleContent(), 'Loading changes…');
@@ -148,4 +151,69 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 	changes.fire({ sessionId: 'a', threadId: 'a-thread' });
 	assert.equal(requests, 3);
 	dom.window.close();
+});
+
+
+test('the default Changes editor reviews the backend checkpoint, resolves exact file identities and follows undo', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domOwner = toDisposable(() => dom.window.close());
+	using services = registerTestComponentServices(new InstantiationService());
+	using contexts = new ContextKeyService();
+	using configuration = new InMemoryConfigurationService();
+	using history = new Emitter<ThreadUpdateEnvelope>();
+	const file = (path: string) => ({ path, kind: 'modified' as const, binary: false, additions: 1, deletions: 0 });
+	let summary: ThreadChangesSummary = {
+		sequence: 2, revision: 'checkpoint', statistics: { files: 3, additions: 3, deletions: 0 }, repositories: [
+			{ repositoryId: 'repo', files: [file('main.ts'), file('repo/main.ts')] },
+			{ repositoryId: 'other', files: [file('main.ts')] },
+		], warnings: []
+	};
+	let comparison: MultiDiffEditorInput | undefined;
+	const counts: (number | undefined)[] = [];
+	class SnapshotPane extends EditorPane {
+		readonly id = 'test.checkpoint';
+		constructor() { super('test.checkpoint', services.get(IThemeService), services.get(IStorageService)); }
+		async setInput(input: MultiDiffEditorInput): Promise<void> { comparison = input; }
+		clearInput(): void { }
+		layout(): void { }
+		focus(): void { }
+	}
+	using registration = EditorPanes.registerEditorPane({
+		id: 'test.checkpoint', name: 'Checkpoint',
+		canOpen: input => input.resource.scheme === 'ash-multi-diff' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => new SnapshotPane(),
+	});
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session' }] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionChangesService, { setChangesCount: (_resource: URI, count: number | undefined) => counts.push(count) } as unknown as ISessionChangesService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IChatService, {
+		onDidUpdateThread: history.event, onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None,
+		readThreadChanges: async () => summary,
+		readThreadChangeFile: async (_session: string, _thread: string, revision: string, repository: string, path: string) => {
+			assert.equal(revision, summary.revision);
+			return { path, before: 'baseline', after: `${repository}/${path}`, binary: false, truncated: false };
+		},
+		listTurnChanges: async () => { throw new Error('A checkpoint must not be reconstructed from Turn captures'); },
+	} as unknown as IChatService);
+	using pane = services.createInstance(SessionChangesEditor, {});
+	pane.create(dom.window.document.body);
+	pane.setVisible(true);
+	await pane.setInput({ resource: URI.parse('ash-session-changes:/session?thread=thread') }, new AbortController().signal);
+	assert.equal(counts.at(-1), 3);
+	assert.deepEqual(comparison!.items.map(item => item.modified.initialText), ['repo/main.ts', 'repo/repo/main.ts', 'other/main.ts']);
+	assert.equal(new Set(comparison!.items.map(item => item.modified.resource.toString())).size, 3);
+	const nested = comparison!.items[1]!;
+	const change = await pane.getFileChange(nested.original.resource, { review: true });
+	assert.equal(change?.file.path, 'repo/main.ts');
+	assert.ok(change && !('summary' in change));
+	assert.equal(change.repositoryId, 'repo');
+	assert.equal(comparison!.items[1]!.contextKeys?.['sessions.changesCanReview'], true);
+	summary = { ...emptySummary, sequence: 3, revision: 'undone' };
+	assert.equal(await pane.getFileChange(nested.modified.resource, { review: true }), undefined);
+	history.fire({ sessionId: 'session', threadId: 'thread', durableSequence: 3, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(counts.at(-1), 0);
+	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
 });

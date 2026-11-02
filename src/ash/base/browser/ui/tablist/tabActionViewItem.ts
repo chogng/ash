@@ -179,7 +179,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		const primaryAction = item.primaryAction ?? this.closeAction;
 		const actions = [...(item.actions?.items ?? []), ...(primaryAction ? [primaryAction] : [])];
 		container.classList.toggle('has-actions', actions.length > 0);
-		const hadActionFocus = this.toolbar.value?.element.contains(container.ownerDocument.activeElement);
+		const hadActionFocus = this.toolbar.value?.domNode.contains(container.ownerDocument.activeElement);
 		if (actions.length === 0) {
 			this.toolbar.clear();
 		} else {
@@ -187,15 +187,15 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			let actionBar = this.toolbar.value;
 			if (actionBar) {
 				actionBar.updateActions(actions);
-				if (actionBar.element.getAttribute('aria-label') !== ariaLabel) {
-					actionBar.element.setAttribute('aria-label', ariaLabel);
+				if (actionBar.domNode.getAttribute('aria-label') !== ariaLabel) {
+					actionBar.domNode.setAttribute('aria-label', ariaLabel);
 				}
 			} else {
 				actionBar = new ActionBar(container, { actions, ariaLabel });
 				this.toolbar.value = actionBar;
-				actionBar.element.classList.add('ash-tab-actions');
+				actionBar.domNode.classList.add('ash-tab-actions');
 			}
-			for (const actionContainer of actionBar.element.children) {
+			for (const actionContainer of actionBar.domNode.children) {
 				const isPrimary = (actionContainer as HTMLElement).dataset.actionId === primaryAction?.id;
 				actionContainer.classList.toggle('ash-tab-primary-action', isPrimary);
 				actionContainer.classList.toggle('ash-tab-close-action', isPrimary && item.primaryAction === undefined);

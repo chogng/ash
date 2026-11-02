@@ -1,8 +1,10 @@
 import type { IAction } from '../../../../../../base/common/actions.js';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
+import type { IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import type { ChatMode } from '../../../../../services/chat/common/chatService.js';
+import type { ChatAgent, ChatMode } from '../../../../../services/chat/common/chatService.js';
 import { ChatSessionPickerActionItem } from '../../chatSessions/chatSessionPickerActionItem.js';
+import { ChatAgentHover } from '../chatAgentHover.js';
 
 interface IModePickerAction extends IAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
@@ -12,12 +14,40 @@ export type ChatInputMode = ChatMode;
 
 /** Presents the chat input's modes through the shared picker lifecycle and focus contract. */
 export class ModePickerActionItem extends ChatSessionPickerActionItem {
-	constructor(modeAction: IModePickerAction, private readonly mode: ChatInputMode, captureContext: () => () => boolean, onDidSelect: () => void, @IInstantiationService instantiationService: IInstantiationService) {
+	private agentHover: IManagedHover | undefined;
+
+	constructor(
+		modeAction: IModePickerAction,
+		private readonly mode: ChatInputMode,
+		captureContext: () => () => boolean,
+		onDidSelect: () => void,
+		private readonly getAgent: () => ChatAgent | undefined,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super(modeAction, {
 			getOptions: () => typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions,
 			captureContext,
 			onDidSelect,
 		}, { className: 'ash-chat-input-mode-menu' }, instantiationService);
+	}
+
+	protected override setupHover(target: HTMLElement, content: string): IManagedHover {
+		const managed = this.agentHover = super.setupHover(target, content);
+		managed.update(() => {
+			const agent = this.getAgent();
+			if (!agent) {
+				return content;
+			}
+			const hover = new ChatAgentHover(target.ownerDocument);
+			hover.setAgent(agent);
+			return hover.domNode;
+		});
+		return managed;
+	}
+
+	public override hide(): void {
+		this.agentHover?.hide();
+		super.hide();
 	}
 
 	public override render(container: HTMLElement): void {

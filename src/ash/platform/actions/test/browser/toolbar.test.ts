@@ -171,7 +171,7 @@ test('menu entry actions switch to their alternative while Alt is held', async (
 		{ ModifierKeyEmitter },
 		{ MenuItemAction },
 		{ ContextKeyService },
-		{ createActionViewItem, resolveAlternativeMenuActions },
+		{ createActionViewItem },
 	] = await Promise.all([
 		import('../../../../base/browser/dom.js'),
 		import('../../../../platform/actions/common/actions.js'),
@@ -213,7 +213,6 @@ test('menu entry actions switch to their alternative while Alt is held', async (
 	button.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.deepEqual(runs, ['test.toolbar.alternative']);
-	assert.equal(resolveAlternativeMenuActions([primary], true)[0]?.id, 'test.toolbar.alternative');
 
 	dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Alt' }));
 	assert.equal(button.textContent, 'Primary');
@@ -390,7 +389,7 @@ test('menu action grouping supports primary predicates, separators, and submenu 
 		'trailing',
 	]);
 	assert.deepEqual(
-		getFlatContextMenuActions(groups, undefined, undefined).map(({ id }) => id),
+		getFlatContextMenuActions(groups).map(({ id }) => id),
 		['first', Separator.ID, 'submenu', Separator.ID, 'second', Separator.ID, 'trailing'],
 	);
 });

@@ -356,7 +356,7 @@ export class CustomizeEditorPane extends EditorPane {
 				},
 			}),
 		);
-		this.toolbar.element.classList.add('ash-customize-actions');
+		this.toolbar.domNode.classList.add('ash-customize-actions');
 		this.panel = h(document, 'div', {
 			className: 'ash-customize-panel',
 			attributes: { id: 'ash-customize-panel', role: 'tabpanel' },
@@ -494,7 +494,7 @@ export class CustomizeEditorPane extends EditorPane {
 					action.id !== 'filterSources' || (this.collection === 'discover' && this.category !== 'plugins'),
 			),
 		]);
-		this.toolbar.element
+		this.toolbar.domNode
 			.querySelector('[data-action-id="filterSources"] button')
 			?.setAttribute('aria-pressed', String(!!this.sourceId));
 		this.hero.hidden = this.collection !== 'discover';

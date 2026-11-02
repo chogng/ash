@@ -1,5 +1,7 @@
+import type { IChatSlashCommandData } from './participants/chatSlashCommands.js';
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
 import { localize } from '../../../../nls.js';
+import { observableValue } from '../../../../base/common/observable.js';
 import { ProductSlashCommands, type SlashCommandDefinition } from '../../../services/chat/common/chatService.js';
 import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from './chat.js';
 
@@ -9,7 +11,8 @@ const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
 	| { readonly origin: 'local'; readonly actionId: string; }
-	| { readonly origin: 'server'; };
+	| { readonly origin: 'server'; }
+	| { readonly origin: 'client'; readonly executeDuringRequest: boolean; };
 
 export type SlashCommandInput =
 	| { readonly kind: 'message'; readonly text: string; }
@@ -30,9 +33,12 @@ interface CatalogEntry {
 /** Owns the current validated Slash Commands snapshot shared by parsing and completion. */
 export class SlashCommandCatalog {
 	private readonly local: readonly LocalSlashCommandRegistration[];
+	private client: readonly IChatSlashCommandData[] = [];
 	private server: readonly SlashCommandDefinition[] = Object.freeze([]);
 	private entriesByName: ReadonlyMap<string, CatalogEntry> = new Map();
-	private _commands: readonly SlashCommandDefinition[] = Object.freeze([]);
+	private readonly commandSnapshot = observableValue<readonly SlashCommandDefinition[]>(this, Object.freeze([]));
+	/** Subscriptions own their listeners; the catalog remains a plain snapshot owner. */
+	public readonly onDidChange = this.commandSnapshot.onDidChange;
 
 	constructor(local: readonly LocalSlashCommandRegistration[], server: readonly SlashCommandDefinition[]) {
 		this.local = Object.freeze([...local]);
@@ -40,11 +46,16 @@ export class SlashCommandCatalog {
 	}
 
 	get commands(): readonly SlashCommandDefinition[] {
-		return this._commands;
+		return this.commandSnapshot.get();
 	}
 
 	setServerCommands(server: readonly SlashCommandDefinition[]): void {
 		this.server = Object.freeze([...server]);
+		this.rebuild();
+	}
+
+	setClientCommands(commands: readonly IChatSlashCommandData[]): void {
+		this.client = commands;
 		this.rebuild();
 	}
 
@@ -65,9 +76,10 @@ export class SlashCommandCatalog {
 			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
 			append(local.definition, Object.freeze({ origin: 'local', actionId: local.actionId }));
 		}
+		for (const command of this.client) append({ name: command.command, description: command.detail, argumentMode: 'optional' }, Object.freeze({ origin: 'client', executeDuringRequest: command.executeDuringRequest === true }));
 		for (const command of this.server) append(command, Object.freeze({ origin: 'server' }));
 		this.entriesByName = entriesByName;
-		this._commands = Object.freeze(commands);
+		this.commandSnapshot.set(Object.freeze(commands));
 	}
 
 	get(name: string): SlashCommandDefinition | undefined {

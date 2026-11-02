@@ -1761,6 +1761,10 @@ use crate::protocol::extension_packages::ExtensionsUpstreamReferenceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsUpstreamRegistryDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::input_completions::InputCompletionsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::input_completions::InputCompletionsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelResult;
@@ -3162,6 +3166,8 @@ use features::FeatureStage;
 use features::FeatureState;
 #[cfg(any(test, feature = "export"))]
 use feedback_contract::PreparedFeedback;
+#[cfg(any(test, feature = "export"))]
+use queue::QueueDelivery;
 #[cfg(any(test, feature = "export"))]
 use queue::QueueInput;
 #[cfg(any(test, feature = "export"))]
@@ -5633,6 +5639,17 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    InputCompletions => "chat/input/completions" {
+        params: InputCompletionsParams,
+        response: InputCompletionsResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    InputCompletionsCancel => "chat/input/completions/cancel" {
+        params: FileGlobCancelParams,
+        response: (),
+        serialization: None,
+    },
     FileGlobCancel => "file/search/glob/cancel" {
         params: FileGlobCancelParams,
         response: (),
@@ -6266,6 +6283,7 @@ macro_rules! typescript_bindings {
 typescript_bindings! {
     serde_json::Value,
     ash_protocol::CollaborationMode,
+    ash_protocol::CommandInterpretation,
     ash_protocol::AgentConfiguration,
     ash_protocol::AgentRoleSelection,
     ash_protocol::InstructionText,
@@ -6975,6 +6993,11 @@ typescript_bindings! {
     ProtocolVersion,
     CapabilityContract,
     ServerCapabilities,
+    crate::protocol::input_completions::InputCompletionsCapability,
+    crate::protocol::input_completions::InputCompletionsParams,
+    crate::protocol::input_completions::InputCompletionsResult,
+    crate::protocol::input_completions::InputCompletionValue,
+    crate::protocol::input_completions::InputCompletionItem,
     InitializeParams,
     InitializeResult,
     DirGrantDto,
@@ -7329,6 +7352,7 @@ typescript_bindings! {
     SearchSource,
     QueueEditParams,
     QueueEditAction,
+    QueueDelivery,
     QueueMove,
     QueueEnqueueParams,
     QueueListParams,

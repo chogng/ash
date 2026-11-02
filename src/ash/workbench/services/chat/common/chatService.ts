@@ -1,3 +1,5 @@
+import { URI } from '../../../../base/common/uri.js';
+import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
@@ -42,8 +44,8 @@ export type {
 	ThreadSnapshotHistory,
 	ThreadHistoryBoundary,
 } from '../../../../platform/agentHost/common/agent.js';
-import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
-export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
+import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
+export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/models/common/agentModels.js';
 import type { Event } from '../../../../base/common/event.js';
 import { PRODUCT_SLASH_COMMANDS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -144,6 +146,8 @@ export interface ChatSubmissionOptions {
 }
 
 export interface StartTurnOptions extends ChatSubmissionOptions {
+	/** Literal messages bypass product slash-command interpretation, including queued delivery. */
+	readonly commandInterpretation?: CommandInterpretation;
 	/** Supplied by the owning composer from its loaded Thread. */
 	readonly isNewSession?: boolean;
 	readonly sessionId: SessionId;
@@ -224,6 +228,14 @@ export interface ThreadChangesSummary {
 	readonly statistics: TurnChangeSetSummary['statistics'];
 	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
 	readonly warnings: readonly string[];
+}
+
+/** Stable review identity for one file in an exact conversation checkpoint. */
+export function createThreadChangeFileResource(sessionId: string, threadId: string, revision: string, repositoryId: string, path: string): URI {
+	return URI.from({
+		scheme: 'ash-thread-change', path: `/${threadId}/${repositoryId}/${path}`,
+		query: new URLSearchParams({ session: sessionId, thread: threadId, revision, repository: repositoryId }).toString(),
+	});
 }
 
 export interface TurnChangeFileContents {
@@ -314,10 +326,10 @@ export interface IChatService {
 	getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
 	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
-	editPendingRequest(target: QueueMessageTarget, text: string): Promise<QueuedMessage>;
+	editPendingRequest(target: QueueMessageTarget, text: string, queue?: ChatRequestQueueKind): Promise<QueuedMessage>;
 	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	/** Promote the durable message before interrupting the captured active task. */
-	sendPendingRequestImmediately(target: QueueMessageTarget): Promise<void>;
+	sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void>;
 	compactContext(options: CompactContextOptions): Promise<void>;
 	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
 	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;

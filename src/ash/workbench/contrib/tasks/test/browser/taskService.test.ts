@@ -1,5 +1,7 @@
+import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
+import { testWorkbenchHostServices, registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import type { NotificationService } from '../../../../services/notification/common/notificationService.js';
@@ -22,7 +24,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IFileSearchService, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { MainThreadTask } from '../../../../api/browser/mainThreadTask.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -45,6 +47,7 @@ import { type IFileSystemProvider, type IFileWriteOptions, type IFileChangeEvent
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { registerTestTerminalCreationServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -53,7 +56,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
+import { CancellationError, isCancellationError } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProcessReadResult, type TerminalProcessExecution } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalService } from '../../../terminal/browser/terminalService.js';
@@ -195,11 +198,15 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 	};
 	using terminals = new FakeTerminalService();
 	using outputResources = new DisposableStore();
-	const services = taskServices(outputResources, files, workspace, terminals);
+	const discoveryLogs: string[] = [];
+	const logger = outputResources.add(new LogService({ sinks: [{ log: entry => { if (entry.category === 'tasks.discovery') discoveryLogs.push(entry.message); } }] }));
+	const services = taskServices(outputResources, files, workspace, terminals).createChild(new ServiceCollection([ILogService, logger]), outputResources);
 	const output = services.get(IOutputService);
 	using service = services.createInstance(TaskService);
 	const tasks = await service.refresh();
 	assert.deepEqual(tasks.map(task => task.id), ['cargo:build', 'cargo:check', 'vscode:0:lint', 'cargo:test', 'pnpm:test', 'cargo:run']);
+	assert.deepEqual(discoveryLogs, [], 'normal task discovery is not recorded at the default level');
+	assert.ok(output.getChannel('tasks')!.entries.filter(entry => entry.category === 'discovery').every(entry => entry.severity === 'trace'));
 
 	const task = tasks.find(candidate => candidate.id === 'vscode:0:lint')!;
 	const run = await service.run(task);
@@ -218,7 +225,9 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 	assert.match(output.getChannel('tasks')?.getText() ?? '', /Task 'Lint' failed \(exit code 2\)/);
 	assert.doesNotMatch(output.getChannel('tasks')?.getText() ?? '', /cargo lint/);
 
+	logger.setLevel('trace');
 	const secondRun = await service.run(task);
+	assert.ok(discoveryLogs.some(message => message === 'Discovered 6 workspace task(s).'));
 	await service.terminate(secondRun);
 	assert.equal(secondRun.status, 'canceled');
 });
@@ -345,6 +354,34 @@ test('a failed current refresh rejects a superseded dispatch instead of using th
 	assert.equal(terminals.instances.length, 0);
 });
 
+test('TaskService background discovery ignores cancellation and reports real failures', async () => {
+	using resources = new DisposableStore();
+	using terminals = new FakeTerminalService();
+	const root = URI.file('/workspace');
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
+	using changes = new Emitter<IFileChangeEvent>();
+	const files = new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Build","command":"build"}]}' }, changes.event);
+	const services = taskServices(resources, files, workspace, terminals);
+	const errors: unknown[][] = [];
+	const log = services.get(ILogService);
+	log.error = (...args: unknown[]) => errors.push(args);
+	using service = services.createInstance(TaskService);
+	await service.refresh();
+	const saved = service.tasks;
+	for (const failure of [new CancellationError(), new Error('Task configuration read failed')]) {
+		files.stat = async () => { throw failure; };
+		changes.fire({ resources: [URI.joinPath(root, '.vscode/tasks.json')] });
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(service.tasks, saved);
+	}
+	assert.equal(errors.length, 2);
+	assert.match(String(errors[0]?.[1]), /Task discovery failed: Task configuration read failed/);
+	assert.equal((errors[1]?.[2] as Error).message, 'Task configuration read failed');
+	const output = services.get(IOutputService).getChannel('tasks')?.getText() ?? '';
+	assert.doesNotMatch(output, /Operation cancelled/);
+	assert.match(output, /Task configuration read failed/);
+});
+
 class FakeFileService implements IFileSystemProvider {
 	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy;
 	public readonly onDidChangeCapabilities = Event.None;
@@ -436,12 +473,12 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 // Fixture paths describe the execution host, independently of the test runner's OS.
 function testRendererHost(os = OperatingSystem.Linux) {
 	const renderer = createDisconnectedRendererApi();
-	return { ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: os } };
+	return { ...renderer, appServer: { ...renderer.appServer, operatingSystem: os, isAvailable: true } };
 }
 
 function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
 	const host = createDisconnectedRendererApi();
-	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
+	return createTestPathService({ ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } }, workspace);
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
@@ -466,7 +503,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 	registerTestWorkbenchInteractionServices(owner, parent);
 	const services = parent.createChild(new ServiceCollection(
 		[IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace],
-		[IPathService, testPathService(workspace, os)], [IRendererHostService, testRendererHost(os)], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[IPathService, testPathService(workspace, os)], ...testWorkbenchHostServices(testRendererHost(os)).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[ITerminalProcessService, {
 			operatingSystem: os, onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
@@ -1019,7 +1056,7 @@ test('TaskService discovers tasks without terminal execution and rejects dispatc
 	registerTestWorkbenchInteractionServices(resources, parent);
 	registerTestExtensionService(resources, parent);
 	parent.registerInstance(IPathService, testPathService(parent.get(IWorkspaceContextService)));
-	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()], [ITerminalProcessService, createDisconnectedRendererApi().terminal], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)]), resources);
+	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()], [ITerminalProcessService, createDisconnectedRendererApi().terminal], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)]), resources);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const tasks = resources.add(services.createInstance(TaskService));
 	const events: ITaskRun[] = [];
@@ -1072,7 +1109,7 @@ suite('TaskService terminal availability', () => {
 			const output = { createChannel: () => ({ ...Disposable.None, appendLine: (entry: { text: string; }) => { logs.push(entry.text); } }) } as unknown as IOutputService;
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
-				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -1144,7 +1181,7 @@ suite('TaskService terminal availability', () => {
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
 				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))],
-				[IWorkspaceContextService, workspace], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+				[IWorkspaceContextService, workspace], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes],
 				[IOutputService, output],
 				[ILogService, new NullLoggerService()],
@@ -1212,7 +1249,7 @@ suite('Task terminal reuse policies', () => {
 			write: async () => { }, resize: async () => { },
 			close: async options => { closed.push(options.terminalId); await closing.wait(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
@@ -1914,11 +1951,11 @@ test('configured provider tasks resolve only at dispatch and preserve their defi
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => { creations.push(options); return create(options); };
 	let calls = 0;
-	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('builder-provider', async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('builder-provider', async (operation, payload): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 		if (operation === 'provideTasks') return { tasks: [] };
 		assert.equal(operation, 'resolveTask');
 		calls++;
-		const definition = (payload as { task: { definition: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue; }; }).task.definition;
+		const definition = (payload as { task: { definition: import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue; }; }).task.definition;
 		return { task: { id: 'app', label: 'App', group: 'build', definition, execution: { type: 'process', program: 'builder', args: ['app'] }, env: { MODE: 'provider', EXTRA: 'inherited' } } };
 	}, workspace, 'builder'));
 	const task = (await service.refresh())[0];
@@ -2027,7 +2064,7 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 	const input = new DeferredPromise<void>();
 	const closed = new DeferredPromise<void>();
 	const operations: string[] = [];
-	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('custom-host', async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+	using registration = service.registerTaskProvider(createExtensionHostTaskProvider('custom-host', async (operation, payload): Promise<import('../../../../../platform/extensions/common/extensionHostApi.js').JsonValue> => {
 		operations.push(operation);
 		if (operation === 'provideTasks') return { tasks: [{ id: 'custom', label: 'Host Custom', group: 'build', definition: { type: 'builder' }, execution: { type: 'custom', id: 'custom' } }] };
 		if (operation === 'createTaskTerminal') return { ptyId: 'pty.1', acceptsInput: true };
@@ -2147,7 +2184,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			...(placement === 'defaultsPlatform' ? { linux: { group } } : {}),
 		};
 		services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
-		services.registerInstance(IPathService, new BrowserPathService({ ...createDisconnectedRendererApi(), hasAppServer: true, appServer: { ...createDisconnectedRendererApi().appServer, operatingSystem: OperatingSystem.Linux } }, workspace));
+		services.registerInstance(IPathService, createTestPathService({ ...createDisconnectedRendererApi(), appServer: { ...createDisconnectedRendererApi().appServer, operatingSystem: OperatingSystem.Linux, isAvailable: true } }, workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 		registerTestExtensionService(resources, services);
@@ -2166,7 +2203,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			read: async () => ({ terminalId: 'resolved-task', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 			write: async () => { }, resize: async () => { }, close: async options => { closed.push(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
@@ -2227,7 +2264,7 @@ suite('Extension task execution lifecycle', () => {
 					close: async () => { void releaseRequested.complete(undefined); await releaseAcknowledged.p; },
 				};
 				services.registerInstance(ITerminalProcessService, processes);
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2408,7 +2445,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 					read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 					write: async () => { }, resize: async () => { }, close: async () => { },
 				});
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2516,7 +2553,7 @@ suite('Task instance limits through the execution owners', () => {
 					read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 					write: async () => { }, resize: async () => { }, close: async () => { if (holdClose) await closeRelease.p; },
 				});
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2577,6 +2614,125 @@ suite('Task instance limits through the execution owners', () => {
 suite('Task instance policies through the execution owners', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('concurrent catalog queries share discovery without caching dynamic provider results', async () => {
+		using resources = new DisposableStore();
+		const { tasks } = executionServices(resources, {});
+		const entered = new DeferredPromise<void>();
+		const pending = new DeferredPromise<readonly TaskProviderTask[]>();
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'shared-discovery', provideTasks: () => {
+				calls++;
+				void entered.complete();
+				return pending.p;
+			},
+		}));
+		const first = tasks.getWorkspaceTasks();
+		await entered.p;
+		const concurrent = [tasks.getWorkspaceTasks(), tasks.getWorkspaceTasks(), tasks.getWorkspaceTasks()];
+		void pending.complete([]);
+		const catalog = await first;
+		assert.deepEqual(await Promise.all(concurrent), [catalog, catalog, catalog]);
+		assert.equal(calls, 1, 'concurrent requests do not restart provider discovery');
+		await tasks.getWorkspaceTasks();
+		assert.equal(calls, 2, 'later queries discover dynamic provider tasks again');
+		await tasks.refresh();
+		assert.equal(calls, 3, 'an explicit refresh reads again');
+		const run = await tasks.run(catalog[0]!);
+		assert.equal(calls, 4, 'execution reads current configuration');
+		await tasks.terminate(run);
+	});
+
+	test('catalog queries reuse configuration reads, including when dynamic provider results change', async () => {
+		using resources = new DisposableStore();
+		const { tasks, files } = executionServices(resources, {});
+		let reads = 0;
+		const readFile = files.readFile.bind(files);
+		files.readFile = async resource => { reads++; return readFile(resource); };
+		const catalog = await tasks.getWorkspaceTasks();
+		assert.equal(await tasks.getWorkspaceTasks(), catalog);
+		assert.equal(await tasks.getWorkspaceTasks(), catalog);
+		assert.equal(reads, 1, 'completed queries reuse configuration tasks');
+		await tasks.refresh();
+		assert.equal(reads, 2, 'explicit refresh reads configuration again');
+		const run = await tasks.run(catalog[0]!);
+		assert.equal(reads, 3, 'execution reads configuration again');
+		await tasks.terminate(run);
+		let label = 'First provider result';
+		resources.add(tasks.registerTaskProvider({
+			id: 'dynamic-query', provideTasks: () => [{ id: 'current', label, command: 'current', group: 'other' }],
+		}));
+		assert.ok((await tasks.getWorkspaceTasks()).some(task => task.label === label));
+		label = 'Updated provider result';
+		assert.ok((await tasks.getWorkspaceTasks()).some(task => task.label === label));
+		assert.equal(reads, 3, 'provider queries reuse unchanged configuration');
+	});
+
+	test('extension catalog changes activate a new provider after a provider-free catalog was cached', async () => {
+		using resources = new DisposableStore();
+		const { tasks, services } = executionServices(resources, {});
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['Policy']);
+		const extensions = services.get(IExtensionService);
+		let activations = 0;
+		using activation = extensions.registerActivationHandler(async () => {
+			activations++;
+			resources.add(tasks.registerTaskProvider({
+				id: 'installed-provider', provideTasks: () => [{ id: 'new', label: 'New extension task', command: 'new', group: 'other' }],
+			}));
+		});
+		await extensions.reload();
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['New extension task', 'Policy']);
+		assert.equal(activations, 1);
+	});
+
+	test('catalog queries follow file invalidation and replacement discovery', async () => {
+		using resources = new DisposableStore();
+		const changes = resources.add(new Emitter<IFileChangeEvent>());
+		const { tasks, files } = executionServices(resources, {}, changes.event);
+		const entered = new DeferredPromise<void>();
+		const pending = new DeferredPromise<readonly TaskProviderTask[]>();
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'invalidated-query', provideTasks: () => {
+				if (++calls === 2) {
+					void entered.complete();
+					return pending.p;
+				}
+				return [{ id: 'current', label: `Revision ${calls}`, command: 'current', group: 'other' }];
+			},
+		}));
+		await tasks.getWorkspaceTasks();
+		changes.fire({ resources: [URI.file('/policy/source.ts')] });
+		assert.equal(calls, 1, 'unrelated file events preserve the catalog');
+		files.readFile = async resource => ({ resource, bytes: new TextEncoder().encode(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Updated configuration', command: 'updated' }] })), revision: '2' });
+		changes.fire({ resources: [URI.file('/policy/.vscode/tasks.json')] });
+		await entered.p;
+		const query = tasks.getWorkspaceTasks();
+		changes.fire({ resources: [URI.file('/policy/package.json')] });
+		assert.deepEqual((await query).map(task => task.label), ['Revision 3', 'Updated configuration']);
+		void pending.complete([]);
+		assert.equal(calls, 3);
+		assert.equal(await tasks.getWorkspaceTasks(), tasks.tasks);
+	});
+
+	test('a failed discovery can be retried and workspace switches discard the cached catalog', async () => {
+		using resources = new DisposableStore();
+		const { tasks, workspace } = executionServices(resources, {});
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'retry-query', provideTasks: () => {
+				if (++calls === 1) throw new Error('Discovery unavailable');
+				return [];
+			},
+		}));
+		await assert.rejects(tasks.getWorkspaceTasks(), /Discovery unavailable/);
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['Policy']);
+		assert.equal(calls, 2);
+		workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+		assert.deepEqual(await tasks.getWorkspaceTasks(), []);
+		assert.equal(calls, 3);
+	});
+
 	test('refresh follows a replacement provider discovery and never returns the superseded catalog to its caller', async () => {
 		using resources = new DisposableStore();
 		const { tasks, peer } = executionServices(resources, {});
@@ -2626,7 +2782,8 @@ suite('Task instance policies through the execution owners', () => {
 		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		const root = URI.file('/policy');
 		workspace.updateWorkspace({ id: 'policy', uri: root });
-		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges))));
+		const files = new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges);
+		services.registerInstance(IFileService, owner.add(createTestFileService(files)));
 		services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 		services.registerInstance(IPathService, testPathService(workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
@@ -2650,7 +2807,7 @@ suite('Task instance policies through the execution owners', () => {
 			read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 			write: async () => { }, resize: async () => { }, close: async options => { peer.closed.push(options.terminalId); await peer.close(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
@@ -2660,7 +2817,7 @@ suite('Task instance policies through the execution owners', () => {
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
 		const tasks = owner.add(services.createInstance(TaskService));
-		return { services, workspace, tasks, terminals, dom, quickInput, peer };
+		return { services, workspace, tasks, terminals, dom, quickInput, peer, files };
 	}
 
 	async function pickerInput(owner: DisposableStore, dom: JSDOM): Promise<HTMLInputElement> {

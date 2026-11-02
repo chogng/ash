@@ -1,7 +1,7 @@
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import type { IChatListItem } from '../../../browser/widget/chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { ChatFindModel, MAX_FIND_MATCHES, type IChatFindOptions } from '../../../browser/widget/chatFind/chatFindModel.js';
 
 const defaults: IChatFindOptions = { isRegex: false, matchCase: false, wholeWord: false };

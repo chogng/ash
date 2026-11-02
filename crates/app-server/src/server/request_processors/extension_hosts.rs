@@ -87,10 +87,7 @@ impl<'ctx, C: ExtensionHostRequestProcessorContext + ?Sized>
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        if !matches!(
-            connection.authority,
-            super::ConnectionAuthority::ProductHost | super::ConnectionAuthority::Browser
-        ) {
+        if !connection.allows_extension_activation() {
             return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
         }
         let mut params: ash_app_server_protocol::protocol::extension_host::ExtensionHostStartParams =

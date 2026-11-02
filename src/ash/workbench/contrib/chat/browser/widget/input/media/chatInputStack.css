@@ -1,0 +1,35 @@
+.ash-chat-input-stack {
+	display: flex;
+	flex-direction: column;
+}
+
+.ash-chat-input-stack > .ash-chat-input-stack-slot {
+	min-width: 0;
+	margin-block: 0;
+}
+
+.ash-chat-input-stack-slot:not(
+	.ash-chat-input-stack-docked,
+	.ash-chat-input-stack-standalone
+) {
+	display: none;
+}
+
+.ash-chat-input-stack > .ash-chat-input-stack-spaced {
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-stack > .ash-chat-input-stack-docked {
+	border-bottom-width: 0;
+	border-end-start-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.ash-chat-input-stack > .ash-chat-input-stack-continues {
+	border-start-start-radius: 0;
+	border-start-end-radius: 0;
+}
+
+.ash-chat-input-stack-input-focused > .ash-chat-input-stack-docked {
+	border-color: var(--ash-chat-input-focus-border, var(--ash-focusBorder));
+}

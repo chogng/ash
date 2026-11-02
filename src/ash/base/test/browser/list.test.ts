@@ -428,6 +428,85 @@ test('List splice preserves focus and selection when rows move', () => {
 	dom.window.close();
 });
 
+test('List splice without IDs keeps surviving selections, rendered state and focus on their items', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<string>(dom.window.document.body, {
+			multipleSelectionSupport: true,
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		list.items = ['A', 'B', 'C', 'D', 'E', 'F'];
+		list.setSelection([0, 2, 4, 5]);
+		list.setActiveIndex(4);
+		const changes: { items: readonly string[]; indexes: readonly number[]; }[] = [];
+		using listener = list.onDidChangeSelection(({ items, indexes }) => changes.push({ items, indexes }));
+		const readState = () => ({
+			selected: list.selection,
+			rendered: [...list.element.querySelectorAll('.selected')].map(row => row.textContent),
+			accessible: [...list.element.querySelectorAll('[aria-selected=true]')].map(row => row.textContent),
+			focused: list.activeItem,
+			activeDescendant: list.element.getAttribute('aria-activedescendant'),
+		});
+
+		list.splice(2, 1, ['X', 'Y']);
+		assert.deepEqual(readState(), {
+			selected: ['A', 'E', 'F'], rendered: ['A', 'E', 'F'], accessible: ['A', 'E', 'F'],
+			focused: 'E', activeDescendant: list.row(5)!.id,
+		});
+		list.rerender(5);
+		assert.deepEqual(readState(), {
+			selected: ['A', 'E', 'F'], rendered: ['A', 'E', 'F'], accessible: ['A', 'E', 'F'],
+			focused: 'E', activeDescendant: list.row(5)!.id,
+		});
+		// An oversized deletion removes the selected tail while preserving earlier choices.
+		list.splice(6, 20);
+		assert.deepEqual(readState(), {
+			selected: ['A', 'E'], rendered: ['A', 'E'], accessible: ['A', 'E'],
+			focused: 'E', activeDescendant: list.row(5)!.id,
+		});
+		assert.deepEqual(changes, [
+			{ items: ['A', 'E', 'F'], indexes: [0, 5, 6] },
+			{ items: ['A', 'E'], indexes: [0, 5] },
+		]);
+	} finally { dom.window.close(); }
+});
+
+test('List splice without IDs moves the range anchor and clears it when its item is replaced', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<string>(dom.window.document.body, {
+			multipleSelectionSupport: true,
+			keyboardNavigation: true,
+			focusOnMouseMove: false,
+			renderItem: item => h(dom.window.document, 'span', undefined, item),
+		});
+		list.items = ['A', 'B', 'C', 'D', 'E'];
+		list.row(2)!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+		list.splice(0, 1);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
+		assert.deepEqual({ focus: list.activeItem, selected: list.selection }, { focus: 'D', selected: ['C', 'D'] });
+		list.splice(1, 1, ['Replacement']);
+		list.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
+		assert.deepEqual({ focus: list.activeItem, selected: list.selection }, { focus: 'E', selected: ['D', 'E'] });
+	} finally { dom.window.close(); }
+});
+
+test('List splice without IDs does not transfer selection to a replacement at the same index', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using list = new List<string>(dom.window.document.body, { renderItem: item => h(dom.window.document, 'span', undefined, item) });
+		list.items = ['Original', 'Retained'];
+		list.setSelection([0]);
+		const focusChanges: (string | undefined)[] = [];
+		using listener = list.onDidChangeActive(({ item }) => focusChanges.push(item));
+		list.splice(0, 1, ['Replacement']);
+		assert.deepEqual({ selected: list.selection, focus: list.activeItem, focusChanges }, {
+			selected: [], focus: 'Replacement', focusChanges: ['Replacement'],
+		});
+		assert.equal(list.row(0)!.getAttribute('aria-selected'), 'false');
+	} finally { dom.window.close(); }
+});
+
 test('List clears logical focus without discarding selection or leaving an active descendant', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const list = new List<string>(dom.window.document.body, {

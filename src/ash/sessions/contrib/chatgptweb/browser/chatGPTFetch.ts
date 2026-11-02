@@ -4,6 +4,9 @@ import { localize } from '../../../../nls.js';
 
 /** Adapt the contribution's pull-based IPC transport to the client's HTTP/stream parser. */
 export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
+	// Abort callbacks also run during window-scope disposal, when delayed service
+	// lookup is no longer available. Retain the transport's bound cleanup operation.
+	const cancel = transport.cancel.bind(transport);
 	return async (input, init) => {
 		if (typeof input !== 'string') { throw new TypeError('Invalid ChatGPT request'); }
 		let requestBody: string | VSBuffer | undefined;
@@ -24,7 +27,7 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 			if (released) { return; }
 			released = true;
 			signal?.removeEventListener('abort', abort);
-			void transport.cancel(id).catch(() => { });
+			void cancel(id).catch(() => { });
 		};
 		const abort = () => release();
 		signal?.addEventListener('abort', abort, { once: true });

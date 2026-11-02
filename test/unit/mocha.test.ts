@@ -8,17 +8,23 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { after, test } from 'node:test';
 import ts from 'typescript';
+import { createServer } from 'node:http';
+import { UnitCoverage, normalizeCoverageSourceMaps } from './coverage.ts';
+import { withProcessRun } from '../../build/processes.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 // Keep synthetic fixtures independent of compiler output size and cleanup.
 const outputDirectory = mkdtempSync(join(desktopDirectory, '.build/desktop/runner-fixtures-'));
 const compiledDirectory = resolve(desktopDirectory, '.build/desktop/test');
+// Windows process startup and descendant cleanup share the subprocess deadline.
+const subprocessTimeout = process.platform === 'win32' ? 45_000 : 15_000;
 const copiedModules = new Set<string>();
 // The real theme preload still needs its emitted module closure in each snapshot.
 for (const module of [
 	'src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js',
 	'src/ash/platform/extensions/common/extensionApi.js',
 	'src/ash/base/common/buffer.js',
+	'src/ash/base/common/numbers.js',
 	'src/ash/workbench/services/extensions/browser/extensionColorThemeService.js',
 ]) copyBootstrapModule(resolve(compiledDirectory, module));
 
@@ -28,6 +34,7 @@ function copyBootstrapModule(source: string): void {
 	const target = resolve(outputDirectory, relative(compiledDirectory, source));
 	mkdirSync(dirname(target), { recursive: true });
 	copyFileSync(source, target);
+	if (existsSync(source + '.map')) copyFileSync(source + '.map', target + '.map');
 	const module = ts.createSourceFile(source, readFileSync(source, 'utf8'), ts.ScriptTarget.Latest, false, ts.ScriptKind.JS);
 	for (const statement of module.statements) {
 		if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) continue;
@@ -59,9 +66,9 @@ writeFileSync(requiredRunner, `import { runUnitTests } from ${JSON.stringify(run
 await runUnitTests(${JSON.stringify([first, 'test/unit/missing-required.test.js'])}, false);
 `);
 
-function run(args: readonly string[], entrypoint = 'test/unit/run.ts', compiledOutput = outputDirectory): { status: number | null; output: string; } {
+function run(args: readonly string[], entrypoint = 'test/unit/run.ts', compiledOutput = outputDirectory, environment: NodeJS.ProcessEnv = {}): { status: number | null; output: string; } {
 	const result = spawnSync(process.execPath, [entrypoint, ...args], {
-		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env: { ...runnerEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: compiledOutput },
+		cwd: desktopDirectory, encoding: 'utf8', timeout: subprocessTimeout, windowsHide: true, env: { ...runnerEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: compiledOutput, ...environment },
 	});
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
@@ -105,6 +112,27 @@ test('default discovery and source filters include extension-owned units alongsi
 	const selected = run(['--run', paths[2].replace(/\.js$/u, '.ts')]);
 	assert.equal(selected.status, 0, selected.output);
 	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
+});
+
+test('emitted extensions resolve their own dependencies without exposing them to host tests', () => {
+	const extension = join(outputDirectory, 'extensions/json-language-features/localization.js');
+	mkdirSync(dirname(extension), { recursive: true });
+	writeFileSync(extension, `export { t } from '@vscode/l10n';`);
+	const fixture = join(directory, 'extension-dependencies.test.js');
+	const specifier = relative(dirname(fixture), extension).replaceAll('\\', '/');
+	writeFileSync(fixture, `
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { test } from 'mocha';
+import { t } from ${JSON.stringify(specifier)};
+test('package dependency scope', () => {
+ assert.equal(t('Extension dependency scope'), 'Extension dependency scope');
+ assert.throws(() => createRequire(import.meta.url).resolve('@vscode/l10n'), { code: 'MODULE_NOT_FOUND' });
+});
+`);
+	const result = run(['--run', relative(outputDirectory, fixture).replaceAll('\\', '/')]);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
 });
 
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
@@ -236,7 +264,7 @@ test('reuses bytecode ${index}', () => {
 	// This case checks the default run-owned cache rather than caller overrides.
 	const env: NodeJS.ProcessEnv = { ...runnerEnvironment };
 	for (const name of ['NODE_COMPILE_CACHE', 'NODE_DISABLE_COMPILE_CACHE', 'NODE_V8_COVERAGE']) delete env[name];
-	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: 15_000 });
+	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: subprocessTimeout });
 	assert.equal(result.status, 0, result.stdout + result.stderr);
 	assert.match(result.stdout, /2 tests executed across 2 files; 0 failed files/);
 	assert.equal(existsSync(JSON.parse(readFileSync(marker, 'utf8')).cache), false);
@@ -250,13 +278,15 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { VSBuffer } from 'ash:editor/base/common/buffer.js';
 import './ignored.css';
+import inlineStyles from './ignored.css?inline';
 test('loads through the synchronous hooks', async () => {
  assert.equal(VSBuffer.fromString('loader').toString(), 'loader');
  assert.equal((await import('ash:editor/base/common/buffer.js')).VSBuffer, VSBuffer);
  assert.deepEqual(Object.keys(await import('./ignored.css')), []);
+ assert.equal(inlineStyles, '.invalid-javascript { color: red; }');
 });
 `);
-	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\\\', '/')]);
+	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\', '/')]);
 	assert.equal(result.status, 0, result.output);
 	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
 });
@@ -265,6 +295,87 @@ test('a filter matching no tests fails the run', () => {
 	const result = run(['--run', first, '--grep', '^missing behavior$']);
 	assert.equal(result.status, 1, result.output);
 	assert.match(result.output, /No unit tests executed/);
+});
+
+test('coverage validates options before preparation and plans without creating reports', () => {
+	const report = join(directory, 'planned-coverage');
+	const planned = run(['--compile', '--coverage', '--coveragePath', report, '--plan', '--run', 'src/ash/base/test/common/numbers.test.ts']);
+	assert.equal(planned.status, 0, planned.output);
+	assert.equal(existsSync(report), false);
+	for (const flags of [['--coverageFormats', 'html'], ['--coverage', '--coverageFormats', 'unknown'], ['--coverage', '--coveragePath', directory]]) {
+		const result = run(['--compile', '--run', 'src/ash/base/test/common/numbers.test.ts', ...flags]);
+		assert.equal(result.status, 1, result.output);
+		assert.match(result.output, /require --coverage|Unsupported coverage format|already exists/u);
+		assert.doesNotMatch(result.output, /Mocha:|Prepared Ash/u);
+	}
+});
+
+test('coverage remaps isolated Node output, includes unloaded sources and preserves failed tests', () => {
+	const module = 'src/ash/base/common/numbers.js';
+	copyBootstrapModule(resolve(compiledDirectory, module));
+	const fixture = join(directory, 'coverage.test.js');
+	const report = join(directory, 'coverage result');
+	const specifier = relative(dirname(fixture), resolve(outputDirectory, module)).replaceAll('\\', '/');
+	writeFileSync(fixture, `import { test } from 'mocha'; import assert from 'node:assert/strict'; import { clamp } from ${JSON.stringify(specifier)};
+test('covers clamp', () => assert.equal(clamp(10, 0, 5), 5));
+test('deliberately fails with coverage', () => { throw new Error('coverage failure sentinel'); });`);
+	const result = run(['--run', relative(outputDirectory, fixture).replaceAll('\\', '/'), '--coverage', '--coveragePath', report, '--coverageFormats', 'json-summary,lcov']);
+	assert.equal(result.status, 1, result.output);
+	assert.match(result.output, /coverage failure sentinel/u);
+	const summary = JSON.parse(readFileSync(join(report, 'coverage-summary.json'), 'utf8'));
+	const numbers = summary[resolve(desktopDirectory, 'src/ash/base/common/numbers.ts')];
+	assert.ok(numbers.functions.covered > 0 && numbers.functions.covered < numbers.functions.total);
+	assert.ok(Object.keys(summary).some(path => path !== 'total' && summary[path].lines.covered === 0));
+	assert.ok(Object.keys(summary).every(path => !path.includes('test-run-') && !path.includes('/test/')));
+	assert.match(readFileSync(join(report, 'lcov.info'), 'utf8').replaceAll('\\', '/'), /SF:src\/ash\/base\/common\/numbers.ts/u);
+	const metadata = JSON.parse(readFileSync(join(report, 'run.json'), 'utf8'));
+	assert.equal(metadata.status, 'failed');
+	assert.equal(metadata.reportStatus, 'complete');
+	assert.equal(metadata.executedTests, 2);
+	assert.equal(metadata.failed.length, 1);
+});
+
+test('coverage merges Node and Chromium source counts across navigation and page close', { timeout: subprocessTimeout * 2 }, async t => {
+	const coverage = new UnitCoverage({ coverage: true, coveragePath: join(directory, 'browser-coverage'), coverageFormats: ['json-summary'] });
+	const assets = join(coverage.directory, 'browser');
+	mkdirSync(assets);
+	const module = 'src/ash/base/common/numbers.js';
+	copyFileSync(resolve(outputDirectory, module), join(assets, 'numbers.js'));
+	const map = JSON.parse(readFileSync(resolve(outputDirectory, module + '.map'), 'utf8'));
+	map.sources = [relative(assets, resolve(desktopDirectory, 'src/ash/base/common/numbers.ts')).replaceAll('\\', '/')];
+	writeFileSync(join(assets, 'numbers.js.map'), JSON.stringify(map));
+	normalizeCoverageSourceMaps(assets);
+	const server = createServer((request, response) => {
+		if (request.url === '/numbers.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(readFileSync(join(assets, 'numbers.js'))); }
+		else response.end('<script type="module">import {rot} from "/numbers.js"; window.answer = rot(-1,5);</script>');
+	});
+	await new Promise<void>(resolveReady => server.listen(0, '127.0.0.1', resolveReady));
+	t.after(() => new Promise<void>((resolveClosed, reject) => { server.closeAllConnections(); server.close(error => error ? reject(error) : resolveClosed()); }));
+	const address = server.address();
+	assert.ok(address && typeof address !== 'string');
+	const fixture = join(directory, 'browser-coverage.test.js');
+	writeFileSync(fixture, `import {suite,test} from 'mocha'; import assert from 'node:assert/strict';
+import {clamp} from ${JSON.stringify(pathToFileURL(resolve(outputDirectory, module)).href)};
+import {useBrowserTests} from ${JSON.stringify(pathToFileURL(resolve(desktopDirectory, 'test/unit/browser/context.ts')).href)};
+suite('source coverage',()=>{const browser=useBrowserTests();test('Node and browser counts',async()=>{
+ assert.equal(clamp(10,0,5),5);
+ await browser.page.goto('/'); await browser.page.waitForFunction(()=>window.answer===4);
+ await browser.page.goto('/again'); await browser.page.waitForFunction(()=>window.answer===4);
+ await browser.page.close();
+ const extra=await browser.context.newPage();await extra.goto('/');await extra.waitForFunction(()=>window.answer===4);
+});});`);
+	const result = await promisify(execFile)(process.execPath, ['node_modules/mocha/bin/mocha.js', '--ui', 'tdd', fixture], {
+		cwd: desktopDirectory, timeout: subprocessTimeout,
+		env: { ...runnerEnvironment, ...coverage.environment, ASH_UNIT_COVERAGE_ASSETS: assets, ASH_BROWSER_UNIT_BASE_URL: `http://127.0.0.1:${address.port}`, ASH_BROWSER_UNIT_RESULTS: join(directory, 'browser-results') },
+	});
+	assert.match(result.stdout, /1 passing/u);
+	await withProcessRun(desktopDirectory, async (processRun, environment) => {
+		await coverage.report(processRun, environment, outputDirectory, assets, { files: [fixture], failed: [], executedTests: 1, completed: true });
+	});
+	const summary = JSON.parse(readFileSync(join(coverage.directory, 'coverage-summary.json'), 'utf8'));
+	assert.ok(summary[resolve(desktopDirectory, 'src/ash/base/common/numbers.ts')].functions.covered >= 2, 'Both the Node-only clamp and browser-only rot must contribute');
+	const metadata = JSON.parse(readFileSync(join(coverage.directory, 'run.json'), 'utf8'));
+	assert.ok(metadata.nodeScripts > 0 && metadata.browserScripts > 0);
 });
 
 test('an executed assertion failure fails the run and retains its diagnostic', () => {
@@ -321,7 +432,7 @@ test('a selection containing only skipped tests fails the run', () => {
 	assert.match(result.output, /No unit tests executed/);
 });
 
-test('a running suite retains its modules after the shared compiler output is cleaned', { timeout: 20_000 }, async t => {
+test('a running suite retains its modules after the shared compiler output is cleaned', { timeout: process.platform === 'win32' ? 90_000 : 20_000 }, async t => {
 	const ready = join(directory, 'snapshot-ready');
 	const release = join(directory, 'snapshot-release');
 	const waiting = join(directory, 'snapshot.test.js');

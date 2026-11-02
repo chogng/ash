@@ -9,7 +9,7 @@ import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExten
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MainThreadClientEditors } from '../../browser/mainThreadClientEditors.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
-import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../platform/extensions/common/extensionHostApi.js';
 
 suite('Client-owned Code features', () => {
 	test('local feature composition preserves existing text, version and undo without a provider', () => {

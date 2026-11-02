@@ -1,7 +1,7 @@
 import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
-import { normalizeExtensionStatusBarEntries } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { type ExtensionClientSource, type ExtensionHostFleetSnapshot, type ExtensionStatusBarEntry } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionStatusBarEntries } from '../../../platform/extensions/browser/extensionHostProtocol.js';
+import { type ExtensionClientSource, type ExtensionHostFleetSnapshot, type ExtensionStatusBarEntry } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../services/statusbar/browser/statusbar.js';
 
 class StatusBarRegistration extends Disposable {

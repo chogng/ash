@@ -139,6 +139,9 @@ impl AppServer {
             .map(|catalog| catalog.is_available())
             .unwrap_or(false);
         let mut capabilities = ServerCapabilities {
+            input_completions: Some(super::input_completions_processor::capability(
+                self.skills.is_some(),
+            )),
             agent_interactions: true,
             document_collaboration: true,
             sessions: true,
@@ -172,6 +175,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if capabilities.threads {
+            capabilities.contracts.insert(
+                "sideChats".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.plugins_manager.is_some() {
             capabilities.contracts.insert(
                 "extensionUpdates".into(),

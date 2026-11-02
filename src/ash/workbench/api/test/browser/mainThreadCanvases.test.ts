@@ -4,7 +4,7 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import type { ILogService } from '../../../../platform/log/common/log.js';
 import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import type { IAgentHostCanvasCollection, ICanvasProvider } from '../../../contrib/canvases/common/agentHostCanvas.js';

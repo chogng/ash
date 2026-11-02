@@ -1,10 +1,15 @@
+import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
 import '../../../common/theme.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -16,14 +21,13 @@ import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { IChatInputNoticeHubService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { IChatInputNotificationService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
-import { NewChatContextAttachments } from '../../chat/browser/newChatContextAttachments.js';
-import { NewChatInputPasteTarget } from '../../chat/browser/newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from './widget/input/chatInputTipPresenter.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
+import { getCoworkChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -37,7 +41,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 	private submittedMessage = false;
 	private displayedThreadId: string | undefined;
 	private displayedDraftId: string;
-	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
 	private draftVisible = false;
 	private restoringDraft = false;
@@ -49,6 +52,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		private readonly model: ICoworkWidgetModel,
+		private readonly presentation: 'conversation' | 'embedded',
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
@@ -62,6 +66,14 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IChatInputNoticeHubService noticeHub: IChatInputNoticeHubService,
+		@IChatInputNotificationService inputNotifications: IChatInputNotificationService,
+		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
+		@IActionViewItemService presentations: IActionViewItemService,
+		@IChatWidgetService chatWidgets: IChatWidgetService,
+		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
+		@ICommandService commands: ICommandService,
 	) {
 		super(container, {
 			...delegate,
@@ -81,35 +93,24 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		}, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
-				placeholder: '',
+				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
-		}, [{
-			id: 'ash.chat.input.attach',
-			get label() { return localize('chat.attach.files', 'Attach files'); },
-			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
-			icon: Lxicon.add,
-			enabled: true,
-			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys);
+		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
-		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
-		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
-		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
+		this.element.classList.toggle('embedded-composer', presentation === 'embedded');
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
 		this.element.append(tipContainer);
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
-			isEligible: () => !this.submittedMessage && this.model.items.length === 0
+			isEligible: () => !this.model.inputState.aiDisabled && !this.submittedMessage && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
 				&& !this.model.inputState.interaction,
 			focusInput: () => this.focus(),
-		}));
-		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
+		}, this.noticeHost));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
@@ -121,7 +122,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.element.prepend(this.heading);
 		this.displayedThreadId = model.threadId;
 		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
-		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId);
+		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId, chatInputStatePersistence);
 		if (storedDraft) this.restoreDraft(storedDraft);
 		this._register(this.onDidChangeInput(() => {
 			if (!this.restoringDraft) {
@@ -146,13 +147,13 @@ export class NewCoworkInputWidget extends ChatInputPart {
 					this.restoringDraft = true;
 					this.input.value = '';
 					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
+					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`, chatInputStatePersistence);
 					if (draft) this.restoreDraft(draft);
 					this.restoringDraft = false;
 				} else {
 					// A successful materialization consumes the new-session identity and its persisted draft.
 					this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
-					writeNewChatDraftState(storage, undefined, this.displayedDraftId);
+					writeNewChatDraftState(storage, undefined, this.displayedDraftId, chatInputStatePersistence);
 				}
 				this.displayedThreadId = model.threadId;
 				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
@@ -161,6 +162,10 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			this.updateConversation();
 		}));
 		this.updateConversation();
+	}
+
+	protected override getAccessibilityHelpContent(): string {
+		return super.getAccessibilityHelpContent() + '\n' + getCoworkChatAccessibilityHelp();
 	}
 
 	public override setVisible(visible: boolean): void {
@@ -195,7 +200,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		const { text, contexts: attachments } = this.snapshotDraftReferences();
 		const mode = this.model.inputState.mode;
 		if (attachments.length === 0) {
-			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
+			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId, chatInputStatePersistence);
 			return;
 		}
 		const contexts = await Promise.all(attachments.map(async attachment => ({
@@ -206,14 +211,14 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
 		})));
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
-		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);
+		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId, chatInputStatePersistence);
 	}
 
 	private updateConversation(): void {
 		const hasConversation = this.submittedMessage || this.model.items.length > 0;
 		this.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
 		this.element.classList.toggle('has-conversation', hasConversation);
-		this.heading.hidden = hasConversation;
+		this.heading.hidden = hasConversation || this.presentation === 'embedded';
 		this.tips.update();
 	}
 }

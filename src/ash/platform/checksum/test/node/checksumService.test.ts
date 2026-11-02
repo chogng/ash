@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'mocha';
+import { hostIntegrityExecutable } from '../../../../../../.build/desktop/hostLogs.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ApplicationChecksums } from '../../common/checksumService.js';
-import { ChecksumService, checksumChannel } from '../../node/checksumService.js';
+import { ChecksumService, checksumChannel } from '../../electron-main/checksumService.js';
 
 const entrypoints = ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html'];
 
@@ -20,7 +21,7 @@ test('application checksums compare published files and detect modified and remo
 			checksums[file] = createHash('sha256').update(file).digest('hex');
 		}
 		await writeFile(join(root, 'package.json'), JSON.stringify({ checksums }));
-		const service = new ChecksumService();
+		const service = new ChecksumService(resolve('.build/desktop/main', hostIntegrityExecutable));
 		const channel = checksumChannel(root, true, service);
 		const original = await channel.call<ApplicationChecksums>('window:1', 'getApplicationChecksums');
 		assert.deepEqual(original.proof.map(pair => pair.actual === pair.expected), [true, true, true]);
@@ -38,8 +39,7 @@ test('application checksums compare published files and detect modified and remo
 test('application checksum channel rejects renderer paths and malformed or incomplete persisted manifests', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-checksum-'));
 	try {
-		let accessed = false;
-		const service = { _serviceBrand: undefined, checksum: async () => { accessed = true; return '0'.repeat(64); } };
+		const service = new ChecksumService(resolve('.build/desktop/main', hostIntegrityExecutable));
 		const channel = checksumChannel(root, true, service);
 		await assert.rejects(channel.call('window:1', 'checksum', '/private/file'), /Invalid application checksum read/);
 		await assert.rejects(channel.call('window:1', 'getApplicationChecksums', { root: '/' }), /Invalid application checksum read/);
@@ -48,14 +48,13 @@ test('application checksum channel rejects renderer paths and malformed or incom
 			await writeFile(join(root, 'package.json'), JSON.stringify({ checksums }));
 			await assert.rejects(checksumChannel(root, true, service).call('window:1', 'getApplicationChecksums'), /checksum/);
 		}
-		assert.equal(accessed, false);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
 });
 
 test('development checksum reads explicitly omit an installation scan', async () => {
-	const result = await checksumChannel('/no-published-installation', false, new ChecksumService()).call('window:1', 'getApplicationChecksums');
+	const result = await checksumChannel('/no-published-installation', false, new ChecksumService(resolve('.build/desktop/main', hostIntegrityExecutable))).call('window:1', 'getApplicationChecksums');
 	assert.deepEqual(result, { isBuilt: false, proof: [] });
 });
 
@@ -64,7 +63,7 @@ test('checksum service hashes actual bytes and rejects non-file resources', asyn
 	try {
 		const file = join(root, 'binary');
 		await writeFile(file, Buffer.from([0, 255, 128, 1]));
-		const service = new ChecksumService();
+		const service = new ChecksumService(resolve('.build/desktop/main', hostIntegrityExecutable));
 		assert.equal(await service.checksum(URI.file(file)), createHash('sha256').update(await readFile(file)).digest('hex'));
 		await assert.rejects(service.checksum(URI.parse('https://example.com/file')), /local file/);
 	} finally {

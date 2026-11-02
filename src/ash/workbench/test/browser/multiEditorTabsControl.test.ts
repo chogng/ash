@@ -371,6 +371,11 @@ test('Connected tab clipping follows the visible tab strip', () => {
 	updateConnectedTabClipping(bounds, 230);
 	assert.equal(tab.classList.contains('connected-tab-hidden'), true);
 	assert.equal(strip.classList.contains('connected-tab-left-clipped'), false);
+	updateConnectedTabClipping({ ...bounds, fillRight: 220.484375 }, 120);
+	assert.equal(tab.classList.contains('connected-tab-right-clipped'), false);
+	assert.equal(strip.classList.contains('connected-tab-right-clipped'), false);
+	updateConnectedTabClipping({ ...bounds, fillRight: 220.515625 }, 120);
+	assert.equal(tab.classList.contains('connected-tab-right-clipped'), true);
 
 	dom.window.close();
 });

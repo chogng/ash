@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { expect, test } from '../../../automation/test.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
-import { readDevelopmentAppServerGeneration } from '../../../../src/ash/platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
+import { readDevelopmentAppServerGeneration } from '../../../../src/ash/platform/app-server-daemon/node/developmentAppServerGeneration.js';
 import { developmentAppServerGenerationPath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -29,7 +29,7 @@ async function attachRuntimeLogs(testInfo: TestInfo, userDataDirectory: string):
 async function publish(source: string, directory: string, identity: string): Promise<string> {
 	const marker = join(directory, 'test-generation');
 	await writeFile(marker, identity);
-	const script = 'import json,sys; from pathlib import Path; from build.lib.development_store import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3])); print(json.dumps({"generation":generation}))';
+	const script = 'import json,sys,uuid; from pathlib import Path; from build.lib.development_store import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3]), publication={"buildId":str(uuid.uuid4()),"reason":"source-change","files":["test/smoke/areas/windows/development-runtime.spec.ts"],"omittedFileCount":0}); print(json.dumps({"generation":generation}))';
 	const result = await execFileAsync(process.execPath, [resolve(desktopDirectory, 'build/python.ts'), '-B', '-c', script, source, marker, directory], { cwd: desktopDirectory, windowsHide: true });
 	return (JSON.parse(result.stdout) as { generation: string; }).generation;
 }
@@ -90,6 +90,8 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await workbench.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await agents.locator('[data-action-id="sessions.newSession"] button').click();
 		await expect.poll(() => agents.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(1);
 		const editor = new Editor(agents.locator('.ash-sessions-chat-slot.active:visible'));
 		await editor.waitForEditorFocus();
@@ -104,7 +106,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		const second = await publish(source, directory, 'second');
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 1);
 		await expect.poll(async () => (await connection(agents)).generation).toBe(beforeAgents.generation + 1);
-		await expect.poll(() => processOutput.includes(`Restarted development runtime ${second}`)).toBe(true);
+		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(second))).toBe(true);
 		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(1);
 		await expect.poll(() => agents.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 		await editor.waitForEditorContents(text => text === 'Keep the Agents draft across backend replacement');
@@ -133,7 +135,7 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await expect.poll(() => desktop!.application.windows().length).toBe(1);
 		expect(await publish(source, directory, 'first')).toBe(first);
 		await expect.poll(async () => (await connection(workbench)).generation).toBe(beforeWorkbench.generation + 2);
-		await expect.poll(() => processOutput.includes(`Restarted development runtime ${first}`)).toBe(true);
+		await expect.poll(() => processOutput.split('\n').some(line => line.includes('Development runtime restart completed') && line.includes(first))).toBe(true);
 		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 	} finally {
 		try {
@@ -166,7 +168,7 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	let release: (() => Promise<void>) | undefined;
 	try {
-		await publish(source, directory, 'first');
+		const first = await publish(source, directory, 'first');
 		desktop = await launchElectron({ appServerMode: 'required', environment, userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		const page = desktop.driver.workbench.page;
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
@@ -233,6 +235,15 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 			expect(after.pid).not.toBe(before.pid);
 			expect(await readDevelopmentAppServerGeneration(environment.ASH_DEV_APP_SERVER_GENERATION)).toBe(join(directory, 'generations', second));
 			expect(await fixture.evaluate(value => value.selectedRuntime())).toBe(join(directory, 'generations', second));
+			const publication = JSON.parse(await readFile(join(directory, 'publication.json'), 'utf8'));
+			// Check the saved Main log, not just captured console output: a later
+			// investigation must retain the trigger even after its terminal is closed.
+			await expect.poll(async () => {
+				const sessions = await readdir(join(userDataDirectory, 'logs'));
+				const text = (await Promise.all(sessions.map(session => readFile(join(userDataDirectory, 'logs', session, 'main.log'), 'utf8')))).join('\n');
+				const completed = text.split('\n').filter(Boolean).map(line => JSON.parse(line)).find(entry => entry.message.startsWith('Development runtime restart completed') && entry.message.includes(second));
+				return completed && JSON.parse(completed.message.slice(completed.message.indexOf('{')));
+			}).toMatchObject({ buildId: publication.buildId, reason: 'source-change', files: ['test/smoke/areas/windows/development-runtime.spec.ts'], previousRuntimes: [first], runtime: second });
 			expect(await fixture.evaluate(value => value.state.prompts)).toEqual([]);
 			const screenshot = testInfo.outputPath('publication-reloaded-editor.png');
 			await page.screenshot({ path: screenshot });

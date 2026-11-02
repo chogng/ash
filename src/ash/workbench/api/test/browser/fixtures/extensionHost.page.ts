@@ -1,8 +1,8 @@
 import type { TextResourceResolveRequest } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../../../platform/agentHost/browser/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../../../platform/extensions/browser/extensionHostApi.js';
 import { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';

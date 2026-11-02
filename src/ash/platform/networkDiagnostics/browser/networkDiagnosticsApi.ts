@@ -2,7 +2,7 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { NetworkReadResult } from '../../../../../.build/protocol/typescript/index.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { INetworkDiagnosticsService, NetworkSnapshot } from '../common/networkDiagnosticsService.js';
 
 export function createAppServerNetworkDiagnosticsApi(connection: AppServerProtocolClient): INetworkDiagnosticsService {

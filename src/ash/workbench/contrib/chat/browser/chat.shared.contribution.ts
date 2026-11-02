@@ -1,5 +1,14 @@
+import { BtwSlashCommandContribution } from './btwSlashCommand.js';
+import { ChatSideChatProvider } from './chatSideChat.js';
+import { IChatSideChatService, ChatSideChatService } from '../common/chatSideChatService.js';
+import { IChatSlashCommandService, ChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
+import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
+import { PanelChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
+import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
+import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
@@ -31,9 +40,6 @@ import { IChatContextPickService, ChatContextPickService } from './attachments/c
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
 import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
 import { IChatPasteTargetService } from './chat.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { agentsWindowGraphicConfiguration, ChatConfiguration, ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
@@ -61,6 +67,8 @@ import './chatManagement/chatManagement.contribution.js';
 import { IChatEditingService } from '../common/editing/chatEditingService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/notices/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from './widget/input/notices/chatInputNotificationService.js';
 import { ChatInputEditor } from './widget/input/chatInputEditor.js';
 import { ChatInputEditors } from './widget/input/chatInputEditorRegistry.js';
 import { IChatDebugService } from '../common/chatDebugService.js';
@@ -70,12 +78,16 @@ import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { ChatSetupContribution } from './chatSetup/chatSetupContributions.js';
+import { ChatEntitlementService, IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
 // Both renderer hosts use these primitives; each host registers its own New and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
+registerSingleton(IChatInputNotificationService, ChatInputNotificationService, InstantiationType.Delayed);
 registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
@@ -89,6 +101,7 @@ registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhas
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
+registerSingleton(IChatLayoutService, ChatLayoutService, InstantiationType.Delayed);
 registerSettingsSection({
 	id: 'chat.usage', categoryId: 'chat-usage', model: new SyncDescriptor(ChatUsageSettingsModel),
 	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
@@ -103,11 +116,18 @@ registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
 registerChatCopyActions();
+registerChatApprovalEnvironmentActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();
+registerSingleton(IChatSideChatService, ChatSideChatService, InstantiationType.Delayed);
+registerSingleton(IChatSlashCommandService, ChatSlashCommandService, InstantiationType.Delayed);
+registerWorkbenchContribution(BtwSlashCommandContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(BtwSlashCommandContribution));
+registerWorkbenchContribution(ChatSideChatProvider.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSideChatProvider));
 registerChatQueueActions();
+registerWorkbenchContribution(ChatQueuePickerRendering.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatQueuePickerRendering));
 registerChatAccessibilityActions();
 AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
+AccessibleViewRegistry.register(new PanelChatAccessibilityHelp());
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
 	key: AGENT_SESSIONS_PRESENTATION_SETTING,
@@ -179,22 +199,35 @@ registerWorkbenchContribution('workbench.contrib.chatCopyText', WorkbenchPhase.B
 	);
 });
 
-registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase.BlockStartup, accessor => {
-	const configuration = accessor.get(IConfigurationService);
-	const enabled = ChatContextKeys.enabled.bindTo(accessor.get(IContextKeyService));
-	const resources = new DisposableStore();
-	const update = (): void => enabled.set(configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true);
-	update();
-	resources.add(configuration.onDidChangeConfiguration(event => {
-		if (event.affectsConfiguration(ChatAIDisabledSettingId)) update();
-	}));
-	resources.add(toDisposable(() => enabled.reset()));
-	return resources;
-});
+registerSingleton(IChatEntitlementService, ChatEntitlementService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatSetupContribution.ID, WorkbenchPhase.BlockStartup,
+	accessor => accessor.get(IInstantiationService).createInstance(ChatSetupContribution));
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
+
+configurationRegistry.registerConfiguration<'queue' | 'steer'>({
+	key: ChatConfiguration.RequestQueueingDefaultAction,
+	defaultValue: 'steer',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['queue', 'steer'] },
+	parse(value: unknown): 'queue' | 'steer' {
+		if (value === 'queue' || value === 'steer') return value;
+		throw new TypeError(localize('chat.queuePicker.invalidDefault', 'Choose queue or steer for follow-up messages.'));
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('chat.queuePicker.defaultTitle', 'Follow-up message action'); },
+		get description() { return localize('chat.queuePicker.defaultDescription', 'Choose what Enter and the send button do while a task is running. Hold Alt to use the other action.'); },
+		get options() {
+			return [
+				{ value: 'queue' as const, label: localize('chat.queuePicker.queue', 'Add to Queue') },
+				{ value: 'steer' as const, label: localize('chat.queuePicker.steer', 'Steer with Message') },
+			];
+		},
+	},
+});
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,
@@ -232,6 +265,35 @@ configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
 				{ value: ChatSessionArchiveActionWording.MarkAsDone, label: localize('chatSession.markAsDone', 'Mark as Done') },
 			];
 		},
+	},
+});
+
+/** Message typography leaves composer and code-editor preferences independent. */
+configurationRegistry.registerConfiguration<string>({
+	key: ChatConfiguration.FontFamily, defaultValue: 'default', scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+	parse(value: unknown): string {
+		if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
+		throw new TypeError(localize('chat.fontFamily.invalid', 'Message font must be a single-line string no longer than 256 characters.'));
+	},
+	setting: {
+		valueType: 'text',
+		get title() { return localize('chat.fontFamily.title', 'Font family'); },
+		get description() { return localize('chat.fontFamily.description', 'Set the font for chat messages, including Markdown and link text. Use default or leave empty to follow the interface font. Input and code-block fonts are configured separately.'); },
+		get placeholder() { return localize('chat.fontFamily.default', 'Interface font'); },
+	},
+});
+configurationRegistry.registerConfiguration<number>({
+	key: ChatConfiguration.FontSize, defaultValue: 13, agentsWindow: { default: 14 }, scope: ConfigurationScope.WINDOW,
+	schema: { type: 'number', minimum: 6, maximum: 100 },
+	parse(value: unknown): number {
+		if (typeof value === 'number' && Number.isFinite(value) && value >= 6 && value <= 100) return value;
+		throw new RangeError(localize('chat.fontSize.invalid', 'Message font size must be a number between 6 and 100.'));
+	},
+	setting: {
+		valueType: 'number', minimum: 6, maximum: 100,
+		get title() { return localize('chat.fontSize.title', 'Font size'); },
+		get description() { return localize('chat.fontSize.description', 'Set the base text size in pixels for chat messages. Markdown headings keep their size hierarchy. Input and code-block sizes are configured separately.'); },
 	},
 });
 

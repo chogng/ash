@@ -14,6 +14,7 @@ import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDispos
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IMenuService, MenuId, SubmenuItemAction, type IMenu } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { createActionViewItem, getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -215,7 +216,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 	constructor(
 		container: HTMLElement,
 		private readonly options: ITitlebarPartFactoryOptions,
-		createMenubar: (menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService, contextKeyService: IContextKeyService) => IMenubarControl,
+		createMenubar: (scope: IInstantiationService) => IMenubarControl,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
@@ -229,7 +230,8 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		IsAuxiliaryWindowContext.bindTo(this.contextKeyService);
 		IsCompactTitleBarContext.bindTo(this.contextKeyService);
 		const ownerDocument = container.ownerDocument;
-		this.menubar = this._register(createMenubar(menuService, contextMenuService, localizationService, this.contextKeyService));
+		const menuScope = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, this.contextKeyService])));
+		this.menubar = this._register(createMenubar(menuScope));
 		const appIconDomNode = h(ownerDocument, 'span');
 		appIconDomNode.className = 'ash-titlebar-app-icon';
 		appIconDomNode.setAttribute('aria-hidden', 'true');
@@ -383,7 +385,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 /** Creates the titlebar used by a regular web workbench. */
 export const createBrowserTitlebarPart: TitlebarPartFactory = (container, options, instantiationService) =>
 	instantiationService.createInstance(BrowserTitlebarPart, container, options,
-		(menuService: IMenuService, contextMenuService: IContextMenuService, localizationService: ILocalizationService, contextKeyService: IContextKeyService) => new BrowserMenubarControl(container, menuService, contextMenuService, localizationService, {}, contextKeyService));
+		(scope: IInstantiationService) => scope.createInstance(BrowserMenubarControl, container, {}));
 
 export interface IAuxiliaryTitlebarPart extends ITitlebarPart, IView {
 	readonly container: HTMLElement;
@@ -414,7 +416,7 @@ export class AuxiliaryBrowserTitlebarPart extends BrowserTitlebarPart implements
 	) {
 		const windowTitle = instantiationService.createInstance(WindowTitle, container.ownerDocument.defaultView!, productName, editorGroupsContainer);
 		super(container, { windowTitle, editorGroupsContainer },
-			(menus, contextMenus, localization, contextKeys) => new BrowserMenubarControl(container, menus, contextMenus, localization, { presentation: menubarPresentation }, contextKeys),
+			scope => scope.createInstance(BrowserMenubarControl, container, { presentation: menubarPresentation }),
 			instantiationService, menuService, contextMenuService, localizationService, themeService, storageService, contextKeyService);
 		this._register(windowTitle);
 		this._register(toDisposable(onDispose));

@@ -5,6 +5,7 @@ export const Menus = {
 	CodeActivityBar: new MenuId('SessionsCodeActivityBar'),
 	ActivityBarContext: new MenuId('SessionsActivityBarContext'),
 	CustomViewAutomations: new MenuId('CustomViewAutomations'),
+	CustomViewCanvas: new MenuId('CustomViewCanvas'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),

@@ -50,6 +50,36 @@ suite('ObjectTree partial update lifecycle', () => {
 		} finally { dom.window.close(); }
 	});
 
+	test('multi-selection stays rendered after a selected child is replaced and other branches move', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tree = new ObjectTree<string>(dom.window.document.body, {
+				multipleSelectionSupport: true,
+				modelOptions: { identityProvider: { getId: item => item } },
+				renderElement: item => h(dom.window.document, 'span', undefined, item),
+			});
+			tree.setChildren([
+				{ element: 'Folder', collapsed: false, children: [{ element: 'First' }] },
+				{ element: 'Middle' }, { element: 'Last' },
+			]);
+			tree.setSelection(['First', 'Middle', 'Last']);
+			tree.setFocus('Last');
+			tree.model.setNodeChildren('Folder', [{ element: 'New first' }, { element: 'New second' }]);
+			const readState = () => ({
+				selected: tree.selection,
+				rendered: [...tree.domNode.querySelectorAll('.selected')].map(row => row.textContent),
+				accessible: [...tree.domNode.querySelectorAll('[aria-selected=true]')].map(row => row.textContent),
+				focus: tree.focus,
+			});
+			const expected = { selected: ['Middle', 'Last'], rendered: ['Middle', 'Last'], accessible: ['Middle', 'Last'], focus: 'Last' };
+			assert.deepEqual(readState(), expected);
+			tree.rerender();
+			assert.deepEqual(readState(), expected);
+			tree.domNode.querySelector<HTMLElement>('[data-tree-id="Folder"]')!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+			assert.deepEqual(readState(), { selected: ['Folder'], rendered: ['Folder'], accessible: ['Folder'], focus: 'Folder' });
+		} finally { dom.window.close(); }
+	});
+
 	test('template renderers receive the projected row index after tree find filters the model', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {

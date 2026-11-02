@@ -2344,6 +2344,91 @@ fn steering_accepts_interaction_waits_and_rejects_terminal_turns() {
 }
 
 #[test]
+fn tool_execution_start_projects_into_live_and_recovered_history() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let writer = ThreadController::with_store(store.clone());
+    let thread = create_thread(&writer, "silent tool");
+    let older = start_turn(&writer, &thread, "older");
+    writer
+        .complete_turn(&thread, &older, "done".into())
+        .unwrap();
+    let turn = start_turn(&writer, &thread, "running");
+    let call = writer
+        .record_tool_call(
+            &thread,
+            &turn,
+            RecordToolCallRequest {
+                tool_call_id: None,
+                name: ToolName::new("silent").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    let window = ash_thread_store::ThreadHistoryWindow::Latest {
+        turn_limit: std::num::NonZeroU32::new(1).unwrap(),
+    };
+    assert_eq!(
+        writer
+            .read_thread_history(&thread, &window)
+            .unwrap()
+            .thread
+            .turns[0]
+            .started_tool_call_ids,
+        Some(Vec::new())
+    );
+    writer
+        .record_tool_execution_started(
+            &thread,
+            &turn,
+            RecordToolExecutionStart {
+                tool_call_id: call.tool_call_id.clone(),
+                action_digest: "action".into(),
+                policy_revision: "policy".into(),
+                authority: ash_protocol::ToolExecutionAuthority::Sandboxed,
+                expected_review_sequence: None,
+            },
+        )
+        .unwrap();
+    let snapshot = writer.read_thread(&thread).unwrap();
+    let public = snapshot.public_thread();
+    assert_eq!(public.turns[0].started_tool_call_ids, Some(Vec::new()));
+    assert_eq!(
+        public.turns[1].started_tool_call_ids,
+        Some(vec![call.tool_call_id.clone()])
+    );
+    assert_eq!(core_api::ThreadView::from(snapshot).public_thread(), public);
+    // History indexing must advance for execution facts even when no Turn or Item text changes.
+    assert_eq!(
+        writer
+            .read_thread_history(&thread, &window)
+            .unwrap()
+            .thread
+            .turns,
+        public.turns[1..]
+    );
+    drop(writer);
+    let reader = ThreadController::with_store(store);
+    assert_eq!(reader.read_thread(&thread).unwrap().public_thread(), public);
+    assert_eq!(
+        reader
+            .read_thread_history(&thread, &window)
+            .unwrap()
+            .thread
+            .turns,
+        public.turns[1..]
+    );
+    let mut legacy = serde_json::to_value(&public.turns[1]).unwrap();
+    legacy.as_object_mut().unwrap().remove("startedToolCallIds");
+    assert_eq!(
+        serde_json::from_value::<ash_protocol::Turn>(legacy)
+            .unwrap()
+            .started_tool_call_ids,
+        None
+    );
+}
+
+#[test]
 fn durable_projection_contains_messages_tools_and_session_identity() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = ThreadController::with_store(store.clone());
@@ -3786,5 +3871,67 @@ fn thread_names_are_retry_safe_and_manual_names_win_after_recovery() {
                 ash_protocol::ThreadTitleSource::Manual
             )
             .is_err()
+    );
+}
+
+#[test]
+fn steering_preserves_frozen_context_and_tool_selection_through_replay() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "steering frozen inputs");
+    let mut start = start_request("steering-frozen-turn");
+    let mut profile = crate::tool_profile::snapshot_tool_profile(&[]).unwrap();
+    profile.allowed_tools = Some(vec![]);
+    start.tool_profile = Some(profile);
+    let turn = threads.start_turn(&thread, start).unwrap().turn_id;
+    let command = CommandId::new("steer-frozen-inputs").unwrap();
+    let request = || SteerTurnRequest {
+        command_id: command.clone(),
+        expected_sequence: SequenceExpectation::Any,
+        turn_id: turn.clone(),
+        input: vec![
+            UserInput::Text {
+                text: "Edited queued text".into(),
+            },
+            UserInput::Context {
+                name: "frozen".into(),
+                content: "Captured original bytes".into(),
+            },
+            UserInput::ToolSelection {
+                disabled: vec![],
+                allowed: Some(vec![]),
+            },
+        ],
+    };
+    let first = threads.steer_turn(&thread, request()).unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| item.client_id() == Some(&command))
+            .count(),
+        2
+    );
+    assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::UserContext { name, content, .. } if name == "frozen" && content == "Captured original bytes")));
+    let recovered = ThreadController::with_store(store);
+    recovered.recover_thread(&thread).unwrap();
+    let replay = recovered.steer_turn(&thread, request()).unwrap();
+    assert_eq!(replay.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(replay.sequence, first.sequence);
+    assert_eq!(
+        recovered.read_thread(&thread).unwrap().items,
+        snapshot.items
+    );
+    let mut changed = request();
+    changed.command_id = CommandId::new("different-frozen-tools").unwrap();
+    changed.input[2] = UserInput::ToolSelection {
+        disabled: vec![],
+        allowed: None,
+    };
+    assert!(recovered.steer_turn(&thread, changed).is_err());
+    assert_eq!(
+        recovered.read_thread(&thread).unwrap().items,
+        snapshot.items
     );
 }

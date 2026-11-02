@@ -24,7 +24,7 @@ import { MainThreadClientEditors } from '../../../src/ash/workbench/api/browser/
 import { loadExtensionEditorModule } from '../../../src/ash/workbench/services/extensions/browser/extensionEditorModules.js';
 import { IExtensionApi, normalizeExtensionCatalog } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import type { EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput, IEditorExtensionApi } from '../../../src/ash/workbench/common/editor.js';

@@ -15,6 +15,8 @@ export interface GitRepositoryContext {
 /** Host Git operations for App workflows, independent of the optional SCM extension. */
 export interface ILocalGitService {
 	readonly _serviceBrand: undefined;
+	/** Ready checkouts of repositories in this connection's workspace; paths belong to that host. */
+	listWorktrees(token: CancellationToken): Promise<readonly { readonly label: string; readonly path: string; readonly sourcePath: string; }[]>;
 	/** Read-only repository metadata authorized by this Session's execution directory. */
 	readRepositoryContexts(directory: { readonly sessionId: string; readonly path: string; }, token?: CancellationToken): Promise<readonly GitRepositoryContext[]>;
 	/** Clones into a new absolute host path. Ref selects a branch, tag or full commit ID. */

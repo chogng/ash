@@ -2,6 +2,19 @@
 
 > 状态：已确认的 Rust Debug 领域迁移和 Workbench 职责拆分已接入生产。Rust 拥有 DAP client、初始化／执行状态、断点绑定、检查编排、工作区定义与 SQLite 持久化、实时异常选择、父子会话和结构化输出。TS 保留配置／编辑器／Tasks／Terminal 接入、v1/v2 Memento 单向迁移和窗口 UI。SSH 资源绑定执行 Environment；Academy 不组装 Tasks、Testing 或 Debug。真实环境验收按实际记录区分，不以源码接通代替。具体实现见 [client](../crates/debug-client/README.md)、[manager](../crates/debug-manager/README.md)、[transport](../crates/debug-adapter/README.md) 和 [Workbench](../src/ash/workbench/contrib/debug/README.md)。
 
+## Agent 调试截图与用户截图
+
+截图按调用入口确定目标，窗口焦点不决定截图对象：
+
+| 入口                                            | 目标与调用链                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 内置 Agent 的 `browser_screenshot(target_id)`   | App Server 校验会话与目标归属，经 `browser/observe`、Main 授权和 `PlaywrightService.getObservation` 定位同一个 BrowserView，再调用该页面的 `page.screenshot()`。不会打开桌面框选窗口。                                                                                                                |
+| 外部 Agent 调试新启动的 Ash                     | 连接该实例的 CDP 端口，按目标身份、URL 和工作区确认页面，保留对应 `Page`／CDP session，再用 `page.screenshot()`／`Page.captureScreenshot`。新开窗口时重新确认目标；不能把页面列表第一项或前台窗口当作调试目标。Desktop 调试配置的 `--remote-debugging-port` 提供这个连接，不会自动替 Agent 选择窗口。 |
+| Workbench 的 `IHostService.getScreenshot(rect)` | 通过 `ash:host:screenshot` 截取 IPC 调用方绑定的 Ash 窗口，最终调用其 `webContents.capturePage()`。矩形使用该窗口的 CSS 坐标，不接受另一个窗口 ID。                                                                                                                                                   |
+| 用户的截图命令、快捷键和 Chat 截图入口          | `IImageEditorService` → `NativeImageEditorService` → `ImageViewMainService` → `getDesktopScreenshots()`，冻结各显示器后打开选区窗口，由用户选择、编辑和输出。                                                                                                                                         |
+
+Agent 调试截图不执行 `workbench.action.chat.attachScreenshot`，也不以桌面框选补偿目标丢失。目标关闭或连接失效后，应报告该目标不可用，重新发现并确认目标后再截图。独立外部应用只有在提供对应调试或截图能力时才能走目标截图；DAP 会话本身不提供通用窗口截图接口。Web 版用户截图由浏览器的 `getDisplayMedia()` 提供来源选择，在页面内承载图片编辑。
+
 ## 编辑器检查与交互
 
 暂停源码的悬浮检查和行内值共用现有 editor hover/decorations；异常详情使用同一编辑器坐标与独立无障碍帮助。Loaded Scripts 独立视图和命令查询适配器的源码目录，也能打开 sourceReference 虚拟脚本。Variables 的“查看内存”及同名命令通过 FileService 以十六进制显示原始字节，保存会写入适配器；继续执行或检查代次变化后必须重新打开，旧视图不能继续读写。

@@ -336,7 +336,7 @@ function pair<T extends { readonly sessionId: string; readonly threadId: string;
 }
 function goal(value: ThreadGoal, scope: ISessionProviderScope): ThreadGoal { return { ...value, threadId: scope.identity(value.threadId) }; }
 function thread(value: Thread, scope: ISessionProviderScope): Thread {
-	const origin = value.origin.type === 'root' ? value.origin : value.origin.type === 'replacement'
+	const origin = value.origin.type === 'sideChat' ? { ...value.origin, parentThreadId: scope.identity(value.origin.parentThreadId), contextThreadId: scope.identity(value.origin.contextThreadId) } : value.origin.type === 'root' ? value.origin : value.origin.type === 'replacement'
 		? { ...value.origin, sourceThreadId: scope.identity(value.origin.sourceThreadId) }
 		: { ...value.origin, parentThreadId: scope.identity(value.origin.parentThreadId) };
 	return { ...pair(value, scope), origin, goal: value.goal && goal(value.goal, scope) };

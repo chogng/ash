@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import './media/sessionsList.css';
@@ -230,7 +231,7 @@ export class SessionsList extends DomWidget {
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		for (const session of this.sessionService.untitledSessions) {
 			let draft: ReturnType<typeof readNewChatDraftState>;
-			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`); }
+			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
 			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
@@ -400,12 +401,12 @@ class SessionListItem extends AbstractDisposable {
 			actions: [{
 				id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
 				tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
-				run: () => this.contextMenu?.(this.actions.element),
+				run: () => this.contextMenu?.(this.actions.domNode),
 			}],
 		});
-		this.actions.element.classList.add('ash-sessions-list-actions');
-		this.actions.element.hidden = true;
-		this.actions.element.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
+		this.actions.domNode.classList.add('ash-sessions-list-actions');
+		this.actions.domNode.hidden = true;
+		this.actions.domNode.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.management = h(ownerDocument, 'span');
@@ -438,12 +439,12 @@ class SessionListItem extends AbstractDisposable {
 
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
 		this.contextMenu = menu;
-		this.actions.element.hidden = false;
+		this.actions.domNode.hidden = false;
 	}
 
 	setMenuVisible(visible: boolean): void {
 		this.domNode.classList.toggle('menu-visible', visible);
-		this.actions.element.querySelector('button')?.setAttribute('aria-expanded', String(visible));
+		this.actions.domNode.querySelector('button')?.setAttribute('aria-expanded', String(visible));
 	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {

@@ -2,7 +2,7 @@ import type { IConfigurationModel } from '../../platform/configuration/common/co
 import type { IURLCallbackProvider } from '../services/url/browser/urlService.js';
 import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
-import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from './rendererApi.js';
 import type { ShutdownReason } from '../services/lifecycle/common/lifecycle.js';
 import type {
 	IAnyWorkspaceIdentifier,
@@ -20,7 +20,7 @@ import type { IUpdateProvider } from '../services/update/browser/updateService.j
  * obeys the same renderer contract as the Electron preload bridge.
  */
 export interface IWebWorkbenchHost {
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	/** A separately hosted copy of the webview assets; {{uuid}} identifies an isolated origin. */
 	readonly webviewEndpoint?: string;
 	readonly urlCallbackProvider?: IURLCallbackProvider;
@@ -37,7 +37,7 @@ export interface IWebWorkbenchConstructionOptions {
 	readonly productName: string;
 	readonly webviewEndpoint?: string;
 	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	readonly urlCallbackProvider?: IURLCallbackProvider;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly webWorkspaceClient?: IWebWorkspaceClient;

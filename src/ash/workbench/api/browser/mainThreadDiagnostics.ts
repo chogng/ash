@@ -2,7 +2,7 @@ import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../..
 import { URI } from '../../../base/common/uri.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { IMarkerService, MarkerSeverity, type IResourceMarker } from '../../../platform/markers/common/markers.js';
-import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/extensions/common/extensionHostApi.js';
 import type { ExtensionDiagnosticEntry } from '../common/extHost.protocol.js';
 
 /** Marker ownership includes the broker-supplied incarnation; extensions cannot clear each other's collections. */

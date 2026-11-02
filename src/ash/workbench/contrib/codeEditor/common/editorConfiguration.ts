@@ -2,7 +2,7 @@ import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfig
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorIndentationKind } from '../../../../editor/common/core/misc/indentation.js';
 import { EditorLineWrapping, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
-import '../../../../editor/common/config/editorConfigurationSchema.js';
+import { editorConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
 import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
 import { localize } from '../../../../nls.js';
 
@@ -23,6 +23,10 @@ export const CodeEditorConfiguration = Object.freeze({
 		key: 'editor.fontFamily',
 		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: '',
+		schema: {
+			// Project Editor-owned candidates without replacing this setting's typed default or parser.
+			get defaultSnippets() { return editorConfiguration.properties['editor.fontFamily'].defaultSnippets; },
+		},
 		parse(value: unknown): string {
 			if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 			throw new TypeError('editor.fontFamily must be a single-line string no longer than 256 characters');

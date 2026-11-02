@@ -8,7 +8,7 @@ import { CommandsRegistry, ICommandService } from '../../../../../platform/comma
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { Menus } from '../../../../browser/menus.js';
 
 const manageHostsCommand = 'sessions.action.manageAgentHosts';
@@ -20,7 +20,7 @@ export class SSHAgentHostContribution extends Disposable {
 	private readonly pickers = this._register(new DisposableStore());
 
 	constructor(
-		@IRendererHostService private readonly renderer: IRendererHost,
+		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IAgentHostConnectionsService private readonly hosts: IAgentHostConnectionsService,
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
 		@ICommandService private readonly commands: ICommandService,
@@ -28,7 +28,7 @@ export class SSHAgentHostContribution extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		if (!renderer.agentHosts) { return; }
+		if (!remoteHosts.isAvailable) { return; }
 		this._register(CommandsRegistry.register(manageHostsCommand, async () => {
 			try { await this.showHosts(); }
 			catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
@@ -48,7 +48,7 @@ export class SSHAgentHostContribution extends Disposable {
 		if (!selected || this.isDisposed) { return; }
 		if (selected.command) { await this.commands.executeCommand(selected.command); return; }
 		if (selected.info) {
-			this.renderer.agentHosts!.disconnect(selected.info.id);
+			this.remoteHosts.disconnect(selected.info.id);
 			return;
 		}
 		const available = await this.connections.list();
@@ -88,7 +88,7 @@ export class SSHAgentHostContribution extends Disposable {
 		const controller = new AbortController();
 		resources.add(toDisposable(() => controller.abort()));
 		try {
-			await this.renderer.agentHosts!.connect(connection, controller.signal);
+			await this.remoteHosts.connect(connection, controller.signal);
 			if (this.isDisposed) throw canceled();
 		} finally { this.pendingConnections.delete(resources); resources.dispose(); }
 	}

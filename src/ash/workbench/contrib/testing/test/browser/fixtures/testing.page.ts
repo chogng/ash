@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { setNlsResolver, formatNlsMessage } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
@@ -13,7 +14,7 @@ import { OperatingSystem } from '../../../../../../base/common/platform.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../../platform/remote/common/remote.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
-import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../../browser/rendererApi.js';
 import { NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -47,9 +48,9 @@ const root = parameters.has('remote') ? createSshRemoteWorkspaceUri(parameters.g
 const workspace = store.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
 const api = createDisconnectedRendererApi();
 uriIdentityServices.registerInstance(IWorkspaceContextService, workspace);
-uriIdentityServices.registerInstance(IRendererHostService, {
-	...api, hasAppServer: true,
-	appServer: { ...api.appServer, operatingSystem: parameters.get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Macintosh },
+registerTestWorkbenchHostServices(uriIdentityServices, {
+	...api,
+	appServer: { ...api.appServer, operatingSystem: parameters.get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Macintosh , isAvailable: true },
 });
 const paths = uriIdentityServices.createInstance(BrowserPathService);
 backend.failurePath = parameters.get('failure') ?? backend.failurePath;
@@ -63,7 +64,7 @@ const tasks: ITaskService = {
 	registerTaskProviders: () => Object.assign(toDisposable(() => { }), { replace: () => { } }),
 	rerun: async () => { throw new Error('Rerunning is outside this fixture'); },
 	runProvidedTask: async () => { throw new Error('Extension tasks are outside this fixture'); },
-	refresh: async () => tasks.tasks,
+	getWorkspaceTasks: async () => tasks.tasks, refresh: async () => tasks.tasks,
 	start: () => { throw new Error('Starting task runs is outside this fixture'); },
 	describe: async () => { throw new Error('Task descriptions are outside this fixture'); },
 	getRun: () => undefined,

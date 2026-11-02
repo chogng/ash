@@ -1,6 +1,8 @@
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { autorun, observableSignalFromEvent } from '../../../../base/common/observable.js';
-import { IAgentHostConnectionsService } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { URI } from '../../../../base/common/uri.js';
+import { ASH_REMOTE_SCHEME, getProviderRemoteWorkspace } from '../../../../platform/remote/common/remote.js';
 import {
 	BrowserViewStorageScope, getBrowserViewSessionNetwork, getBrowserViewSessionAffinity,
 	type IBrowserViewNetwork, type IBrowserViewOwner, type IBrowserViewSessionOptions,
@@ -78,7 +80,7 @@ export class SessionBrowserNetworkContribution extends Disposable implements IWo
 	}
 
 	private network(authority: string | undefined, root?: string): IBrowserViewNetwork | undefined {
-		return authority && authority !== 'local' ? { authority, ...(authority.startsWith('provider') && root ? { root } : {}) } : undefined;
+		return authority && authority !== 'local' ? { authority, ...(root ? { root } : {}) } : undefined;
 	}
 
 	private affinity(context: BrowserNetworkContext): string | undefined {
@@ -121,8 +123,15 @@ export class SessionBrowserNetworkContribution extends Disposable implements IWo
 	}
 
 	private status(network: IBrowserViewNetwork): IBrowserViewNetworkStatus {
-		const host = this.hosts.connections.find(info => info.directory?.uri.authority === network.authority);
-		const ambient = getWorkspaceRemoteAuthority(this.workspace.getWorkspace()) === network.authority
+		const runtime = getProviderRemoteWorkspace(URI.from({ scheme: ASH_REMOTE_SCHEME, authority: network.authority, path: '/' }));
+		const authority = runtime?.hostAuthority ?? (runtime ? 'local' : network.authority);
+		let host: IAgentHostConnectionInfo | undefined;
+		try {
+			host = this.hosts.resolveConnection(URI.from({ scheme: ASH_REMOTE_SCHEME, authority, path: runtime ? '/' : network.root ?? '/' }));
+		} catch {
+			return { label: network.authority, connected: false, proxySupported: true };
+		}
+		const ambient = (authority === 'local' || getWorkspaceRemoteAuthority(this.workspace.getWorkspace()) === authority)
 			? this.hosts.connections.find(info => info.isAmbient) : undefined;
 		const connection = host ?? ambient;
 		return {

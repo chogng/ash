@@ -4,8 +4,8 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../
 import { observableValue } from '../../../base/common/observable.js';
 import type { URI } from '../../../base/common/uri.js';
 import { IDataChannelService, ILinkPresentationService, parseLinkPresentation, type ILinkPresentation, type ILinkPresentationWatcher } from '../../../platform/dataChannel/common/dataChannel.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/extensions/browser/extensionHostProtocol.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 
 interface RegistrationScope extends DisposableStore {

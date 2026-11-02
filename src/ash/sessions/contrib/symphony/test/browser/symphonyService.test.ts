@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { ISymphonyBackend, SymphonySnapshot } from '../../../../../platform/symphony/common/symphonyService.js';
 import { SymphonyService } from '../../browser/symphonyService.js';
@@ -22,7 +21,7 @@ suite('Built-in Symphony presentation', () => {
 			if (id === 'one') { return previous.p; }
 			await second.complete(); return { conversation: conversation(id), messages: [{ id: 'two-message', role: 'assistant', text: 'Second' }] };
 		});
-		using service = new SymphonyService({ symphony: api } as IRendererHost, storage);
+		using service = new SymphonyService(api, storage);
 		const refresh = service.refresh();
 		await Promise.resolve();
 		service.select('two');
@@ -37,7 +36,7 @@ suite('Built-in Symphony presentation', () => {
 	test('unavailable hosts show a useful state without starting another transport', async () => {
 		const stored = new Map<string, string>();
 		const storage = { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService;
-		using service = new SymphonyService({} as IRendererHost, storage);
+		using service = new SymphonyService(undefined, storage);
 		await service.refresh();
 		assert.equal(service.available, false);
 		assert.match(service.state.get().error!, /App Server/u);
@@ -48,7 +47,7 @@ suite('Built-in Symphony presentation', () => {
 		const storage = { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService;
 		const api = backend(async () => ({ workflows: [], conversations: [conversation('one')] }), async () => ({ conversation: conversation('one'), messages: [] }));
 		api.control = async () => { throw new Error('Could not stop'); };
-		using service = new SymphonyService({ symphony: api } as IRendererHost, storage);
+		using service = new SymphonyService(api, storage);
 		await service.refresh();
 		await service.control('one', 'pause');
 		await service.refresh();

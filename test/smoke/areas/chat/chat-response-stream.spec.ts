@@ -62,6 +62,11 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const before = await read();
 		await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'response-turn', sessionId, request: { type: 'startTurn', threadId, expectedSequence: before.sequence, mode: 'ask', approvalMode: 'bypassPermissions', model, input: [{ type: 'text', text: 'Return the synthetic streamed response without using tools.' }] } });
 		await expect.poll(() => requests.length).toBe(1);
+		const workingLogo = chat.locator('.ash-chat-working-logo');
+		await expect(workingLogo).toBeVisible();
+		await expect(workingLogo).toHaveClass(/atlas/);
+		await expect.poll(() => workingLogo.locator('.ash-chat-working-logo-atlas').evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+		await testInfo.attach('working-logo.png', { body: await page.screenshot(), contentType: 'image/png' });
 		const code = '```typescript\nconst value = 1;\n```';
 		for (const index of [0, 1]) send({ type: 'response.output_item.added', output_index: index, item: message(index, '') });
 		delta(0, 'Synthetic media is being prepared.');
@@ -136,6 +141,8 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		stream!.end();
 		mark('completed-media-and-correction');
 		await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
+		await expect(workingLogo).toBeHidden();
+		await expect.poll(() => workingLogo.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 		await expect.poll(() => chat.getByRole('img', { name: 'Synthetic response media', exact: true }).evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 		await expect(block.locator('.view-lines')).toContainText('const value = 2;');
 		await expect.poll(async () => Math.abs((await geometry(paragraph)).top - reading.top)).toBeLessThanOrEqual(1);

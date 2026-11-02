@@ -1,4 +1,11 @@
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { Keybinding, logicalKey } from '../../../../../base/common/keybindings.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { ChatConfiguration } from '../../common/constants.js';
+import { ChatSubmitAction, readExecuteContext } from './chatExecuteActions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
@@ -7,34 +14,73 @@ import { IChatWidgetService, type IChatWidget } from '../chat.js';
 import { IChatService, type QueuedMessage, type QueueMessageTarget } from '../../../../services/chat/common/chatService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { createUuid } from '../../../../../base/common/uuid.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { Dialog } from '../../../../../base/browser/ui/dialog/dialog.js';
-import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
+
+const editingQueue = ChatContextKeys.editingRequestType.isEqualTo(ChatContextKeys.EditingRequestType.Queue);
+const editingSteer = ChatContextKeys.editingRequestType.isEqualTo(ChatContextKeys.EditingRequestType.Steer);
+const editingPending = ContextKeyExpr.or(editingQueue, editingSteer)!;
+const steerDefault = ContextKeyExpr.equals(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, 'steer');
+const notEditingPending = ContextKeyExpr.and(
+	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Queue),
+	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Steer),
+);
+const effectiveQueue = ContextKeyExpr.or(editingQueue, ContextKeyExpr.and(notEditingPending, ContextKeyExpr.notEquals(`config.${ChatConfiguration.RequestQueueingDefaultAction}`, 'steer')))!;
+const effectiveSteer = ContextKeyExpr.or(editingSteer, ContextKeyExpr.and(notEditingPending, steerDefault))!;
+const queueAvailable = ContextKeyExpr.and(
+	ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.inputBlocked.isEqualTo(false),
+	ChatContextKeys.transcriptProgressActive.isEqualTo(false),
+);
+const queueVisible = ContextKeyExpr.and(
+	ContextKeyExpr.or(ChatContextKeys.requestInProgress.isEqualTo(true), editingPending),
+	ContextKeyExpr.notEquals(ChatContextKeys.editingRequestType.key, ChatContextKeys.EditingRequestType.Sent),
+	ChatContextKeys.inputHasText.isEqualTo(true), ChatContextKeys.transcriptProgressActive.isEqualTo(false),
+);
 
 export class ChatQueueMessageAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.queueMessage';
 	constructor() {
-		super({ id: ChatQueueMessageAction.ID, title: localize2('chat.queueMessage', 'Chat: Add Message to Queue'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) });
+		super({
+			id: ChatQueueMessageAction.ID, title: localize2('chat.queueMessage', 'Chat: Add Message to Queue'),
+			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+			keybinding: [
+				{ primary: Keybinding.single(logicalKey('Enter')), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
+				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveSteer), weight: KeybindingWeight.EditorContrib + 1 },
+			],
+		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible) { await widget.acceptInput(undefined, { queue: ChatRequestQueueKind.Queued }); }
+	public override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
+		const context = readExecuteContext(value);
+		await accessor.get(ICommandService).executeCommand(ChatSubmitAction.ID, { ...context, acceptInputOptions: { queue: ChatRequestQueueKind.Queued } });
 	}
 }
 
 export class ChatSteerWithMessageAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.steerWithMessage';
 	constructor() {
-		super({ id: ChatSteerWithMessageAction.ID, title: localize2('chat.steerWithMessage', 'Chat: Steer with Message'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) });
+		super({
+			id: ChatSteerWithMessageAction.ID, title: localize2('chat.steerWithMessage', 'Chat: Steer with Message'),
+			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+			keybinding: [
+				{ primary: Keybinding.single(logicalKey('Enter')), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveSteer), weight: KeybindingWeight.EditorContrib + 1 },
+				{ primary: Keybinding.single(logicalKey('Enter', { altKey: true })), when: ContextKeyExpr.and(queueAvailable, ChatContextKeys.inChatInput.isEqualTo(true), queueVisible, effectiveQueue), weight: KeybindingWeight.EditorContrib + 1 },
+			],
+		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget?.visible) { await widget.acceptInput(undefined, { queue: ChatRequestQueueKind.Steering }); }
+	public override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
+		const context = readExecuteContext(value);
+		await accessor.get(ICommandService).executeCommand(ChatSubmitAction.ID, { ...context, acceptInputOptions: { queue: ChatRequestQueueKind.Steering } });
+	}
+}
+
+export class ChatAskInSideChatAction extends Action2 {
+	static readonly ID = 'workbench.action.chat.askInSideChat';
+	constructor() {
+		super({ id: ChatAskInSideChatAction.ID, title: localize2('chat.askInSideChat', 'Ask in Side Chat'), precondition: queueAvailable, f1: false });
+	}
+	override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
+		const context = readExecuteContext(value);
+		await accessor.get(ICommandService).executeCommand(ChatSubmitAction.ID, { ...context, acceptInputOptions: { sideChat: true } });
 	}
 }
 
@@ -99,74 +145,13 @@ async function selectMessage(accessor: ServicesAccessor, value?: unknown): Promi
 	});
 }
 
-/** The dialog owns temporary multiline text; the composer and frozen input are untouched. */
-async function editMessage(chat: IChatService, widget: IChatWidget, original: QueuedMessage): Promise<void> {
-	const paused = await chat.pausePendingRequest(messageTarget(original));
-	const current = () => widget.visible && widget.sessionId === paused.sessionId && widget.threadId === paused.threadId && widget.domNode.isConnected;
-	const resume = () => original.status === 'pending' ? chat.resumePendingRequest(messageTarget(paused)).then(() => undefined) : Promise.resolve();
-	if (!current()) { await resume(); return; }
-	using lifetime = new DisposableStore();
-	const content = h(widget.domNode.ownerDocument, 'div');
-	const input = lifetime.add(new InputBox(content, { flexibleHeight: true, flexibleMaxHeight: 240, ariaLabel: localize('chat.queue.editTitle', 'Edit queued message'), inputBoxStyles: defaultInputBoxStyles }));
-	input.value = paused.text;
-	const hint = h(content.ownerDocument, 'p');
-	hint.textContent = localize('chat.queue.editHint', 'The message is paused while editing. Ctrl or Command+Enter saves. Escape cancels. Attached inputs and the unsent draft are kept. Previously paused or failed messages stay paused when cancelled.');
-	hint.id = createUuid();
-	input.inputElement.setAttribute('aria-describedby', hint.id);
-	const feedback = h(content.ownerDocument, 'p');
-	feedback.setAttribute('role', 'alert');
-	content.append(hint, feedback);
-	const save = lifetime.add(new Button(content, { label: localize('chat.queue.save', 'Save queued message'), presentation: 'primary' }));
-	save.enabled = !!input.value.trim();
-	const dialog = lifetime.add(new Dialog(widget.domNode, localize('chat.queue.editTitle', 'Edit queued message'), undefined, {
-		disableDefaultAction: true,
-		buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, dialogStyles: defaultDialogStyles, inputBoxStyles: defaultInputBoxStyles,
-		renderBody: container => container.append(content),
-	}));
-	let saved = false;
-	let hidden = false;
-	let pending: Promise<void> | undefined;
-	try {
-		const submit = (): void => {
-			if (pending || !input.value.trim() || !current()) return;
-			input.inputElement.readOnly = true;
-			save.enabled = false;
-			feedback.textContent = '';
-			pending = chat.editPendingRequest(messageTarget(paused), input.value).then(() => {
-				saved = true;
-				status(localize('chat.queue.saved', 'Queued message saved.'));
-				dialog.dispose();
-			}, error => {
-				if (!hidden) feedback.textContent = localize('chat.queue.saveFailed', 'Could not save queued message: {0}', String(error instanceof Error ? error.message : error));
-			}).finally(() => {
-				pending = undefined;
-				input.inputElement.readOnly = false;
-				save.enabled = !!input.value.trim();
-			});
-		};
-		lifetime.add(save.onDidClick(submit));
-		lifetime.add(addDisposableListener(input.inputElement, 'input', () => { save.enabled = !!input.value.trim(); }));
-		lifetime.add(addDisposableListener(input.inputElement, 'keydown', event => {
-			if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); event.stopPropagation(); submit(); }
-		}));
-		lifetime.add(widget.onDidHide(() => dialog.dispose()));
-		lifetime.add(widget.onDidChangeViewModel(() => { if (!current()) dialog.dispose(); }));
-		await dialog.show();
-		hidden = true;
-		await pending;
-	} finally {
-		if (!saved) await resume();
-		if (current()) widget.focusInput();
-	}
-}
 
 export class ChatEditPendingRequestAction extends Action2 {
 	public static readonly ID = 'workbench.action.chat.editPendingRequest';
 	constructor() { super({ id: ChatEditPendingRequestAction.ID, title: localize2('chat.queue.edit', 'Chat: Edit Queued Message'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) }); }
 	public override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
-		const chat = accessor.get(IChatService);
 		const selected = await selectMessage(accessor, value);
-		if (selected) await editMessage(chat, selected.widget, selected.message);
+		if (selected) await selected.widget.startEditing(selected.message.commandId);
 	}
 }
 
@@ -209,8 +194,18 @@ export class ChatRemoveAllPendingRequestsAction extends Action2 {
 export function registerChatQueueActions(): void {
 	registerAction2(ChatQueueMessageAction);
 	registerAction2(ChatSteerWithMessageAction);
+	registerAction2(ChatAskInSideChatAction);
 	registerAction2(ChatEditPendingRequestAction);
 	registerAction2(ChatRemovePendingRequestAction);
 	registerAction2(ChatSendPendingImmediatelyAction);
 	registerAction2(ChatRemoveAllPendingRequestsAction);
+	MenusRegistry.appendMenuItem(MenuId.ChatExecuteQueue, {
+		command: { id: ChatQueueMessageAction.ID, title: localize2('chat.queuePicker.queue', 'Add to Queue'), icon: Lxicon.add, precondition: queueAvailable }, group: 'navigation', order: 1,
+	});
+	MenusRegistry.appendMenuItem(MenuId.ChatExecuteQueue, {
+		command: { id: ChatSteerWithMessageAction.ID, title: localize2('chat.queuePicker.steer', 'Steer with Message'), icon: Lxicon.enter, precondition: queueAvailable }, group: 'navigation', order: 2,
+	});
+	MenusRegistry.appendMenuItem(MenuId.ChatExecute, {
+		submenu: MenuId.ChatExecuteQueue, title: localize2('chat.queuePicker.label', 'Send a Follow-up Message'), when: queueVisible, group: 'navigation',
+	});
 }

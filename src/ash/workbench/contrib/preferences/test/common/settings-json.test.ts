@@ -24,7 +24,7 @@ import { IEditorService as EditorServiceId } from '../../../../services/editor/c
 import { IFileTextModelService, TextModelConflictError } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { Event } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
-import { test, suiteTeardown } from 'mocha';
+import { suite, test, suiteTeardown } from 'mocha';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
@@ -45,6 +45,11 @@ import { createSettingsEditorInput, SettingsEditorInput, UserSettingsResource } 
 import { createJsonCompletionProvider } from '../../../../../../../test/fixtures/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import type { IJSONSchemaSnippet } from '../../../../../base/common/jsonSchema.js';
+import { editorConfiguration, registerEditorFontConfigurations } from '../../../../../editor/common/config/editorConfigurationSchema.js';
+import { JsonLanguageFeatures } from '../../../../../../../extensions/json-language-features/languageFeatures.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -388,6 +393,45 @@ test('settings schema changes notify cached language services when contributed s
 	} finally {
 		registry.updateConfigurations({ add: [], remove: [node] });
 	}
+});
+
+suite('Editor font completion', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('editor font candidates refresh cached settings JSON completion after the font query resolves', async () => {
+		const key = 'editor.fontFamily';
+		const originalSchema = editorConfiguration.properties[key];
+		using configuration = new WorkbenchConfigurationService();
+		using textFiles = createTestTextFileService(configuration.fileService);
+		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(textFiles), {});
+		try {
+			await registerEditorFontConfigurations(async () => []);
+			using contribution = new PreferencesContribution(models, new UserDataProfileService(), new NullLoggerService());
+			let schemaReads = 0;
+			const features = new JsonLanguageFeatures(async () => {
+				schemaReads++;
+				const associations = jsonRegistry.getSchemaAssociations();
+				return JSON.parse(JSON.stringify(Object.entries(jsonRegistry.getSchemaContributions().schemas).map(([uri, schema]) => ({ uri, fileMatch: associations[uri] ?? [], schema }))));
+			});
+			using listener = jsonRegistry.onDidChangeSchema(() => features.invalidateSchemas());
+			const document = { uri: UserSettingsResource.toString(), languageId: 'jsonc', version: 1, text: '{ "editor.fontFamily": ' };
+			const position = { line: 0, character: document.text.length };
+			const before = await features.complete(document, position);
+			assert.deepEqual(before?.items.map(item => item.label), ['""']);
+			assert.equal(schemaReads, 1);
+			const pending = new DeferredPromise<IJSONSchemaSnippet[]>();
+			const registration = registerEditorFontConfigurations(() => pending.p);
+			await features.complete(document, position);
+			assert.equal(schemaReads, 1, 'an unresolved font query leaves the cached schema usable');
+			await pending.complete([{ body: 'Test Mono' }, { body: '字体 "测试"' }]);
+			await registration;
+			const after = await features.complete(document, position);
+			assert.deepEqual(after?.items.map(item => item.label), ['', 'Test Mono', '字体 "测试"'].map(family => JSON.stringify(family)));
+			assert.equal(schemaReads, 2);
+		} finally {
+			editorConfiguration.properties[key] = originalSchema;
+		}
+	});
 });
 
 test('settings JSON saves validate registered values through the text model participant', async () => {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
-import { unavailableOperation, WebAppServerUnavailableError } from '../../../renderer/browser/disconnectedHost.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../../agentHost/browser/disconnectedAppServer.js';
 import { createAppServerSecretStorageStatusService, createDisconnectedSecretStorageStatusService, withSecretStorageErrors } from '../../browser/appServerSecretStorageStatusService.js';
 import { SecretStorageError, secretStorageMessage, type SecretStorageStatus } from '../../common/secrets.js';
 import { setNlsMessages } from '../../../../nls.js';

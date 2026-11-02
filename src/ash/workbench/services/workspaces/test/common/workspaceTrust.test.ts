@@ -14,7 +14,7 @@ import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js'
 import { IRemoteAuthorityResolverService, WebSocketRemoteConnection } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
 import { RemoteAuthorityResolverService as DesktopRemoteAuthorityResolverService } from '../../../../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { WorkspaceTrustRequestService } from '../../common/workspaceTrust.js';
@@ -45,7 +45,7 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	using recovered = new Emitter<void>();
 	let recoveryStatus: 'recovering' | 'idle' = 'recovering';
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [], recovery: { get status() { return recoveryStatus; }, error: undefined, onDidChange: recovered.event, reconnect: async () => { } } });
+	services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [], recovery: { get status() { return recoveryStatus; }, error: undefined, onDidChange: recovered.event, reconnect: async () => { } } });
 	using trust = services.createInstance(WorkspaceTrustManagementService);
 	let notifications = 0;
 	using listener = trust.onDidChangeTrustedFolders(() => notifications += 1);
@@ -107,7 +107,7 @@ for (const prefix of ['ssh', 'team']) {
 		using fleetChanges = new Emitter<number>();
 		using workspace = new TestWorkspaceService({ id: 'remote', uri: URI.parse(`ash-remote://${prefix}+build/alias`) });
 		using services = new InstantiationService();
-		services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
+		services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
 		using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -192,6 +192,7 @@ for (const source of ['permissions', 'workspace', 'resolver', 'recovery', 'dispo
 		using resolver = services.createInstance(RemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IAppServerApi, {
+			isAvailable: true,
 			connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [],
 			recovery: { status: 'idle', error: undefined, onDidChange: recovered.event, reconnect: async () => { } },
 		});
@@ -218,7 +219,7 @@ test('empty remote Workspace Trust discards a resolver hint changed during canon
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkspaceTrustApi, createDisconnectedWorkspaceTrustApi(async () => { throw new Error('An empty window must not read directory grants'); }));
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
+	services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
 	using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	const address = { authority, connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined };
@@ -516,6 +517,7 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	const resolver = resources.add(services.createInstance(RemoteAuthorityResolverService));
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	services.registerInstance(IAppServerApi, {
+		isAvailable: true,
 		connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [],
 		recovery: {
 			get status() { return state.status; }, error: undefined, onDidChange: recovered.event,

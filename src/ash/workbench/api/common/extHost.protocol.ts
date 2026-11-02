@@ -1,4 +1,4 @@
-import type { ExtensionClientSource, ExtensionHostInitialization, ExtensionStatusBarEntry, JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientSource, ExtensionHostInitialization, ExtensionStatusBarEntry, JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 
 export interface ExtensionDocumentSnapshot {
 	readonly uri: string;

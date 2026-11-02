@@ -387,7 +387,19 @@
 	align-items: start;
 }
 
-.ash-projects-overview,
+.ash-projects-overview {
+	min-width: 0;
+}
+
+.ash-projects-composer > .ash-cowork {
+	height: auto;
+	overflow: visible;
+}
+
+.ash-projects-goals {
+	margin-top: var(--ash-spacing-size240);
+}
+
 .ash-projects-materials {
 	min-width: 0;
 	padding: var(--ash-spacing-size240);

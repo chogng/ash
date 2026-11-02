@@ -22,18 +22,18 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 `common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主输出 PTY 不声明输入或工作目录；交互 child process 按真实能力提供 input/processBinary/resize/getCwd。原始字节输入不降级为文本输入。扩展 PTY 的 input/resize 等待 provider 回复，关闭撤回排队与进行中的输入，原始错误传回调用方；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入、尺寸、信号与服务器输出背压走原 Rust 进程链。属性契约提供实际消费的 Title 与 HasChildProcesses，后者用于关闭保护；不预建没有消费者的通用属性端口。
 
-| 文件                                             | 职责与生产入口                                                                                                                                                                          |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `common/terminal.ts`                             | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IRendererHost.terminal` 提供给 Workbench |
-| `browser/appServerTerminalProcessService.ts`     | 已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程                                                                                 |
-| `browser/reconnectableTerminalProcessService.ts` | Electron 本地与远程进程适配器：保存和旋转 token，在新 connection generation 或窗口 reload 后 attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象                                      |
-| `browser/disconnectedTerminalProcessService.ts`  | 无后端的 UI 运行环境明确拒绝进程操作；不创建模拟 Shell                                                                                                                                  |
+| 文件                                             | 职责与生产入口                                                                                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `common/terminal.ts`                             | 前端进程契约：profile、带真实 PID/启动目录的创建、文本或原始字节输入、尺寸、增量字节输出、关闭和连接状态；退出码使用 `undefined` 表达未知，由 `IAgentConnection.terminal` 提供给 Workbench |
+| `browser/appServerTerminalProcessService.ts`     | 已连接 Web 的协议适配；通过现有 Renderer protocol client 调用 `terminal/*`，创建 `connectionOwned` 进程                                                                                    |
+| `browser/reconnectableTerminalProcessService.ts` | Electron 本地与远程进程适配器：保存和旋转 token，在新 connection generation 或窗口 reload 后 attach 原 PTY，恢复最后尺寸；宿主直接选择这个服务对象                                         |
+| `browser/disconnectedTerminalProcessService.ts`  | 无后端的 UI 运行环境明确拒绝进程操作；不创建模拟 Shell                                                                                                                                     |
 
 两个适配器消费同一个 `AppServerProtocolClient`。创建结果的 ready 信息来自 Rust；文本走 `terminal/write`，原始字节只在适配边界编码为 base64 后走 `terminal/writeBinary`，不经过 UTF-8 转换。普通与 SSH 读取都经过同一 DTO 转换入口，在适配边界把 base64 解码为原始 `Uint8Array`，把 nullable 退出码转为前端 `undefined`；多字节字符和控制字节不会经过逐块文本解码。重连租约管理复用该 client 的状态和代次，只恢复已有 PTY，不自行建立连接。Main 负责 connection acquisition、透明 relay、运行时更换通知和通用窗口级内存 SecretStorage，不解析 `terminal/*`，也不拥有终端会话状态。
 
 `terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。Web 的 `connectionOwned` 进程随 connection 关闭而结束。托管产品运行时由独立 PTY 宿主保留 Electron 的 `reconnectable` 进程，Main 持有的独立窗口存活连接保持打开时，App Server 重启不触发断线回收期限；实际关窗或 Main 退出由 Rust 回收该窗口的 Shell 和 job，主动 detach 的窗口交接仍限 30 秒；宿主本身退出、主动交接过期或显式切换执行宿主时不能恢复原 PTY，详见[关闭与恢复](../../../../docs/terminal.md#关闭与恢复)。token 平时只归 Renderer 进程适配层；协调 reload 时通过窗口级内存 SecretStorage 短期交接；跨窗口时先由 Rust 原子 detach 撤销源访问、旋转 token，再经 Main 内存交给指定同工作区／执行宿主窗口，目标失败可返回新 lease 回滚。实际窗口关闭清空内存凭据，不写入普通工作区存储、设置或日志。屏幕和布局 checkpoint 由 Workbench 原 owner 保存，不能代替后端租约。
 
-`common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主直接使用拥有租约管理的服务对象。传输层使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。适配层与工作台之间的身份和顺序约束见 [Terminal 运行契约](../../../../docs/terminal.md#进程接入)。
+`common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IAgentConnection.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主直接使用拥有租约管理的服务对象。传输层使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。适配层与工作台之间的身份和顺序约束见 [Terminal 运行契约](../../../../docs/terminal.md#进程接入)。
 
 后端链路是 `app-server/src/server/request_processors/terminals.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
 

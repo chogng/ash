@@ -14,10 +14,10 @@ import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetMode
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import type { ISessionProviderScope, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
-import { createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import type { AgentInteractionOffer, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
-import type { AdvisorConfig, IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import type { AdvisorConfig, IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
@@ -66,11 +66,12 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 		start: async (input: SessionOperationInput<'startTurn'>) => { starts.push(input); return { turnId: 'started', sequence: 2 }; }, enqueue: async (input: Parameters<IAgentTurnService['enqueue']>[0]) => { queues.push(input); return { sessionId: input.sessionId, threadId: input.threadId, commandId: input.commandId, revision: 1, mode: input.mode, text: '', contextCount: 0, status: 'pending' as const }; }, editQueued: async () => { throw new Error('Unexpected queue edit'); }, cancelQueued: async () => { throw new Error('Unexpected queue cancel'); }, listQueued: async () => ({ messages: [] }), steer: async (input: SessionOperationInput<'steerTurn'>) => { steers.push(input); return { turnId: input.turnId, sequence: 2 }; }, consultAdvisor: async (input: SessionOperationInput<'consultAdvisor'>) => { consults.push(input); return { turnId: 'consultation', sequence: 2 }; }, compact: async (input: SessionOperationInput<'compactContext'>) => { compacts.push(input); return { turnId: 'compacted', sequence: 2 }; }, interrupt: async () => ({ sequence: 2 }), resolveInteraction: async () => ({ sequence: 2 })
 	} as IAgentTurnService;
 	const execution: IAgentExecutionSettingsService = { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } };
-	const appServer = { get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
+	const appServer = { isAvailable: true, get connectionGeneration() { return generation; }, getConnectionState: async () => 'ready', onConnectionState: connection.event, getSlashCommands: async () => [] } as IAppServerApi;
 	const changeApi = { list: async () => ({ changeSets: [] }), summary: async () => ({ sequence: 1, revision: 'initial', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }) } as unknown as ITurnChangesApi;
 	const events = { subscribe: () => ({ dispose() { } }) } as IServerEventApi;
 	const configuration = resources.add(new TestConfigurationService());
-	const chat = resources.add(new ChatService(modelApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
+	const sessionApi = createDisconnectedAgentSessionService(async operation => { throw new Error(`Unexpected ${operation}`); });
+	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
@@ -408,12 +409,12 @@ for (const kind of ['Code', 'Cowork'] as const) {
 }
 
 for (const kind of ['Code', 'Cowork'] as const) {
-	for (const aba of [false, true]) {
+	if (kind === 'Code') for (const aba of [false, true]) {
 		test(`${kind} advisor lifetime cancels a delayed question on ${aba ? 'A-B-A' : 'A-B'}`, async () => {
 			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 			const pending = new DeferredPromise<AdvisorConfig | null>(); const started = new DeferredPromise<void>();
 			f.modelApi.readAdvisorDefault = () => { void started.complete(); return pending.p; };
-			const result = f.model.executeServerCommand('advisor', 'Private A question').then(() => undefined, error => error);
+			const result = (f.model as ChatWidgetModel).executeServerCommand('advisor', 'Private A question').then(() => undefined, error => error);
 			await started.p; await f.model.selectThread({ session: f.session, threadId: 'B' }); if (aba) await f.model.selectThread({ session: f.session, threadId: 'A' });
 			const state = f.model.state; const error = f.model.error;
 			await pending.complete({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 });
@@ -422,7 +423,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		test(`${kind} compact lifetime cancels a delayed subscription on ${aba ? 'A-B-A' : 'A-B'}`, async () => {
 			const pending = new DeferredPromise<ThreadSubscription>(); let first = true;
 			const f = fixture(kind, async threadId => { if (first) { first = false; return pending.p; } return { ...snapshot(threadId), updates: [] }; }); using resources = f.resources;
-			const result = f.model.executeServerCommand('compact', '').then(() => undefined, error => error);
+			const result = (f.model as ChatWidgetModel).executeServerCommand('compact', '').then(() => undefined, error => error);
 			await f.model.selectThread({ session: f.session, threadId: 'B' }); if (aba) await f.model.selectThread({ session: f.session, threadId: 'A' });
 			const state = f.model.state; const error = f.model.error;
 			await pending.complete({ ...snapshot('A'), updates: [] });
@@ -662,7 +663,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	}
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+for (const kind of ['Code'] as const) {
 	for (const argument of ['Private question', 'off']) {
 		test(`${kind} captured server command lifetime blocks ${argument === 'off' ? 'default mutation' : 'consultation'} after input cancellation`, async () => {
 			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
@@ -670,7 +671,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			f.modelApi.readAdvisorDefault = () => { void started.complete(); return answer.p; };
 			f.modelApi.setAdvisorDefault = async () => { mutations++; };
 			const signal = new AbortController();
-			const command = Reflect.apply(f.model.executeServerCommand, f.model, ['advisor', argument, signal.signal]).then(() => undefined, (error: unknown) => error);
+			const command = Reflect.apply((f.model as ChatWidgetModel).executeServerCommand, f.model, ['advisor', argument, signal.signal]).then(() => undefined, (error: unknown) => error);
 			await started.p; signal.abort();
 			await answer.complete({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 });
 			assert.ok(isCancellationError(await command)); assert.equal(f.consults.length, 0); assert.equal(mutations, 0);
@@ -841,7 +842,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+for (const kind of ['Code'] as const) {
 	test(`${kind} advisor command preserves budgets across model changes and Off`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		const old: AdvisorConfig = { model: { provider: 'test', model: 'old' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: 'high' };
@@ -849,11 +850,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		f.modelApi.readAdvisorDefault = async () => saved;
 		f.modelApi.setAdvisorDefault = async ({ advisor }) => { saved = advisor; };
 		f.models.listAdvisorModels = async () => [{ model: { provider: 'test', model: 'next' }, displayName: 'Next', longContext: null, supportedReasoningEfforts: [{ effort: 'medium', description: 'Medium' }] }];
-		await f.model.executeServerCommand('advisor', 'test/next');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'test/next');
 		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
-		await f.model.executeServerCommand('advisor', 'off');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'off');
 		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: false, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
-		await f.model.executeServerCommand('advisor', 'clear');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'clear');
 		assert.equal(saved, null);
 	});
 }
@@ -969,4 +970,21 @@ test('Cancelling a queue editor restores already admitted input after AI is disa
 	await f.chat.resumePendingRequest(target);
 	await assert.rejects(f.chat.startTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'New work', mode: 'agent' }), /AI features are disabled/);
 	assert.deepEqual(calls, [[target, { type: 'resume' }]]);
+});
+
+
+test('Cowork does not expose Code command execution and submits slash text literally for start and queue', async () => {
+	for (const route of ['start', 'queue'] as const) {
+		const f = fixture('Cowork', undefined, route === 'queue');
+		using resources = f.resources;
+		await f.model.initialize();
+		assert.equal('executeServerCommand' in f.model, false);
+		assert.deepEqual(f.model.inputState.slashCommands, []);
+		await f.model.send('/develop Keep this as a message', 'agent', undefined, undefined, route === 'queue' ? { queue: ChatRequestQueueKind.Queued } : undefined);
+		const request = route === 'start' ? f.starts[0]! : f.queues[0]!;
+		assert.equal(request.commandInterpretation, 'literal');
+		assert.deepEqual(request.input, [{ type: 'text', text: '/develop Keep this as a message' }]);
+		assert.equal(f.compacts.length, 0);
+		assert.equal(f.consults.length, 0);
+	}
 });

@@ -206,9 +206,9 @@ suite('chatTranscript browser component', () => {
 			await page.goto(`/chatTranscript.html?locale=${locale}`);
 			await page.evaluate(() => window.ashChatTranscriptIntegration.showTool());
 			const tool = page.locator('.ash-chat-tool-invocation');
-			const summary = tool.locator('summary');
+			const summary = tool.locator(':scope > summary');
 			await expect(tool).not.toHaveAttribute('open');
-			await expect(summary).toHaveText(locale === 'en' ? 'shell · Awaiting result' : 'shell · 等待结果');
+			await expect(summary).toHaveText(locale === 'en' ? 'Run echo "<safe>" · Awaiting result' : '运行 echo "<safe>" · 等待结果');
 			await summary.focus();
 			await summary.press('Enter');
 			await expect(tool).toHaveAttribute('open', '');
@@ -233,7 +233,7 @@ suite('chatTranscript browser component', () => {
 			await expect(accessibleText).toHaveValue(locale === 'en' ? /tool summary/ : /工具摘要/);
 			await page.keyboard.press('Escape');
 			await expect(accessibleText).toHaveCount(0);
-			await expect(summary).toHaveText(locale === 'en' ? 'shell · Failed' : 'shell · 失败');
+			await expect(summary).toHaveText(locale === 'en' ? 'Run echo "<safe>" · Failed' : '运行 echo "<safe>" · 失败');
 			await expect(summary).toBeFocused();
 			await expect(tool).toHaveAttribute('open', '');
 			for (const palette of ['dark', 'light', 'hc'] as const) {

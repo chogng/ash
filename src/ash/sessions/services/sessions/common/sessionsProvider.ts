@@ -1,13 +1,14 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IObservable } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from './session.js';
+import type { IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 
 export interface ISessionCreateOptions {
 	readonly devContainer?: boolean;
+	readonly branchName?: string;
 	readonly token: CancellationToken;
 }
 
@@ -20,6 +21,8 @@ export interface ISessionsProvider extends IDisposable {
 	readonly id: string;
 	readonly label: string;
 	readonly order: number;
+	/** This provider's connection scope mounts and retires its Session directories. */
+	readonly ownsSessionFileSystem?: boolean;
 	readonly automations?: ISessionsProviderAutomations;
 	readonly connectionStatus?: IObservable<'connecting' | 'connected' | 'disconnected'>;
 	/** The catalog and its detail subscriptions must be read again; selection remains frontend-owned. */
@@ -33,6 +36,8 @@ export interface ISessionsProvider extends IDisposable {
 	/** Cancels pending acquisition and releases it before the next lease can be acquired. */
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
+	/** Available checkouts on this provider's host, preserving execution authority. */
+	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]>;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
 	setModel(model: ModelRef): Promise<void>;

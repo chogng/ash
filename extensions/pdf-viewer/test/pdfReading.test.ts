@@ -11,7 +11,7 @@ const require = createRequire(resolve('extensions/pdf-viewer/package.json'));
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js') as typeof import('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js') as typeof import('@modelcontextprotocol/sdk/client/stdio.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas') as typeof import('@napi-rs/canvas');
-import { buildPdfReadingPackage } from '../ai/package.js';
+import { buildPdfReadingPackage, stagePdfReadingRuntime } from '../ai/package.js';
 import { pdfReadingFixture } from './pdfReadingFixture.js';
 
 let root: string;
@@ -31,9 +31,16 @@ before(async function () {
 	path = join(root, 'fixture.pdf');
 	const bytes = pdfReadingFixture(); sha256 = digest(bytes);
 	await writeFile(path, bytes);
-	await buildPdfReadingPackage(resolve('extensions/pdf-viewer'), join(root, 'submission'));
+	const source = resolve('extensions/pdf-viewer');
+	const submission = join(root, 'submission');
+	if (process.platform === 'win32') {
+		await assert.rejects(buildPdfReadingPackage(source, submission), /supports macOS and Linux/);
+		await stagePdfReadingRuntime(source, join(submission, 'package'));
+	} else {
+		await buildPdfReadingPackage(source, submission);
+	}
 	client = new Client({ name: 'ash-pdf-test', version: '1' });
-	await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(root, 'submission/package/server/launch')], stderr: 'pipe', env: { TMPDIR: root } }));
+	await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(root, 'submission/package/server/launch')], stderr: 'inherit', env: { TMPDIR: root, TMP: root, TEMP: root } }));
 });
 after(async () => {
 	await client?.close();

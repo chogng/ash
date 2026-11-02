@@ -5,7 +5,7 @@ import { IInstantiationService } from '../../../../../../../platform/instantiati
 import type { ChatContentPart } from '../../../../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../../../../nls.js';
 import type { IChatImageRevealOrigin } from '../../../attachments/chatImageReveal.js';
-import type { IChatListItem } from '../../chatListItems.js';
+import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
 import '../media/chatImageGenerationProgressPart.css';
 

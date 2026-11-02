@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 
 export type SymphonyStatus = 'pending' | 'starting' | 'running' | 'blocked' | 'retrying' | 'stopping' | 'paused' | 'completed';
@@ -33,3 +34,5 @@ export interface ISymphonyBackend {
 	enable(workflowId: string, enabled: boolean): Promise<void>;
 	messages(id: string): Promise<{ readonly conversation: SymphonyConversation; readonly messages: readonly SymphonyMessage[]; }>;
 }
+
+export const ISymphonyBackendService = createServiceIdentifier<ISymphonyBackend | undefined>('symphonyBackendService');

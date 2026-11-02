@@ -2,7 +2,7 @@ import { SettingsPageRenderer } from './settingsRenderers.js';
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../speech/common/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../platform/dictation/common/dictation.js';
 import { readDictationOptions } from '../../chat/browser/speechToText/dictationInput.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import './media/dictationSettingsRenderer.css';

@@ -15,8 +15,28 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { AGENTS_VOICE_CONNECTED, AGENTS_VOICE_CONNECTING, AGENTS_VOICE_PUSH_TO_TALK, IAgentsVoiceWindowService } from '../common/agentsVoice.js';
 import { AgentsVoiceWindowService } from './agentsVoiceWindowService.js';
+import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from './voiceModeOnboarding.js';
+import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
+import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 registerSingleton(IAgentsVoiceWindowService, AgentsVoiceWindowService, InstantiationType.Delayed);
+registerSingleton(IVoiceModeOnboardingService, VoiceModeOnboardingService, InstantiationType.Delayed);
+
+registerAction2(class ShowVoiceIntroduction extends Action2 {
+	constructor() {
+		super({
+			id: 'agentsVoice.showIntroduction',
+			title: localize2('agentsVoice.command.introduction', 'Voice: Show Introduction'),
+			f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
+		});
+	}
+	run(accessor: ServicesAccessor): void {
+		if (!accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) {
+			accessor.get(IVoiceModeOnboardingService).show();
+		}
+	}
+});
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.AgentsVoice, defaultValue: true,

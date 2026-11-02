@@ -72,25 +72,25 @@ export class AppServerBrowserHost extends Disposable {
 		if (pages.length > 256) { throw new Error('Browser page list exceeds its limit'); }
 		return { pages };
 	}
-	async create(params: BrowserCreateParams, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; }) {
+	async create(params: BrowserCreateParams, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; providerId?: string; }) {
 		this.assertEnabled();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
-		if (!params.canvas) { return this.createPage(params, signal, context.network); }
+		if (!params.canvas) { return this.createPage(params, signal, context.network, context.providerId); }
 		const key = JSON.stringify([params.canvas.sessionId, params.threadId, params.canvas.instanceId]);
 		const pending = this.canvasOperations.get(key) ?? Promise.resolve();
-		const opening = pending.catch(() => undefined).then(() => this.createPage(params, signal, context.network));
+		const opening = pending.catch(() => undefined).then(() => this.createPage(params, signal, context.network, context.providerId));
 		this.canvasOperations.set(key, opening);
 		try { return await opening; }
 		finally { if (this.canvasOperations.get(key) === opening) { this.canvasOperations.delete(key); } }
 	}
 
-	private async createPage(params: BrowserCreateParams, signal: AbortSignal, network?: IBrowserViewNetwork | null): Promise<{ targetId: string; }> {
+	private async createPage(params: BrowserCreateParams, signal: AbortSignal, network?: IBrowserViewNetwork | null, providerId?: string): Promise<{ targetId: string; }> {
 		signal.throwIfAborted();
 		const canvas = params.canvas && {
-			sessionId: params.canvas.sessionId, instanceId: params.canvas.instanceId, title: params.canvas.title,
+			...(providerId ? { providerId } : {}), sessionId: params.canvas.sessionId, instanceId: params.canvas.instanceId, title: params.canvas.title,
 			...(params.canvas.definition ? { extensionId: params.canvas.definition.extensionId, canvasId: params.canvas.definition.canvasId } : {})
 		};
-		const existing = params.canvas && (await this.views.getBrowserViews()).find(info => info.canvas?.instanceId === params.canvas!.instanceId && info.canvas?.sessionId === params.canvas!.sessionId
+		const existing = params.canvas && (await this.views.getBrowserViews()).find(info => (info.canvas?.providerId ?? 'local-agent-host') === (providerId ?? 'local-agent-host') && info.canvas?.instanceId === params.canvas!.instanceId && info.canvas?.sessionId === params.canvas!.sessionId
 			&& (info.owner.type === 'agent' ? info.owner.sessionId : info.canvas.threadId) === params.threadId);
 		if (existing && (existing.owner.type !== 'agent' || existing.canvas?.extensionId !== canvas?.extensionId || existing.canvas?.canvasId !== canvas?.canvasId)) { throw new Error('CanvasInstanceAlreadyOwned'); }
 		const retained = existing ? this.views.tryGetBrowserView(existing.id) : undefined;
@@ -205,11 +205,12 @@ export class AppServerBrowserHost extends Disposable {
 	}
 
 	private routes(): readonly IpcRoute<unknown, unknown>[] {
-		const operation = (value: unknown): { id: string; params: unknown; network?: IBrowserViewNetwork | null; } => {
+		const operation = (value: unknown): { id: string; params: unknown; network?: IBrowserViewNetwork | null; providerId?: string; } => {
 			if (!isRecord(value) || typeof value.id !== 'string' || !/^[a-f0-9-]{36}$/.test(value.id)) { throw new Error('Invalid browser operation'); }
-			return { id: value.id, params: value.params, ...(value.network !== undefined ? { network: value.network === null ? null : validateBrowserViewNetwork(value.network) } : {}) };
+			if (value.providerId !== undefined && (typeof value.providerId !== 'string' || !value.providerId || value.providerId.length > 1024)) { throw new TypeError('Invalid Canvas host'); }
+			return { id: value.id, params: value.params, ...(typeof value.providerId === 'string' ? { providerId: value.providerId } : {}), ...(value.network !== undefined ? { network: value.network === null ? null : validateBrowserViewNetwork(value.network) } : {}) };
 		};
-		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
+		const run = async (value: unknown, execute: (params: unknown, context: { signal: AbortSignal; network?: IBrowserViewNetwork | null; providerId?: string; }, decode: typeof decodeAppServerServerRequestParams) => unknown | Promise<unknown>): Promise<unknown> => {
 			this.assertNotDisposed();
 			const request = operation(value);
 			if (this.operations.has(request.id) || this.operations.size >= 128) { throw new Error('Browser operation capacity exceeded'); }
@@ -224,7 +225,7 @@ export class AppServerBrowserHost extends Disposable {
 					const { decodeAppServerServerRequestParams: decode } = await import('../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js');
 					signal.throwIfAborted();
 					this.assertNotDisposed();
-					return execute(request.params, { signal, network: request.network }, decode);
+					return execute(request.params, { signal, network: request.network, providerId: request.providerId }, decode);
 				};
 				return await raceCancellationError(operation(), signal, 'BrowserRequestCancelled');
 			}
@@ -238,6 +239,21 @@ export class AppServerBrowserHost extends Disposable {
 				}, invoke: value => this.configure(value as { enabled: boolean; cdpEnabled: boolean; })
 			},
 			{ channel: 'list', validate: operation, invoke: value => run(value, (params, _context, decode) => this.list(decode('browser/list', params))) },
+			{
+				channel: 'retireConnection', validate: value => {
+					if (!isRecord(value) || Object.keys(value).length !== 1 || !Array.isArray(value.threadIds) || value.threadIds.length > 4096
+						|| value.threadIds.some(id => typeof id !== 'string' || !id || id.length > 4096)) { throw new TypeError('Invalid browser connection retirement'); }
+					return value.threadIds as string[];
+				}, invoke: async value => {
+					this.assertNotDisposed();
+					const threads = new Set(value as string[]);
+					for (const [id, thread] of this.hostedTargets) { if (threads.has(thread)) { this.views.tryGetBrowserView(id)?.dispose(); } }
+					await Promise.all([...threads].map(async thread => {
+						this.sessions.delete(thread);
+						await Promise.all([this.playwright.disposeSession(thread), this.cdp.disposeSession(thread)]);
+					}));
+				},
+			},
 			{
 				channel: 'disposeSession', validate: value => {
 					if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 512) { throw new TypeError('Invalid browser session'); }

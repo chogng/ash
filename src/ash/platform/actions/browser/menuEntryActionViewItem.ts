@@ -20,13 +20,11 @@ type MenuActionGroups = ReadonlyArray<readonly [string, readonly IAction[]]>;
 export function getContextMenuActions(
 	groups: MenuActionGroups,
 	primaryGroup?: string,
-	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
 ): PrimaryAndSecondaryActions {
 	const target: PrimaryAndSecondaryActions = { primary: [], secondary: [] };
 	fillInActions(
 		groups,
 		target,
-		targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false,
 		primaryGroup ? (group) => group === primaryGroup : undefined,
 	);
 	return target;
@@ -35,13 +33,11 @@ export function getContextMenuActions(
 export function getFlatContextMenuActions(
 	groups: MenuActionGroups,
 	primaryGroup?: string,
-	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
 ): IAction[] {
 	const target: IAction[] = [];
 	fillInActions(
 		groups,
 		target,
-		targetWindow ? shouldUseAlternativeMenuActions(targetWindow) : false,
 		primaryGroup ? (group) => group === primaryGroup : undefined,
 	);
 	return target;
@@ -94,7 +90,6 @@ export function fillInActionBarActions(
 	fillInActions(
 		groups,
 		target,
-		false,
 		isPrimaryGroup,
 		shouldInlineSubmenu,
 		useSeparatorsInPrimaryActions,
@@ -104,7 +99,6 @@ export function fillInActionBarActions(
 function fillInActions(
 	groups: MenuActionGroups,
 	target: IAction[] | PrimaryAndSecondaryActions,
-	useAlternativeActions: boolean,
 	isPrimaryGroup: (group: string) => boolean = (group) => group === 'navigation',
 	shouldInlineSubmenu: (action: SubmenuAction, group: string, groupSize: number) => boolean = () => false,
 	useSeparatorsInPrimaryActions = false,
@@ -119,10 +113,7 @@ function fillInActions(
 		if (bucket.length > 0 && (!isPrimary || useSeparatorsInPrimaryActions)) {
 			bucket.push(new Separator());
 		}
-		for (const originalAction of groupActions) {
-			const action = useAlternativeActions
-				? resolveAlternativeMenuAction(originalAction)
-				: originalAction;
+		for (const action of groupActions) {
 			const index = bucket.push(action) - 1;
 			if (action instanceof SubmenuAction) submenus.push({ group, action, index });
 		}
@@ -136,45 +127,9 @@ function fillInActions(
 	}
 }
 
-export function shouldUseAlternativeMenuActions(targetWindow: Window): boolean {
-	const status = ModifierKeyEmitter.getInstance(targetWindow).keyStatus;
-	return status.altKey || ((isWindows || isLinux) && status.shiftKey);
-}
-
-export function resolveAlternativeMenuActions(
-	actions: readonly IAction[],
-	useAlternative: boolean,
-): readonly IAction[] {
-	if (!useAlternative) return actions;
-	return actions.map(resolveAlternativeMenuAction);
-}
-
-function resolveAlternativeMenuAction(action: IAction): IAction {
-	if (action instanceof MenuItemAction) return action.alt ?? action;
-	if (!(action instanceof SubmenuAction)) return action;
-	if (action instanceof SubmenuItemAction) {
-		return new SubmenuItemAction(
-			action.item,
-			action.actions.map(resolveAlternativeMenuAction),
-		);
-	}
-	return new SubmenuAction(
-		action.id,
-		action.label,
-		action.actions.map(resolveAlternativeMenuAction),
-		action.icon,
-	);
-}
-
 export type IMenuEntryActionViewItemOptions = ActionViewItemOptions;
 
-/**
- * ActionBar representation of one command resolved from a menu contribution.
- *
- * Popup-menu rows use base Menu's private view items instead; this platform
- * representation is for contributed actions rendered in toolbars and other
- * ActionBar hosts.
- */
+/** Contributed toolbar actions; popup rows use the shared base Menu view items. */
 export class MenuEntryActionViewItem extends ButtonActionViewItem {
 	private readonly menuItemAction: MenuItemAction;
 	private activeAction: MenuItemAction;

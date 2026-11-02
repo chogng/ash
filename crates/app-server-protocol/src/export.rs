@@ -52,6 +52,8 @@ pub const GENERATED_TYPESCRIPT_HEADER: &str =
 #[schemars(title = "Ash App Server Protocol")]
 #[serde(rename_all = "camelCase")]
 struct ProtocolSchema {
+    host_log_request: ash_host_logs::contract::HostLogRequest,
+    host_log_response: ash_host_logs::contract::HostLogResponse,
     native_host_credential_request: crate::host_credentials::HostCredentialRequest,
     native_host_credential_response: crate::host_credentials::HostCredentialResponse,
     listen_info: AppServerListenInfo,
@@ -318,6 +320,44 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
         (PathBuf::from("index.ts"), generated_index()),
     ];
 
+    let mut host_logs = String::from(GENERATED_TYPESCRIPT_HEADER);
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogRequest as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogResponse as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogFailure as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogEntry as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogLevel as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogCursor as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogFile as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogFormat as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    host_logs.push_str(&format!(
+        "export {}\n",
+        <ash_host_logs::contract::HostLogReadResult as ts_rs::TS>::decl(&ts_rs::Config::default())
+    ));
+    files.push((PathBuf::from("HostLogs.ts"), host_logs));
     files.extend(typescript_decoder::generate(&schema));
     for binding in TYPESCRIPT_BINDINGS {
         files.push((

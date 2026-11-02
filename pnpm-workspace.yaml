@@ -8,6 +8,8 @@ packages:
   - extensions/json-language-features
   - test/scenario
 engineStrict: true
+skills:
+  dirs: []
 allowBuilds:
   core-js: false
   electron: true

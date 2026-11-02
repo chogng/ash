@@ -87,7 +87,7 @@ export class OutputViewPane extends ViewPane {
 		this.headerActionsElement.append(this.titleControls);
 		this._register(toDisposable(() => this.titleControls.remove()));
 		this.titleActions = this._register(new ActionBar(this.titleControls, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
-		this.titleActions.element.classList.add('ash-toolbar');
+		this.titleActions.domNode.classList.add('ash-toolbar');
 		this.filterBar = h(container.ownerDocument, 'div');
 		this.filterBar.className = 'ash-output-filter-bar';
 		this.filterBar.hidden = true;
@@ -101,7 +101,7 @@ export class OutputViewPane extends ViewPane {
 		this.filterInput.value = this.filters.text;
 		this.filterWidget.append(this.filterInput);
 		this.filterToolbar = this._register(new ActionBar(this.filterWidget, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.filter', 'Filter Output'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
-		this.filterToolbar.element.classList.add('ash-toolbar');
+		this.filterToolbar.domNode.classList.add('ash-toolbar');
 		this.titleControls.prepend(this.filterWidget);
 		this.content = h(container.ownerDocument, 'div');
 		this.content.className = 'ash-output-content';
@@ -161,7 +161,7 @@ export class OutputViewPane extends ViewPane {
 			const active = this.filterWidget.ownerDocument.activeElement;
 			const focused = this.filterWidget.contains(active) ? active as HTMLElement : undefined;
 			const { selectionStart, selectionEnd, selectionDirection } = this.filterInput;
-			host.insertBefore(this.filterWidget, inHeader ? this.titleActions.element : null);
+			host.insertBefore(this.filterWidget, inHeader ? this.titleActions.domNode : null);
 			// Reparent the existing control so its value, caret and keyboard focus survive resizing.
 			focused?.focus({ preventScroll: true });
 			if (focused === this.filterInput) this.filterInput.setSelectionRange(selectionStart, selectionEnd, selectionDirection ?? undefined);
@@ -248,7 +248,7 @@ export class OutputViewPane extends ViewPane {
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
-			this.titleActions.element.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)?.classList.add('ash-output-channel-picker');
+			this.titleActions.domNode.querySelector<HTMLElement>(`[data-action-id="${SelectChannelActionId}"]`)?.classList.add('ash-output-channel-picker');
 			const filtered = OutputSeverities.some(severity => !this.filters.isSeverityVisible(severity)) || categories.some(category => !this.filters.isCategoryVisible(category, active!.id));
 			this.filterWidget.classList.toggle('filtered', filtered);
 			const filterLabel = filtered ? localize('output.filterActive', 'Filter Output (Filters Active)') : localize('output.filter', 'Filter Output');

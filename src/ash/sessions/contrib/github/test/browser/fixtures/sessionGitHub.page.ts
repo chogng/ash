@@ -1,5 +1,5 @@
-import { AppServerAutomationService } from '../../../../../../platform/agentHost/browser/appServerAutomationService.js';
-import type { Automation } from '../../../../../../platform/agentHost/common/automation.js';
+import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
+import type { Automation } from '../../../../../../platform/automations/common/automation.js';
 import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { IChecksOperationService } from '../../../../changes/common/checksOperationService.js';
@@ -10,7 +10,7 @@ import { IChatService, type StartTurnOptions } from '../../../../../../workbench
 import { IGitHubService as IGitHubApi } from '../../../../../../platform/github/common/githubService.js';
 import { IGitHubService as ISessionGitHubService } from '../../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
-import type { IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
@@ -47,6 +47,8 @@ import { SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInp
 import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
+import { chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot, refreshChatInputStack, setChatInputStackSlot } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
+import '../../../../../../workbench/contrib/chat/browser/widget/media/chat.css';
 
 
 const listCustomViews = { showCustomView: (id: string) => { document.body.dataset.openedView = id; }, activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
@@ -203,9 +205,9 @@ resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undef
 const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
 const scm = { onDidAddRepository: Event.None, onDidRemoveRepository: Event.None, repositories: git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: (listener: () => void) => statusChanged.event(() => listener()) } })) } as unknown as ISCMService;
 const baseHost = createDisconnectedRendererApi();
-const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
+const hostEvents = resources.add(new Emitter<Parameters<Parameters<IWorkbenchHost['events']['subscribe']>[0]>[0]>());
 resources.add(accountsChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
-const host: IRendererHost = {
+const host: IWorkbenchHost = {
 	...baseHost, automation: resources.add(new AppServerAutomationService(client)), github: new AppServerGitHubService(client), events: { subscribe: hostEvents.event },
 	appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready', onConnectionState: listener => client.onStateChange(listener) },
 	localGit: {
@@ -215,7 +217,7 @@ const host: IRendererHost = {
 		})))
 	},
 };
-const scope: ISessionProviderScope = { providerId: 'primary', services: { host } as SessionProviderServices, thread: host.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
+const scope: ISessionProviderScope = { providerId: 'primary', services: { host } as unknown as SessionProviderServices, thread: host.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
 const scopes = { getScopes: () => [scope], getScope: () => scope, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService;
 const github = resources.add(new GitHubService(sessions, management, scm, scopes, new ConsoleLogger('sessions-pr-test')));
 const main = document.createElement('main');
@@ -225,8 +227,23 @@ const opened: string[] = [];
 const opener = { open: async (uri: URI) => { opened.push(uri.toString()); return true; } } as IOpenerService;
 const notifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
-const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
+const inputStack = new URL(location.href).searchParams.has('inputStack');
+const toolbarModel = inputStack ? {
+	get sessionId() { return selection?.kind === 'session' ? selection.active.session.sessionId : undefined; },
+	onDidChange: selected.event,
+} : { sessionId: 'session', onDidChange: Event.None };
+const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
+if (inputStack) {
+	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
+	main.classList.add('ash-chat-input-part', chatInputStackClass);
+	const input = document.createElement('textarea');
+	input.classList.add('ash-chat-input-container', chatInputStackSlotClass);
+	input.value = 'Retained PR draft';
+	main.append(input);
+	setChatInputStackSlot(input, ChatInputStackSlot.Standalone);
+	refreshChatInputStack(main);
+}
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
 const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
 const submissions: Record<string, unknown>[] = [];

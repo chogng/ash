@@ -1,12 +1,12 @@
-import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort, ModelCatalogStatus } from '../../../../platform/agentHost/common/agentModels.js';
+import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort, ModelCatalogStatus } from '../../../../platform/models/common/agentModels.js';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { IAgentModelsService, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
-import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
-import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, type CustomModelProvider, type ModelProviderTestResult } from '../../../../platform/models/common/agentModels.js';
+import type { ModelPreferencesUpdate } from '../../../../platform/models/common/agentModels.js';
+import type { ApprovalReviewModelSelection } from '../../../../platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';

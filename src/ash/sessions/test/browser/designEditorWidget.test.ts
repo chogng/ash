@@ -2036,8 +2036,8 @@ test('Design edits text inside scaled rotated groups and keeps the character edi
 
 test('Design font picker queries installed families only on request and accepts a chosen font', async () => {
 	using view = createView(); view.layout({ width: 400, height: 300 }); createText(view);
-	let calls = 0; const previous = Object.getOwnPropertyDescriptor(globalThis, 'queryLocalFonts');
-	Object.defineProperty(globalThis, 'queryLocalFonts', { configurable: true, value: async () => { calls++; return [{ family: 'Test Serif' }, { family: 'Test Sans' }, { family: 'Test Serif' }]; } });
+	let calls = 0; const previous = Object.getOwnPropertyDescriptor(browser.window, 'queryLocalFonts');
+	Object.defineProperty(browser.window, 'queryLocalFonts', { configurable: true, value: async () => { calls++; return [{ family: 'Test Serif' }, { family: 'Test Sans' }, { family: 'Test Serif' }]; } });
 	try {
 		assert.equal(calls, 0);
 		const button = [...view.propertiesDomNode.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Load installed fonts')!; button.click();
@@ -2045,7 +2045,7 @@ test('Design font picker queries installed families only on request and accepts 
 		const input = view.propertiesDomNode.querySelector<HTMLInputElement>('[aria-label="Font family"]')!; assert.ok(input.list); assert.deepEqual([...input.list.options].map(option => option.value).filter(value => value.startsWith('Test')), ['Test Sans', 'Test Serif']);
 		input.value = 'Test Serif'; input.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 		assert.equal((view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>).fontFamily, 'Test Serif');
-	} finally { if (previous) { Object.defineProperty(globalThis, 'queryLocalFonts', previous); } else { Reflect.deleteProperty(globalThis, 'queryLocalFonts'); } }
+	} finally { if (previous) { Object.defineProperty(browser.window, 'queryLocalFonts', previous); } else { Reflect.deleteProperty(browser.window, 'queryLocalFonts'); } }
 });
 
 test('Linked text styles stay within the character selection and preserve subsequent caret emphasis', () => {

@@ -667,10 +667,16 @@ export const SettingsNavigation = [
 			{
 				id: 'chat-appearance',
 				label: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.label' }, 'Appearance'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.description' }, 'Customize the message input and code blocks in replies.'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.description' }, 'Customize chat messages, the message input, and code blocks.'),
 				keywords: ['chat input', 'prompt', 'chat code', 'font', 'typography', 'word wrap'],
 				presentation: 'general',
 				groups: [
+					{
+						id: 'chat-message-typography',
+						label: localize('settings.chatMessages.label', 'Messages'),
+						description: localize('settings.chatMessages.description', 'Choose the font, base text size, and helpful-response animation for messages.'),
+						settings: ['chat.fontFamily', 'chat.fontSize', 'chat.upvoteAnimation'],
+					},
 					{
 						id: 'chat-input-typography',
 						label: localize('settings.chatInput.label', 'Message input'),

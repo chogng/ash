@@ -1,6 +1,6 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import type { ISyntaxApi, SyntaxRange } from '../common/syntaxApi.js';
 import { Event } from '../../../base/common/event.js';

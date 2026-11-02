@@ -2,6 +2,7 @@ import { EditorContributionInstantiation, registerEditorContribution } from '../
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { localize } from '../../../../nls.js';
 import { TestingEditorContribution } from './testingEditorContribution.js';
@@ -53,6 +54,7 @@ class TestingContribution extends Disposable implements IWorkbenchContribution {
 		@ITestingService testing: ITestingService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ITaskService private readonly tasks: ITaskService,
+		@IAppServerApi private readonly appServer: IAppServerApi,
 	) {
 		super();
 		const capability = hasTestCapability.bindTo(contextKeys);
@@ -62,8 +64,10 @@ class TestingContribution extends Disposable implements IWorkbenchContribution {
 	}
 
 	public async onWorkspaceRestored(): Promise<void> {
+		// UI-only hosts have no backend file access for automatic workspace task detection.
+		if (await this.appServer.getConnectionState() !== 'ready' || this.isDisposed) { return; }
 		// Reuse task detection and its file watchers; Rust discovery can build test targets.
-		await this.tasks.refresh();
+		await this.tasks.getWorkspaceTasks();
 	}
 }
 

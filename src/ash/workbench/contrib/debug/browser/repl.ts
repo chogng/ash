@@ -122,7 +122,7 @@ export class Repl extends FilterViewPane {
 		this.contentElement.classList.add('ash-debug-console');
 		this.headerActionsElement.classList.add('ash-debug-console-title-actions');
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('debug.repl.actions', 'Debug Console actions') }));
-		this.titleActions.element.classList.add('ash-toolbar');
+		this.titleActions.domNode.classList.add('ash-toolbar');
 		this.sessionSelect = h(container.ownerDocument, 'select');
 		this.sessionSelect.className = 'ash-debug-console-session';
 		this.sessionSelect.setAttribute('aria-label', localize('debug.repl.session', 'Debug Console session'));

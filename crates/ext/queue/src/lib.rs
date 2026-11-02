@@ -9,6 +9,7 @@ pub use runtime::QueueExecutor;
 pub use runtime::QueueRuntime;
 pub use store::QueueStore;
 
+pub use contract::QueueDelivery;
 pub use contract::QueueEdit;
 pub use contract::QueueInput;
 pub use contract::QueueMove;

@@ -19,6 +19,8 @@ export interface ICanvas {
 	readonly title: string;
 	readonly status?: string;
 	readonly source: URI | undefined;
+	readonly extensionId?: string;
+	readonly canvasId?: string;
 }
 
 export type CanvasExtensionSource = 'user' | 'project' | 'session' | 'plugin' | 'unknown';
@@ -94,6 +96,8 @@ export interface ICanvasContextService {
 	readonly onDidChangeVisibility: Event<void>;
 	isOwnerVisible(owner: ICanvasOwner, reader?: IReader): boolean;
 	getContext(owner: ICanvasOwner, reader?: IReader): ICanvasContext | undefined;
+	getTrackedCanvas?(reference: ICanvasReference, reader?: IReader): ICanvas | undefined;
+	isPresentedElsewhere?(reference: ICanvasReference, reader?: IReader): boolean;
 	getFrontendSessionResource(owner: ICanvasOwner, reader?: IReader): URI | undefined;
 	getEditorGroup(owner: ICanvasOwner, input: CanvasInput, restore: boolean): IEditorGroup | undefined;
 }
@@ -103,7 +107,8 @@ export const ICanvasService = createServiceIdentifier<ICanvasService>('sessionCa
 export interface ICanvasService {
 	readonly enabled: IObservable<boolean>;
 	readonly reopenableCanvases: IObservable<readonly ICanvasReopenTarget[]>;
-	isOwnerPresentable(reference: ICanvasReference): boolean;
+	isOwnerPresentable(reference: ICanvasReference, reader?: IReader): boolean;
+	isPresentable(reference: ICanvasReference, reader?: IReader): boolean;
 	revealCanvas(reference: ICanvasReference): Promise<void>;
 	reopenCanvas(reference: ICanvasReference): Promise<void>;
 	closeCanvas(reference: ICanvasReference): Promise<void>;

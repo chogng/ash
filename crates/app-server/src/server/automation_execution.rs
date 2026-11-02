@@ -262,6 +262,7 @@ impl AppServer {
                     TurnModelSelection::Current,
                     None,
                     None,
+                    ash_protocol::CommandInterpretation::Product,
                     vec![InputItem::Text {
                         text: match &observed.event {
                             Some(event) => {

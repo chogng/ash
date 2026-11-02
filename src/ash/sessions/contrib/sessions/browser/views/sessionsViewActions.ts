@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { captureSessionActionTarget } from '../../../../browser/sessionActionsService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -34,7 +35,7 @@ registerAction2(class CloseSessionAction extends Action2 {
 		if (!selection) return;
 		sessions.closeVisibleSelection(selection);
 		if (selection.kind === 'untitled') {
-			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`);
+			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`, chatInputStatePersistence);
 		}
 	}
 });

@@ -3,7 +3,7 @@ import type { IResourceEditorInput } from '../../common/editor.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 import { createScmMergeEditorInput } from '../../contrib/scm/browser/scmMergeEditorInput.js';
 import { createMultiDiffEditorInput, requireActions, type MultiDiffEditorInputItem } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { assertEncoding } from '../../services/textfile/common/encoding.js';
 function record(value: JsonValue): Record<string, JsonValue> {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {

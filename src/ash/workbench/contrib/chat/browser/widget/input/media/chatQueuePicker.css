@@ -1,0 +1,9 @@
+.ash-chat-queue-picker {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-chat-queue-picker > .ash-button {
+	flex: none;
+}

@@ -1,24 +1,24 @@
-.ash-menubar {
+.ash-titlebar-left-actions {
 	/* Hosts select the radius on this root; action styling stays inside the control. */
 	--ash-menubar-action-radius: var(--ash-cornerRadius-small);
 	--ash-menubar-hover-background: var(--ash-titleBar-hoverBackground);
 }
 
-.ash-menubar .ash-button {
+.ash-titlebar-left-actions .ash-button {
 	border-radius: var(--ash-menubar-action-radius);
 }
 
-.ash-menubar .ash-menubar-item {
+.ash-titlebar-left-actions .ash-menubar-menu-button {
 	color: var(--ash-titleBar-foreground);
 }
 
-.ash-menubar .ash-menubar-item:hover,
-.ash-menubar .ash-menubar-item.active {
+.ash-titlebar-left-actions .ash-menubar-menu-button:hover,
+.ash-titlebar-left-actions .ash-menubar-menu-button.active {
 	background: var(--ash-menubar-hover-background);
 }
 
 .ash-workbench:is(.hc-black, .hc-light)
-	.ash-menubar
+	.ash-titlebar-left-actions
 	.ash-button:is(.active, :hover):not(:disabled):not(:focus-visible) {
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: -1px;

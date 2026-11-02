@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import type { IChatListItem } from '../chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { getChatFindTextParts, type IChatFindTextPart } from './chatFindContent.js';
 
 export const MAX_FIND_MATCHES = 9999;

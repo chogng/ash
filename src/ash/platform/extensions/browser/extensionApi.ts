@@ -8,7 +8,7 @@ import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { localize } from '../../../nls.js';
 import { ExtensionResourceLoaderService } from '../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
 

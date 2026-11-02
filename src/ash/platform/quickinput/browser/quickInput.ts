@@ -439,8 +439,8 @@ export class QuickPick<TItem extends IQuickPickItem>
 				},
 			}],
 		}));
-		this.inputActions.element.classList.add('ash-quick-pick-input-actions');
-		this.inputActions.element.hidden = true;
+		this.inputActions.domNode.classList.add('ash-quick-pick-input-actions');
+		this.inputActions.domNode.hidden = true;
 		this.navigationHost = h(ownerDocument, 'div');
 		this.navigationHost.className = 'ash-quick-pick-navigation';
 		this.navigationHost.hidden = true;
@@ -571,7 +571,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 
 	protected override updateEnabled(): void {
 		this.inputBox.enabled = this.enabled;
-		this.inputActions.element.inert = !this.enabled;
+		this.inputActions.domNode.inert = !this.enabled;
 		this.navigationHost.inert = !this.enabled;
 		this.list.element.inert = !this.enabled;
 	}
@@ -597,7 +597,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	}
 
 	private handleValueChange(value: string): void {
-		this.inputActions.element.hidden = value.length === 0;
+		this.inputActions.domNode.hidden = value.length === 0;
 		this.inputBox.element.classList.toggle('has-value', value.length > 0);
 		this.list.filter(this._filterValue(value));
 		if (this.visible) this.layout();

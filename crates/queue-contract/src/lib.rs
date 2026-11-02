@@ -2,6 +2,7 @@
 
 use protocol::ApprovalMode;
 use protocol::CommandId;
+use protocol::CommandInterpretation;
 use protocol::SessionId;
 use protocol::ThreadId;
 use protocol::ToolMode;
@@ -20,6 +21,8 @@ pub struct QueueInput {
     pub thread_id: ThreadId,
     /// Execution directory selected by the host when accepting the message.
     pub directory: String,
+    #[serde(default, skip_serializing_if = "CommandInterpretation::is_product")]
+    pub command_interpretation: CommandInterpretation,
     pub input: Vec<UserInput>,
     #[serde(default)]
     pub mode: protocol::CollaborationMode,
@@ -69,6 +72,11 @@ pub enum QueueEdit {
     ReplaceText {
         text: String,
     },
+    /// Save text and its delivery intent in one revision, retaining frozen non-text input.
+    ReplaceTextWithDelivery {
+        text: String,
+        delivery: QueueDelivery,
+    },
     Replace {
         input: Vec<UserInput>,
     },
@@ -78,6 +86,18 @@ pub enum QueueEdit {
     Send {
         turn_id: Option<TurnId>,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum QueueDelivery {
+    Queued,
+    Immediate,
+    Steering { turn_id: TurnId },
 }
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

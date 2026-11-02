@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test, before, afterEach } from 'mocha';
 import { prepareMarkdownExtension, startMarkdownExtension } from '../../../../../../test/fixtures/markdownExtension.js';
-import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { type ExtensionHostRegistration, type JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../../../platform/extensions/browser/extensionHostProtocol.js';
+import { type ExtensionHostRegistration, type JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { CustomEditorInput } from '../../../contrib/customEditor/browser/customEditorInput.js';
 import { CustomEditorInputSerializer } from '../../../contrib/customEditor/browser/customEditorInputFactory.js';
@@ -14,7 +14,7 @@ import { EditorPanes } from '../../../browser/editor.js';
 import type { CustomTextEditorProvider } from '../../../contrib/webviewPanel/browser/webviewEditor.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IExtensionApi, ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
-import type { IExtensionHostApi } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../platform/extensions/common/extensionHostApi.js';
 
 test('Rust custom editor resources stay within their enabled package and follow catalog generations', async () => {
 	let generation = 1, enabled = true;

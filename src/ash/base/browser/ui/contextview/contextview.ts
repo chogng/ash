@@ -71,7 +71,7 @@ export class ContextView
 	private restoreFocusTo: HTMLElement | undefined;
 	private options: ContextViewOptions | undefined;
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement | ShadowRoot) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
@@ -116,6 +116,14 @@ export class ContextView
 		);
 		this.element.style.visibility = 'hidden';
 		this.element.hidden = false;
+		// The top layer keeps menu coordinates in the viewport under transformed hosts.
+		const followsMenu = options.presentation === 'hover' && isElementAnchor(options.anchor) && options.anchor.closest('.ash-context-view[popover]') !== null;
+		if ((options.presentation === 'menu' || followsMenu) && this.element.isConnected && typeof this.element.showPopover === 'function') {
+			this.element.popover = 'manual';
+			this.element.showPopover();
+		} else {
+			this.element.removeAttribute('popover');
+		}
 		this.layout();
 		if (!this.visible) return false;
 		this.element.style.visibility = '';
@@ -125,7 +133,7 @@ export class ContextView
 			ownerDocument,
 			'pointerdown',
 			(event: PointerEvent) => {
-				const target = event.target;
+				const target = event.composedPath()[0] ?? event.target;
 				if (isTargetInAnotherModal(target, this.element)) return;
 				if (
 					isNode(target) &&
@@ -257,6 +265,7 @@ export class ContextView
 		this.options = undefined;
 		unregisterVisibleContextView(this);
 		this.visibleListeners.clear();
+		if (typeof this.element.hidePopover === 'function' && this.element.matches(':popover-open')) this.element.hidePopover();
 		this.element.hidden = true;
 		this.element.replaceChildren();
 		this.element.style.removeProperty('--ash-context-view-layer');

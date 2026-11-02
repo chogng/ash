@@ -166,6 +166,9 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 		kind: 'untitled',
 		session: { untitledSessionId: (await panes.locator(':is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id'))!, title: 'New session', workspace: { type: 'current' } },
 	});
+	// Desktop Chat has its own ChatGPT composer; legacy Agent drafts restore in Code.
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await add.click();
 	await typeDraft('Chat first draft');
 	const chatReferences = [await draftReference()];
 	await add.click();
@@ -184,18 +187,20 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(1);
 	await typeDraft('Code second draft');
 	codeReferences.push(await draftReference());
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	// Restore an existing split arrangement; Add is ordinary navigation, not a split command.
 	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
 	await expect.poll(async () => Boolean((await readStorageEntries(application, page, identity))['sessions.viewState'])).toBe(true);
 	await seedStorageOnNextLoad(application, page, identity, {
+		'sessions.activityBar.activePage': { value: 'chat', target: StorageTarget.MACHINE },
 		'sessions.viewState': { value: JSON.stringify({ version: 1, pages: { chat: { visible: chatReferences, active: 0 }, code: { visible: codeReferences, active: 1 } } }), target: StorageTarget.MACHINE },
 		'sessions.gridState': null,
 		'sessions.gridState.chat': null,
 		'sessions.gridState.code': null,
 	});
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(5);
 	await new Editor(panes.first()).input.focus();
 	const beforeDrag = (await panes.first().boundingBox())!.width;
@@ -205,16 +210,18 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	const shared = await snapshot();
 	expect(shared.map(slot => slot.text)).toEqual(['Chat first draft', 'Chat second draft', 'Chat third draft', 'Code first draft', 'Code second draft']);
 	const identities = shared.map(({ width, ...state }) => state);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(5);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(identities);
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	for (let index = 0; index < shared.length; index++) {
 		await expect.poll(async () => Math.abs((await panes.nth(index).boundingBox())!.width - shared[index]!.width)).toBeLessThanOrEqual(1);
 	}
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
 	await page.reload({ waitUntil: 'domcontentloaded' });
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(5);
 	await expect.poll(async () => (await snapshot()).map(({ width, ...state }) => state)).toEqual(identities);
 	for (let index = 0; index < shared.length; index++) {
@@ -241,7 +248,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(4);
 	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', selected.identity!);
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text.replace(/\n/g, '') === selected.text);
-	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(4);
 	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text.replace(/\n/g, '') === selected.text);
 	await page.reload({ waitUntil: 'domcontentloaded' });

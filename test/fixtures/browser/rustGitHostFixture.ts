@@ -1,8 +1,8 @@
 import { Disposable, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import type { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
-import type { IExtensionHostApi, ExtensionHostRuntime, ExtensionHostClientHandler, ExtensionHostInvocationRequest, ExtensionHostActivationRequest, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import type { ExtensionHostInitialization } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostRuntime, ExtensionHostClientHandler, ExtensionHostInvocationRequest, ExtensionHostActivationRequest, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
+import type { ExtensionHostInitialization } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 
 declare global {
 	interface Window {

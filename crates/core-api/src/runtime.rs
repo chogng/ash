@@ -1,5 +1,6 @@
 use crate::CoreError;
 use crate::CreateBranchRequest;
+use crate::CreateSideChatRequest;
 use crate::ForkThreadRequest;
 use crate::InterruptTurnRequest;
 use crate::ReplaceThreadRequest;
@@ -178,6 +179,7 @@ pub trait AgentRuntime {
     fn start_thread(&self, request: StartThreadRequest) -> Result<ThreadView, CoreError>;
     fn create_branch(&self, request: CreateBranchRequest) -> Result<ThreadView, CoreError>;
     fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
+    fn create_side_chat(&self, request: CreateSideChatRequest) -> Result<ThreadView, CoreError>;
     fn fork_session(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
     fn replace_thread(&self, request: ReplaceThreadRequest) -> Result<ThreadView, CoreError>;
     fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadView, CoreError>;

@@ -1,8 +1,9 @@
+import { isHTMLElement } from '../../../../base/browser/dom.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { ILanguageServerStatusService, MANAGE_LANGUAGE_SERVERS_COMMAND_ID, LanguageServerMenuFocused, LANGUAGE_SERVER_STATUS_ENTRY_ID } from '../../../services/language/common/languageServerStatusService.js';
+import { ILanguageServerStatusService, MANAGE_LANGUAGE_SERVERS_COMMAND_ID, LanguageServerStatusFocused, LANGUAGE_SERVER_STATUS_ENTRY_ID } from '../../../services/language/common/languageServerStatusService.js';
 import { localize, localize2 } from '../../../../nls.js';
 
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -33,12 +34,18 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		name: 'language-server-status', type, priority: 110,
 		getProvider: accessor => {
 			const focused = accessor.get(IContextViewService).container.ownerDocument.activeElement;
-			if (!accessor.get(IContextKeyService).getValue(LanguageServerMenuFocused.key)
+			if (!accessor.get(IContextKeyService).getValue(LanguageServerStatusFocused.key)
 				&& !focused?.closest(`[data-statusbar-item-id="${LANGUAGE_SERVER_STATUS_ENTRY_ID}"]`)) return undefined;
 			const service = accessor.get(ILanguageServerStatusService);
 			return new AccessibleContentProvider(AccessibleViewProviderId.LanguageServerStatus, { type }, () => type === AccessibleViewType.Help
-				? localize('languageServer.help', 'Language Services lists servers by workspace folder. Use Up and Down to select a server, Right to open its actions, Left to return, and Escape to close and return focus. View Logs opens the full server output. Restart Server and Stop Server affect this window without changing saved configuration. Workspace and All Servers actions control servers that have already started, including stopped servers when restarting. Progress stays in the status bar. Warnings and full errors are in Output; failures that need your attention offer actions in notifications.')
-				: service.getAccessibleContent(), () => { void service.open(); }, AccessibilityVerbositySettingId.LanguageServers);
+				? localize('languageServer.help', 'Language Services shows servers and live status grouped by workspace folder. Each row shows a status icon and server name. Use Up and Down Arrow to move between rows. Tab keeps focus in the menu. Click a server row, or press Enter, Space or Right Arrow, to open its actions submenu with View Logs, Restart Server and Stop Server. Workspace actions and All server actions open their corresponding submenus. Left Arrow or Escape closes a submenu and returns focus to its row. An empty circle means inactive, a green dot means ready, a rotating ring means starting or an operation in progress, and a red dot means an error. Hover over a row to read its specific state; screen readers receive the same state as the row description. Restart and Stop keep this window open so you can observe their results. State and progress update without moving focus; if a menu action becomes unavailable, focus moves to an available action. View Logs closes this window and opens the full server output. Escape or clicking outside closes this window and returns focus to the status bar. Controls affect this window without changing saved configuration. Workspace and All Servers actions control servers that have already started, including stopped servers when restarting. Warnings and full errors remain in Output; failures that need your attention offer actions in notifications.')
+				: service.getAccessibleContent(), () => {
+					if (isHTMLElement(focused) && focused.isConnected) {
+						focused.focus();
+					} else {
+						void service.open();
+					}
+				}, AccessibilityVerbositySettingId.LanguageServers);
 		},
 	});
 }

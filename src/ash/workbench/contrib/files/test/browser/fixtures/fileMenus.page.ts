@@ -1,3 +1,4 @@
+import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Pane, PaneView } from '../../../../../../base/browser/ui/splitview/paneview.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -133,7 +134,8 @@ if (new URLSearchParams(location.search).has('applicationMenu')) {
 	lifetime.add(MenusRegistry.appendMenuItem(editMenu, { command: { id: 'fixture.edit', title: 'Edit item' } }));
 	const host = document.body.insertBefore(document.createElement('div'), document.body.firstChild);
 	host.classList.add('ash-workbench-titlebar');
-	lifetime.add(new BrowserMenubarControl(host, services.get(IMenuService), menus, undefined, { applicationMenuId: rootMenu, titlebarMenuId: titlebarMenu }));
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	lifetime.add(services.createInstance(BrowserMenubarControl, host, { applicationMenuId: rootMenu, titlebarMenuId: titlebarMenu }));
 	lifetime.add(toDisposable(() => host.remove()));
 }
 services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), views, menus)));

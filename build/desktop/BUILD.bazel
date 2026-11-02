@@ -5,6 +5,7 @@ filegroup(
     srcs = [
         "__init__.py",
         "develop.py",
+        "host_logs.py",
         "//build:prepare.py",
         "//build/lib:assembly_sources",
         "//build/lib:python_sources",

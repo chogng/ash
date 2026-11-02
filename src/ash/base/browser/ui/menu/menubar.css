@@ -1,0 +1,36 @@
+.ash-menubar {
+	display: inline-flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: stretch;
+}
+
+.ash-menubar[hidden] {
+	display: none;
+}
+
+.ash-menubar .ash-menubar-menu-button {
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	color: inherit;
+}
+
+.ash-menubar.compact > .ash-menubar-menu-button {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	padding: 0;
+	border: 0;
+}
+
+.ash-menubar .ash-menubar-menu-button.active {
+	color: var(--ash-menu-selectionForeground);
+	background: var(--ash-menu-selectionBackground);
+}
+
+.ash-menubar u {
+	text-decoration: none;
+}
+
+.ash-menubar.show-mnemonics u {
+	text-decoration: underline;
+}

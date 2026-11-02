@@ -2,7 +2,6 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
-	margin-bottom: var(--ash-spacing-size80);
 }
 
 .ash-session-chat-input-prs[hidden] {

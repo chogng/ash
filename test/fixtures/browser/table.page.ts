@@ -1,3 +1,5 @@
+import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { BrowserImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
@@ -17,7 +19,7 @@ import { IExtensionService } from '../../../src/ash/workbench/services/extension
 import { TestExtensionService } from '../../../src/ash/workbench/test/common/testExtensionServices.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
@@ -35,7 +37,7 @@ import { IStorageService, StorageScope } from '../../../src/ash/platform/storage
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
@@ -146,6 +148,7 @@ const resources = new DisposableStore();
 if (!new URLSearchParams(location.search).has('realAudio')) resources.add(installTestDictationAudio(window));
 const configuration = resources.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' }));
 const services = resources.add(new InstantiationService());
+services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 services.registerInstance(IFileService, resources.add(new FileService()));
 services.registerInstance(IEditorService, { onDidVisibleEditorsChange: Event.None, onDidActiveEditorChange: Event.None } as unknown as IEditorService);
 const notifications = resources.add(new TestNotificationService());

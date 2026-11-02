@@ -184,7 +184,7 @@ export class ChatViewTitleControl extends Disposable {
 		// also stays explicit instead of falling back to a later active selection.
 		const active = this.navigation.getActiveConversation();
 		const context = active ? { sessionId: active.sessionId, threadId: active.threadId } : {};
-		const actions = getFlatContextMenuActions(this.menuService.getMenuActions(MenuId.ChatTitle, { arg: context, renderShortTitle: true }), undefined, this.titleButton.ownerDocument.defaultView ?? undefined);
+		const actions = getFlatContextMenuActions(this.menuService.getMenuActions(MenuId.ChatTitle, { arg: context, renderShortTitle: true }));
 		this.contextMenuService.showContextMenu({
 			cancellationToken: this.menuCancellation,
 			getAnchor: () => event.type === 'contextmenu'

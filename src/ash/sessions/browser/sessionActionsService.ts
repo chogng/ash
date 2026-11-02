@@ -1,3 +1,4 @@
+import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { isRecord } from '../../base/common/types.js';
 import { localize } from '../../nls.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -7,10 +8,13 @@ import {
 	type IAgentSessionActionsService,
 	type IAgentSessionActionItem,
 	type IAgentSessionActionTarget,
+	type IAgentSessionReviewEnvironmentTarget,
 } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../services/sessions/common/session.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 
 /** Resolve the captured item only after its picker/confirmation is accepted. */
 export function captureSessionActionTarget(sessions: ISessionsManagementService, storage: IStorageService, navigation: IChatSessionNavigationService, argument: unknown, useActive = false): { readonly title: string; resolve(): Promise<ISession>; } {
@@ -30,10 +34,10 @@ export function captureSessionActionTarget(sessions: ISessionsManagementService,
 					// Park an unmounted composer's draft before the catalog removes its
 					// local identity. Mounted composers retain and migrate their live input.
 					const key = `untitled:${draftId}`;
-					const input = readNewChatDraftState(storage, key);
-					if (input) writeNewChatDraftState(storage, input, active.threadId);
+					const input = readNewChatDraftState(storage, key, chatInputStatePersistence);
+					if (input) writeNewChatDraftState(storage, input, active.threadId, chatInputStatePersistence);
 					sessions.promoteUntitledSession(draftId, active);
-					writeNewChatDraftState(storage, undefined, key);
+					writeNewChatDraftState(storage, undefined, key, chatInputStatePersistence);
 				}
 				return sessions.sessions.find(session => session.sessionId === active.session.sessionId) ?? active.session;
 			},
@@ -75,13 +79,35 @@ export class SessionActionsService implements IAgentSessionActionsService {
 		return { title: captured.title, resolve: async () => actionItem(await captured.resolve()) };
 	}
 
+	getReviewEnvironmentTargets(target: { readonly sessionId?: string; readonly threadId?: string; readonly untitledSessionId?: string; }, currentWorkspace: IWorkspace): readonly IAgentSessionReviewEnvironmentTarget[] {
+		if (target.threadId) {
+			const session = this.sessionsOwner.sessions.find(session => session.sessionId === target.sessionId);
+			const chat = session?.chats.find(chat => chat.threadId === target.threadId);
+			if (!chat || chat.workspace === null) return [];
+			const workspace = chat.workspace ?? session?.workspace;
+			// An unknown directory cannot establish which backend owns the Thread.
+			if (!workspace) return [];
+			return [{ label: workspace.root, scope: workspace.authorityId === 'local' ? { type: 'thread', threadId: target.threadId } : { type: 'remote' } }];
+		}
+		const draft = this.sessionsOwner.untitledSessions.find(session => session.untitledSessionId === target.untitledSessionId);
+		if (!draft) return [];
+		const workspace = draft.workspace.type === 'current' ? selectionFromWorkspace(currentWorkspace) : draft.workspace;
+		const folders = workspace.type === 'multiple' ? workspace.folders : workspace.type === 'current' ? [] : [{ label: workspace.root, target: workspace }];
+		return folders.map(({ label, target }) => ({
+			label, description: target.type === 'ssh' ? `${target.host}:${target.root}` : target.root,
+			scope: target.type === 'local' ? { type: 'directory', root: target.root } : { type: 'remote' },
+		}));
+	}
+
 	discardDraft(argument: unknown): boolean {
-		if (!isRecord(argument) || argument.kind !== 'untitled') return false;
-		const draftId = Reflect.get(argument.session ?? {}, 'untitledSessionId');
+		if (!isRecord(argument)) return false;
+		const canonical = Object.keys(argument).length === 1 && 'untitledSessionId' in argument;
+		if (!canonical && argument.kind !== 'untitled') return false;
+		const draftId = canonical ? argument.untitledSessionId : Reflect.get(argument.session ?? {}, 'untitledSessionId');
 		if (typeof draftId !== 'string') throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		if (this.sessionsOwner.untitledSessions.some(session => session.untitledSessionId === draftId)) {
 			this.sessionsOwner.discardUntitledSession(draftId);
-			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`);
+			writeNewChatDraftState(this.storage, undefined, `untitled:${draftId}`, chatInputStatePersistence);
 		}
 		return true;
 	}

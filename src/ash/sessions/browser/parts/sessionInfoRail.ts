@@ -280,7 +280,7 @@ export class SessionInfoRail extends Disposable {
 				appendIcon(icon, row);
 				const label = h(this.host.ownerDocument, 'span');
 				label.textContent = text;
-				row.title = icon === Lxicon.folder && folder ? folder.fsPath : text;
+				row.title = icon === Lxicon.folder && folder ? folder.scheme === 'file' ? folder.fsPath : folder.toString() : text;
 				row.append(label);
 				return row;
 			}),

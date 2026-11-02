@@ -221,6 +221,7 @@ export interface IBrowserViewCreateOptions {
 
 /** Live Canvas identity is independent of its temporary page URL. */
 export interface IBrowserCanvasPresentation {
+	readonly providerId?: string;
 	readonly sessionId: string;
 	readonly threadId?: string;
 	readonly extensionId?: string;
@@ -390,15 +391,16 @@ export function validateBrowserViewCreateRequest(
 	}
 	let canvas: IBrowserCanvasPresentation | undefined;
 	if (options.canvas !== undefined) {
-		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', ['threadId', 'extensionId', 'canvasId']);
+		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', ['providerId', 'threadId', 'extensionId', 'canvasId']);
 		if (typeof value.instanceId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(value.instanceId)
 			|| typeof value.sessionId !== 'string' || !value.sessionId.trim() || value.sessionId.length > 1024
 			|| typeof value.title !== 'string' || !value.title.trim() || value.title.length > 256
 			|| owner.type === 'user' && (session.scope !== BrowserViewStorageScope.Ephemeral || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 1024 || typeof value.extensionId !== 'string' || typeof value.canvasId !== 'string')
-			|| ['threadId', 'extensionId', 'canvasId'].some(key => value[key] !== undefined && (typeof value[key] !== 'string' || !(value[key] as string).trim() || (value[key] as string).length > 1024))) {
+			|| ['providerId', 'threadId', 'extensionId', 'canvasId'].some(key => value[key] !== undefined && (typeof value[key] !== 'string' || !(value[key] as string).trim() || (value[key] as string).length > 1024))) {
 			throw new TypeError('Invalid Canvas presentation');
 		}
 		canvas = {
+			...(value.providerId === undefined ? {} : { providerId: value.providerId as string }),
 			sessionId: value.sessionId, instanceId: value.instanceId, title: value.title,
 			...(value.threadId === undefined ? {} : { threadId: value.threadId as string }),
 			...(value.extensionId === undefined ? {} : { extensionId: value.extensionId as string }),

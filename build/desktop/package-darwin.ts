@@ -1,3 +1,4 @@
+import { copyHostOutput } from './host.ts';
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
@@ -40,7 +41,8 @@ try {
 	metadata.main = 'dist/main/src/main.js';
 	await writeFile(join(appStage, 'package.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 	for (const part of ['main', 'preload', 'renderer']) {
-		await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
+		if (part === 'main') await copyHostOutput(join(buildRoot, part), join(appStage, 'dist', part));
+		else await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
 	}
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 	await mkdir(join(appStage, 'resources', 'darwin'), { recursive: true });
@@ -131,6 +133,9 @@ try {
 			'-B', join(repositoryRoot, 'build', 'sign.py'),
 			'--package-dir', join(bundlePath, 'Contents', 'Resources'), '--target', target, '--verify-only',
 		], repositoryRoot);
+		// Packager has signed nested Mach-O files, including the Rust host helpers.
+		// Hash their final bytes before sealing the updated package.json in the app.
+		await writeApplicationChecksums(join(bundlePath, 'Contents', 'Resources', 'app'));
 		await run('codesign', ['--force', '--sign', signingIdentity!, '--timestamp', '--options', 'runtime', '--preserve-metadata=entitlements,requirements,flags', bundlePath], repositoryRoot);
 		await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', bundlePath], repositoryRoot);
 	}

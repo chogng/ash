@@ -1,0 +1,22 @@
+.ash-pinned-canvas-page {
+	position: relative;
+	height: 100%;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ash-pinned-canvas-message {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	margin: 0;
+	padding: var(--ash-spacing-size160);
+	color: var(--ash-description-foreground);
+	overflow: auto;
+}
+
+.ash-pinned-canvas-message[hidden] {
+	display: none;
+}

@@ -1,6 +1,6 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { IExtensionManagementApi } from '../common/extensionManagementApi.js';
 import { localize } from '../../../nls.js';
 

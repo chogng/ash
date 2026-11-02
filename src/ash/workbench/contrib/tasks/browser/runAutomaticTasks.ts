@@ -80,7 +80,7 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 		await this.trust.workspaceTrustInitialized;
 		await this.trust.resolveWorkspaceTrust();
 		if (!current() || !this.trust.isWorkspaceTrusted()) return;
-		if (refresh) await this.tasks.refresh();
+		if (refresh) await this.tasks.getWorkspaceTasks();
 		if (!current()) return;
 		for (const task of this.tasks.tasks) {
 			if (task.runOptions?.runOn !== 'folderOpen' || this.attempted.has(task.id)) continue;

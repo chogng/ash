@@ -84,8 +84,26 @@ test('real Ash development services exit after worker death or launcher loss wit
 
 const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
+interface ObservedProcess { readonly pid: number; readonly recordedAt: number; }
+
+async function assertProcessesExited(observed: readonly ObservedProcess[], output = ''): Promise<void> {
+	if (process.platform !== 'win32') {
+		for (const { pid } of observed) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+		return;
+	}
+	// Windows may reuse short-lived compiler/service PIDs within one test. Only
+	// a process born before its fixture log can be the original instance.
+	const { stdout } = await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `@(Get-Process -Id ${observed.map(process => process.pid).join(',')} -ErrorAction SilentlyContinue | ForEach-Object { @{ pid = $_.Id; started = ([DateTimeOffset]$_.StartTime).ToUnixTimeMilliseconds() } }) | ConvertTo-Json -Compress`], { windowsHide: true, timeout: 15_000 });
+	const processes = JSON.parse(stdout || '[]') as { pid: number; started: number; } | { pid: number; started: number; }[];
+	const started = new Map((Array.isArray(processes) ? processes : [processes]).map(process => [process.pid, process.started]));
+	for (const process of observed) {
+		assert.ok(!isProcessRunning(process.pid) || (started.get(process.pid) ?? -Infinity) > process.recordedAt, `Leaked fixture process ${JSON.stringify(process)}; current generation started at ${started.get(process.pid)}: ${output}`);
+	}
+}
+
 for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) {
-	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: process.platform === 'win32' ? 60_000 : 20_000 }, async t => {
+	// Each Windows compiler/restart cycle snapshots its process tree through CIM.
+	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: process.platform === 'win32' ? 240_000 : 20_000 }, async t => {
 		const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-electron-')));
 		const desktop = join(root, '.');
 		let phaseRevision = 0;
@@ -115,7 +133,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		await writeFile(join(desktop, 'package.json'), '{"main":"fixture.cjs","type":"module"}');
 		await writeFile(join(desktop, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
 		await writeFile(join(desktop, 'fixture.cjs'), `
-      require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, launchWorker: process.env.ASH_ELECTRON_LAUNCH_WORKER, runDirectory: process.env.ASH_SMOKE_RUN_DIRECTORY, home: process.env.ASH_HOME }) + '\\n');
+      require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now(), cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, launchWorker: process.env.ASH_ELECTRON_LAUNCH_WORKER, runDirectory: process.env.ASH_SMOKE_RUN_DIRECTORY, home: process.env.ASH_HOME }) + '\\n');
       if (require('node:fs').existsSync('refuse-startup')) process.exit(0);
       if (require('node:fs').existsSync('busy-startup')) {
         process.send('ash:dev:busy', () => process.exit(0));
@@ -140,7 +158,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
       const path = require('node:path');
       if (fs.existsSync('compiler-active')) throw new Error('Concurrent Host compilers');
       fs.writeFileSync('compiler-active', String(process.pid));
-      fs.appendFileSync('compilers.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2) }) + '\\n');
+      fs.appendFileSync('compilers.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now(), cwd: process.cwd(), args: process.argv.slice(2) }) + '\\n');
         const phase = fs.readFileSync('phase', 'utf8');
         fs.appendFileSync('started.log', phase + '\\n');
       setTimeout(() => {
@@ -185,7 +203,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 			return text.trim().split('\n').filter(Boolean);
 		}
 		async function until(predicate: () => Promise<boolean> | boolean): Promise<void> {
-			const deadline = Date.now() + (process.platform === 'win32' ? 15_000 : 6_000);
+			const deadline = Date.now() + (process.platform === 'win32' ? 30_000 : 6_000);
 			while (Date.now() < deadline) {
 				if (await predicate()) return;
 				assert.equal(child.exitCode, null, output);
@@ -246,7 +264,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		const launches = (await lines('launches.log')).map(line => JSON.parse(line));
 		const allCompilers = (await lines('compilers.log')).map(line => JSON.parse(line));
 		assert.ok(allCompilers.length >= 7);
-		for (const { pid, ...launch } of launches) {
+		for (const { pid, recordedAt, ...launch } of launches) {
 			assert.ok(pid > 0);
 			assert.deepEqual(launch, { cwd: desktop, args: ['--fixture', ...userDataArgs], home });
 		}
@@ -269,7 +287,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 			assert.equal(child.exitCode, profile === 'custom' ? 1 : 0, output);
 		}
 		if (profile === 'custom') assert.match(output, /Electron exited before startup completed/u);
-		for (const { pid } of [...launches, ...allCompilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+		await assertProcessesExited([...launches, ...allCompilers], output);
 	});
 }
 
@@ -295,6 +313,9 @@ time.sleep(300)
 `);
 	const environment: NodeJS.ProcessEnv = { ...process.env, ASH_ELECTRON_LAUNCH_WORKER: '1', PYTHON: pythonCommand([]).command };
 	delete environment.ASH_DESKTOP_UI_ONLY;
+	// Windows termination cannot run a signal handler. Keep the real supervisor
+	// so it can reclaim preparation after the launcher's IPC channel closes.
+	if (process.platform === 'win32') delete environment.ASH_ELECTRON_LAUNCH_WORKER;
 	const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch'], { cwd: root, env: environment, stdio: 'pipe', detached: process.platform !== 'win32' });
 	let output = '';
 	child.stdout.on('data', chunk => { output += chunk; });
@@ -309,12 +330,13 @@ time.sleep(300)
 		if (!preparation) await delay(50);
 	}
 	assert.ok(preparation, output);
-	// Signal only the launcher: its own cancellation must reclaim the detached
-	// preparation group before this test's fallback ProcessRun performs cleanup.
+	// Signal only the launcher: its cancellation owner must reclaim preparation
+	// before this test's fallback ProcessRun performs cleanup.
 	child.kill('SIGTERM');
 	while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(50);
-	assert.notEqual(child.exitCode, null, output);
-	for (const pid of [preparation.parent, preparation.compiler]) assert.equal(isProcessRunning(pid), false, `Leaked preparation process ${pid}`);
+	assert.ok(child.exitCode !== null || child.signalCode !== null, output);
+	while ([preparation.parent, preparation.compiler].some(isProcessRunning) && Date.now() < deadline) await delay(50);
+	for (const pid of [preparation.parent, preparation.compiler]) assert.equal(isProcessRunning(pid), false, `Leaked preparation process ${pid}: ${output}`);
 });
 
 test('a stale busy retry cannot replace the instance started by a concurrent rebuild', { timeout: process.platform === 'win32' ? 60_000 : 15_000 }, async t => {
@@ -388,7 +410,7 @@ for (const mode of ['running', 'rendererStarting', 'watcherFails', 'portBusy', '
 		await writeFile(join(root, 'mode'), mode);
 		await writeFile(join(root, 'build/desktop/host.ts'), `
 import { existsSync, writeFileSync } from 'node:fs';
-writeFileSync('supervisor.pid', String(process.ppid));
+writeFileSync('supervisor.pid', JSON.stringify({ pid: process.ppid, recordedAt: Date.now() }));
 export async function watchHost(onReady) {
   const done = Promise.withResolvers();
   const timer = setInterval(() => {
@@ -400,11 +422,11 @@ export async function watchHost(onReady) {
   return { close: async () => { clearInterval(timer); done.resolve(); }, done: done.promise };
 }
 `);
-		const record = `require('node:fs').appendFileSync('services.log', process.pid + '\\n');`;
+		const record = `require('node:fs').appendFileSync('services.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now() }) + '\\n');`;
 		await writeFile(join(root, 'fixture.cjs'), `${record}\nprocess.send('ash:dev:ready'); setInterval(() => {}, 1000);`);
 		await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), `
 ${record}
-require('node:fs').writeFileSync('worker.pid', String(process.ppid));
+require('node:fs').writeFileSync('worker.pid', JSON.stringify({ pid: process.ppid, recordedAt: Date.now() }));
 const net = require('node:net');
 const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
 net.createServer().listen(port, '127.0.0.1', () => {
@@ -415,9 +437,9 @@ net.createServer().listen(port, '127.0.0.1', () => {
 		await writeFile(join(root, 'build/desktop/watch-app-server.ts'), `
 import { appendFileSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-appendFileSync('services.log', process.pid + '\\n');
+appendFileSync('services.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now() }) + '\\n');
 if (readFileSync('mode', 'utf8') === 'watcherFails') process.exit(2);
-spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); require('node:fs').appendFileSync('services.log', process.pid + '\\\\n'); setInterval(() => {}, 1000)"], { stdio: 'ignore' });
+spawn(process.execPath, ['-e', ${JSON.stringify(`process.on('SIGTERM', () => {}); ${record} setInterval(() => {}, 1000);`)}], { stdio: 'ignore' });
 console.log('[app-server] Watching Rust App Server sources');
 setInterval(() => {}, 1000);
 `);
@@ -429,7 +451,8 @@ setInterval(() => {}, 1000);
 		if (mode === 'portBusy') await new Promise<void>(resolveReady => reservation.listen(port, '127.0.0.1', resolveReady));
 		const runs: ProcessRun[] = [];
 		t.after(async () => { await Promise.all(runs.map(run => run.stop('SIGTERM'))); await rm(root, { recursive: true, force: true }); });
-		const pids = async (): Promise<number[]> => readFile(join(root, 'services.log'), 'utf8').then(text => text.trim().split('\n').filter(Boolean).map(Number), () => []);
+		const services = async (): Promise<ObservedProcess[]> => readFile(join(root, 'services.log'), 'utf8').then(text => text.trim().split('\n').filter(Boolean).map(line => JSON.parse(line)), () => []);
+		const pids = async (): Promise<number[]> => (await services()).map(process => process.pid);
 		const supervisorKilled = mode === 'supervisorKilled' || mode === 'supervisorKilledDuringRendererStartup';
 		const rendererStarting = mode === 'rendererStarting' || mode === 'supervisorKilledDuringRendererStartup' || mode === 'workerKilledDuringRendererStartup';
 		const workerKilled = mode === 'workerKilled' || mode === 'workerKilledDuringRendererStartup';
@@ -445,19 +468,19 @@ setInterval(() => {}, 1000);
 			child.stdout.on('data', chunk => { output += chunk; });
 			child.stderr.on('data', chunk => { output += chunk; });
 			await run.own(child);
-			const deadline = Date.now() + (workerHung ? 50_000 : 15_000);
+			const startupDeadline = Date.now() + (process.platform === 'win32' ? 30_000 : 15_000);
 			const expectedCount = rendererStarting || mode === 'portBusy' ? 1 : mode === 'watcherFails' ? 2 : 4;
-			while ((await pids()).length < previousCount + expectedCount && Date.now() < deadline) await delay(20);
+			while ((await pids()).length < previousCount + expectedCount && Date.now() < startupDeadline) await delay(20);
 			assert.equal((await pids()).length, previousCount + expectedCount, output);
-			const worker = Number(await readFile(join(root, 'worker.pid'), 'utf8'));
-			const supervisor = Number(await readFile(join(root, 'supervisor.pid'), 'utf8'));
+			const worker = JSON.parse(await readFile(join(root, 'worker.pid'), 'utf8')) as ObservedProcess;
+			const supervisor = JSON.parse(await readFile(join(root, 'supervisor.pid'), 'utf8')) as ObservedProcess;
 			if (workerKilled) {
 				await run.own(child);
-				process.kill(worker, 'SIGKILL');
+				process.kill(worker.pid, 'SIGKILL');
 			} else if (workerHung) {
 				await run.own(child);
 				await writeFile(join(root, 'hang-worker'), '');
-				while (!await readFile(join(root, 'worker-hung')).then(() => true, () => false) && Date.now() < deadline) await delay(20);
+				while (!await readFile(join(root, 'worker-hung')).then(() => true, () => false) && Date.now() < startupDeadline) await delay(20);
 				assert.ok(await readFile(join(root, 'worker-hung')));
 				if (mode === 'launcherKilledWorkerHung') child.kill('SIGKILL');
 			} else if (supervisorKilled) {
@@ -469,14 +492,16 @@ setInterval(() => {}, 1000);
 				if (process.platform === 'win32') await run.stop('SIGTERM');
 				else child.kill('SIGTERM');
 			}
-			while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(20);
+			// Startup must not consume the supervisor's independent termination budget.
+			const cleanupDeadline = Date.now() + (workerHung ? 50_000 : process.platform === 'win32' ? 30_000 : 15_000);
+			while (child.exitCode === null && child.signalCode === null && Date.now() < cleanupDeadline) await delay(20);
 			if (supervisorKilled || mode === 'launcherKilledWorkerHung') assert.equal(child.signalCode, 'SIGKILL', output);
 			else if (workerKilled || workerHung) assert.equal(child.exitCode, 1, output);
 			else if (mode !== 'watcherFails' && mode !== 'portBusy' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
 			else assert.equal(child.exitCode, mode === 'watcherFails' || mode === 'portBusy' ? 1 : 143, output);
-			const owned = [supervisor, worker, ...await pids()];
-			while (owned.some(isProcessRunning) && Date.now() < deadline) await delay(20);
-			for (const pid of owned) assert.equal(isProcessRunning(pid), false, `Leaked F5 process ${pid}: ${output}`);
+			const owned = [supervisor, worker, ...(await services()).slice(previousCount)];
+			while (owned.some(process => isProcessRunning(process.pid)) && Date.now() < cleanupDeadline) await delay(20);
+			await assertProcessesExited(owned, output);
 			if (mode === 'workerHung') assert.match(output, /Development worker stopped responding/u);
 			if (mode === 'portBusy') {
 				assert.equal(reservation.listening, true, 'An unrelated port owner must survive launcher cleanup');

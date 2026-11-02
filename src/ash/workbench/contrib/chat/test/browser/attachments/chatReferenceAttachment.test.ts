@@ -88,7 +88,7 @@ suite('Registered Chat reference attachments', () => {
 		source.dispatchEvent(drag);
 		assert.equal(transfer.get('text/uri-list'), resource.toString());
 		assert.deepEqual(JSON.parse(transfer.get('ResourceURLs')!), [resource.toString()]);
-		assert.deepEqual(JSON.parse(transfer.get('CodeFiles')!), ['/workspace/captured.ts']);
+		assert.deepEqual(JSON.parse(transfer.get('CodeFiles')!), [resource.fsPath]);
 		assert.equal(dataTransfer.effectAllowed, 'copyLink');
 		assert.ok(![...transfer.values()].some(value => value.includes('Earlier design')));
 		source.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));

@@ -26,7 +26,7 @@ export async function getScreenshot(window: BrowserWindow, rect?: IRectangle): P
 	return VSBuffer.wrap(new Uint8Array(bytes));
 }
 
-/** Acquires display pixels only; the workbench owns selection, overlays and output actions. */
+/** Acquires display pixels only; the image-view host owns selection windows and output actions. */
 export async function getDesktopScreenshots(): Promise<readonly DesktopScreenshot[]> {
 	const { desktopCapturer, screen } = await import('electron/main');
 	const displays = screen.getAllDisplays();

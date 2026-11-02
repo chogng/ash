@@ -508,7 +508,7 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 		const notifications = resources.add(new TestNotificationService());
 		const menuKeybindings = { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService;
 		editorServices.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(menus, editorServices.get(IContextKeyService), menuKeybindings, views, notifications)));
-		editorServices.registerInstance(IAppServerApi, { connectionGeneration: 1, onConnectionState: Event.None, getConnectionState: async () => 'ready', getSlashCommands: async () => [] } as IAppServerApi);
+		editorServices.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, onConnectionState: Event.None, getConnectionState: async () => 'ready', getSlashCommands: async () => [] } as IAppServerApi);
 		editorServices.registerInstance(IChatService, { readThread: async (sessionId, threadId) => ({ thread: { sessionId, threadId } }) } as IChatService);
 		editorServices.registerInstance(IClipboardService, { writeText: async value => { copiedLinks.push(value); } } as IClipboardService);
 		editorServices.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root: document.body, contextKeyService: editorServices.get(IContextKeyService), configurationService: editorServices.get(IConfigurationService) })));

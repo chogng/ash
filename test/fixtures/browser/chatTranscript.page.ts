@@ -1,3 +1,6 @@
+import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
+import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -9,14 +12,14 @@ import { ImageEditorService } from '../../../src/ash/workbench/services/imageEdi
 const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ImagePreviewEditor } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreviewEditor.js';
 import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
 import '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
 import { ITerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { readNewChatDraftState } from '../../../src/ash/sessions/contrib/chat/common/newChatDraftState.js';
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { CoworkWidget } from '../../../src/ash/sessions/contrib/cowork/browser/widget/coworkWidget.js';
@@ -44,17 +47,27 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { AgentsVoiceStorageKeys } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
+import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IContentSearchService } from '../../../src/ash/platform/search/common/search.js';
+import { FileContentSearchService } from '../../../src/ash/platform/search/browser/searchService.js';
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentConnection, IAgentThreadService, IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
@@ -81,8 +94,8 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListItems.js';
-import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
+import { createAppServerAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -94,7 +107,7 @@ import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
@@ -115,7 +128,7 @@ import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/com
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../src/ash/platform/chat/common/chatSettings.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
@@ -134,7 +147,7 @@ import { ChatSessionArchiveActionWordingSettingId } from '../../../src/ash/platf
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { type AgentSession } from '../../../src/ash/platform/agentHost/common/agent.js';
-import { IAgentModelsService } from '../../../src/ash/platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../src/ash/platform/models/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';
@@ -158,6 +171,11 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
+services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
+// This fixture hosts standalone editors rather than tabbed Workbench groups.
+services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService {
 	async capture(): Promise<never> { throw new Error('Image capture is outside this transcript fixture'); }
 }());
@@ -212,6 +230,7 @@ if (builtinBackend) {
 } else {
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 }
+services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected introduction settings'); } } as unknown as IPreferencesService);
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -232,7 +251,8 @@ const prompts = resources.add(new PromptsService({
 	},
 }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 services.registerInstance(IPromptsService, prompts);
-const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution', 'workbench.contrib.chatEnablement']));
+if (!services.has(IChatEntitlementService)) services.registerSingleton(IChatEntitlementService, () => services.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IChatEntitlementService)![1]));
+const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution', 'workbench.contrib.chatSetup']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
 const chatViews = resources.add(services.createInstance(ViewDescriptorService, {}));
 resources.add(services.get(IConfigurationService).onDidChangeConfiguration(event => {
@@ -402,6 +422,7 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let appChat: ChatWidget | CoworkWidget | undefined;
+let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
 let dictationStarts = 0;
 let dictationCancels = 0;
@@ -603,6 +624,7 @@ declare global {
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
+			setTypography(values: Readonly<Record<string, string | number | undefined>>): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
 			showHistoryPagination(fail?: boolean): void;
@@ -659,6 +681,10 @@ declare global {
 			updateAcceptedContext(text: string): void;
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean): void;
 			voiceState(): readonly string[];
+			showVoiceIntroduction(): void;
+			showDictationIntroduction(): void;
+			toggleIntroductionFocus(): void;
+			setIntroductionNotification(visible: boolean): void;
 			voiceSelection(): AgentVoiceSelection | undefined;
 			proposeVoiceTask(): void;
 			delayAppResources(): void;
@@ -787,6 +813,9 @@ window.ashChatTranscriptIntegration = {
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),
+	setTypography: async values => {
+		for (const [key, value] of Object.entries(values)) await services.get(IConfigurationService).updateValue(key, value);
+	},
 	setTheme: value => {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : value === 'hcLight' ? highContrastLightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);
@@ -797,6 +826,7 @@ window.ashChatTranscriptIntegration = {
 		const widget = {
 			visible: true, domNode: list.element,
 			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
+			focusCodeBlock: (reverse?: boolean) => list.focusCodeBlock(reverse),
 			getFocus: () => list.getFocus(),
 			getSibling: (item, type) => list.getSibling(item, type),
 			focus: item => list.focus(item),
@@ -1102,6 +1132,10 @@ window.ashChatTranscriptIntegration = {
 		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestDictationOnboarding(chatServices);
+		composerServices = chatServices;
+		if (new URLSearchParams(location.search).has('voiceOnboarding')) {
+			chatServices.get(IStorageService).remove(AgentsVoiceStorageKeys.IntroBannerShown, StorageScope.PROFILE);
+		}
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));
 		const contextView = resources.add(new BrowserContextViewService(document.body));
 		chatServices.registerInstance(IContextViewService, contextView);
@@ -1145,7 +1179,7 @@ window.ashChatTranscriptIntegration = {
 		const container = document.createElement('main');
 		container.style.cssText = 'height:700px;width:800px;background:var(--ash-editor-background);color:var(--ash-foreground);font-family:system-ui';
 		document.body.append(container);
-		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined));
+		appChat = cowork ? resources.add(chatServices.createInstance(CoworkWidget, container, 'app-chat', model, () => { }, chatServices.get(ICommandService), undefined, undefined, undefined, (host: HTMLElement, delegate: ChatInputDelegate) => chatServices.createInstance(NewCoworkInputWidget, host, delegate, model, 'conversation'))) : resources.add(chatServices.createInstance(ChatWidget, container, 'app-chat', model, () => { }, contextMenus, contextView, chatServices.get(ICommandService), accessibleView, chatServices.get(INotificationService), undefined, undefined, undefined, undefined, undefined));
 		appChat.setVisible(true);
 	},
 	showHistoryPagination: (fail = false) => {
@@ -1240,13 +1274,14 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerInstance(IViewsService, { focusView: async () => { file.focus(); return true; } } as unknown as IViewsService);
 		const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 		lifecycleServices.registerSingleton(IAgentSessionsService, () => lifecycleServices.createInstance(historyDescriptor));
+		lifecycleServices.registerSingleton(ISessionGroupsService, () => lifecycleServices.createInstance(SessionGroupsService));
 		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
-		lifecycleServices.registerInstance(IRendererHostService, disconnected);
+		lifecycleServices.registerInstance(IAgentConnection, disconnected);
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
-		lifecycleServices.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
+		lifecycleServices.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
 		lifecycleServices.registerInstance(IServerEventApi, { subscribe: () => Disposable.None });
 		lifecycleServices.registerInstance(IAgentModelsService, disconnected.model);
 		lifecycleServices.registerInstance(IAgentTurnService, disconnected.turn);
@@ -1319,13 +1354,21 @@ window.ashChatTranscriptIntegration = {
 	appImagePending: () => completeImageDecode !== undefined,
 	delayAppImages: () => { window.createImageBitmap = ((...args: Parameters<typeof createImageBitmap>) => new Promise<ImageBitmap>((resolve, reject) => { completeImageDecode = () => { window.createImageBitmap = createBitmap; void createBitmap(...args).then(resolve, reject); }; })) as typeof createImageBitmap; },
 	finishAppImages: () => { completeImageDecode?.(); completeImageDecode = undefined; },
-	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread),
+	persistedChatDraft: () => readNewChatDraftState(services.get(IStorageService), appChatThread, chatInputStatePersistence),
 	chatDraft: async () => (await appChat?.captureDraft())?.draft.text,
 	chatDraftContexts: async () => (await appChat?.captureDraft())?.draft.contexts,
 	chatDraftContextNames: async () => (await appChat?.captureDraft())?.draft.contexts.map(context => context.name) ?? [],
 	setChatVisible: visible => appChat?.setVisible(visible),
 	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,
+	showVoiceIntroduction: () => { composerServices!.invokeFunction(CommandsRegistry.getCommand('agentsVoice.showIntroduction')!); },
+	showDictationIntroduction: () => { composerServices!.get(IDictationOnboardingService).show(); },
+	toggleIntroductionFocus: () => { composerServices!.get(IChatInputNoticeHubService).toggleNoticeFocus(); },
+	setIntroductionNotification: visible => {
+		const notifications = composerServices!.get(IChatInputNotificationService);
+		if (visible) notifications.setNotification({ id: 'test.voice-notice', severity: ChatInputNotificationSeverity.Error, message: 'Synthetic connection failure', actions: [], dismissible: true, autoDismissOnMessage: false });
+		else notifications.deleteNotification('test.voice-notice');
+	},
 	voiceSelection: () => chosenVoice,
 	proposeVoiceTask: () => {
 		if (!voiceSession) throw new Error('Voice is not connected');

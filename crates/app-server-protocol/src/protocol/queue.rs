@@ -3,6 +3,7 @@ use crate::TS;
 use crate::protocol::turn::InputItem;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
+use ash_protocol::CommandInterpretation;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolMode;
@@ -15,6 +16,9 @@ pub struct QueueEnqueueParams {
     pub command_id: CommandId,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command_interpretation: Option<CommandInterpretation>,
     pub input: Vec<InputItem>,
     #[serde(default)]
     pub mode: ash_protocol::CollaborationMode,
@@ -75,6 +79,10 @@ pub enum QueueEditAction {
     Resume,
     ReplaceText {
         text: String,
+    },
+    ReplaceTextWithDelivery {
+        text: String,
+        delivery: queue::QueueDelivery,
     },
     Replace {
         input: Vec<InputItem>,

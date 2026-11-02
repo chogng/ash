@@ -119,6 +119,10 @@ build-rust *args:
 test *args:
     {{ python }} -B scripts/cargo.py test -p {{ recipe_args }}
 
+# Collect Rust library/binary unit coverage without changing normal Cargo artifacts.
+coverage-rust *args:
+    {{ python }} -B scripts/coverage.py {{ recipe_args }}
+
 # Run selected process integration tests independently of Cargo's Windows Job.
 test-processes *args:
     {{ python }} -B scripts/cargo.py --process-tests test -p {{ recipe_args }}

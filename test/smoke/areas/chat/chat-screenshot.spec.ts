@@ -71,26 +71,61 @@ test('standalone capture copies on Enter while Chat stays closed', { tag: ['@ele
 	} finally { await uncoverDisplays(application, covers); }
 });
 
-test('AI window capture keeps its trusted sender, CSS rectangle and no-overlay behavior', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
+test('Agent window screenshots retain their target with another window open and never start desktop selection', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
 	if (!('browserWindow' in application)) throw new Error('Expected an Electron window');
 	const page = workbench.page;
 	const owner = await application.browserWindow(page);
 	await owner.evaluate(window => window.webContents.setZoomFactor(1.25));
+	const otherWindow = await application.evaluate(async ({ BrowserWindow }) => {
+		const window = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+		await window.loadURL('data:text/html,' + encodeURIComponent('<title>Screenshot decoy</title><body style="background:rgb(255,0,255)">Other window</body>'));
+		return window.id;
+	});
 	try {
+		await page.evaluate(async () => {
+			const marker = document.createElement('div');
+			marker.id = 'target-screenshot-marker';
+			marker.style.cssText = 'position:fixed;inset:0;width:240px;height:180px;background:rgb(37,99,235);z-index:2147483647;pointer-events:none';
+			document.body.append(marker);
+			await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		});
 		const count = application.windows().length;
+		const externalPixel = await page.evaluate(async bytes => {
+			const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
+			try {
+				const canvas = document.createElement('canvas'); canvas.width = bitmap.width; canvas.height = bitmap.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(bitmap, 0, 0);
+				return [...context.getImageData(8, 8, 1, 1).data];
+			} finally { bitmap.close(); }
+		}, [...await page.screenshot({ clip: { x: 20, y: 30, width: 160, height: 96 } })]);
+		// Native color management can round an RGB channel by one level.
+		for (const [index, expected] of [37, 99, 235, 255].entries()) expect(Math.abs(externalPixel[index] - expected)).toBeLessThanOrEqual(2);
 		const capture = await page.evaluate(async () => {
 			const host = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
 			const bytes = await host.ipcRenderer.invoke('ash:host:screenshot', { x: 20, y: 30, width: 160, height: 96 }) as Uint8Array;
 			const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/png' }));
-			try { return { signature: [...bytes.slice(0, 8)], width: bitmap.width, height: bitmap.height, scale: devicePixelRatio }; }
+			try {
+				const canvas = document.createElement('canvas'); canvas.width = bitmap.width; canvas.height = bitmap.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(bitmap, 0, 0);
+				return { signature: [...bytes.slice(0, 8)], width: bitmap.width, height: bitmap.height, scale: devicePixelRatio, pixel: [...context.getImageData(8, 8, 1, 1).data] };
+			}
 			finally { bitmap.close(); }
 		});
 		expect(capture.signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 		expect(capture.width).toBe(Math.round(160 * capture.scale));
 		expect(capture.height).toBe(Math.round(96 * capture.scale));
+		for (const [index, expected] of [37, 99, 235, 255].entries()) expect(Math.abs(capture.pixel[index] - expected)).toBeLessThanOrEqual(2);
 		expect(application.windows()).toHaveLength(count);
+		expect(application.windows().filter(window => window.url().includes('/imageView/imageView.html'))).toHaveLength(0);
 		await expect(page.getByRole('dialog', { name: 'Screen Capture', exact: true })).toHaveCount(0);
-	} finally { await owner.evaluate(window => window.webContents.setZoomFactor(1)); }
+	} finally {
+		await page.evaluate(() => document.getElementById('target-screenshot-marker')?.remove());
+		await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.destroy(), otherWindow);
+		await owner.evaluate(window => window.webContents.setZoomFactor(1));
+		await owner.dispose();
+	}
 });
 
 for (const locale of ['en', 'zh-CN']) {

@@ -13,6 +13,35 @@ import { pythonCommand } from '../python.ts';
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name => join(repositoryRoot, 'crates', name));
 
+test('a source batch logs one build ID and passes its relative trigger paths to the publisher', async t => {
+	const completed = Promise.withResolvers<void>();
+	const events: { event: string; detail: object; }[] = [];
+	let context: { buildId: string; files: string[]; reason: string; } | undefined;
+	let contextFile: string | undefined;
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, _args: readonly string[], options: { env: NodeJS.ProcessEnv; }) => {
+		contextFile = options.env.ASH_DEV_BUILD_CONTEXT_FILE;
+		assert.ok(contextFile);
+		context = JSON.parse(fs.readFileSync(contextFile, 'utf8'));
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve(), log: (event, detail) => events.push({ event, detail }) });
+	t.after(stop);
+	save('app-server/src/startup.rs');
+	save('app-server/src/startup.rs');
+	save('worktree/src/manager.rs');
+	await completed.promise;
+	assert.deepEqual(context?.files, ['crates/app-server/src/startup.rs', 'crates/worktree/src/manager.rs']);
+	assert.equal(context?.reason, 'source-change');
+	assert.deepEqual(events.filter(value => value.event !== 'Build watcher started').map(value => ({ event: value.event, buildId: (value.detail as { buildId: string; }).buildId })), [
+		{ event: 'Build started', buildId: context!.buildId }, { event: 'Build completed', buildId: context!.buildId },
+	]);
+});
+
 function mockProtocolDirectories(t: TestContext, directories = () => protocolDirectories) {
 	return t.mock.method(childProcess, 'execFile', (_command: string, args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
 		assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);

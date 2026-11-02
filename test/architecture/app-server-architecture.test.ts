@@ -18,7 +18,9 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (name.includes('/test/') || name.includes('/generated/')) continue;
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentModels|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
+		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
+			|| /^platform\/(?:models|automations)\/common\//u.test(name)
+			|| /^platform\/extensions\/common\/extension(?:Backend|Host)Api\.ts$/u.test(name)
 			|| name === 'platform/files/common/fileApi.ts';
 		const allowed = !domainContract && (/^platform\/agentHost\//u.test(name)
 			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
@@ -45,6 +47,30 @@ test('generated protocol dependencies stay in transport contracts and runtime ad
 		visit(source);
 	}
 	assert.deepEqual(violations, [], 'UI, editor, and public domain services must use frontend-owned contracts');
+});
+
+test('File notifications are routed only by file runtime adapters', () => {
+	const violations: string[] = [];
+	for (const file of files(sourceRoot)) {
+		const name = relative(sourceRoot, file).replaceAll('\\', '/');
+		if (/^platform\/files\/(?:browser|electron-browser|electron-main|node)\//u.test(name)) continue;
+		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+		function visit(node: ts.Node): void {
+			if (ts.isStringLiteral(node) && node.text === 'fs/changed') violations.push(name);
+			ts.forEachChild(node, visit);
+		}
+		visit(source);
+	}
+	assert.deepEqual(violations, [], 'File consumers must subscribe to their connection-owned file domain');
+});
+
+test('Agent connection contracts do not depend on Renderer host composition', () => {
+	for (const name of ['agentService.ts', 'agentHostConnectionsService.ts']) {
+		const file = join(sourceRoot, 'platform/agentHost/common', name);
+		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+		const dependencies = source.statements.filter(ts.isImportDeclaration).map(declaration => (declaration.moduleSpecifier as ts.StringLiteral).text);
+		assert.deepEqual(dependencies.filter(dependency => dependency.includes('/renderer/')), [], name);
+	}
 });
 
 function protocolPath(file: string, specifier: string): string | undefined {

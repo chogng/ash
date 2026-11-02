@@ -1,4 +1,5 @@
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { IJSONSchemaSnippet } from '../../../../base/common/jsonSchema.js';
 import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import { environment } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
@@ -145,6 +146,13 @@ Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	add: [{ id: 'terminal', scope: ConfigurationScope.WINDOW, properties }], remove: [],
 });
+
+/** Adds desktop font suggestions to the already registered terminal schema. */
+export async function registerTerminalConfiguration(getFontSnippets: () => Promise<IJSONSchemaSnippet[]>): Promise<void> {
+	const snippets = await getFontSnippets();
+	Object.assign(properties[`${TERMINAL_CONFIG_SECTION}.fontFamily`], { defaultSnippets: Object.freeze([...snippets]) });
+	Registry.as<IConfigurationRegistry>(Extensions.Configuration).notifyConfigurationSchemaUpdated();
+}
 
 /** Converts the current configuration once for creation and live rule updates. */
 export function getTerminalAutoReplyRules(configuration: IConfigurationService): readonly ITerminalAutoReply[] {

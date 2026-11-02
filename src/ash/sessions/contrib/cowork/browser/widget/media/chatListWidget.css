@@ -17,8 +17,11 @@
 .ash-cowork-item {
 	margin: 0 0 16px;
 	color: var(--ash-foreground);
-	font-size: var(--ash-fontSize-body1);
+	font-size: inherit;
 	line-height: 1.5;
+}
+.ash-cowork-list-widget .ash-markdown {
+	font-size: inherit;
 }
 .ash-cowork-item-label {
 	margin-bottom: 4px;

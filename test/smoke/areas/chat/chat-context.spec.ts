@@ -136,6 +136,7 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 		}
 		for (const surface of ['workbench', 'sessions']) {
 			const surfacePage = surface === 'workbench' ? page : await workbench.openAgentsWindow(target.kind);
+			if (surface === 'sessions') await surfacePage.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 			const composer = surface === 'workbench' ? chat : surfacePage.locator('.ash-sessions-chat-slot.active:visible');
 			await composer.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 			await surfacePage.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
@@ -143,6 +144,19 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 			await expect(image).toBeVisible();
 			await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
 			await expect(surfacePage.getByRole('dialog')).toHaveCount(0);
+			await expect(composer.locator('.stanza-editor-input')).toBeFocused();
+			await surfacePage.keyboard.press('Home');
+			await surfacePage.keyboard.press('ControlOrMeta+k');
+			await surfacePage.keyboard.press('ControlOrMeta+i');
+			const hover = surfacePage.locator('.stanza-editor-hover:not([hidden]) .ash-chat-image-reference-hover');
+			await expect(hover).toBeFocused();
+			const preview = hover.getByRole('img', { name: 'Pasted Image', exact: true });
+			await expect(preview).toBeVisible();
+			await expect.poll(() => preview.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
+			await hover.press('Tab');
+			await expect(hover.getByRole('button', { name: 'Close image preview', exact: true })).toBeFocused();
+			await surfacePage.keyboard.press('Enter');
+			await expect(hover).toHaveCount(0);
 			await expect(composer.locator('.stanza-editor-input')).toBeFocused();
 			await composer.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 			await surfacePage.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();

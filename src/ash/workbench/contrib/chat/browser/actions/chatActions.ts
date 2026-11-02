@@ -28,8 +28,35 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { CHAT_VIEW_ID } from '../../common/chat.js';
 import { IChatWidgetService, type IChatViewPane } from '../chat.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatInputNoticeHubService } from '../widget/input/notices/chatInputNoticeHub.js';
+import { status } from '../../../../../base/browser/ui/aria/aria.js';
+
+export const CHAT_SETUP_ACTION_ID = 'workbench.action.chat.triggerSetup';
 
 export function registerChatActions(): void {
+	registerAction2(class FocusNoticeAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.focusTip',
+				title: localize2('chat.notice.focus', 'Chat: Toggle Focus Between Notice and Input'),
+				precondition: ChatContextKeys.enabled.isEqualTo(true),
+				f1: true,
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Slash,
+					weight: KeybindingWeight.WorkbenchContrib,
+					when: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.inChatSession.isEqualTo(true)),
+				},
+			});
+		}
+
+		override run(accessor: ServicesAccessor): void {
+			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return;
+			if (!accessor.get(IChatInputNoticeHubService).toggleNoticeFocus()) {
+				status(localize('chat.notice.unavailable', 'No chat notice is available.'));
+			}
+		}
+	});
+
 	registerAction2(class FocusChatInputAction extends Action2 {
 		constructor() {
 			super({

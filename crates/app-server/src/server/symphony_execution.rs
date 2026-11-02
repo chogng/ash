@@ -350,6 +350,7 @@ impl AppServer {
                 model_selection,
                 reasoning_effort,
                 None,
+                ash_protocol::CommandInterpretation::Product,
                 vec![InputItem::Text {
                     text: invocation.prompt.clone(),
                 }],

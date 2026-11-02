@@ -1,5 +1,5 @@
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { IAgentThreadService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { IInstructionService } from '../../../platform/instructions/common/instructionService.js';
 import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
@@ -10,7 +10,6 @@ import { canceled } from '../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
-import { IRendererHostService, type IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
@@ -29,7 +28,7 @@ export class SessionProviderServices {
 		@ILanguageModelsService readonly models: ILanguageModelsService,
 		@IPromptsService readonly prompts: IPromptsService,
 		@IAgentExecutionSettingsService readonly execution: IAgentExecutionSettingsService,
-		@IRendererHostService readonly host: IRendererHost,
+		@IAgentConnection readonly host: IAgentConnection,
 		@ILanguageModelToolsService readonly tools: ILanguageModelToolsService,
 	) { }
 }

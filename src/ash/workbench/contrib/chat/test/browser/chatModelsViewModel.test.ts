@@ -6,7 +6,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import type { ModelProviderCredentialStatus } from '../../../../../platform/agentHost/common/agentModels.js';
+import type { ModelProviderCredentialStatus } from '../../../../../platform/models/common/agentModels.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { ChatModelsViewModel, isLanguageModelProviderEntry, isStatusEntry, type ILanguageModelEntry, type IViewModelEntry } from '../../browser/chatManagement/chatModelsViewModel.js';

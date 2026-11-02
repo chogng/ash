@@ -409,6 +409,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
     assert_eq!(snapshot.voice_transcripts[1].text, "I will check.");
     queue
         .enqueue(&queue::QueueInput {
+            command_interpretation: ash_protocol::CommandInterpretation::Product,
             command_id: CommandId::new(proposal["commandId"].as_str().unwrap()).unwrap(),
             session_id: params.session_id.clone(),
             thread_id: params.thread_id.clone(),

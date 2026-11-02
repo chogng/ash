@@ -183,6 +183,7 @@ function readChangesState(stored: string): StoredChangesState | undefined {
 		for (const key of value.reviewed) {
 			const resource = URI.parse(key);
 			const query = new URLSearchParams(resource.query);
+			if (resource.scheme === 'ash-thread-change' && resource.path.startsWith('/') && query.get('session') && query.get('thread') && query.get('revision') && query.get('repository') && !query.has('side')) { continue; }
 			const revision = Number(query.get('revision'));
 			if (resource.scheme !== 'ash-turn-diff' || !/^\/[^/]+\/.+/u.test(resource.path) || !query.get('session') || !query.get('thread')
 				|| !query.get('revision') || !Number.isSafeInteger(revision) || revision < 0 || query.has('side')) { return undefined; }

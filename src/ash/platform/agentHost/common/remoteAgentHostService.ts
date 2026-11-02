@@ -1,3 +1,10 @@
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import { Event } from '../../../base/common/event.js';
+import { createDecorator } from '../../instantiation/common/instantiation.js';
+import type { IFileSystemDirectory } from '../../files/common/fileApi.js';
+import type { IAgentConnection } from './agentService.js';
+import type { AppServerConnectionState } from './appServerApi.js';
+import { localize } from '../../../nls.js';
 import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
 import { URI } from '../../../base/common/uri.js';
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, normalizeRemoteWorkspacePath } from '../../remote/common/remote.js';
@@ -62,4 +69,46 @@ function text(value: unknown, maximum: number): string {
 
 function keys(value: Record<string, unknown>, expected: readonly string[]): void {
 	if (Object.keys(value).length !== expected.length || expected.some(key => !Object.hasOwn(value, key))) throw new TypeError('Agent host must contain exactly required keys');
+}
+
+/** One independent backend connection. Disposing it releases its carrier, never its shared daemon. */
+export interface IRemoteAgentHostProtocolClient extends IDisposable {
+	readonly id: string;
+	readonly connection: RemoteAgentHostConnection;
+	readonly api: IAgentConnection;
+	readonly directory: IFileSystemDirectory;
+}
+
+/** A runtime-owned endpoint. Domain ports are borrowed and retain their original connection scope. */
+export interface IRemoteAgentHostConnectionInfo {
+	readonly id: string;
+	readonly connection: RemoteAgentHostConnection;
+	readonly state: AppServerConnectionState;
+	readonly host: IRemoteAgentHostProtocolClient | undefined;
+}
+
+export interface IRemoteAgentHostService {
+	readonly isAvailable: boolean;
+	readonly connections: readonly IRemoteAgentHostConnectionInfo[];
+	readonly onDidChangeConnections: Event<void>;
+	connect(connection: RemoteAgentHostConnection, signal: AbortSignal, ticket?: string): Promise<IRemoteAgentHostProtocolClient>;
+	listWSLDistros(): Promise<readonly string[]>;
+	disconnect(id: string): void;
+	reconnect(id: string): Promise<void>;
+}
+
+
+export const IRemoteAgentHostService = createDecorator<IRemoteAgentHostService>('remoteAgentHostService');
+
+/** Explicit runtime availability for windows without native remote-host acquisition. */
+export class NullRemoteAgentHostService implements IRemoteAgentHostService {
+	readonly isAvailable = false;
+	readonly connections = [];
+	readonly onDidChangeConnections = Event.None;
+	async connect(): Promise<IRemoteAgentHostProtocolClient> {
+		throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.unavailable' }, 'Agent host connections are unavailable in this window.'));
+	}
+	async listWSLDistros(): Promise<readonly string[]> { return []; }
+	disconnect(): void { }
+	async reconnect(): Promise<void> { await this.connect(); }
 }

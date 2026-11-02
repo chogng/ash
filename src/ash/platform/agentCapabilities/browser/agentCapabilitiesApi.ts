@@ -1,7 +1,7 @@
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { Event } from '../../../base/common/event.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { AgentCapabilitiesSnapshot, IAgentCapabilitiesService } from '../common/agentCapabilitiesService.js';
 
 export function createAppServerAgentCapabilitiesApi(connection: AppServerProtocolClient): IAgentCapabilitiesService {

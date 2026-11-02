@@ -19,7 +19,7 @@ import { ISessionsService } from '../../../sessions/services/sessions/browser/se
 import type { ISession } from '../../../sessions/services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../sessions/services/sessions/common/sessionsManagement.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import type { ApprovalReviewModelSelection } from '../../../platform/agentHost/common/agentModels.js';
+import type { ApprovalReviewModelSelection } from '../../../platform/models/common/agentModels.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/agentHost/common/approvalModes.js';

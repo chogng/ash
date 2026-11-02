@@ -174,6 +174,8 @@ mod hook_events;
 #[path = "server/request_processors/ide.rs"]
 mod ide_operations;
 mod initialize;
+#[path = "server/request_processors/input_completions.rs"]
+mod input_completions_processor;
 #[path = "server/request_processors/instruction_import.rs"]
 mod instruction_import;
 #[path = "server/request_processors/instructions.rs"]
@@ -4594,6 +4596,12 @@ impl AppServer {
             Some(ClientMethod::FileFuzzy) => self
                 .search_processor()
                 .file_fuzzy(&request.params, cancellation),
+            Some(ClientMethod::InputCompletions) => {
+                self.input_completions(&request.params, cancellation)
+            }
+            Some(ClientMethod::InputCompletionsCancel) => self
+                .search_processor()
+                .file_glob_cancel(connection, &request.params),
             Some(ClientMethod::FileFuzzyCancel) => self
                 .search_processor()
                 .file_glob_cancel(connection, &request.params),

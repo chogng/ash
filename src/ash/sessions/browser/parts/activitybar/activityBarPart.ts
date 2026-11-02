@@ -97,7 +97,7 @@ export class ActivityBar extends Disposable {
 				onDragEnd: () => { this.draggedActionId = undefined; },
 			},
 		}));
-		this.navigation.element.classList.add('ash-sessions-navigation');
+		this.navigation.domNode.classList.add('ash-sessions-navigation');
 		const updateActions = (): void => {
 			const code = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code';
 			this.domNode.dataset.workspaceMode = code ? 'code' : 'chat';
@@ -151,7 +151,7 @@ export class ActivityBar extends Disposable {
 	public setLocation(location: ActivityBarPosition, host: HTMLElement | undefined, accountHost?: HTMLElement): void {
 		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
 		const focusedId = focused?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		const navigationTabStop = this.navigation.element.querySelector('[tabindex="0"]')?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		const navigationTabStop = this.navigation.domNode.querySelector('[tabindex="0"]')?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
 		const restoreFocus = focused && (this.domNode.contains(focused) || this.bottomDomNode.contains(focused));
 		const labeled = location === ActivityBarPosition.DEFAULT;
 		const presentationChanged = this.labeled !== labeled;
@@ -287,7 +287,7 @@ export class ActivityBar extends Disposable {
 
 	public updateHelpHint(hint: string | undefined): void {
 		const label = localize('sessions.activity.navigation', 'Navigation');
-		this.navigation.element.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
+		this.navigation.domNode.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
 	}
 }
 

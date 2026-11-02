@@ -6,7 +6,7 @@ import { EditorExtensionsRegistry } from '../../../../../../editor/browser/edito
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import type { IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
-import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 
 const language = languages.registerLanguages([{ description: { id: 'code-fixture' } }]);
 const languageConfiguration = languages.setLanguageConfiguration('code-fixture', { brackets: [['(', ')']], autoClosingPairs: [{ open: '(', close: ')' }] });

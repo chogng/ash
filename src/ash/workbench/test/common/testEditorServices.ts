@@ -1,4 +1,8 @@
+import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
+import { IChatLayoutService } from '../../contrib/chat/common/widget/chatLayoutService.js';
+import { ChatLayoutService } from '../../contrib/chat/browser/widget/chatLayoutService.js';
 import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
@@ -16,7 +20,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../browser/rendererApi.js';
 import { IElevatedFileService } from '../../services/files/common/elevatedFileService.js';
 import { BrowserElevatedFileService } from '../../services/files/browser/elevatedFileService.js';
@@ -25,7 +29,7 @@ import { Schemas } from '../../../base/common/network.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
-import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
+import { ILoggerService, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
@@ -114,6 +118,8 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, new NullLoggerService());
+	if (!services.has(IChatLayoutService)) services.registerSingleton(IChatLayoutService, () => services.createInstance(ChatLayoutService));
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	if (!services.has(IElevatedFileService)) { services.registerInstance(IElevatedFileService, new BrowserElevatedFileService()); }
 	if (!services.has(IWorkbenchEnvironmentService)) {
@@ -184,7 +190,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IStatusbarService)) services.registerSingleton(IStatusbarService, () => new StatusbarService());
 	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
 	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) }));
-	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	if (!services.has(IAppServerApi)) registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));

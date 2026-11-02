@@ -222,7 +222,7 @@ for (const locale of ['en', 'zh-CN']) {
 				status: 'failed', error: 'fixture offline', onDidChange: changed.event,
 				reconnect: async () => { retries++; recovery.status = 'recovering'; changed.fire(); },
 			};
-			services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
+			services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
 			services.registerInstance(IBannerService, {
 				_serviceBrand: undefined, focus() { }, focusNextAction() { }, focusPreviousAction() { },
 				show: item => { notices.set(item.id, item); }, hide: id => { notices.delete(id); },

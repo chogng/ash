@@ -1,5 +1,5 @@
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionClientSource, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionClientSource, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { IAgentHostCanvasCollection, type ICanvasProvider } from '../../contrib/canvases/common/agentHostCanvas.js';
 import type { ICanvasOwner } from '../../contrib/canvases/common/canvas.js';
@@ -12,21 +12,24 @@ export class MainThreadCanvases extends Disposable {
 	private readonly bindings = new Map<string, { identity: string; source: ExtensionClientSource; provider?: ICanvasProvider; settled?: boolean; }>();
 	private readonly suspended = new Set<string>();
 	private readonly readyOwners = new Set<string>();
-	constructor(private readonly timeout: number,
+	constructor(private readonly options: number | { readonly timeout: number; readonly providerId: string; readonly backendOwner: (owner: ICanvasOwner) => { readonly sessionId: string; readonly threadId: string; }; },
 		@IExtensionHostApi private readonly runtime: IExtensionHostApi,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IAgentHostCanvasCollection private readonly canvases: IAgentHostCanvasCollection,
 		@ILogService private readonly log: ILogService,
 	) { super(); }
 
+	private get providerId(): string { return typeof this.options === 'number' ? 'local-agent-host' : this.options.providerId; }
+	private get timeout(): number { return typeof this.options === 'number' ? this.options : this.options.timeout; }
+
 	update(snapshot: ExtensionHostFleetSnapshot): void {
 		this.readyOwners.clear();
 		for (const owner of snapshot.extensions) { if (owner.lifecycle === 'ready') { this.readyOwners.add(owner.id); } }
 		for (const extensionId of this.suspended) {
 			const owner = snapshot.extensions.find(owner => owner.id === extensionId);
-			if (!owner || owner.lifecycle === 'stopped') { this.canvases.retireExtension(extensionId); this.suspended.delete(extensionId); }
+			if (!owner || owner.lifecycle === 'stopped') { this.canvases.retireExtension(extensionId, this.providerId); this.suspended.delete(extensionId); }
 		}
-		const declarations = this.extensions.getExtensionPointContributions<readonly { id: string; displayName: string; description: string; requiresInput: boolean; }[]>('canvases');
+		const declarations = this.providerId === 'local-agent-host' ? this.extensions.getExtensionPointContributions<readonly { id: string; displayName: string; description: string; requiresInput: boolean; }[]>('canvases') : [];
 		const active = new Set<string>();
 		for (const owner of snapshot.extensions) {
 			if (owner.lifecycle !== 'ready' || owner.incarnation === undefined) { continue; }
@@ -51,18 +54,19 @@ export class MainThreadCanvases extends Disposable {
 				const invoke = async (action: string, context: ICanvasOwner, instanceId: string, signal: AbortSignal) => {
 					const result = await this.runtime.invoke({
 						...source, registrationId: registration.registrationId, operation: 'receiveData', deadlineUnixMillis: Date.now() + this.timeout,
-						payload: { data: { action, context: { sessionId: context.session.path.slice(1), threadId: context.chat.path.slice(1), instanceId } } },
+						payload: { data: { action, context: { ...(typeof this.options === 'number' ? { sessionId: context.session.path.slice(1), threadId: context.chat.path.slice(1) } : this.options.backendOwner(context)), instanceId } } },
 					}, AbortSignal.any([signal, controller.signal]));
 					if (!result || typeof result !== 'object' || Array.isArray(result)) { throw new TypeError('Invalid Canvas provider result'); }
 					return result as Record<string, JsonValue>;
 				};
-				const loading = lifetime.add(this.canvases.beginDefinitionRefresh());
+				const loading = lifetime.add(this.canvases.beginDefinitionRefresh(this.providerId));
 				void this.runtime.invoke({ ...source, registrationId: registration.registrationId, operation: 'receiveData', deadlineUnixMillis: Date.now() + this.timeout, payload: { data: { action: 'describe' } } }, controller.signal).then(result => {
 					if (controller.signal.aborted || this.isDisposed) { return; }
 					if (!result || typeof result !== 'object' || Array.isArray(result)) { throw new TypeError('Invalid Canvas definition'); }
 					const declaration = result as Record<string, JsonValue>;
 					if (declaration.state !== 'definition' || typeof declaration.canvasId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(declaration.canvasId) || typeof declaration.displayName !== 'string' || !declaration.displayName.trim() || declaration.displayName.length > 256 || typeof declaration.description !== 'string' || declaration.description.length > 4096 || typeof declaration.requiresInput !== 'boolean') { throw new TypeError('Invalid Canvas definition'); }
 					const provider: ICanvasProvider = {
+						providerId: this.providerId,
 						definition: { canvasId: declaration.canvasId, extensionId: owner.id, extensionSource: extension?.description.sourceKind === 'plugin' ? 'plugin' : extension ? 'user' : 'unknown', extensionName: extension?.description.displayName, displayName: declaration.displayName, description: declaration.description, requiresInput: declaration.requiresInput },
 						signal: controller.signal,
 						open: async (context, instanceId, signal) => sourceResult(await invoke('open', context, instanceId, signal)),
@@ -93,16 +97,16 @@ export class MainThreadCanvases extends Disposable {
 			this.registrations.deleteAndDispose(key); this.bindings.delete(key);
 		}
 		for (const extensionId of this.readyOwners) { this.settleOwner(extensionId); }
-		this.canvases.reconcileExtensions(new Set(snapshot.extensions.filter(owner => owner.lifecycle !== 'stopped').map(owner => owner.id)));
+		this.canvases.reconcileExtensions(new Set(snapshot.extensions.filter(owner => owner.lifecycle !== 'stopped').map(owner => owner.id)), this.providerId);
 	}
 
 	private settleOwner(extensionId: string): void {
 		if (!this.readyOwners.has(extensionId) || [...this.bindings.values()].some(binding => binding.source.extensionId === extensionId && !binding.settled)) { return; }
-		this.canvases.settleExtension(extensionId);
+		this.canvases.settleExtension(extensionId, this.providerId);
 		this.suspended.delete(extensionId);
 	}
 
-	async handleChange(payload: JsonValue, source: ExtensionClientSource): Promise<void> {
+	async handleChange(payload: unknown, source: ExtensionClientSource): Promise<void> {
 		if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).sort().join(',') !== 'canvasId,method' || !('canvasId' in payload) || typeof payload.canvasId !== 'string') { throw new TypeError('Invalid Canvas invalidation'); }
 		const binding = [...this.bindings.values()].find(binding => binding.source.extensionId === source.extensionId && binding.provider?.definition.canvasId === payload.canvasId);
 		if (!binding?.provider || binding.source.activationGeneration !== source.activationGeneration || binding.source.incarnation !== source.incarnation) { throw new Error('Canvas provider has retired'); }

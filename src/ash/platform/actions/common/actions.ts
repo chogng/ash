@@ -99,6 +99,8 @@ export class MenuId {
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatExecute = new MenuId('ChatExecute');
+	static readonly ChatExecuteQueue = new MenuId('ChatExecuteQueue');
 	static readonly ChatNewMenu = new MenuId('ChatNewMenu');
 	static readonly ChatTitleLayout = new MenuId('ChatTitleLayout');
 	static readonly ChatSessionsLayout = new MenuId('chatAgentSessionsOrientationSubmenu');

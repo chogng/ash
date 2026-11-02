@@ -206,7 +206,7 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 			// The new process publishes its marker before protocol initialization.
 			// Saving must exercise the restored connection, after Main confirms the
 			// complete restart, rather than race the intentional offline interval.
-			await expect.poll(() => output.includes('[app-server] Restarted development runtime'), { timeout: 90_000 }).toBe(true);
+			await expect.poll(() => output.includes('Development runtime restart completed'), { timeout: 90_000 }).toBe(true);
 			await editor.waitForEditorFocus();
 			await editor.input.press('ControlOrMeta+s');
 			await expect.poll(() => readFile(join(workspace, 'selfhost.txt'), 'utf8')).toBe(draft);

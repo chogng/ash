@@ -574,17 +574,26 @@ impl WorktreeManager {
 
     /// Lists the repository's worktrees while preserving the source directory's relative cwd.
     pub async fn list(&self, source_directory: &Path) -> Result<Vec<Worktree>> {
+        Self::list_with_git(&self.git, source_directory).await
+    }
+
+    /// Reads existing checkouts without configuring or creating managed Thread directories.
+    pub async fn list_existing(source_directory: &Path) -> Result<Vec<Worktree>> {
+        Self::list_with_git(&GitClient::system(), source_directory).await
+    }
+
+    async fn list_with_git(git: &GitClient, source_directory: &Path) -> Result<Vec<Worktree>> {
         let source_directory = dunce::canonicalize(source_directory).with_context(|| {
             format!(
                 "cannot resolve source directory {}",
                 source_directory.display()
             )
         })?;
-        let source_repository = self.git.open_repository(&source_directory).await?;
+        let source_repository = git.open_repository(&source_directory).await?;
         let relative_directory = source_directory
             .strip_prefix(source_repository.worktree_root())
             .context("source directory is outside its repository root")?;
-        let entries = self.git.worktrees(&source_repository).await?;
+        let entries = git.worktrees(&source_repository).await?;
         let mut worktrees = Vec::with_capacity(entries.len());
         for (index, entry) in entries.into_iter().enumerate() {
             let current = if entry.checkout_root() == source_repository.worktree_root() {
@@ -595,7 +604,7 @@ impl WorktreeManager {
                 false
             };
             let owner = if entry.availability().is_available() && entry.checkout_root().exists() {
-                match self.git.open_repository(entry.checkout_root()).await {
+                match git.open_repository(entry.checkout_root()).await {
                     Ok(repository) => match metadata::owner(repository.git_dir()) {
                         Ok(Some(thread_id)) => WorktreeOwner::Thread(thread_id),
                         Ok(None) => WorktreeOwner::Unbound,

@@ -1,11 +1,12 @@
 import { withProcessRun } from '../../build/processes.ts';
-import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
 import { planAffectedTests } from './impactWorker.ts';
+import { UnitCoverage, validateCoverageOptions, type CoverageOptions } from './coverage.ts';
 
-interface Selection {
+interface Selection extends CoverageOptions {
 	readonly runs: readonly string[];
 	readonly runGlob?: string;
 	readonly affected?: string;
@@ -95,6 +96,14 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		// Reflinks keep the snapshot independent of compiler writes without copying
 		// every byte on filesystems that support them; elsewhere Node copies normally.
 		cpSync(compiledDirectory, outputDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE });
+		// Emitting extension sources relocates them away from their package's dependencies.
+		// Retain that scope without exposing extension-only packages to host tests.
+		const extensionsDirectory = resolve(outputDirectory, 'extensions');
+		for (const extension of existsSync(extensionsDirectory) ? readdirSync(extensionsDirectory, { withFileTypes: true }) : []) {
+			if (!extension.isDirectory()) continue;
+			const dependencies = resolve(desktopDirectory, 'extensions', extension.name, 'node_modules');
+			if (existsSync(dependencies)) symlinkSync(dependencies, resolve(extensionsDirectory, extension.name, 'node_modules'), 'junction');
+		}
 		// TypeScript resolves vendored declarations but does not emit their adjacent JavaScript implementations.
 		for (const path of ['src/ash/base/common/marked/marked.js', 'src/ash/base/browser/dompurify/dompurify.js']) {
 			const output = resolve(outputDirectory, path);
@@ -113,21 +122,25 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 
 		const failed: string[] = [];
 		let executedTests = 0;
+		const coverage = selection.coverage ? new UnitCoverage(selection) : undefined;
+		coverage?.validateSourceMaps(outputDirectory);
 		const resultDirectory = mkdtempSync(resolve(tmpdir(), 'ash-unit-results-'));
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
+				const coverageEnvironment = { ...environment, ...coverage?.environment };
 				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
-					? await startBrowserUnitServer(run, environment) : undefined;
+					? await startBrowserUnitServer(run, coverageEnvironment) : undefined;
 				// Reuse compiled bytecode across isolated processes, never their module
 				// instances or globals. The first completed files warm subsequent workers;
 				// the run owns cleanup, and V8 coverage keeps its uncached precision.
 				// A single wave has no reuse to offset the cost of writing a cold cache.
 				const testEnvironment = {
-					...environment,
+					...coverageEnvironment,
 					NODE_COMPILE_CACHE: environment.NODE_COMPILE_CACHE ?? (files.length > selection.workers ? resolve(resultDirectory, 'compile-cache') : undefined),
-					...(environment.NODE_V8_COVERAGE ? { NODE_DISABLE_COMPILE_CACHE: '1' } : {}),
-					...(browserServer ? { ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : {}),
+					...(coverageEnvironment.NODE_V8_COVERAGE ? { NODE_DISABLE_COMPILE_CACHE: '1' } : {}),
+					...(browserServer ? { ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results, ASH_UNIT_COVERAGE_ASSETS: browserServer.assets } : {}),
 				};
+				let completed = false;
 				try {
 					let nextFile = 0;
 					const worker = async (): Promise<void> => {
@@ -166,7 +179,11 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 					for (const result of results) {
 						if (result.status === 'rejected') throw result.reason;
 					}
-				} finally { await browserServer?.dispose(); }
+					completed = !run.stopped;
+				} finally {
+					try { await coverage?.report(run, environment, outputDirectory, browserServer?.assets, { files, failed, executedTests, completed }); }
+					finally { await browserServer?.dispose(); }
+				}
 			});
 		} finally {
 			rmSync(resultDirectory, { recursive: true, force: true });
@@ -202,12 +219,18 @@ function parseSelection(args: readonly string[]): Selection {
 	let timeout = 60_000;
 	let workers = Math.min(4, availableParallelism());
 	let plan = false;
+	let coverage = false;
+	let coveragePath: string | undefined;
+	const coverageFormats: string[] = [];
 	for (let index = 0; index < args.length; index += 1) {
 		const option = args[index];
 		if (option === '--plan') { plan = true; continue; }
+		if (option === '--coverage') { coverage = true; continue; }
 		const value = args[index + 1];
 		if (!value) throw new Error(`Missing value for ${option}`);
 		switch (option) {
+			case '--coveragePath': coveragePath = value; break;
+			case '--coverageFormats': coverageFormats.push(...value.split(',')); break;
 			case '--run': runs.push(value); break;
 			case '--runGlob': runGlob = value; break;
 			case '--affected': {
@@ -236,5 +259,7 @@ function parseSelection(args: readonly string[]): Selection {
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
 	if (affected && (runs.length > 0 || runGlob)) throw new Error('--affected cannot be combined with --run or --runGlob');
-	return { runs, runGlob, affected, grep, timeout, workers, plan };
+	const selection = { runs, runGlob, affected, grep, timeout, workers, plan, coverage, coveragePath, coverageFormats };
+	validateCoverageOptions(selection);
+	return selection;
 }

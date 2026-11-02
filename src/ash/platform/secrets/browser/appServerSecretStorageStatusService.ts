@@ -2,7 +2,7 @@ import type { AppServerProtocolClient } from '../../agentHost/browser/appServerP
 import type { SecretStorageStatusResult } from '../../../../../.build/protocol/typescript/index.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { SecretStorageError, type ISecretStorageStatusService, type SecretStorageState } from '../common/secrets.js';
 
 export function createAppServerSecretStorageStatusService(connection: AppServerProtocolClient): ISecretStorageStatusService {

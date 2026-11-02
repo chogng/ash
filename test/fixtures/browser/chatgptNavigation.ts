@@ -20,9 +20,9 @@ import { ChatGPTWidget } from '../../../src/ash/sessions/contrib/chatgptweb/brow
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
-import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';
@@ -38,7 +38,7 @@ import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/d
 import { ViewContainerLocation } from '../../../src/ash/workbench/common/views.js';
 import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
 import { Event } from '../../../src/ash/base/common/event.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';

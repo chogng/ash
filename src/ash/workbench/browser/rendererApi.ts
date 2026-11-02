@@ -1,3 +1,11 @@
+import type { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/common/dictation.js';
+import type { IAgentConnection } from '../../platform/agentHost/common/agentService.js';
+import type { IRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
+import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
+import type { IDebugAdapterProcessService } from '../../platform/debug/common/debugAdapterProcessService.js';
+import type { IRemoteAgentApi } from '../../platform/remote/common/remoteAgentApi.js';
+import type { IRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
+import type { URI } from '../../base/common/uri.js';
 import { createDisconnectedSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
 import { createDisconnectedLocalGitService } from '../../platform/git/browser/appServerLocalGitService.js';
 import { createDisconnectedExecutionSettingsService } from '../../platform/agentHost/browser/appServerExecutionSettingsService.js';
@@ -12,11 +20,10 @@ import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDi
 import { createDisconnectedFileApi } from '../../platform/files/browser/fileApi.js';
 import { createDisconnectedExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createDisconnectedSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
-import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
-import { unavailableOperation, WebAppServerUnavailableError } from '../../platform/renderer/browser/disconnectedHost.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
-import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { createDisconnectedAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
+import { createDisconnectedAgentHostInputCompletionService, createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
+import { createDisconnectedAgentModelsService } from '../../platform/models/browser/appServerAgentModels.js';
 import { DisconnectedTerminalProcessService } from '../../platform/terminal/browser/disconnectedTerminalProcessService.js';
 import { createDisconnectedDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
 import { createDisconnectedCodebaseApi } from '../../platform/codebase/browser/codebaseApi.js';
@@ -25,7 +32,7 @@ import { createDisconnectedConnectorApi } from '../../platform/connectors/browse
 import { createDisconnectedToolSearchApi } from '../../platform/toolSearch/browser/toolSearchApi.js';
 import { createDisconnectedLanguageApi } from '../../platform/language/browser/languageApi.js';
 import { createDisconnectedPluginManagementApi } from '../../platform/extensionManagement/browser/pluginManagementApi.js';
-import { createDisconnectedExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../platform/extensions/browser/extensionHostApi.js';
 import { createDisconnectedExtensionsApi } from '../../platform/extensionManagement/browser/extensionManagementApi.js';
 import { createDisconnectedWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
 import { createDisconnectedAgentCapabilitiesApi } from '../../platform/agentCapabilities/browser/agentCapabilitiesApi.js';
@@ -37,15 +44,53 @@ import { createDisconnectedAccountApi } from '../../platform/accounts/browser/ac
 import { createDisconnectedTurnChangesApi } from '../../platform/turnChanges/browser/turnChangesApi.js';
 import { createDisconnectedTeamApi } from '../../platform/teams/browser/teamApi.js';
 
+/** Optional product capabilities contributed by a statically selected host bundle. */
+export interface WorkbenchHostCapabilities {
+	readonly debugAdapter?: IDebugAdapterProcessService;
+	readonly localTranscription?: ILocalTranscriptionService;
+	readonly localTranscriptionModels?: ILocalTranscriptionModelService;
+}
+
+/** Merges product capabilities while rejecting two contributions that claim the same slot. */
+export function mergeWorkbenchHostCapabilities(capabilities: readonly WorkbenchHostCapabilities[]): WorkbenchHostCapabilities {
+	const merged: Record<string, unknown> = {};
+	for (const capability of capabilities) {
+		for (const [name, value] of Object.entries(capability)) {
+			if (value === undefined) continue;
+			if (Object.hasOwn(merged, name)) throw new Error(`Renderer host capability '${name}' was contributed more than once`);
+			merged[name] = value;
+		}
+	}
+	return merged;
+}
+
+/** Startup composition only. Runtime consumers inject the individual domain services. */
+export interface IWorkbenchHost extends IAgentConnection, WorkbenchHostCapabilities {
+	readonly dictation?: IVoiceCodeTranscriptionBackendService;
+	/** Native local connection remains distinct when the window's primary host is remote. */
+	readonly localTcp?: import('../../platform/network/common/tcp.js').ITcpService;
+	/** Actual local OS user directory when supplied by the desktop host. */
+	readonly localUserHome?: URI;
+	/** Granted local profile directory; absent in browser-only hosts. */
+	readonly userDataHome?: URI;
+	/** Opens this host's profile TOML; absent when the host cannot edit a local profile. */
+	readonly editUserConfiguration?: () => Promise<void>;
+	readonly remote?: IRemoteAgentApi;
+	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
+	readonly remoteConnections?: IRemoteConnectionApi;
+	/** Additional backend scopes are available only in hosts with a multi-host window owner. */
+	readonly agentHosts?: IRemoteAgentHostService;
+}
+
 export { WebAppServerUnavailableError };
 
-/** Composes the explicit disconnected capability set for standalone Web pages. */
-export function createDisconnectedRendererApi(): IRendererHost {
-	const appServer = createDisconnectedAppServerApi(unavailableOperation);
+/** Builds disconnected domain ports; Desktop keeps host support while its carrier is offline. */
+export function createDisconnectedRendererApi(isAvailable = false): IWorkbenchHost {
+	const appServer = createDisconnectedAppServerApi(unavailableOperation, isAvailable);
 	return {
-		hasAppServer: false,
 		appServer,
 		accounts: createDisconnectedAccountApi(unavailableOperation),
+		completions: createDisconnectedAgentHostInputCompletionService(),
 		session: createDisconnectedAgentSessionService(unavailableOperation),
 		teams: createDisconnectedTeamApi(unavailableOperation),
 		model: createDisconnectedAgentModelsService(unavailableOperation),

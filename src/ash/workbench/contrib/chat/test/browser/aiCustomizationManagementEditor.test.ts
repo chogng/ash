@@ -1,3 +1,4 @@
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import assert from 'node:assert/strict';
@@ -29,7 +30,6 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { ITextFileSaveEvent } from '../../../../services/textfile/common/textFileService.js';
 import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
-import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { AICustomizationManagementEditor } from '../../browser/aiCustomization/aiCustomizationManagementEditor.js';

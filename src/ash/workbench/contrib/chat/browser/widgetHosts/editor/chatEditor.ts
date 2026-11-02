@@ -2,6 +2,7 @@ import { ConfirmResult } from '../../../../../../platform/dialogs/common/dialogs
 import './media/chatEditor.css';
 import { h, type IDimension } from '../../../../../../base/browser/dom.js';
 import { MutableDisposable } from '../../../../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../../../../base/common/errors.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { EditorPane } from '../../../../../browser/parts/editor/editorPane.js';
@@ -22,6 +23,7 @@ export class ChatEditor extends EditorPane {
 	private session: Awaited<ReturnType<ChatViewPane['attachSessionEditor']>> | undefined;
 	private input: ChatEditorInput | undefined;
 	private closeHandler: IEditorCloseHandler | undefined;
+	private inputLoad: AbortController | undefined;
 
 	constructor(
 		@IViewsService private readonly views: IViewsService,
@@ -36,32 +38,44 @@ export class ChatEditor extends EditorPane {
 	}
 
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		const view = await this.views.openView<ChatViewPane>(CHAT_VIEW_ID);
 		signal.throwIfAborted();
-		if (!view || typeof view.attachEditor !== 'function') throw new Error('Chat editor requires its window conversation owner');
+		if (this.isDisposed) throw new CancellationError();
 		if (!(input instanceof ChatEditorInput)) throw new TypeError('Invalid Chat editor input');
-		if (input.paneId !== undefined) {
-			const session = await view.attachSessionEditor(input, this.element);
-			if (signal.aborted) { session.dispose(); signal.throwIfAborted(); }
-			this.session = session;
-			this.mount.value = session;
+		this.clearInput();
+		const load = this.inputLoad = new AbortController();
+		const lifetime = AbortSignal.any([signal, load.signal]);
+		try {
+			const view = await this.views.openView<ChatViewPane>(CHAT_VIEW_ID);
+			lifetime.throwIfAborted();
+			if (!view || typeof view.attachEditor !== 'function') throw new Error('Chat editor requires its window conversation owner');
+			if (input.paneId !== undefined) {
+				const session = await view.attachSessionEditor(input, this.element, lifetime);
+				if (lifetime.aborted) {
+					session.dispose();
+					lifetime.throwIfAborted();
+				}
+				this.session = session;
+				this.mount.value = session;
+				this.input = input;
+				input.closeHandler = this.closeHandler = {
+					showConfirm: () => true,
+					confirm: async () => { await session.widget.captureDraft(); return ConfirmResult.DONT_SAVE; },
+				};
+				session.widget.setTabId(undefined);
+				session.setVisible(this.shown);
+				return;
+			}
 			this.input = input;
 			input.closeHandler = this.closeHandler = {
 				showConfirm: () => true,
-				confirm: async () => { await session.widget.captureDraft(); return ConfirmResult.DONT_SAVE; },
+				confirm: async () => { await view.captureActiveDraft(); return ConfirmResult.DONT_SAVE; },
 			};
-			session.widget.setTabId(undefined);
-			session.setVisible(this.shown);
-			return;
+			this.view = view;
+			this.mount.value = view.attachEditor(this.element);
+			view.setEditorVisible(this.element, this.shown);
+		} finally {
+			if (this.inputLoad === load) this.inputLoad = undefined;
 		}
-		this.input = input;
-		input.closeHandler = this.closeHandler = {
-			showConfirm: () => true,
-			confirm: async () => { await view.captureActiveDraft(); return ConfirmResult.DONT_SAVE; },
-		};
-		this.view = view;
-		this.mount.value = view.attachEditor(this.element);
-		view.setEditorVisible(this.element, this.shown);
 	}
 
 	override setVisible(visible: boolean): void {
@@ -72,6 +86,8 @@ export class ChatEditor extends EditorPane {
 	}
 
 	override clearInput(): void {
+		this.inputLoad?.abort(new CancellationError());
+		this.inputLoad = undefined;
 		// A group move may already have installed the target editor's handler on this input.
 		if (this.input?.closeHandler === this.closeHandler && this.input) this.input.closeHandler = undefined;
 		this.input = undefined;

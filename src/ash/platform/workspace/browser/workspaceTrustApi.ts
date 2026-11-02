@@ -3,7 +3,7 @@ import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { IWorkspaceTrustApi, WorkspaceTrustCommandResult, WorkspaceTrustPermission } from '../common/workspaceTrust.js';
 
 export function createDisconnectedWorkspaceTrustApi(unavailable: UnavailableOperation): IWorkspaceTrustApi {

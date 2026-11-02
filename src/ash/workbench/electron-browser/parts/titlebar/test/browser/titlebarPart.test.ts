@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { registerTestTitlebarServices } from '../../../../../test/common/testTitlebarServices.js';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
@@ -74,7 +75,12 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 		let pinRead: Promise<void> | undefined;
 		const pinTargets: (string | undefined)[] = [];
 		services.registerInstance(IThemeService, themes);
+		using notifications = new TestNotificationService();
+		services.registerInstance(INotificationService, notifications);
+		const localizationService = { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback };
+		services.registerInstance(ILocalizationService, localizationService);
 		registerTestComponentServices(services, environment.window.document);
+		registerTestTitlebarServices(services);
 		services.registerInstance(INativeHostService, {
 			onDidSuspendOS: () => ({ dispose() { } }),
 			onDidResumeOS: () => ({ dispose() { } }),
@@ -132,17 +138,14 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
 		});
 		services.registerInstance(IMenubarService, { _serviceBrand: undefined, updateMenubar: async () => { }, onDidSelect: Event.None });
-		using notifications = new TestNotificationService();
-		services.registerInstance(INotificationService, notifications);
 		const factory = createElectronTitlebarPartFactory();
 		const options = {
 			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 			menuService: menus,
 			contextMenuService: { contextMenuStyle: 'custom' as const, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } },
-			localizationService: { whenReady: Promise.resolve(), translate: (_bundle: string, _key: string, fallback: string) => fallback },
+			localizationService,
 		};
 		services.registerInstance(IContextMenuService, options.contextMenuService);
-		services.registerInstance(ILocalizationService, options.localizationService);
 		using missingServices = new InstantiationService();
 		assert.throws(() => factory(environment.window.document.body, { windowTitle: options.windowTitle }, missingServices), /service/i);
 		using titlebar = factory(environment.window.document.body, { windowTitle: options.windowTitle }, services);

@@ -2,6 +2,28 @@
 
 本轮通用服务已按下节的真实调用与领域 owner 闭合；下面各批记录保留其当时的范围和验证。产品差异及真实环境验收由 [AgentHost TODO](TODO.md#agenthost--todo) 维护。保留 Ash 的 Rust 执行与持久化架构，不声明上游 AHP wire protocol 兼容。
 
+## 文件事件领域契约与验证收尾 · 2026-11-02
+
+在上一批工作树上继续实施，当前基线更新为 `9b0e48221119830daa9210dd4fc74064d211bf71`，保留期间合入的 Session 目录与展示 owner 变更。本片沿 Workbench／Session 文件消费者 → `AgentHostFileSystemProvider` → `IFileApi` → 原协议客户端与 Rust 文件通知的调用链收敛职责。
+
+- `platform/files/common/fileApi.ts` 拥有前端 `FileInvalidation` 与 `IFileApi.onDidChangeFiles`；文件 browser adapter 唯一识别 `fs/changed` 并提供连接所属的事件。文件 Provider 直接订阅领域事件，Workbench、Session 文件服务、发现的 worktree 挂载与 Remote Provider 退出原始通知分发；窗口目录授权恢复仍通过附加失效信号请求重新扫描。
+- 新回归使用真实协议客户端、生成 decoder 和文件 Provider，先复现领域事件未到达 Provider，再验证同目录 ID 的两条连接隔离、无关通知过滤、断线／重连、调用者及 Provider 释放。架构检查阻止文件协议通知重新流入领域外消费者；原文件缓存、授权目录、连接和 Rust 状态 owner 保持原职责。
+- 上批编译阻塞实际是导入路径错误：`createChatFileAttachments` 已由 `chatPasteProviders.ts` 实现，修正 `chatInputPart.ts` 的导入后恢复完整编译。扩大窗口验证时补齐 Chat fixture 的搜索／编辑器分组／补全依赖，让命令与输入框共用 Widget 注册表，并按测试释放编辑器监听，避免读取上个测试已释放的配置。
+
+验证：完整 Renderer 和测试项目类型检查通过，`pnpm build:web` 通过。标准单测入口的 13 文件中，其余 12 文件／278 项通过；修复上述 fixture 后，Chat 窗口 221 项完整重跑通过，合计 499 项，包含 Automation／GitHub 的真实 Chromium 组件及中英文 Chat 恢复。首轮失败和最终重跑分别保留在 `.build/agenthost-files-20261102/file-events-final.log`、`chat-window-final.log`，红绿回归及 Web 构建也在同一目录。前批验证待办已移除。
+
+## common 连接契约与窗口能力 · 2026-11-02
+
+本批基线为 Ash `274d8f16f956066ec05603d29c0581c56d110941` 与本地只读 VS Code `ae15303824771284a26e84c78d5769a03051f50d`，工作树开始时干净。按用户确认的第一批连接契约范围实施，不以目录存在或成员数量声明整项 API 等价。
+
+- `platform/agentHost/common/agentService.ts` 的 `IAgentConnection` 承接既有连接所属的领域端口；ConnectionsService、远端 lease、Session 文件与 Provider scope 改用该契约。领域 adapter、连接代次、恢复调度、Main relay 和 Rust 状态 owner 保持原有实现。
+- Workbench 与 Sessions 的窗口装配将同一个宿主对象注册为 `IAgentConnection` 和 `IRendererHostService`；远端 Provider scope 只绑定自己的连接和领域服务，继续借用父作用域的窗口宿主。本机 TCP、profile 目录与配置编辑保留在 Renderer，浏览器代理与技能上传从窗口 owner 显式取得所需能力。
+- 新回归从真实 SSH 命令、Provider scope、后端命名操作到关闭释放，验证远端连接不会覆盖窗口宿主；另覆盖缺少连接注入时创建失败、窗口无 profile 时禁止技能发布，并增加 common 连接契约不依赖 Renderer 装配的架构检查。
+
+验证：先通过 5 文件／36 项最小调用链，再扩大到 15 文件／257 项定向单测，覆盖协议配对、取消、Local／Remote 恢复、目录重绑、权限等待、多宿主同 ID／嵌套根隔离与 scope 释放。最终精简测试装配后，受影响的 Provider 路由、Session 管理和 Automation store 3 文件／116 项重跑通过。生成协议通过仓库 `pnpm protocol:generate` 更新；定向编译继承 `tsconfig.test.json`，配置与选中文件清单位于 `.build/agenthost-connections-20261102/`。
+
+该批结束时，完整编译与窗口验证被 `chatInputPart.ts:74` 的附件导入路径错误阻塞；已在上面的验证收尾切片修复并完成验收。本批只完成连接能力与窗口能力的 owner 切片；上游完整 `IAgentConnection`／`IAgentHostService` 成员、authority／address 与 Session URI 解析、资源快照同名职责及其他领域的原始通知泄漏继续保持待复核状态。
+
 ## 通用服务端到端闭合 · 2026-10-18
 
 本节取代下面历史记录中的“统一连接、主列表、Chat scope、文件过滤尚未实现”结论。范围为现有通用能力；SDK、续接、模型安装和其他独立产品能力继续由根 TODO 列缺口。这里按公开职责核对实际调用与唯一 owner，不以 Node、state／meta 或同名文件数量判断完成，也不声明兼容上游 AHP wire protocol。
@@ -138,7 +160,7 @@ Common **2,761**、Renderer **4,300** 文件类型检查通过，Desktop `pnpm b
 
 ### 仅 Ash 文件与现有归属
 
-下列 39 个生产文件完整对应清单的 `ash-only` 项。本表记录现状和后续路由，不替未完成的职责复核作保留／移动／删除决定。本次已按用户批准将唯一文件 Provider 从 browser 迁至上游对应 common 路径并删除旧文件；其余专属归属不因文件数量而迁移。
+下表记录审计时 39 个 `ash-only` 生产文件的当前归属和后续路由，不替未完成的职责复核作保留／移动／删除决定。文件 Provider 已按用户批准迁至上游对应 common 路径；模型、自动化和扩展的 Ash 专属契约、adapter 及对应测试按本次用户要求分别归入 `platform/models`、`platform/automations`、`platform/extensions`，保留原有实现与公开契约，调用方同步迁移。
 
 | 目录与准确文件名                                                                                                                                                                                                       | 当前 owner / 生产入口                                                            | 处理范围                                                                                                                              |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -146,9 +168,10 @@ Common **2,761**、Renderer **4,300** 文件类型检查通过，Desktop `pnpm b
 | `platform/agentHost/common/`：`appServerApi.ts`、`appServerEnvironment.ts`、`appServerError.ts`、`appServerProtocolCompatibility.ts`、`appServerTransport.ts`                                                          | 各领域 adapter、Renderer 装配与协议客户端共用连接契约。                          | 按 Ash 协议复核；不改名冒充 AHP。                                                                                                     |
 | `platform/agentHost/browser/`：`appServerSocketTransport.ts`、`appServerWebSocketTransport.ts`；`electron-browser/`：`appServerMessagePortTransport.ts`                                                                | Local／Remote service 与 Web 装配取得并持有 transport。                          | 保留现有 carrier；对照上游 transport 时单独核对认证、代次、关闭与资源回收。                                                           |
 | `platform/agentHost/electron-main/`：`appServerConnectionRelay.ts`、`appServerProcessLauncher.ts`、`appServerBrowserHost.ts`；`electron-browser/`：`appServerBrowserHost.ts`；`node/`：`childProcessJsonlTransport.ts` | Electron 应用／窗口 → 连接转发与浏览器宿主；daemon 生命周期归 Rust。             | 不迁入 Node agent runtime；宿主端口、carrier 与 daemon 职责分别复核。                                                                 |
-| `platform/agentHost/browser/`：`appServerAgentService.ts`；`common/`：`agentModels.ts`、`agentToolsApi.ts`、`agentExecutionSettingsService.ts`、`approvalModes.ts`、`automation.ts`                                    | Chat／Sessions／模型选择／工具调用与设置消费者使用各自领域契约。                 | 领域数据已迁入同路径 `common/agent.ts`，服务契约保留 `agentService.ts`；模型、工具、设置和 automation 专属职责继续按真实 owner 复核。 |
-| `platform/agentHost/browser/`：`appServerAgentModels.ts`、`agentToolsApi.ts`、`appServerExecutionSettingsService.ts`、`appServerAutomationService.ts`                                                                  | Workbench Renderer 装配 → model／tools／config／automation 的现有 Rust owner。   | 核对领域 adapter；不新增另一份目录、配置或 automation 状态。                                                                          |
-| `platform/agentHost/common/`：`extensionBackendApi.ts`、`extensionHostApi.ts`；`browser/`：`extensionBackendApi.ts`、`extensionHostApi.ts`、`extensionHostProtocol.ts`                                                 | Renderer 扩展客户端 → Rust 监管的 extension fleet／invocation。                  | 属于扩展接入链；上游 `agentHostExtensionProtocol.ts` 不能按名称直接替代，另核对 provider／客户端对象边界。                            |
+| `platform/agentHost/browser/`：`appServerAgentService.ts`、`agentToolsApi.ts`、`appServerExecutionSettingsService.ts`；`common/`：`agentToolsApi.ts`、`agentExecutionSettingsService.ts`、`approvalModes.ts`           | Chat／Sessions／工具调用与执行设置消费者 → 现有 Agent 执行 owner。               | 领域数据位于同路径 `common/agent.ts`，服务契约保留 `agentService.ts`；工具和执行设置职责保留。                                        |
+| `platform/models/common/agentModels.ts`、`platform/models/browser/appServerAgentModels.ts`                                                                                                                             | Chat／Sessions／模型设置 → 模型领域 contract 与 App Server adapter。             | 已迁回模型领域，Rust 仍拥有模型目录与配置状态。                                                                                       |
+| `platform/automations/common/automation.ts`、`platform/automations/browser/appServerAutomationService.ts`                                                                                                              | Renderer 装配／Provider store → 自动化领域 contract 与 App Server adapter。      | 已迁回自动化领域，未新增计划或运行状态。                                                                                              |
+| `platform/extensions/common/`：`extensionBackendApi.ts`、`extensionHostApi.ts`；`browser/`：`extensionBackendApi.ts`、`extensionHostApi.ts`、`extensionHostProtocol.ts`                                                | Renderer 扩展客户端 → Rust 监管的 extension fleet／invocation。                  | 已迁回扩展领域；保留 Ash 自有接入契约，不以 `agentHostExtensionProtocol.ts` 替代。                                                    |
 | `sessions/contrib/providers/agentHost/browser/`：`appServerSessionsProvider.ts`、`appServerTeamsProvider.ts`、`sessionFileService.ts`、`workbenchSessionsService.contribution.ts`                                      | Sessions Workbench、Provider 与 Code 启动贡献 → 后端 Session／Team／文件领域。   | 先核对 `baseAgentHostSessionsProvider.ts`、local provider 与 contribution 职责；保留 Ash Session／Thread 身份，团队专属能力单独记录。 |
 | `sessions/browser/devContainerAgentHostService.ts`                                                                                                                                                                     | Sessions Workbench → Dev Container actions／Remote 连接。                        | 对照上游 connector 调用链核对最终 owner；本次未迁移。                                                                                 |
 

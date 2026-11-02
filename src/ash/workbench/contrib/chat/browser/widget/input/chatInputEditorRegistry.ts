@@ -13,8 +13,10 @@ export interface ChatInputEditorOptions {
 	readonly container: HTMLElement;
 	readonly placeholder: string;
 	readonly ariaLabel: string;
-	readonly slashCommands: SlashCommandCatalog;
+	readonly slashCommands?: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
+	/** Backend discovery is registered by the owning composer. */
+	readonly hostCompletions?: boolean;
 	readonly height?: { readonly minimum: number; readonly maximum: number; };
 	/** Move to the next control with Tab instead of inserting indentation. */
 	readonly tabFocusMode?: boolean;

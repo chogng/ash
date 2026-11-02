@@ -167,6 +167,13 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
 
     pub(super) fn fs_read_directory(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadDirectoryParams = decode(params)?;
+        result(&self.read_directory_query(params)?)
+    }
+
+    pub(super) fn read_directory_query(
+        &self,
+        params: FsReadDirectoryParams,
+    ) -> Result<FsReadDirectoryResult, RpcError> {
         let entries = self
             .file_system_for_request(
                 params.dir_id.as_deref(),
@@ -181,7 +188,7 @@ impl<'ctx, C: FileSystemRequestProcessorContext + ?Sized> FileSystemRequestProce
                 file_type: file_type(entry.file_type),
             })
             .collect();
-        result(&FsReadDirectoryResult { entries })
+        Ok(FsReadDirectoryResult { entries })
     }
 
     pub(super) fn fs_read_file(&self, owner: u64, params: &Value) -> Result<Value, RpcError> {

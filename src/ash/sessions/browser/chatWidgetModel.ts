@@ -17,11 +17,11 @@ import type { SkillReference } from '../../platform/agentHost/common/appServerAp
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
-import type { AgentModelDefaults } from '../../platform/agentHost/common/agentModels.js';
+import type { AgentModelDefaults } from '../../platform/models/common/agentModels.js';
 import { observableValue } from '../../base/common/observable.js';
 import type { IChatSessionHistoryStatus } from '../../platform/chat/common/chatSessionHistory.js';
 import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';

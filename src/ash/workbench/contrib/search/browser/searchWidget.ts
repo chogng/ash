@@ -82,7 +82,7 @@ export class SearchWidget extends Disposable {
 				ariaLabel: action.label,
 			}),
 		}));
-		this.queryOptions.element.classList.add('ash-search-query-options');
+		this.queryOptions.domNode.classList.add('ash-search-query-options');
 		this.replaceRow = h(document, 'div');
 		this.replaceRow.className = 'ash-search-replace-row';
 		this.replaceRow.id = `ash-search-replace-${this.searchInput.inputBox.inputElement.id}`;

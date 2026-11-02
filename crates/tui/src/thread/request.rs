@@ -184,6 +184,7 @@ where
             question: question.to_owned(),
         },
         _ => SessionRequest::StartTurn {
+            command_interpretation: None,
             ide_window_id,
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,

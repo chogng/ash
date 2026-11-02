@@ -68,6 +68,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         items: Vec::<ThreadItem>::new(),
         plan: None,
         pending_interaction: None,
+        started_tool_call_ids: None,
         error: (status == TurnStatus::Failed).then(StableTurnError::model_invocation_failed),
     }
 }

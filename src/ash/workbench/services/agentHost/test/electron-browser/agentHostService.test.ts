@@ -13,7 +13,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../../base/parts/ipc/common/ipc.net.js';
 import type { ISandboxGlobals } from '../../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
-import type { IExtensionHostApi } from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../../platform/extensions/common/extensionHostApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';

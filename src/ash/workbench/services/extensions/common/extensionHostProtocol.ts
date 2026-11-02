@@ -1,7 +1,7 @@
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { getNLSLanguage } from '../../../../nls.js';
-import type { ExtensionHostInitialization, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostInitialization, IExtensionHostApi, JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 
 /** Collects a snapshot from the existing window owners, without retaining a second fact store. */
 export function createExtensionHostInitialization(workspace: IWorkspaceContextService, configuration: IConfigurationService): ExtensionHostInitialization {

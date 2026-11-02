@@ -1,4 +1,4 @@
-DOMPurify 3.4.12
+DOMPurify 3.4.17
 Copyright Cure53 and other contributors
 https://github.com/cure53/DOMPurify
 

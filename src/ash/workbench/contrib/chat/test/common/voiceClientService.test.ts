@@ -36,6 +36,7 @@ test('Chat widget targeting belongs to one window and releases each registered f
 		focus: () => { },
 		reveal: () => { },
 		focusResponseItem: () => { },
+		startEditing: () => { throw new Error('Unexpected queue editor'); },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	using registration = firstWindow.register(widget);

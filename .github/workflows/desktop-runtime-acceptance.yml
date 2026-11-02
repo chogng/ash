@@ -72,6 +72,10 @@ jobs:
         with:
           path: .build/desktop-addons
           key: desktop-addons-v1-${{ matrix.runner }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'build/desktop/addons.ts') }}
+      - name: Verify relocated pnpm deployment and Electron native bindings
+        env:
+          ASH_DEPLOY_PRODUCT_TESTS: "1"
+        run: pnpm exec node --test build/desktop/packageApplication.deploy.test.ts
       - name: Install browser used to render Windows application icons
         if: runner.os == 'Windows'
         run: pnpm exec playwright install chromium

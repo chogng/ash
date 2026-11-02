@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, readdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
-import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import ts from 'typescript';
 import { detachedProcess, ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
 import { prepareIncrementalOutput } from '../lib/incrementalOutput.ts';
+import { runPython } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const sourceRoot = repositoryRoot;
@@ -16,6 +18,17 @@ const outputRoot = desktopBuildPath(repositoryRoot);
 const compiler = join(sourceRoot, 'node_modules/@ash/typescript-compiler/bin/tsc');
 const preload = join(outputRoot, 'preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs');
 const projects = ['tsconfig.main.json', 'tsconfig.preload.json'] as const;
+
+/** Package only the selected native generation; development can retain running Windows executables. */
+export async function copyHostOutput(source: string, destination: string): Promise<void> {
+	const { hostLogExecutable, hostIntegrityExecutable } = await import(pathToFileURL(join(source, '.build/desktop/hostLogs.js')).href);
+	await cp(source, destination, {
+		recursive: true, filter: path => {
+			const entry = relative(source, path).replaceAll('\\', '/');
+			return !['host-logs/', 'host-integrity/'].some(prefix => entry.startsWith(prefix)) || [hostLogExecutable, hostIntegrityExecutable].some(executable => executable === entry || executable?.startsWith(`${entry}/`));
+		}
+	});
+}
 
 /** Publish hashes after copying the final desktop assets; package.json cannot hash itself. */
 export async function writeApplicationChecksums(applicationRoot: string): Promise<void> {
@@ -51,6 +64,7 @@ export async function writeApplicationChecksums(applicationRoot: string): Promis
 }
 
 export async function prepareHostOutput(): Promise<void> {
+	await prepareHostLogs();
 	await mkdir(outputRoot, { recursive: true });
 	const metadata = '{\n  "private": true,\n  "type": "module"\n}\n';
 	const packageFile = join(outputRoot, 'package.json');
@@ -92,6 +106,7 @@ export async function buildHost(): Promise<void> {
 /** Successful readiness includes the output content digest used to decide whether Electron needs restarting. */
 export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void>; }> {
 	await prepareHostBuild();
+	const nativeBuild = new AbortController();
 	const completion = Promise.withResolvers<void>();
 	let compilerRun: ProcessRun | undefined;
 	let revision = 0;
@@ -102,7 +117,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	let pending = true;
 	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
 	// runtime files. Watch source inputs here and invoke its incremental build once.
-	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
+	const roots = ['src', 'crates/host-logs', 'crates/host-integrity', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
 	const directories = new Map<string, ts.FileWatcher>();
 	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
@@ -115,7 +130,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			// Windows timestamp polling cannot see equal-size saves with a restored
 			// mtime; native change events also let us compare their content digest.
 			const watcher = watch(root, { recursive: true }, (event, file) => {
-				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
+				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json|rs|toml)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
 			});
 			watcher.on('error', error => { if (!closing) fail(error); });
 			nativeDirectories.push(watcher);
@@ -136,7 +151,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			try {
 				for (const entry of readdirSync(path, { withFileTypes: true })) {
 					if (entry.isDirectory()) visit(join(path, entry.name));
-					else if (entry.isFile() && /\.(?:[cm]?ts|json)$/u.test(entry.name)) inputs.add(join(path, entry.name));
+					else if (entry.isFile() && /\.(?:[cm]?ts|json|rs|toml)$/u.test(entry.name)) inputs.add(join(path, entry.name));
 				}
 			} catch (error) {
 				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
@@ -168,7 +183,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		// Subscribe before compilation, including imports not listed as tsconfig
 		// roots, so a save during the first build cannot escape the pending batch.
 		const paths = updateDirectoryWatches();
-		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) paths.add(resolve(sourceRoot, path));
+		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'Cargo.toml', 'Cargo.lock', '.build/desktop/hostLogs.ts', 'rust-toolchain.toml', '.cargo/config.toml']) paths.add(resolve(sourceRoot, path));
 		const readConfig = (path: string): string | undefined => { paths.add(resolve(path)); return ts.sys.readFile(path); };
 		for (const project of projects) {
 			const path = resolve(sourceRoot, project);
@@ -225,6 +240,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	}
 
 	async function build(): Promise<void> {
+		await prepareHostLogs(nativeBuild.signal);
 		pending = false;
 		// Check settled timestamps after debouncing: a Windows write can report a
 		// transient truncation. Compare with the last compiled snapshot, not that
@@ -286,7 +302,9 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 					const path = join(directory, entry.name);
 					if (entry.isDirectory()) { await collect(path); }
 					else if (entry.isFile()) {
-						hash.update(JSON.stringify([path, await readFile(path, 'utf8')]));
+						const bytes = await readFile(path);
+						hash.update(JSON.stringify([path, bytes.length]));
+						hash.update(bytes);
 					}
 				}
 			}
@@ -300,12 +318,14 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	}
 
 	function fail(error: Error): void {
+		if (closing) return;
 		completion.reject(error);
 		void close();
 	}
 
 	function close(): Promise<void> {
 		if (closing) return closing;
+		nativeBuild.abort();
 		clearTimeout(timer);
 		clearTimeout(structureTimer);
 		for (const watcher of [...nativeDirectories, ...directories.values(), ...files.values()]) watcher.close();
@@ -319,6 +339,10 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 async function prepareHostBuild(): Promise<void> {
 	await prepareHostOutput();
 	await Promise.all(projects.map(project => prepareIncrementalOutput(join(sourceRoot, project))));
+}
+
+async function prepareHostLogs(signal?: AbortSignal): Promise<void> {
+	await runPython(['-B', 'build/desktop/host_logs.py'], { cwd: sourceRoot, operation: 'Rust host logging build', signal });
 }
 
 async function verifyPreload(): Promise<void> {

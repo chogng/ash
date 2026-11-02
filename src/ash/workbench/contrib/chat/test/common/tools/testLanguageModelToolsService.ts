@@ -1,6 +1,6 @@
 import type { AgentCapabilitiesReadResult, AgentToolCapabilityDto } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { createDisconnectedAppServerApi } from '../../../../../../platform/agentHost/browser/appServerApi.js';
-import { unavailableOperation } from '../../../../../../platform/renderer/browser/disconnectedHost.js';
+import { unavailableOperation } from '../../../../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { LanguageModelToolsService } from '../../../browser/tools/languageModelToolsService.js';
 import { Event } from '../../../../../../base/common/event.js';
 

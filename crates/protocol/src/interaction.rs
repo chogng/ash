@@ -37,4 +37,5 @@ pub use turn_interaction::InteractionCancelReason;
 pub use turn_interaction::InteractionDeadline;
 pub use turn_interaction::PendingInteraction;
 pub use turn_interaction::TurnInteraction;
+pub use user_input::CommandInterpretation;
 pub use user_input::UserInput;

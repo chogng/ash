@@ -1,8 +1,9 @@
+import { testWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
 import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
 import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
-import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../services/label/common/labelService.js';
@@ -58,7 +59,7 @@ import { IConfigurationResolverService } from '../../../../../services/configura
 import { ConfigurationResolverService } from '../../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
-import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
@@ -136,7 +137,7 @@ import type { CommandId } from '../../../../../../platform/commands/common/comma
 import { type Context } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
-import { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
+import { GroupDirection, IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
 import {
 	ContextKeyService,
 	IContextKeyService,
@@ -167,6 +168,7 @@ import { EditorPaneMatch, EditorPane } from '../../../../../../workbench/browser
 import type { IEditorPaneWithViewState } from '../../../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { EditorPaneRegistry, EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../../editor.js';
 import { ImagePreviewEditorInput } from '../../../../../contrib/mediaPreview/browser/imagePreviewEditorInput.js';
+import { ChatEditorInput } from '../../../../../contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { MediaPlayerEditorInput } from '../../../../../contrib/mediaPreview/browser/mediaPlayerEditorInput.js';
 import '../../../../../contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { ActiveEditorContext } from '../../../../../../workbench/common/contextkeys.js';
@@ -1709,6 +1711,29 @@ test('EditorPart keeps unguarded clean group replacement synchronous for layout 
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('EditorPart layout observers can query every published group during removal', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using editor = createEditorPart(dom.window.document.body, {});
+		editor.layout(new Dimension(900, 600));
+		const remaining = editor.activeGroup;
+		const removed = editor.addGroup(remaining.id, Direction.Right);
+		const failures: unknown[] = [];
+		const observed: number[][] = [];
+		using listener = editor.onDidLayout(() => {
+			try {
+				observed.push(editor.groups.map(group => group.id));
+				for (const group of editor.groups) editor.isGroupVisible(group.id);
+				editor.setEditorContentVisible(true);
+			} catch (error) { failures.push(error); }
+		});
+		assert.equal(await editor.removeGroup(removed), true);
+		assert.deepEqual(failures, []);
+		assert.ok(observed.length > 0);
+		assert.ok(observed.every(ids => ids.length === 1 && ids[0] === remaining.id));
+	} finally { dom.window.close(); }
 });
 
 test('EditorPart confirms an inactive dirty editor before unguarded group removal', async () => {
@@ -4193,6 +4218,42 @@ test('singleton canvases reveal their original group and cannot create an empty 
 		assert.equal(editor.activeGroup, original);
 		assert.deepEqual(other.inputs, []);
 		assert.deepEqual(original.inputs, [canvas]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+for (const anotherWindow of [false, true]) test(`a materialized Chat input reveals its original pane from another ${anotherWindow ? 'window' : 'group'}`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(
+			descriptor(ChatEditorInput.EditorID, '', () => new TestEditorPane(ChatEditorInput.EditorID)),
+		);
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'chat-identity', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		using draft = new ChatEditorInput('untitled:draft', 'Draft');
+		const pane = await parts.openEditor(draft, { pinned: true });
+		const original = main.activeGroup;
+		const closeHandler = draft.closeHandler = { showConfirm: () => false, confirm: async () => ConfirmResult.DONT_SAVE };
+		draft.updateSession('session:created', 'Created');
+		const other = anotherWindow
+			? (await parts.createAuxiliaryEditorPart()).activeGroup
+			: main.addGroup(original.id, Direction.Right);
+		if (!anotherWindow) main.activateGroup(other.id);
+		using historyInput = new ChatEditorInput('session:created', 'Created');
+		assert.equal(await parts.openEditor(historyInput, { pinned: true }), pane);
+		assert.equal(parts.activePart, main);
+		assert.equal(main.activeGroup, original);
+		assert.deepEqual(original.inputs, [draft]);
+		assert.deepEqual(other.inputs, []);
+		assert.equal(draft.closeHandler, closeHandler);
+		draft.updateSession('session:created', 'Renamed live chat');
+		assert.equal(original.domNode.querySelector('[role=tab]')?.getAttribute('aria-label'), 'Renamed live chat');
 	} finally {
 		dom.window.close();
 	}
@@ -6727,10 +6788,7 @@ for (const scenario of [
 			const environment = new DeferredPromise<Record<string, string>>();
 			using executionServices = services.createChild(
 				new ServiceCollection(
-					[
-						IRendererHostService,
-						{ ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: scenario.os } },
-					],
+					...testWorkbenchHostServices({ ...base, appServer: { ...base.appServer, operatingSystem: scenario.os, isAvailable: true } }).entries(),
 					[IWorkspaceContextService, workspace],
 					[IEditorService, editors],
 					[ICodeEditorService, codeEditors],
@@ -7033,6 +7091,43 @@ test('editor service keeps real failures and explicitly requested cancellation f
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('layout listeners observe registered groups throughout grid structure changes and restoration', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	editor.layout(new Dimension(900, 600));
+	const errors: unknown[] = [];
+	const layouts: number[][] = [];
+	using listener = editor.onDidLayout(() => {
+		try {
+			assert.ok(editor.getSize(editor.activeGroup).width >= 0);
+			layouts.push(editor.groups.map(group => {
+				assert.equal(typeof editor.isGroupVisible(group.id), 'boolean');
+				assert.ok(editor.getSize(group).width >= 0);
+				return group.id;
+			}));
+			editor.setEditorContentVisible(true);
+		} catch (error) {
+			errors.push(error);
+		}
+	});
+	const first = editor.activeGroup;
+	const second = editor.addGroup(first.id, Direction.Right);
+	assert.deepEqual(errors, []);
+	const third = editor.addGroup(second.id, Direction.Down);
+	editor.moveGroup(first, third, GroupDirection.DOWN);
+	const saved = editor.saveWorkingSet('documents', [first.id]);
+	editor.restoreLayout(saved.layout!, new Map([[second.id, second.id], [third.id, third.id]]));
+	editor.activateGroup(second.id);
+	await editor.removeGroup(second);
+	await editor.applyWorkingSet(saved, { preserveGroups: [first.id], preserveFocus: true });
+	assert.deepEqual(errors, []);
+	assert.ok(layouts.length > 0);
+	assert.ok(layouts.every(groups => groups.length > 0));
+	assert.deepEqual(layouts.at(-1), editor.groups.map(group => group.id));
 });
 
 test('maximizing a group preserves hidden groups, saved layout and activation recovery', async () => {

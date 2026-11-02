@@ -1,3 +1,4 @@
+import { URI } from '../../../../../base/common/uri.js';
 import assert from 'node:assert/strict';
 import { suite, test, teardown } from 'mocha';
 import { expect } from '@playwright/test';
@@ -5,19 +6,19 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Event } from '../../../../../base/common/event.js';
 import { AgentSessionsDataSource } from '../../browser/agentSessions/agentSessionsViewer.js';
-import { isAgentSessionSection, type IAgentSessionListItem } from '../../browser/agentSessions/agentSessionsModel.js';
+import { isAgentSessionSection, type IAgentSession } from '../../browser/agentSessions/agentSessionsModel.js';
 
 suite('Agent Sessions data projection', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('groups and filters the owning model without changing its records', () => {
-		const items: IAgentSessionListItem[] = [
-			{ id: 'draft', kind: 'draft', title: 'Draft', description: '', active: false, getActions: () => [], open() { } },
-			{ id: 'pin', kind: 'session', title: 'Pinned', description: 'find this', active: true, pinned: true, getActions: () => [], open() { } },
-			{ id: 'group', kind: 'session', title: 'Grouped', description: '', active: false, group: { sectionId: 'team', name: 'Team' }, getActions: () => [], open() { } },
-		];
+		const items: IAgentSession[] = [
+			{ id: 'draft', kind: 'draft', label: 'Draft', description: '', active: false, open() { } },
+			{ id: 'pin', kind: 'session', label: 'Pinned', description: 'find this', active: true, open() { } },
+			{ id: 'group', kind: 'session', label: 'Grouped', description: '', active: false, group: { sectionId: 'team', name: 'Team' }, open() { } },
+		].map(item => ({ ...item, kind: item.kind as 'draft' | 'session', resource: URI.from({ scheme: 'test-session', path: `/${item.id}` }), target: { sessionId: item.id }, isArchived: () => false, isPinned: () => item.id === 'pin' }));
 		let query = '';
 		const source = new AgentSessionsDataSource(() => query);
-		const model = { items, state: 'ready' as const, error: undefined, onDidChange: Event.None };
+		const model = { sessions: items, state: 'ready' as const, error: undefined, onDidChangeSessions: Event.None, getSession: (resource: URI) => items.find(item => item.resource.toString() === resource.toString()) };
 		const sections = [...source.getChildren(model)];
 		assert.deepEqual(sections.map(item => isAgentSessionSection(item) ? item.id : undefined), ['pinned', 'drafts', 'group:team']);
 		assert.equal([...source.getChildren(sections[0]!)][0], items[1]);
@@ -35,12 +36,16 @@ interface Fixture {
 	doubleClickMode(): Promise<void>;
 	refreshDuringNavigation(): Promise<void>;
 	rename(): Promise<void>;
+	blankDraft(): Promise<void>;
 	pin(): Promise<void>;
 	invokeMenu(): Promise<void>;
 	readonly opened: string[];
 	readonly menuOpen: boolean;
 	readonly menuCount: number;
 	readonly newSessionCount: number;
+	readonly refreshCount: number;
+	readonly layoutCount: number;
+	chooseFilter(id: string): Promise<void>;
 	readonly menuAnchoredToRow: boolean;
 	dispose(): void;
 }
@@ -49,6 +54,29 @@ declare global { interface Window { agentSessionsFixture: Fixture; } }
 suite('Agent Sessions shared Tree in a browser', () => {
 	const browser = useBrowserTests();
 	teardown(async () => { await browser.page.evaluate(() => window.agentSessionsFixture?.dispose()); });
+	for (const locale of ['en', 'zh-CN']) {
+		test(`session toolbar refreshes, filters, searches and changes layout (${locale})`, async () => {
+			const { page } = browser;
+			await page.goto(`/agentSessions.html?locale=${locale}`);
+			await page.evaluate(() => window.agentSessionsFixture.ready());
+			await page.getByRole('button', { name: locale === 'en' ? 'Refresh Sessions' : '刷新会话', exact: true }).click();
+			await expect(page.locator('[data-item="session-1"] .ash-agent-session-title')).toHaveText('Refreshed Session');
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.refreshCount)).toBe(1);
+			await page.getByRole('button', { name: locale === 'en' ? 'Filter Sessions' : '筛选会话', exact: true }).click();
+			await page.evaluate(() => window.agentSessionsFixture.chooseFilter('running'));
+			await expect(page.getByRole('tree').locator('[data-item]')).toHaveCount(1);
+			await expect(page.locator('[data-item="session-1"]')).toBeVisible();
+			await page.getByRole('button', { name: locale === 'en' ? 'Filter Sessions' : '筛选会话', exact: true }).click();
+			await page.evaluate(() => window.agentSessionsFixture.chooseFilter('drafts'));
+			await expect(page.locator('[data-item="session-0"]')).toBeVisible();
+			await expect(page.getByRole('tree').locator('[data-item]')).toHaveCount(1);
+			await page.getByRole('button', { name: locale === 'en' ? 'Search sessions' : '搜索会话', exact: true }).click();
+			await expect(page.getByRole('searchbox')).toBeFocused();
+			await page.getByRole('button', { name: locale === 'en' ? 'Toggle Session Layout' : '切换会话布局', exact: true }).click();
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.layoutCount)).toBe(1);
+			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.opened)).toEqual([]);
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Tree owns keyboard focus, sections, activation and search (${locale})`, async () => {
 			const { page } = browser;

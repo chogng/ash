@@ -69,8 +69,8 @@ import { CommandRegistry, CommandsRegistry } from '../../../../../platform/comma
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostPayload } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from '../../../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../../../platform/extensions/browser/extensionHostProtocol.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -88,7 +88,7 @@ import { IQuickDiffService } from '../../../../contrib/scm/common/quickDiff.js';
 import { QuickDiffService } from '../../../../contrib/scm/common/quickDiffService.js';
 import { IDecorationsService } from '../../../decorations/common/decorations.js';
 import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
-import { IExtensionBackendApi } from '../../../../../platform/agentHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../../../../platform/extensions/common/extensionBackendApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
 import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
@@ -1236,7 +1236,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
 	});
 	services.registerInstance(IExtensionBackendApi, { request: async () => assert.fail('Unexpected extension backend request') });
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: () => api.getConnectionState(), getSlashCommands: async () => [], onConnectionState: listener => api.onConnectionState(listener) });
+	services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: () => api.getConnectionState(), getSlashCommands: async () => [], onConnectionState: listener => api.onConnectionState(listener) });
 	services.registerInstance(IServerEventApi, { subscribe: () => toDisposable(() => { }) });
 	services.registerInstance(ISCMService, services.resources.add(new SCMService()));
 	services.registerSingleton(ISCMViewService, () => services.createInstance(SCMViewService));

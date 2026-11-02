@@ -12,7 +12,7 @@ import type { AdvisorConfig, IChatService } from '../../../../services/chat/comm
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { AdvisorSettingsModel } from '../../browser/advisorSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../preferences/browser/settingsSectionRenderer.js';
-import { ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
+import { ModelPurpose } from '../../../../../platform/models/common/agentModels.js';
 import type { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 
 test('Advisor focuses its saved model, Disable when disabled and its saved value when the model is hidden', async () => {

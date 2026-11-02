@@ -405,6 +405,9 @@ impl GitTurnChangesRuntime {
             ThreadOrigin::Replacement {
                 source_thread_id, ..
             } => source_thread_id,
+            ThreadOrigin::SideChat {
+                context_thread_id, ..
+            } => context_thread_id,
         };
         let parent = self.binding(parent_id).ok_or_else(|| {
             CoreError::Journal(format!("parent Thread {parent_id} has no dir binding"))
@@ -417,6 +420,7 @@ impl GitTurnChangesRuntime {
                 ));
             }
             (ThreadOrigin::Fork { .. }, ManagedDirKind::Directory)
+            | (ThreadOrigin::SideChat { .. }, ManagedDirKind::Directory)
             | (ThreadOrigin::Replacement { .. }, ManagedDirKind::Directory)
             | (ThreadOrigin::AgentSpawn { .. }, ManagedDirKind::Directory) => {
                 ManagedDirSource::CurrentDirectory {
@@ -450,6 +454,13 @@ impl GitTurnChangesRuntime {
             (
                 ThreadOrigin::Fork {
                     parent_sequence, ..
+                },
+                ManagedDirKind::Git,
+            )
+            | (
+                ThreadOrigin::SideChat {
+                    context_sequence: parent_sequence,
+                    ..
                 },
                 ManagedDirKind::Git,
             )

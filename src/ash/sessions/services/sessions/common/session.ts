@@ -74,6 +74,7 @@ export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../wo
 
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
+	| { readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number; readonly selection?: string | null; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| { readonly type: 'rewind'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string; }
 	| { readonly type: 'agentSpawn'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; };
@@ -189,6 +190,8 @@ export interface IUntitledChatSession {
 	readonly workspace: SessionWorkspaceSelection;
 	/** Prepare the source workspace's container before creating the first durable Session. */
 	readonly devContainer?: boolean;
+	/** Created with the conversation on first send, never while selecting its workspace. */
+	readonly branchName?: string;
 }
 
 /** Repository-backed resources remain independent of Session execution directories. */

@@ -150,3 +150,50 @@ suite('Agent Canvas provider ownership', () => {
 		});
 	}
 });
+
+test('independent hosts isolate identical Canvas definitions, native membership and provider retirement', async () => {
+	using lifetime = new DisposableStore();
+	const events = lifetime.add(new Emitter<BrowserViewEvent>());
+	const pages = new Map<string, IBrowserViewInfo>();
+	const destroyed: string[] = [];
+	const browser = {
+		onDidEvent: events.event, getBrowserViews: async () => [],
+		getOrCreateBrowserView: async (id: string, options: IBrowserViewCreateOptions) => {
+			const page: IBrowserViewInfo = {
+				id, owner: options.owner, session: options.session, canvas: options.canvas, host: { windowId: 1 },
+				state: { targetId: id, url: options.initialUrl, title: '', visible: false, loading: false, canGoBack: false, canGoForward: false, isDevToolsOpen: false }
+			};
+			pages.set(id, page); events.fire({ type: 'created', info: page }); return page;
+		},
+		destroyBrowserView: async (id: string) => { destroyed.push(id); pages.delete(id); events.fire({ type: 'closed', targetId: id }); },
+	} as unknown as IBrowserViewService;
+	const collection = lifetime.add(new AgentHostCanvasCollection(browser, { activateByEvent: async () => { } } as unknown as IExtensionService, {} as INotificationService));
+	await Promise.resolve();
+	const remoteHost = lifetime.add(collection.registerHost('remote', async () => { }, () => ({ authority: 'remote-authority', root: '/workspace' })));
+	const definition = { extensionId: 'fixture', canvasId: 'board', extensionSource: 'user' as const, displayName: 'Board', description: '', requiresInput: false };
+	const provider = (providerId: string): ICanvasProvider => ({
+		providerId, definition, signal: new AbortController().signal,
+		open: async () => ({ url: 'http://localhost:9000/' + providerId }), close: async () => { }
+	});
+	const localProvider = provider('local-agent-host'), remoteProvider = provider('remote');
+	lifetime.add(collection.register(localProvider)); lifetime.add(collection.register(remoteProvider));
+	const local = collection.createContext({ providerId: 'local-agent-host', session: URI.parse('ash-session:/same'), chat: URI.parse('ash-thread:/same') });
+	const remote = collection.createContext({ ...local.owner, providerId: 'remote' });
+	await local.definitionProvider!.openCanvas(definition, 'same');
+	await remote.definitionProvider!.openCanvas(definition, 'same');
+	assert.equal(local.canvases.get()!.length, 1); assert.equal(remote.canvases.get()!.length, 1);
+	const localId = local.canvases.get()![0]!.resource.path.slice(1), remoteId = remote.canvases.get()![0]!.resource.path.slice(1);
+	assert.notEqual(localId, remoteId);
+	const remoteSession = pages.get(remoteId)!.session;
+	assert.ok('network' in remoteSession);
+	assert.deepEqual(remoteSession.network, { authority: 'remote-authority', root: '/workspace' });
+	const localSession = pages.get(localId)!.session;
+	assert.equal('network' in localSession ? localSession.network : undefined, undefined);
+	collection.reconcileExtensions(new Set());
+	await Promise.resolve();
+	assert.deepEqual(destroyed, [localId]);
+	assert.equal(remote.canvases.get()!.length, 1);
+	remoteHost.dispose();
+	assert.equal(remote.canvases.get(), undefined, 'A disconnected host has unknown membership');
+	assert.equal(pages.has(remoteId), true, 'Disconnection must not destroy a recoverable native identity');
+});

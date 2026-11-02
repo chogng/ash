@@ -1,6 +1,5 @@
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
-import { IRendererHostService } from '../../platform/renderer/common/rendererHost.js';
 import { IBrowserViewWorkbenchService } from '../contrib/browserView/common/browserView.js';
 import { ElectronAuxiliaryWindowService } from '../services/auxiliaryWindow/electron-browser/auxiliaryWindowService.js';
 import { NativeExtensionService } from '../services/extensions/electron-browser/nativeExtensionService.js';
@@ -9,7 +8,7 @@ import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { IRemoteAuthorityResolverService } from '../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IRemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
-import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi } from '../../platform/extensions/common/extensionHostApi.js';
 import { MutableDisposable, DisposableStore } from '../../base/common/lifecycle.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { RelayURLService } from '../services/url/electron-browser/urlService.js';
@@ -181,7 +180,7 @@ export class DesktopMain extends Disposable {
 				} : undefined,
 				createBrowserHost: documentClient ? services => {
 					const browsers = services.get(IBrowserViewWorkbenchService);
-					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IRendererHostService), services.get(IWorkspaceContextService));
+					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
 					const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
 					return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
 				} : undefined,

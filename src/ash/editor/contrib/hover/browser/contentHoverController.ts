@@ -1,6 +1,6 @@
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHover } from '../../../common/languages.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
+import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition, type IEditorMouseEvent } from '../../../browser/editorBrowser.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import './hover.css';
 import { addDisposableListener, h, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
@@ -59,13 +59,20 @@ export class ContentHoverController extends Disposable implements IContentWidget
 			}
 		}));
 		this._register(toDisposable(() => { this.hide(); editor.removeContentWidget(this); this.element.remove(); }));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.schedule(event)));
+		this._register(editor.onMouseMove(event => this.schedule(event)));
 		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerleave', event => {
 			if (event.relatedTarget instanceof this.element.ownerDocument.defaultView!.Node && this.element.contains(event.relatedTarget as Node)) { return; }
 			this.scheduleHide();
 		}));
 		this._register(addDisposableListener(this.element, 'pointerenter', () => this.hideTimer.clear()));
-		this._register(addDisposableListener(this.element, 'pointerleave', () => this.scheduleHide()));
+		this._register(addDisposableListener<PointerEvent>(this.element, 'pointerleave', event => {
+			// Layout can move the hover away from a stationary pointer onto its source.
+			if (event.relatedTarget instanceof this.element.ownerDocument.defaultView!.Node && this.anchor?.target?.contains(event.relatedTarget as Node)) {
+				this.hideTimer.clear();
+				return;
+			}
+			this.scheduleHide();
+		}));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.hide(); editor.focus(); }
 		}));
@@ -115,15 +122,23 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		else { this.element.focus({ preventScroll: true }); }
 	}
 
-	private schedule(event: PointerEvent): void {
-		if (this.element.contains(event.target as Node)) { return; }
+	private schedule(event: IEditorMouseEvent): void {
+		if (this.element.contains(event.event.target as Node)) { return; }
 		if (!this.element.hidden && this.element.contains(this.element.ownerDocument.activeElement)) { return; }
-		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
+		for (const participant of this.participants) {
+			const anchor = participant.suggestHoverAnchor?.(event);
+			if (anchor) {
+				if (this.anchor?.position.equals(anchor.position) && this.anchor.target === anchor.target) { this.hideTimer.clear(); return; }
+				this.scheduleAt(anchor);
+				return;
+			}
+		}
+		const target = this.viewport.getNearestTargetAtClientPoint(event.event);
 		if (!target || target.kind !== 'text') {
 			this.hide();
 			return;
 		}
-		const element = event.target instanceof this.element.ownerDocument.defaultView!.HTMLElement ? event.target as HTMLElement : undefined;
+		const element = event.event.target instanceof this.element.ownerDocument.defaultView!.HTMLElement ? event.event.target as HTMLElement : undefined;
 		if (this.anchor?.position.equals(target.position) && this.anchor.target === element) { this.hideTimer.clear(); return; }
 		this.scheduleAt({ position: target.position, target: element, source: 'mouse' });
 	}

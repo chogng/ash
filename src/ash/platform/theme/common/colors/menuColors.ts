@@ -1,5 +1,6 @@
 import { registerColor } from '../colorUtils.js';
-import { foreground, selectionBackground, selectionForeground } from './baseColors.js';
+import { localize } from '../../../../nls.js';
+import { focusBorder, foreground, selectionBackground, selectionForeground } from './baseColors.js';
 import { listHoverBackground } from './listColors.js';
 
 const owner = 'platform.theme.menu';
@@ -14,3 +15,5 @@ export const menuSelectionForeground = alias('menu.selectionForeground', foregro
 export const menuSelectionBackground = alias('menu.selectionBackground', listHoverBackground, selectionBackground, 'Selected menu item background.');
 export const menuBackground = color('menu.background', '#252526', '#ffffff', '#000000', '#ffffff', 'Command menu background.');
 export const menuHoverBackground = color('menu.hoverBackground', '#45454b', '#e2e2e4', '#333333', '#dddddd', 'Hovered command menu item background.');
+
+export const menuSelectionBorder = registerColor('menu.selectionBorder', { dark: null, light: null, hcDark: focusBorder, hcLight: focusBorder }, { description: localize('menu.selectionBorder.description', 'Border of the selected menu item.'), owner });

@@ -1,6 +1,7 @@
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { Schemas } from '../../../../../../base/common/network.js';
+import type { IExtUri } from '../../../../../../base/common/resources.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize } from '../../../../../../nls.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../common/editor.js';
@@ -12,6 +13,7 @@ export class ChatEditorInput extends EditorInput {
 	static readonly TypeID = 'workbench.input.chatSession';
 	static readonly EditorID = 'workbench.editor.chatSession';
 	readonly typeId = ChatEditorInput.TypeID;
+	override readonly editorId = ChatEditorInput.EditorID;
 	closeHandler: IEditorCloseHandler | undefined;
 	readonly resource: URI;
 	private readonly labelChanged = this._register(new Emitter<void>());
@@ -35,6 +37,14 @@ export class ChatEditorInput extends EditorInput {
 
 	getName(): string { return this.title || localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'); }
 	getIcon(): typeof Lxicon.commentDiscussion { return Lxicon.commentDiscussion; }
+
+	override matches(other: IResourceEditorInput, resourceIdentity?: IExtUri): boolean {
+		if (other instanceof ChatEditorInput) {
+			// The resource stays stable while a draft acquires its durable conversation identity.
+			return this.paneId === other.paneId;
+		}
+		return super.matches(other, resourceIdentity);
+	}
 }
 
 /** Editor restoration carries only canvas identity; the conversation owner restores its drafts. */

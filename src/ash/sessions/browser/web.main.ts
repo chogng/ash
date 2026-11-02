@@ -32,7 +32,7 @@ import { TitlebarPart } from './parts/titlebarPart.js';
 import { BrowserStorageService } from '../../workbench/services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
-import { selectionFromWorkspace } from './workspaceSelection.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
 import { BrowserHostService } from '../../workbench/services/host/browser/browserHostService.js';
 import { ILanguagePackStore } from '../../platform/languagePacks/common/languagePackStore.js';
@@ -82,6 +82,9 @@ export class SessionsBrowserMain extends Disposable {
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
+					'chat.queuePickerRendering',
+					'workbench.contrib.btwSlashCommand',
+					'workbench.contrib.chatSideChat',
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
@@ -103,7 +106,7 @@ export class SessionsBrowserMain extends Disposable {
 					'sessions.contrib.automationsCustomView',
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
-					'workbench.contrib.chatEnablement',
+					'workbench.contrib.chatSetup',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',

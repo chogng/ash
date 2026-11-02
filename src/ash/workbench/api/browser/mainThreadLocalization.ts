@@ -4,7 +4,7 @@ import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.
 import { toExtensionResourceURI } from '../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
 import { parseTranslationMessages } from '../../../platform/languagePacks/common/languagePackCatalog.js';
-import type { ExtensionHostInitialization } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostInitialization } from '../../../platform/extensions/common/extensionHostApi.js';
 import { parseJsonc } from '../../services/extensions/common/jsonc.js';
 import { localizeManifest } from '../../../platform/extensionManagement/common/extensionNls.js';
 

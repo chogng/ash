@@ -1,0 +1,61 @@
+.ash-language-server-status-widget {
+	max-width: min(320px, calc(100vw - var(--ash-spacing-size160)));
+}
+
+.ash-language-server-status-widget > .ash-menu {
+	box-sizing: border-box;
+	max-width: inherit;
+	max-height: min(420px, calc(100vh - var(--ash-spacing-size400)));
+	overflow: auto;
+}
+
+.ash-language-server-workspace > .ash-button {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-language-server-summary.is-ready > .ash-menu-leading-slot {
+	color: var(--ash-success-foreground);
+}
+
+.ash-language-server-summary.is-error > .ash-menu-leading-slot {
+	color: var(--ash-error-foreground);
+}
+
+.ash-language-server-summary.is-busy > .ash-menu-leading-slot {
+	color: var(--ash-description-foreground);
+}
+
+.ash-language-server-summary.is-busy > .ash-menu-leading-slot .ash-icon {
+	animation: ash-language-server-progress 1.2s linear infinite;
+}
+
+@keyframes ash-language-server-progress {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-language-server-summary.is-busy > .ash-menu-leading-slot .ash-icon {
+		animation: none;
+	}
+}
+
+.ash-language-server-state {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ash-language-server-detail,
+.ash-language-server-progress-text {
+	margin: var(--ash-spacing-size40) 0;
+	padding-inline: var(--ash-spacing-size320) var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

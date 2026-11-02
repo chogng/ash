@@ -1,9 +1,10 @@
+import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
-import type { IRendererAgentHostConnection, IRendererAgentHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import type { IRemoteAgentHostConnectionInfo, IRemoteAgentHostProtocolClient } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { BrowserLayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
@@ -27,8 +28,8 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { observableValue, autorun } from '../../../../../../base/common/observable.js';
 import { setNlsMessages } from '../../../../../../nls.js';
 import translations from '../../../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../../platform/automations/common/automation.js';
+import { type IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -240,15 +241,16 @@ const hostTargets = [
 ];
 const disconnected = createDisconnectedRendererApi();
 const endpointChanges = resources.add(new Emitter<void>());
-const endpoints = new Map<string, IRendererAgentHostConnection>();
+const endpoints = new Map<string, IRemoteAgentHostConnectionInfo>();
 services.registerInstance(ILanguageModelsConfigurationService, {
 	onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => { },
 	removeProviderPreferences: async () => { },
 		isModelVisible: () => true, setModelVisible: async () => { },
 });
-const renderer: IRendererHost = parameters.has('hosts') ? {
+const renderer: IWorkbenchHost = parameters.has('hosts') ? {
 	...disconnected, automation: backend,
 	agentHosts: {
+			isAvailable: true,
 		get connections() { return [...endpoints.values()]; },
 		onDidChangeConnections: endpointChanges.event,
 		disconnect: id => { [...endpoints.values()].find(entry => entry.id === id)?.host?.dispose(); },
@@ -259,7 +261,7 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 			const existing = endpoints.get(key)?.host;
 			if (existing) return existing;
 			hostChanges.push(`open:${target.name}`);
-			const host: IRendererAgentHost = {
+			const host: IRemoteAgentHostProtocolClient = {
 				id: target.name, connection: target, directory: { uri: remoteAgentHostRoot(target, target.name), target: { type: 'environment', dirId: target.name } },
 				api: {
 					...disconnected,
@@ -279,7 +281,7 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 		}
 	},
 } : { ...disconnected, automation: parameters.get('available') === '0' ? undefined : backend };
-services.registerInstance(IRendererHostService, renderer);
+registerTestWorkbenchHostServices(services, renderer);
 services.registerInstance(IAgentHostConnectionsService, resources.add(services.createInstance(AgentHostConnectionsService)));
 
 const registry = resources.add(new SessionsProvidersService());

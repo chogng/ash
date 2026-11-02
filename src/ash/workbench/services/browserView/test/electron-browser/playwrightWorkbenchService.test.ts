@@ -26,7 +26,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
 import '../../electron-browser/playwrightWorkbenchService.js';
-import type { IAgentCanvasHost } from '../../../../../platform/agentHost/common/agentService.js';
+import type { IAgentCanvasHost, IAgentBrowserHostScope } from '../../../../../platform/agentHost/common/agentService.js';
 
 const targetId = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const options = { includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
@@ -53,7 +53,7 @@ suite('Workbench Playwright service', () => {
 		const result = await f.transport.request('browser/create', { threadId: 'source-thread', url: 'about:blank', canvas, networkToken: 'execution-network-grant' });
 		assert.deepEqual(result.result, { targetId });
 		assert.deepEqual(opens, [{ sessionId: 'source-session', threadId: 'source-thread', instanceId: 'preview', definition: definition.id }]);
-		assert.deepEqual((calls[0]!.arg as { params: unknown; }).params, { threadId: 'source-thread', url: 'http://localhost:9000/board', canvas: { ...canvas, title: 'Resolved board' }, networkToken: 'execution-network-grant' });
+		assert.deepEqual((calls.find(call => call.command === 'create')!.arg as { params: unknown; }).params, { threadId: 'source-thread', url: 'http://localhost:9000/board', canvas: { ...canvas, title: 'Resolved board' }, networkToken: 'execution-network-grant' });
 		const states = requests as { state: { id: string; succeeded: boolean; }; }[];
 		assert.equal(states[0]!.state.id, states[1]!.state.id);
 		assert.deepEqual(states.map(value => value.state.succeeded), [false, true]);
@@ -207,6 +207,7 @@ suite('Workbench Playwright service', () => {
 			return command === 'sharing' ? null : undefined;
 		});
 		await fixture.client.connect();
+		fixture.events.fire({ type: 'created', info: { id: targetId, owner: { type: 'agent', sessionId: 'thread-one' } } as import('../../../../../platform/browserView/common/browserView.js').IBrowserViewInfo });
 		fixture.events.fire({ type: 'networkRequested', targetId, requestId: 'network-one', networkToken: 'network-authority', url: 'https://example.test/data', method: 'GET' });
 		assert.deepEqual(await acknowledged.promise, { targetId, requestId: 'network-one', allowed: false });
 		assert.deepEqual(fixture.transport.backendRequests[0], { method: 'browser/network/authorize', params: { networkToken: 'network-authority', url: 'https://example.test/data', method: 'GET' } });
@@ -223,7 +224,41 @@ function registrations(): ServiceCollection {
 	return new ServiceCollection(...descriptors);
 }
 
-function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>, canvases?: IAgentCanvasHost): DisposableStore & { readonly configuration: ConfigurationService; readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
+suite('Connection-scoped browser presentation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('remote requests map owner identities and route native network and sharing callbacks to their own connection', async () => {
+		const calls: { command: string; arg: unknown; }[] = [];
+		const acknowledged = promiseWithResolvers<unknown>();
+		using local = hostFixture(async (command, arg) => {
+			calls.push({ command, arg });
+			if (command === 'network') { acknowledged.resolve(arg); }
+			return command === 'create' ? { targetId } : null;
+		});
+		const scope: IAgentBrowserHostScope = { providerId: 'remote', toFrontendIdentity: id => 'remote/' + id, toBackendIdentity: id => id.startsWith('remote/') ? id.slice(7) : undefined };
+		using remote = hostFixture(async () => null, undefined, scope, local.main);
+		await local.client.connect(); await remote.client.connect();
+		const created = await remote.transport.request('browser/create', { threadId: 'same', url: 'https://example.test/', networkToken: null, canvas: { sessionId: 'same', instanceId: 'preview', title: 'Remote page', definition: null } });
+		assert.deepEqual(created.result, { targetId });
+		const args = calls.find(call => call.command === 'create')!.arg as { params: { threadId: string; canvas: { sessionId: string; }; }; providerId: string; };
+		assert.equal(args.params.threadId, 'remote/same'); assert.equal(args.params.canvas.sessionId, 'remote/same'); assert.equal(args.providerId, 'remote');
+		local.events.fire({ type: 'created', info: { id: targetId, owner: { type: 'agent', sessionId: 'remote/same' } } as import('../../../../../platform/browserView/common/browserView.js').IBrowserViewInfo });
+		local.events.fire({ type: 'networkRequested', targetId, requestId: 'remote-request', networkToken: 'remote-token', url: 'https://example.test/', method: 'GET' });
+		await acknowledged.promise;
+		assert.equal(local.transport.backendRequests.length, 0);
+		assert.equal(remote.transport.backendRequests[0]!.method, 'browser/network/authorize');
+		await local.sharing.call('main', 'setSharing', [targetId, ['remote/same']]);
+		assert.deepEqual(remote.transport.backendRequests[1], { method: 'browser/sharing/set', params: { targetId, threadIds: ['same'] } });
+		await assert.rejects(local.sharing.call('main', 'setSharing', [targetId, ['remote/same', 'local-thread']]), /AcrossHostsDenied/);
+		const preferences = local.main.preferences.length;
+		remote.dispose();
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(local.main.preferences.length, preferences, 'Retiring a secondary host must not disable the window browser host');
+		const localPage = await local.transport.request('browser/create', { threadId: 'same', url: 'https://example.test/', networkToken: null, canvas: null });
+		assert.deepEqual(localPage.result, { targetId });
+	});
+});
+
+function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>, canvases?: IAgentCanvasHost, scope?: IAgentBrowserHostScope, sharedMain?: TestMainProcessService): DisposableStore & { readonly configuration: ConfigurationService; readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; readonly main: TestMainProcessService; } {
 	const resources = new DisposableStore();
 	const events = resources.add(new Emitter<BrowserViewEvent>());
 	const services = resources.add(new InstantiationService(registrations()));
@@ -233,25 +268,27 @@ function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>, 
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IPolicyService, new NullPolicyService());
 	const configuration = resources.add(services.createInstance(ConfigurationService, URI.parse('test:/settings.json')));
-	services.registerSingleton(IMainProcessService, () => services.createInstance(TestMainProcessService, call, events.event));
+	if (sharedMain) { services.registerInstance(IMainProcessService, sharedMain); }
+	else { services.registerSingleton(IMainProcessService, () => services.createInstance(TestMainProcessService, call, events.event)); }
 	const mainProcessService = services.get(IMainProcessService);
 	const playwright = services.get(IPlaywrightService);
 	const transport = new HostTransport();
 	const client = new AppServerProtocolClient(transport);
 	resources.add(toDisposable(() => client.dispose()));
-	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService, configuration, canvases));
-	return Object.assign(resources, { configuration, playwright, transport, client, events, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
+	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService, configuration, canvases, undefined, scope));
+	return Object.assign(resources, { configuration, playwright, transport, client, events, main: mainProcessService as TestMainProcessService, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
 }
 
 class TestMainProcessService extends AbstractDisposable implements IMainProcessService {
 	declare public readonly _serviceBrand: undefined;
 	private readonly channel: IChannel;
 	public readonly rendererChannels = new Map<string, IServerChannel<string>>();
+	public readonly preferences: unknown[] = [];
 
 	constructor(call: (command: string, arg: unknown) => Promise<unknown>, events: Event<BrowserViewEvent>) {
 		super();
 		this.channel = {
-			call: async <T>(command: string, arg: unknown): Promise<T> => { this.assertNotDisposed(); return command === 'configure' ? undefined as T : await call(command, arg) as T; },
+			call: async <T>(command: string, arg: unknown): Promise<T> => { this.assertNotDisposed(); if (command === 'configure') { this.preferences.push(arg); return undefined as T; } const value = await call(command, arg); return (command === 'list' && value == null ? { pages: [] } : value) as T; },
 			listen: <T>() => events as Event<T>,
 		};
 	}

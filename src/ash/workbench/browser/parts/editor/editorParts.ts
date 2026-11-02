@@ -1,5 +1,6 @@
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
@@ -293,6 +294,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+		if ((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton) {
+			const owner = this.findPartForInput(input);
+			if (owner) {
+				const pane = await owner.openEditor(input, options);
+				this.embedded.get(owner)?.reveal();
+				if (!options?.preserveFocus) {
+					this.setActivePart(owner);
+					this.partWindows.get(owner)?.window.focus();
+				}
+				return pane;
+			}
+		}
 		const embedded = [...this.embedded].find(([, registration]) => registration.accepts(input));
 		if (embedded) {
 			const [part, registration] = embedded;
@@ -488,7 +501,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	private findPartForInput(input: IResourceEditorInput): IEditorPart | undefined {
 		const key = editorInputKey(input);
-		return this.parts.find(part => part.groups.some(group => group.inputs.some(candidate => editorInputKey(candidate) === key)));
+		return this.parts.find(part => part.groups.some(group => group.inputs.some(candidate => {
+			if (candidate instanceof EditorInput) return candidate.matches(input);
+			if (input instanceof EditorInput) return input.matches(candidate);
+			return editorInputKey(candidate) === key;
+		})));
 	}
 }
 

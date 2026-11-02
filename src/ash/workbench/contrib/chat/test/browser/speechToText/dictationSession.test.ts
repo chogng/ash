@@ -241,6 +241,7 @@ function commandFixture() {
 		focus: () => { },
 		reveal: () => { },
 		focusResponseItem: () => { },
+		startEditing: () => { throw new Error('Unexpected queue editor'); },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	const registration = resources.add(widgets.register(widget));

@@ -4,6 +4,14 @@ Chat／Cowork 共用输入、响应组件和窗口服务。Session、Thread、Tu
 
 VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照 `f2d375b9623eb7245db28d3a7dab1c9fb3dddb0f`，后续参照 `3fd165bbb0d1dcafd9e3df36c3aa26474c6ecb85`。文件／公开成员差异用于定位真实消费者，不作为实现队列或兼容完成率。历史清单在 `.build/chat-alignment/inventory.json` 与 `report.html`，可恢复快照在 `.build/chat-alignment/chat-speech-validated-slices-20261013`；whole-file 快照可能包含当时共享工作区修改，不能盲目恢复。
 
+会话侧栏的帮助由 `actions/chatAccessibilityHelp.ts` 提供，在 `chat.shared.contribution.ts` 注册；侧栏 DOM owner 保有焦点作用域。`accessibility.verbosity.agentSessions` 的注册归无障碍配置 owner；它仍被 Sessions 工作区状态帮助消费，保留既有设置含义。历史选择器只向 Quick Input 提供条目和按钮，行布局与按钮显隐归 `platform/quickinput`。
+
+列表和历史选择器共用窗口的 `IAgentSessionsService.model`：`sessions` 提供 Session／草稿及其子 Thread，`onDidChangeSessions` 发布原 owner 的变化，`getSession(resource)` 在打开前重新查询捕获的资源。`ChatHistoryModel` 只投影现有 Session、分组和置顶状态，不保留第二份目录；列表按 Session 展示，历史选择器将子 Thread、归档分组和操作按钮投影为 Quick Input 条目。
+
+`AgentSessionsControl` 拥有 Tree、搜索、焦点、菜单和刷新调度，通过 `element` 暴露自身 DOM。`agentSessionsViewer.ts` 拥有目录投影、行渲染、无障碍与键盘标签及编辑器拖拽；草稿的可见说明、搜索与朗读共用同一描述。拖拽取消或来源释放时回收临时 editor input，成功交给编辑器后由编辑器接管。
+
+control／viewer 仍有底层差异：当前 AsyncDataTree 逐父节点刷新时拒绝跨分组复用同一 ID，因此行身份仍包含分组，重分组后由 control 恢复逻辑焦点。上游基于资源的身份要先闭合 Tree 的跨父节点更新；模板 renderer／list delegate 也要先迁移本地 Tree 的渲染端口。审批行、provider／已读状态、仓库分组及没有本地调用方的 reveal／批量选择端口仍待对应 owner 和真实入口就绪。
+
 ## 会话提交与运行摘要
 
 `browser/chatSessions/` 承接 Chat 的会话展示与输入生命周期：
@@ -20,11 +28,38 @@ VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照
 
 ## 输入与附件
 
-`ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill 补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
+`ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill／上下文补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
+
+2026-11-02 已确认保留 Ash 的 `CHAT_INPUT_LANGUAGE_ID`、`createChatCommandCompletionProvider`、`createChatSkillCompletionProvider` 和 `createChatFileAttachments` 入口及职责。补全读取捕获的 Stanza snapshot，沿当前命令／Skill 目录生成替换；前导空白与提交端的 trim 规则一致，接受补全复用已有分隔空格。`SlashCommandCatalog` 发布同一份命令快照的变化，`editor/chatInputCommandArgumentHint.ts` 借用它投影参数提示；提示不进入文本、撤销历史或提交内容，键入参数和只读状态会隐藏提示，目录更新、撤销和恢复可重新计算它。提示使用输入占位文字的主题 token，并通过现有 ARIA 状态和输入帮助提供同一说明。
+
+上述导出名与上游不同，不表示职责没有对应归属：命令补全对应同路径 `chatInputCompletions.ts` 的 `SlashCommandCompletions`；`BuiltinDynamicCompletions` 在上游同文件中已有同名内部类，Ash 为逐输入释放而导出。`AgentHostInputCompletionHost` 借用原 composer 的上下文和接收回调，对应上游 `agentHostInputCompletions.ts` 对输入 widget 的接入；host 技能候选的接受也归该模块。Ash 的本地 `$skill` 目录补全仍位于 `chatInputCompletions.ts`。输入语言标识对应上游 `chatEditorInputContentProvider.ts` 创建输入模型的职责；Ash 目前直接创建模型，不为无调用方的 URI 解析另加 provider。`createChatFileAttachments` 已从粘贴 provider 移入 `attachments/chatAttachmentResolveService.ts`，文件选择和拖放复用该采集入口，仍由原 composer 接收捕获结果。
+
+host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerCharacterToken` 提供，`AgentHostInputCompletionsBase` 在读取当前模型版本后使用它：只查询 host 声明的触发词，行首斜杠命令可以继续补全参数；普通文字、邮箱中的 `@`、引用词后的空白和过期 snapshot 不发起 host 查询。注册、取消和附件状态继续由原输入及领域服务拥有。
+
+上下文补全也先核对捕获的模型版本，再通过同文件的 `computeCompletionRanges` 和 `getCompletionRangeWord` 区分光标前的查询与完整替换词，保留词后消息及已有分隔空格。范围工具不维护候选或草稿状态。host 结果目前受 App Server 的 command／skill／resource 领域契约约束；上游 chat 引用、配置动作等变体不能只在 Renderer 增加分支，须先有后端契约与实际 producer。
+
+`widget/chatAgentHover.ts / ChatAgentHover` 展示现有选中自定义 Agent 的名称与描述，不发布第二份 Agent 目录，也不展示内部目录标识。模式选择器使用原托管 Hover；输入开头的 `@名称` 与选中 Agent 精确匹配时，`editor/chatInputEditorContrib.ts / InputEditorDecorations` 借用同一对象投影引用，`ChatAgentHoverParticipant` 通过原编辑器 Hover 展示同一信息卡。引用文字保留在草稿中，不切换 Agent 或建立新的请求路由语义。键盘 hover、无障碍纯文本、Escape 焦点恢复及切换 Agent／模式、隐藏、释放均沿现有输入与 Hover 生命周期处理。
+
+当前 Ash 生产链的职责归位与上游全量功能覆盖分别记录。目录仍有以下上游差异，未创建无调用方入口：
+
+| 上游职责                                              | Ash 当前调用链                                                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `chatEditorInputContentProvider.ts` 的 URI 内容解析   | `ChatInputEditor` 创建并释放模型；粘贴的 `BulkEditService` 直接借用匹配的嵌入模型及其撤销栈，没有外部 URI resolver 消费者。            |
+| `chatInputInlineSuggestions.ts`                       | 上游绑定 Copilot Chat provider 专属设置；Ash 没有该 provider，通用编辑器补全由原 Editor 层提供。                                       |
+| `editorHoverWrapper.ts` 和样式                        | Agent 信息卡已由原托管 Hover／编辑器 Hover 容器承载；没有扩展 participant 的 hover action producer，不另建并行容器。                   |
+| 内联附件的 prompt rebasing／selection projection 端口 | Ash 的引用标签已在原文本中；`ChatDynamicVariableModel` 拥有偏移和撤销，复制粘贴沿原 snapshot 处理，不建立隐藏 anchor 或第二份 prompt。 |
+
+`ChatInlineAttachments.refresh` 接收 Ash 现有引用快照及移除回调；`getPillReferences`、`openActivePill` 与 `layout` 分别服务输入字体／Tab 策略、Alt+Enter 和原输入布局。该公开输入形状适配 Ash 领域模型，不宣称与上游类型签名完全兼容。其余无消费者的补全匹配／排序 helper 也不单独导出。
+
+`editor/chatInputEditorContrib.ts` 为共享输入登记 `chatTokenDeleter`：仅输入 `/` 后接受命令补全，紧接着按 Backspace 删除整个补全词，保留词前的空白和换行；输入部分命令后接受补全仍按普通字符删除。它只记录当前输入最后一次补全的范围与模型版本，不建立第二份草稿；删除沿原编辑器事务进入撤销历史。手工输入、继续键入、光标移动、失焦、模型切换及只读状态保留普通编辑语义；参数补全和资源引用仍由各自原 owner 处理。
+
+IDE 的 `chat.contribution.ts` 在现有会话链接 opener 之后注册 `editor/chatInputSessionLinkProvider.ts`。输入内的 canonical `agent-host-session:` 链接经共享解析器验证，交回编辑器链接检测和 `IOpenerService`；Ctrl／Command 点击和光标处的 Open Link 命令均不提交或修改草稿。嵌套在其他 URL 内、参数重复或带 fragment 的候选不作为会话链接。该注册不扩展 Agents Window 的会话导航契约。VS Code 的 `github.copilot.completions.chat.enabled` 属于 Copilot 聊天输入 provider，Ash 当前没有对应 provider，不把这个插件设置注册为 Ash Code 或 Chat 的通用开关。
 
 Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，最大文本高度 314px，文本增长向上扩展。textarea 根据内容与容器宽度布局，ResizeObserver／调度器随输入释放。`ChatAttachmentModel` 是当前附件内容与身份的唯一 owner，并原子发布新增、更新、删除事件；`ChatDynamicVariableModel` 借用这些内容，只拥有正文位置和按文本模型版本保存的撤销快照。删除、撤销、重做与草稿恢复均同步回同一附件集合；来源拥有的实时上下文更新原身份，撤销不能复活已撤销的来源。输入框不展示当前编辑器文件推荐栏，切换文件或 SCM diff 不自动附加文件。添加上下文、粘贴、拖放和代码选区仍生成消息内引用。
 
 `attachments/chatAttachmentResolveService.ts` 拥有编辑器、未命名编辑器、资源、图片、符号与 SCM 历史项的 Chat 附件构造：文本优先取工作副本或版本快照，目录生成限定范围的文件清单，图片复用原有解码、缩放与内容哈希管线。“打开的编辑器”跳过没有文本快照和文件 provider 的页签；只读编辑器的显式内容代表其显示版本，优先于同 URI 的可编辑工作副本；可编辑输入继续读取未保存文本。读取失败仍由原草稿报告，取消后的结果不能附加。工作区和编辑器图片在加入草稿前检查当前模型能力。 粘贴、拖放和文件选择也通过同一图片解析服务；当原生文件缺少 MIME 或仅有通用二进制类型时，按扩展名识别 PNG、JPEG、GIF 和 WebP，并在读取前检查图片大小与模型能力。混合文件批次在全部准备完成并再次检查模型和取消状态后，交回原有正文引用入口接收。符号源版本校验由 Search 的 `common/search.ts` 共享领域操作承担；SCM 仍解析固定提交与比较父版本，Chat resolver 只构造捕获条目。`attachments/chatContextPickService.ts` 拥有公开 value／picker／pick 契约与窗口注册；`AttachContextAction` 拥有选择界面、查询取消、错误和原输入接收。内置来源及 Browser、Debug、SCM 注册方均使用该契约。共享附件领域数据保留在 `services/chat/common/chatContextService.ts`；Code 和 Sessions 通过 `chat.shared.contribution.ts` 装配窗口默认服务。
+
+共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
 
 添加上下文的已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查和选择均随原输入取消。
 
@@ -34,15 +69,17 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 拖入接收由同一个 `widget/chatDragAndDrop.ts` 处理 Code、Sessions Chat 与 Cowork；Cowork 的重复接收文件已在获准后删除。接收入口在原生事件期间复制文件对象与资源 URI，合并 `ResourceURLs`／URI 列表及本机文件的重复表示，普通文本和网页链接继续由原输入行为处理。整个批次通过当前输入的 `acquireContext` 准备：文件读取当前工作副本，目录捕获清单，图片走已有字节处理，带范围的资源先剥离导航片段再读取，并校验、截取对应源文本；来源 URI 和捕获后的换行保持不变。全部准备成功后，`ChatWidgetPasteTarget` 用一次正文插入绑定整批引用，撤销和重做由原文本模型版本恢复同一批快照。任一资源读取失败或图片能力不满足都不会部分插入；发送等待准备完成，隐藏、释放或切换草稿会撤销未完成的接收，迟到结果不能修改或聚焦下一份草稿。
 
-同一 `chatAttachmentWidgets.ts` 中的 `FileAttachmentWidget`、`ImageAttachmentWidget` 和 `TerminalCommandAttachmentWidget` 分别拥有真实标签、主题图标、图片缩略图或终端预览，以及原生打开／预览和移除按钮。`InlineChatAttachmentWidget` 只负责模型坐标和整块控件的文字替换投影；文件打开事件仍交回 `ChatInputEditor` 的只读快照 owner。图片仅显示原 resolver 已准备的内容，不重新读来源；加载期间仍能 Tab 到达移除按钮。预览按钮等待浏览器确认图片加载成功；已存图片无法解码或其快照读取失败时结束忙碌状态，以可读提示和原主题图标表示不可预览，保留移除操作，不能打开空预览。移除与释放会清理加载监听及图片地址；撤销、草稿恢复和复制粘贴仍保留原快照，不因预览失败修改捕获字节。终端预览借用捕获的文字与列数创建只读镜像，来源关闭后仍可查看；返回来源使用原终端身份与已有 Focus 命令。预览的 Escape／关闭返回引用，移除或释放控件清理自己的预览，不能关闭后续其他弹层。三个控件的 Delete／Backspace、中键和移除按钮都回到同一引用模型，撤销／重做保留原快照。生成图片动画与转录附件不在这一链路内。
+同一 `chatAttachmentWidgets.ts` 中的 `FileAttachmentWidget`、`ImageAttachmentWidget` 和 `TerminalCommandAttachmentWidget` 分别拥有真实标签、主题图标、图片缩略图或终端预览，以及原生打开／预览和移除按钮。`editor/chatInlineAttachments.ts` 的 `ChatInlineAttachments` 拥有模型装饰、内联控件投影、宽度测量、选区与键盘导航，并沿现有 `IChatInputEditor.renderContextReferences` 接收引用位置模型发布的投影；私有 pill 只承载一个原生控件。保存内容的打开与异步生命周期也归该投影，仍通过 `IEditorService` 打开同一份只读快照。图片仅显示原 resolver 已准备的内容，不重新读来源；加载期间仍能 Tab 到达移除按钮。预览按钮等待浏览器确认图片加载成功；已存图片无法解码或其快照读取失败时结束忙碌状态，以可读提示和原主题图标表示不可预览，保留移除操作，不能打开空预览。移除与释放会清理加载监听及图片地址；撤销、草稿恢复和复制粘贴仍保留原快照，不因预览失败修改捕获字节。终端预览借用捕获的文字与列数创建只读镜像，来源关闭后仍可查看；返回来源使用原终端身份与已有 Focus 命令。预览的 Escape／关闭返回引用，移除或释放控件清理自己的预览，不能关闭后续其他弹层。三个控件的 Delete／Backspace、中键和移除按钮都回到同一引用模型，撤销／重做保留原快照。生成图片动画与转录附件不在这一链路内。
 
-剩余现有上下文在同一控件文件内接入 `DefaultChatAttachmentWidget`、`PromptFileAttachmentWidget` 和 `ToolSetOrToolItemAttachmentWidget`。目录由 `FileAttachmentWidget` 返回 Explorer；指令只打开原授权 URI，提交仍由后端读取指令路径；工具与工具选择打开已有工具设置，不修改执行选择。通用控件保留符号位置、搜索视图和 GitHub 链接的原目标；没有可导航来源的调试和其他捕获内容，通过打开事件交回 `ChatInputEditor` 的同一只读快照 owner。移除、撤销、草稿恢复和复制粘贴保留原 resolver。所有现有控件均以完整原生按钮组替换正文标签，旧的前后独立按钮和来源分支已退出；按钮上的删除键只作用于其引用，异步导航和快照打开不能在控件退休后生效。`ElementChatAttachmentWidget`、`SCMHistoryItemAttachmentWidget` 和 `SCMHistoryItemChangeAttachmentWidget` 分别承接浏览器元素、提交和历史文件。主按钮及 Alt+Enter 交回同一只读快照入口；浏览器 HTML/CSS 作为捕获文本显示，不执行标记。独立来源按钮打开原 HTTP(S) 页面、SCM 提交更改或只读历史版本文件，不会同时打开快照。保存内容控件的鼠标悬停和编辑器键盘悬停共用同一份限定为 12 行、4,000 字符的捕获预览，HTML 和命令链接只作为代码文本显示；移除、替换或切换草稿后迟到结果不能更新新控件。内部来源标识不进入预览，完整内容仍由只读快照入口打开。SCM producer 通过领域 URI 固定仓库、提交、比较父版本和文件路径，草稿与复制粘贴沿既有 resource 契约保留它们；来源导航由原 SCM 命令及编辑器 owner 执行，不从显示名或复合 id 猜测身份，也不读取当前工作文件。来源失效时快照仍可查看；移除控件会取消其待完成的 SCM 导航，仓库移除或替换后迟到结果不能打开编辑器。
+剩余现有上下文在同一控件文件内接入 `DefaultChatAttachmentWidget`、`PromptFileAttachmentWidget` 和 `ToolSetOrToolItemAttachmentWidget`。目录由 `FileAttachmentWidget` 返回 Explorer；指令只打开原授权 URI，提交仍由后端读取指令路径；工具与工具选择打开已有工具设置，不修改执行选择。通用控件保留符号位置、搜索视图和 GitHub 链接的原目标；没有可导航来源的调试和其他捕获内容，通过打开事件交回 `ChatInlineAttachments` 的同一只读快照 owner。移除、撤销、草稿恢复和复制粘贴保留原 resolver。所有现有控件均以完整原生按钮组替换正文标签，旧的前后独立按钮和来源分支已退出；按钮上的删除键只作用于其引用，异步导航和快照打开不能在控件退休后生效。`ElementChatAttachmentWidget`、`SCMHistoryItemAttachmentWidget` 和 `SCMHistoryItemChangeAttachmentWidget` 分别承接浏览器元素、提交和历史文件。主按钮及 Alt+Enter 交回同一只读快照入口；浏览器 HTML/CSS 作为捕获文本显示，不执行标记。独立来源按钮打开原 HTTP(S) 页面、SCM 提交更改或只读历史版本文件，不会同时打开快照。保存内容控件的鼠标悬停和编辑器键盘悬停共用同一份限定为 12 行、4,000 字符的捕获预览，HTML 和命令链接只作为代码文本显示；移除、替换或切换草稿后迟到结果不能更新新控件。内部来源标识不进入预览，完整内容仍由只读快照入口打开。SCM producer 通过领域 URI 固定仓库、提交、比较父版本和文件路径，草稿与复制粘贴沿既有 resource 契约保留它们；来源导航由原 SCM 命令及编辑器 owner 执行，不从显示名或复合 id 猜测身份，也不读取当前工作文件。来源失效时快照仍可查看；移除控件会取消其待完成的 SCM 导航，仓库移除或替换后迟到结果不能打开编辑器。
 
 `ChatPasteTargetService` 只按输入 URI 登记活着的接收端；`ChatWidgetPasteTarget.attachments` 读取规范附件集合，`inlineReferences` 读取带位置的正文投影；接收端拥有自身登记的释放，将粘贴、拖放及显式附件准备交回同一正文引用入口。准备仍由 `ChatAttachmentModel` 管理，接收端返回实际插入的身份和偏移供待发送快照使用；取消、接收端替换或释放后不能写入旧输入。引用快照标签显式声明文本类型，使独立的快照 URI 能进入真实工作台的只读文本编辑器。
 
 聊天正文的复制和剪切通过现有 `CopyPasteController`，由每个输入拥有的 `ChatPasteProvidersFeature` 捕获选区内的引用和内容快照。剪切前同步捕获身份与偏移，内容读取沿原编辑器的复制准备缓存完成；清空或关闭来源不影响已捕获内容。工具选择配置留在目标输入，复制只携带其可见标签。粘贴 provider 校验剪贴板正文与引用范围，选中的标准文字编辑生效后，才经 `ChatWidgetPasteTarget.addInlineReference` 绑定新身份；捕获内容进入同一 `ChatAttachmentModel`，偏移及撤销快照仍归原 `ChatDynamicVariableModel` 与文本模型历史。换行转换和多个粘贴选区分别映射引用位置；同名标签覆盖也保留一次可撤销替换。粘贴选项由 `PasteEditSession` 保持准备资源，允许在带快照和纯文本之间切换；输入隐藏、草稿换代或释放会取消等待中的粘贴。Workbench 对显式传入、没有文件 provider 的输入模型直接编辑原模型，不获取或保存文件。textarea 输入沿用原生纯文本复制粘贴。普通编辑器的代码复制由窗口级 `CopyTextProvider` 在打开聊天前捕获来源 URI、单个选区与可读名称，内容取实际剪贴板正文；普通粘贴保持原文，`PasteTextProvider` 提供“粘贴为代码附件”选项，复用同一快照绑定和撤销链路。选择该选项后，即使来源修改或关闭，引用仍保存复制时的内容。多个不连续来源选区保留普通粘贴。
 
-当前引用内容借用 `ChatAttachmentModel`，偏移与历史快照归 `ChatDynamicVariableModel`；`ChatInputEditor` 拥有引用装饰和内联控件，沿 `editor/chatInputReferenceDecorations.ts` 注册可释放的共享样式。输出选区使用通道的可读名称：单根工作区省略重复的目录名，多根工作区保留目录名以区分同名语言服务器；原始 URI、行范围和选中时的内容仍完整保留。点击文件／代码引用或在引用处按 Alt+Enter，通过 `IEditorService` 在独立的只读标签中打开同一 resolver 保存的完整正文；快照资源身份按 resolver 区分，避免覆盖实时来源或另一份同名选区，重复打开复用原标签。移除引用、换草稿或释放输入会阻止迟到的打开请求。引用 hover 通过同一快照 resolver 预览附加的文件或选区正文，最多 12 行、4000 字符，缩短时明确提示；输出不展示内部通道 URI，文件保留来源路径。通用 Editor 的 `markdownHoverParticipant.ts` 读取装饰的 `hoverMessage`，通过原 Markdown renderer 显示正文并接收延迟快照更新。鼠标悬停或在引用处使用 Show or focus hover（Ctrl／Command+K，Ctrl／Command+I）均可查看，Escape 返回输入；移除引用或释放输入会清理对应展示，迟到结果不恢复旧引用。
+当前引用内容借用 `ChatAttachmentModel`，偏移与历史快照归 `ChatDynamicVariableModel`；`ChatInlineAttachments` 拥有引用装饰和内联控件，沿 `editor/chatInputReferenceDecorations.ts` 注册可释放的共享样式，投影布局规则位于 `editor/media/chatInlineAttachments.css`。输出选区使用通道的可读名称：单根工作区省略重复的目录名，多根工作区保留目录名以区分同名语言服务器；原始 URI、行范围和选中时的内容仍完整保留。点击文件／代码引用或在引用处按 Alt+Enter，通过 `IEditorService` 在独立的只读标签中打开同一 resolver 保存的完整正文；快照资源身份按 resolver 区分，避免覆盖实时来源或另一份同名选区，重复打开复用原标签。移除引用、换草稿或释放输入会阻止迟到的打开请求。引用 hover 通过同一快照 resolver 预览附加的文件或选区正文，最多 12 行、4000 字符，缩短时明确提示；输出不展示内部通道 URI，文件保留来源路径。通用 Editor 的 `markdownHoverParticipant.ts` 读取装饰的 `hoverMessage`，通过原 Markdown renderer 显示正文并接收延迟快照更新。鼠标悬停或在引用处使用 Show or focus hover（Ctrl／Command+K，Ctrl／Command+I）均可查看，Escape 返回输入；移除引用或释放输入会清理对应展示，迟到结果不恢复旧引用。
+
+图片引用的编辑器预览由 `editor/chatInputEditorHover.ts` 的 `ChatAttachmentReferenceHoverParticipant` 读取同一引用装饰和捕获 resolver，支持鼠标悬停与 Show or focus hover。预览只解码已捕获的 raster data URL，显示加载／失败状态；关闭只释放展示，不取消附件捕获。移除引用或切换草稿会退休迟到结果；Tab 到关闭按钮、Escape 返回输入，并沿原 Chat Accessible View 读取名称、尺寸和状态。点击引用的原生预览仍由 `ImageAttachmentWidget` 拥有。Editor 的 `suggestHoverAnchor` 将内联控件映射回模型位置，弹层布局后指针回到原引用不会误触关闭计时器。
 
 正文中的引用位置用于表达材料顺序及其与前后说明的关系，设计缘由见[为什么 Ash 把上下文放进正文](blog/inline-context-references.md)。`resolveChatContextAttachment` 将正文引用偏移与保存的快照一起传给发送模型；Code 和 Cowork 保留未经裁剪的原始正文，`ChatService` 在普通发送、排队和 steering 中按引用位置拆分文字，将标签替换成相应的上下文或图片输入。同名引用保留各自快照，附件读取完成的先后不影响顺序。没有位置的旧草稿附件和来源上下文保持前置；空白片段不单独生成后端不接受的空文本输入，有效文字片段保留原有空白。越界或重叠的引用在提交前报错并保留草稿。Rust 的输入规范化、持久化与模型消息组装沿用输入顺序。
 
@@ -94,6 +131,8 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 `chat.disableAIFeatures` 是 TypeScript UI 的 WINDOW scope boolean 偏好，默认 false，唯一资源是 profile `settings.json`。配置 → `ChatContextKeys.enabled`／model input state → `ChatService` → adapter 共用一条链。禁用阻止 start、queue、steer、Advisor、compaction 和提交说明生成，异步权限读取后再次检查；关闭本窗口活动或待连接 Voice。历史、草稿、停止与已存在 Turn 交互仍归原 owner，重新启用恢复草稿，不改 Rust 权限或停止共享 App Server。底层 Workspace／Folder 支持见 [Configuration](preferences-and-settings.md#configuration-的存储与配置层)，不沿用旧对齐记录中的未迁移状态。
 
+`services/chat/common/chatEntitlementService.ts` 只从该配置投影 `sentiment.hidden`，不保存账号或模型就绪状态。共享的 `browser/chatSetup/chatSetupContributions.ts` 在 Code、Agents 和主题预览中统一更新 `ChatContextKeys.Setup.hidden`／`enabled`；命令面板和模型目录错误提示通过 `workbench.action.chat.triggerSetup` 进入现有模型连接或账号管理。取消、禁用 AI 或关闭窗口释放设置选择器，保留草稿。上游 Copilot 扩展安装、套餐、Microsoft 探测和增长会话没有对应的 Ash 生产调用链，不加入这条配置流程。
+
 共享后端同时服务 Agent、手动终端和扩展。`aiAgentEnv.ts`／宿主环境构建器过滤继承的 `AI_AGENT`（含大小写变体），不更改父环境；Rust `ProcessExecutor` 只为 Core 工具、Hook 和认证 Agent ProcessStart 的最终子环境设置 `AI_AGENT=ash`。手动终端默认不继承标记，显式 env 可以覆盖。该值仅作进程归因，不代表授权、身份认证、账号或模型，不另加配置或协议字段。
 
 邀请沿成功的 `ChatService.onDidSubmitRequest` → sender 绑定可信 IPC → Main `AgentsWindowInvitationState` → focused conversation 的现有通知列表。只有后端接受的本窗口请求登记使用；Main 的 Application／Machine storage 仅保存首次使用计数与冷却，不读领域 RPC 或建立会话目录。单窗口等待 30 秒，并行活动等待 15 秒，全局只有一个 claim，真正可见后才记曝光。
@@ -110,14 +149,14 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本地默认是 Rust 后端的 Paraformer 模型包，云端选择是 OpenAI／xAI API 或 Codex 订阅，`dictation.model` 只表示本地模型包；本地服务使用受管缓存并拒绝尚不支持的 Foundry runtime、代理及语言参数。模型准备与缓存操作仍走原服务，未加入运行时或模型迁移。代码测试与真实账户、物理设备及音质的覆盖边界见[历史验证与复测入口](#历史验证与复测入口)。
 
-| 职责             | 唯一 owner 与范围                                                                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 听写编排         | `browser/speechToText/chatSpeechToTextService.ts` 处理会话与累计转写，配置解析归 common constants                                                                  |
-| 云端转写         | `voiceCodeTranscriptionClient.ts` 处理连接、发送顺序、PTT 音频、停止确认及断线；领域宿主契约在 `platform/renderer/common/dictation.ts`，adapter 只做 RPC／通知转换 |
-| 浏览器采音       | `pcmCaptureWorklet.ts` 输出 PCM16 并提供 flush 屏障；Rust 持有凭据与识别，本地模型使用 `ILocalTranscriptionService`，TUI 可继续后端采音                            |
-| 标准扩展 Speech  | `vscode.speech.registerSpeechProvider` → Node／V8 Host capability 和精确注册代次 → MainThreadSpeech → SpeechService                                                |
-| Widget 实时语音  | `browser/voiceClient/voiceSessionController.ts`、ChatWidget／Cowork 的原输入生命周期                                                                               |
-| Ash 语音领域适配 | agentHost `agent.ts` 数据契约、`agentService.ts` 服务契约与 `appServerAgentService.ts` adapter；optional `RendererHost.agentVoice`，不新设 platform/voice          |
+| 职责             | 唯一 owner 与范围                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 听写编排         | `browser/speechToText/chatSpeechToTextService.ts` 处理会话与累计转写，配置解析归 common constants                                                                   |
+| 云端转写         | `voiceCodeTranscriptionClient.ts` 处理连接、发送顺序、PTT 音频、停止确认及断线；领域宿主契约在 `platform/dictation/common/dictation.ts`，adapter 只做 RPC／通知转换 |
+| 浏览器采音       | `pcmCaptureWorklet.ts` 输出 PCM16 并提供 flush 屏障；Rust 持有凭据与识别，本地模型使用 `ILocalTranscriptionService`，TUI 可继续后端采音                             |
+| 标准扩展 Speech  | `vscode.speech.registerSpeechProvider` → Node／V8 Host capability 和精确注册代次 → MainThreadSpeech → SpeechService                                                 |
+| Widget 实时语音  | `browser/voiceClient/voiceSessionController.ts`、ChatWidget／Cowork 的原输入生命周期                                                                                |
+| Ash 语音领域适配 | agentHost `agent.ts` 数据契约、`agentService.ts` 服务契约与 `appServerAgentService.ts` adapter；optional `IWorkbenchHost.agentVoice`，不新设 platform/voice         |
 
 标准 provider 唯一拥有 STT／TTS／keyword session。Host bridge 只持有 bounded invoke／read／close、opaque session ID 与取消 token；撤销或关闭释放该精确 registration／incarnation／activationGeneration 的全部会话，迟到创建显式 close，不能把清理送到 replacement。无选择的多 provider 明确拒绝，不按启动顺序抢占。SpeechService 的 availability 只指注册／声明的 Speech provider；原无扩展听写不冒充 TTS／keyword。
 
@@ -146,6 +185,14 @@ IDE 与 Agent Window 均可从命令面板运行“开发人员：导出 Agent H
 ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录制状态及读取失败、未录制、截断和分页上限。每个文件最多 16 MiB，最多 1,000 个文件、64 MiB，每类会话证据最多 64 页；正文索引最多 1,000 项，完整原引用仍在诊断分页中。daemon 每次只读取该 profile 的最多 32 个日志文件，共最多 64 MiB，不修改生产日志。超过限额的来源和宿主尾读缺口均有标记，不再因旧的 1 MiB 单文件限制丢弃正文。部分来源失败仍导出已有证据并通知用户。取消等待当前有界读取结束后停止并释放尚未读取的资源，不下载半成品；后端连接或 capture 变化拒绝迟到证据，不向新代次续读。复测入口为 `exportAgentHostDebugLogs.test.ts`、`appServerAgentService.test.ts` 和 `test/smoke/areas/chat/chat-debug-logs.spec.ts`。
 
 ## 历史验证与复测入口
+
+2026-11-02 在 macOS 验证本轮输入调用链：补全、输入编辑器及命令删除的 3 文件 108 项和完整 composer 323 项通过，包含 en／zh-CN、真实浏览器键盘、只读、焦点、撤销与重做。正常 Desktop 构建通过；Workbench 和 Agents Window 的 host 补全、文件捕获并发送，以及命令补全即时删除的 3 个 Electron＋App Server 场景通过，之前的模型配置与翻译构建阻塞未再复现。Renderer、automation、翻译及触及格式检查通过，记录在 `.build/chat-input-editor-finish/`。此前直接运行本地 VS Code 源码 helper 的 795 组触发词结果相同。随后已通过隔离合成 provider 补上命令和图片鼠标预览的四主题参照，范围见下文；该参照不等同于本地 1.146.0 源码的完整 API／UI 验收。
+
+2026-11-02 完成现有输入职责迁移后的验证：输入编辑器、完整 composer、附件、host 补全和图片 hover 五个文件共 475 项通过；命令删除的中英文 8 项单独复验通过，合计 483 项。完整运行最初有 5 项命令用例错误地接受了首个 `/new` 候选，改为显式选择目标 `/review` 后该文件 8 项全过，生产逻辑未因测试选择问题放宽。三个 Electron＋App Server 场景通过附件选择／键盘移除、Workbench 与 Sessions Code 图片预览，以及命令补全删除／撤销／重做。Renderer、automation、翻译、样式、格式及 diff 检查通过，证据在 `.build/chat-input-final-ownership/`。下层 Editor hover 在本次迁移中未再修改，此前 10 项 hover 回归与 495 项完整浏览器集成记录仍见 `.build/chat-input-image-hover/`。
+
+本机 VS Code 1.144.0 已通过隔离合成 participant／model provider 完成四主题参照，不需要真实账号：从裸 `/` 与已输入部分命令两种入口接受候选，核对 Backspace、输入焦点、Undo／Redo；同一张 320 × 180 捕获图片通过鼠标预览，预览保留原提示文本。这个对照发现并修正了 Ash 对部分命令补全也执行整词删除的差异。参照运行使用 `defaultChatParticipant` 与 `chatReferenceBinaryData` 测试能力，不发起真实模型请求。图片键盘预览仍由 Ash 本地中英文／四主题用例验证，未把参照中未出现的键盘图片 hover 记为通过。参照版本与本地只读 1.146.0 源码不同，也不代表上表缺失功能或全部上游类型签名兼容。
+
+2026-11-02 在 Windows x64 验证输入编辑器：`chatInputEditor.test.ts`、`chatPasteProviders.test.ts`、`slashCommands.test.ts` 共 86 项通过，含 en／zh-CN × 四主题的真实 Chromium 参数提示、ARIA／帮助、目录更新、文本／焦点／撤销保持与释放；Open Link 的 provider／菜单生命周期和真实编辑器命令另有 2 项补验通过。Renderer、完整 unit 与 automation 类型检查、修改文件格式、CSS 和翻译检查通过。真实 Electron＋App Server 的代码快照粘贴场景通过，键盘命令场景最终通过参数提示换行、参数键入后隐藏及前导空白补全。单测记录为 `.build/desktop/chat-input-verified.log`、`.build/desktop/chat-input-links-verified.log`；两个桌面场景在同一轮最终复验通过，记录为 `.build/desktop/chat-input-smoke-combined.log`。本轮不包含服务端动态输入补全、Chat 行内建议 provider 或上游运行环境验收。
 
 2026-10-30 在 Windows x64 按代码与测试验收语音链路：SpeechService、VoiceClient、听写会话／云端适配器／引导和 Call adapter 共 6 文件 60 项通过，覆盖输入归属、准备／取消、PCM 尾包、停止回执和迟到结果；`just test ash-voice-host --lib --features host` 的 8 项通过，覆盖有符号 PCM、控制帧、设备控制代次、重采样、滤波状态清理、回声参考和增益不削波。重新编译后的最终复验包含于 `.build/todo-code-audit-voice-document-scoped.log`，AudioHost 日志为 `.build/todo-code-audit-audio-host.log`。本轮使用受控账户／音频接口和合成信号，原语音验收待办按代码口径消项；没有新增真实账户、物理采音、主观音质或界面验收。旧麦克风枚举故障仍待定位，完整 Prompt／Agent 格式及缺失 MCP capability 不在本次结论内。
 

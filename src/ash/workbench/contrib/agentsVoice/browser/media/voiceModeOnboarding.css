@@ -1,0 +1,14 @@
+.ash-agents-voice-introduction {
+	padding: var(--ash-spacing-size120);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-agents-voice-introduction[hidden] {
+	display: none;
+}
+
+.ash-agents-voice-introduction p {
+	margin: var(--ash-spacing-size80) 0;
+}

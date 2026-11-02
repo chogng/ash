@@ -1,4 +1,4 @@
-import { BrowserPathService } from '../../../../workbench/services/path/browser/pathService.js';
+import { createTestPathService, testAppServerApi } from '../../../../workbench/test/common/workbenchHostTestServices.js';
 import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -65,8 +65,8 @@ test('LabelService normalizes absolute Windows drive labels while retaining work
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api, appServer: { ...api.appServer, operatingSystem: os, isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }
 
 test('LabelService reads connection home for each label and invalidates labels on replacement and disconnect', () => {
@@ -75,10 +75,11 @@ test('LabelService reads connection home for each label and invalidates labels o
 	let os: OperatingSystem | undefined = OperatingSystem.Linux;
 	let home: string | undefined = '/home/remote';
 	const host = {
-		...api, hasAppServer: true, appServer: {
+		...api, appServer: {
 			...api.appServer,
 			get operatingSystem() { return os; }, get userHome() { return home; },
 			onConnectionState: changes.event,
+			isAvailable: true
 		}
 	};
 	const workspace = {
@@ -88,7 +89,7 @@ test('LabelService reads connection home for each label and invalidates labels o
 		onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'label-home', folders: [] }),
 		getWorkbenchState: () => WorkbenchState.EMPTY, getWorkspaceFolder: () => null
 	};
-	using labels = new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	using labels = new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 	const resource = URI.parse('file:///home/remote/notes.txt');
 	const values = [labels.getUriLabel(resource)];
 	assert.equal(labels.getUriLabel(resource, { noPrefix: true }), '/home/remote/notes.txt');

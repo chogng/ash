@@ -53,6 +53,7 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
         &self,
         input: &mut Vec<ash_protocol::UserInput>,
         mode: ash_protocol::CollaborationMode,
+        command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<super::operations::TurnInstructionSelection, super::RpcError>;
 }
 
@@ -119,6 +120,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             ash_app_server_protocol::protocol::queue::QueueEditAction::ReplaceText { text } => {
                 queue::QueueEdit::ReplaceText { text }
             }
+            ash_app_server_protocol::protocol::queue::QueueEditAction::ReplaceTextWithDelivery { text, delivery } => {
+                queue::QueueEdit::ReplaceTextWithDelivery { text, delivery }
+            }
             ash_app_server_protocol::protocol::queue::QueueEditAction::Move { direction } => {
                 queue::QueueEdit::Move { direction }
             }
@@ -134,8 +138,11 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 let mut input =
                     self.context
                         .normalize_input(Some(owner), &params.session_id, input)?;
-                self.context
-                    .turn_instruction_selection(&mut input, existing.request.mode)?;
+                self.context.turn_instruction_selection(
+                    &mut input,
+                    existing.request.mode,
+                    existing.request.command_interpretation,
+                )?;
                 queue::QueueEdit::Replace { input }
             }
         };
@@ -212,8 +219,11 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         let mut input =
             self.context
                 .normalize_input(Some(owner), &params.session_id, params.input)?;
-        self.context
-            .turn_instruction_selection(&mut input, params.mode)?;
+        self.context.turn_instruction_selection(
+            &mut input,
+            params.mode,
+            params.command_interpretation.unwrap_or_default(),
+        )?;
         let tool_mode = match (params.tool_mode, existing.as_ref()) {
             (Some(mode), _) => mode,
             (None, Some(message)) => message.request.tool_mode,
@@ -241,6 +251,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 directory,
                 input,
                 mode: params.mode,
+                command_interpretation: params.command_interpretation.unwrap_or_default(),
                 model: params.model,
                 reasoning_effort: params.reasoning_effort,
                 tool_mode,
@@ -333,15 +344,20 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 &request.thread_id,
                 core_api::SteerTurnRequest {
                     command_id: request.command_id.clone(),
-                    expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
+                    // Streaming advances the sequence between read and mutation. Core checks
+                    // the captured Turn's identity and active state atomically.
+                    expected_sequence: core_api::SequenceExpectation::Any,
                     turn_id: turn_id.clone(),
                     input: request.input.clone(),
                 },
             );
-            if result.is_ok() {
-                return Ok(Delivery::Started(turn_id.clone()));
-            }
-            return Ok(Delivery::Rejected("steeringRejected".into()));
+            return match result {
+                Ok(_) => Ok(Delivery::Started(turn_id.clone())),
+                Err(error) => {
+                    eprintln!("App Server queued steering failed: {error}");
+                    Ok(Delivery::Rejected("steeringRejected".into()))
+                }
+            };
         }
         if snapshot.turns.iter().any(|turn| active(turn.status)) {
             return Ok(Delivery::Waiting);
@@ -352,7 +368,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         let mut input = request.input.clone();
         let selection = self
             .context
-            .turn_instruction_selection(&mut input, request.mode)
+            .turn_instruction_selection(&mut input, request.mode, request.command_interpretation)
             .map_err(|error| format!("{:?}", error.message))?;
         let start = self.context.start_agent_turn_request(
             ThreadMutation {

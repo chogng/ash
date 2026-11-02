@@ -9,10 +9,12 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 	const params = <T extends { readonly sessionId: string; readonly threadId?: string; }>(value: T): T => ({ ...value, sessionId: scope.backendIdentity(value.sessionId), ...('threadId' in value && value.threadId !== undefined ? { threadId: scope.backendIdentity(value.threadId) } : {}) });
 	const run = async <T>(operation: () => Promise<T>): Promise<T> => { scope.assertCurrent(); const result = await operation(); scope.assertCurrent(); return result; };
 	return {
+		canCreateSideChat: sessionId => { scope.assertCurrent(); return backend.canCreateSideChat(scope.backendIdentity(sessionId)); },
 		onDidChangeConnection: backend.onDidChangeConnection,
 		onDidOfferInteraction: Event.map(backend.onDidOfferInteraction, identity),
 		onDidUpdateThread: Event.map(backend.onDidUpdateThread, identity),
 		onDidUpdateThreadTranscript: Event.map(backend.onDidUpdateThreadTranscript, identity),
+		createSideChat: source => run(async () => identity(await backend.createSideChat(params(source)))),
 		fork: (...args: Parameters<IAgentThreadService['fork']>) => run(async () => {
 			const [source, ...rest] = args;
 			const result = await backend.fork(params(source), ...rest);
@@ -113,12 +115,12 @@ export function createSessionThreadService(scope: ISessionProviderScope): IAgent
 		read: (...args: Parameters<IAgentThreadService['read']>) => run(async () => {
 			const [source, ...rest] = args;
 			const result = await backend.read(params(source), ...rest);
-			return { ...result, thread: { ...identity(result.thread), origin: result.thread.origin.type === 'root' ? result.thread.origin : result.thread.origin.type === 'replacement' ? { ...result.thread.origin, sourceThreadId: scope.identity(result.thread.origin.sourceThreadId) } : { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId) }, goal: result.thread.goal && { ...result.thread.goal, threadId: scope.identity(result.thread.goal.threadId) } }, transcript: identity(result.transcript) };
+			return { ...result, thread: { ...identity(result.thread), origin: result.thread.origin.type === 'sideChat' ? { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId), contextThreadId: scope.identity(result.thread.origin.contextThreadId) } : result.thread.origin.type === 'root' ? result.thread.origin : result.thread.origin.type === 'replacement' ? { ...result.thread.origin, sourceThreadId: scope.identity(result.thread.origin.sourceThreadId) } : { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId) }, goal: result.thread.goal && { ...result.thread.goal, threadId: scope.identity(result.thread.goal.threadId) } }, transcript: identity(result.transcript) };
 		}),
 		subscribe: (...args: Parameters<IAgentThreadService['subscribe']>) => run(async () => {
 			const [source, ...rest] = args;
 			const result = await backend.subscribe(params(source), ...rest);
-			return { ...result, thread: { ...identity(result.thread), origin: result.thread.origin.type === 'root' ? result.thread.origin : result.thread.origin.type === 'replacement' ? { ...result.thread.origin, sourceThreadId: scope.identity(result.thread.origin.sourceThreadId) } : { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId) }, goal: result.thread.goal && { ...result.thread.goal, threadId: scope.identity(result.thread.goal.threadId) } }, transcript: identity(result.transcript), updates: result.updates.map(identity) };
+			return { ...result, thread: { ...identity(result.thread), origin: result.thread.origin.type === 'sideChat' ? { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId), contextThreadId: scope.identity(result.thread.origin.contextThreadId) } : result.thread.origin.type === 'root' ? result.thread.origin : result.thread.origin.type === 'replacement' ? { ...result.thread.origin, sourceThreadId: scope.identity(result.thread.origin.sourceThreadId) } : { ...result.thread.origin, parentThreadId: scope.identity(result.thread.origin.parentThreadId) }, goal: result.thread.goal && { ...result.thread.goal, threadId: scope.identity(result.thread.goal.threadId) } }, transcript: identity(result.transcript), updates: result.updates.map(identity) };
 		}),
 		unsubscribe: (...args: Parameters<IAgentThreadService['unsubscribe']>) => run(async () => {
 			const [source, ...rest] = args;

@@ -1,3 +1,4 @@
+import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
@@ -10,14 +11,40 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatWidget } from './widget/chatWidget.js';
-import type { IChatListItem } from './widget/chatListItems.js';
+import type { IChatListItem } from '../common/model/chatViewModel.js';
+import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;
+	readonly cancelCurrentRequest?: boolean;
+	readonly sideChat?: boolean;
+}
+
+/** The Welcome host owns the available targets and the current selection. */
+export interface IWorkspacePickerItem {
+	readonly uri: URI;
+	readonly label: string;
+	readonly isFolder: boolean;
+}
+
+export interface IWorkspacePickerDelegate {
+	getWorkspaces(): IWorkspacePickerItem[];
+	getSelectedWorkspace(): IWorkspacePickerItem | undefined;
+	setSelectedWorkspace(workspace: IWorkspacePickerItem | undefined): void;
+	readonly onDidChangeSelectedWorkspace: Event<IWorkspacePickerItem | undefined>;
+	readonly onDidChangeWorkspaces: Event<void>;
+	readonly openFolderCommand: string;
+}
+
+/** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
+export interface IChatWidgetViewOptions {
+	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
+	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;
@@ -29,6 +56,8 @@ export interface IChatWidget {
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
+	/** Edits a queued request without replacing the unsent composer draft. */
+	startEditing(requestId: string): void | Promise<void>;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;
@@ -117,8 +146,11 @@ export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetS
 
 /** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
 export interface IChatViewPane extends IView {
+	createNewChatEditorInput(source?: ChatEditorInput): ChatEditorInput;
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;
+	/** Borrows an independent retained composer; releasing the mount preserves its model and draft. */
+	createEmbeddedChat(parent: HTMLElement, titleId: string, options?: IChatWidgetViewOptions): IQuickChatSession;
 	getOptimalWidth(): number;
 	getSessionsViewerOrientation(): AgentSessionsViewerOrientation;
 	getLastDimensions(orientation: AgentSessionsViewerOrientation): { height: number; width: number; } | undefined;

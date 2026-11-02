@@ -8,7 +8,7 @@ import type { AppServerProtocolClient } from '../../../../platform/agentHost/bro
 import { createAppServerLocalTranscriptionBackendService } from '../../../../platform/localTranscription/browser/appServerLocalTranscriptionBackendService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService, DEFAULT_LOCAL_TRANSCRIPTION_MODEL, LocalTranscriptionModelState, DictationModelState, type ILocalTranscriptionModelStatus, type ILocalTranscriptionResult, type IDictationModelStatus, type ILocalTranscriptionModelOperation, type LocalTranscriptionModelOperation } from '../../../../platform/localTranscription/common/localTranscription.js';
 import type { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
-import type { RendererHostCapabilities } from '../../../../platform/renderer/common/rendererHost.js';
+import type { WorkbenchHostCapabilities } from '../../../browser/rendererApi.js';
 import { localize } from '../../../../nls.js';
 
 interface ActiveTranscription {
@@ -279,7 +279,7 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 }
 
 /** The renderer entry owns this service scope and releases it with the window. */
-export function registerLocalTranscriptionService(services: InstantiationService, client: AppServerProtocolClient): RendererHostCapabilities {
+export function registerLocalTranscriptionService(services: InstantiationService, client: AppServerProtocolClient): WorkbenchHostCapabilities {
 	services.registerInstance(ILocalTranscriptionBackendService, createAppServerLocalTranscriptionBackendService(client));
 	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
 	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);

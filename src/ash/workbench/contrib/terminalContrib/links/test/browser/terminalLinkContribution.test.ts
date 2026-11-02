@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
 import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
 import { TerminalLinkResolver } from '../../browser/terminalLinkResolver.js';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { OperatingSystem } from '../../../../../../base/common/platform.js';
-import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
@@ -77,9 +78,9 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: root }));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const api = createDisconnectedRendererApi();
-	services.registerInstance(IRendererHostService, {
-		...api, hasAppServer: true,
-		appServer: { ...api.appServer, operatingSystem: cwd.startsWith('C:') && root.scheme === 'file' ? OperatingSystem.Windows : OperatingSystem.Linux, userHome: '/home/fixture' },
+	registerTestWorkbenchHostServices(services, {
+		...api,
+		appServer: { ...api.appServer, operatingSystem: cwd.startsWith('C:') && root.scheme === 'file' ? OperatingSystem.Windows : OperatingSystem.Linux, userHome: '/home/fixture', isAvailable: true },
 	});
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	const environmentQueries: { names: readonly string[]; dirId: string | undefined; }[] = [];

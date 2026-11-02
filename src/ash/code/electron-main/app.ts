@@ -18,7 +18,7 @@ import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin, TerminalWindowTransferHost } from '../../platform/native/electron-main/nativeHostMainService.js';
-import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
+import { ChecksumService, checksumChannel } from '../../platform/checksum/electron-main/checksumService.js';
 import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
 import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -150,7 +150,9 @@ import { StorageScope, StorageTarget } from '../../platform/storage/common/stora
 import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
 import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState } from '../../platform/native/common/nativeHost.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
-import { LoggerService } from '../../platform/log/node/loggerService.js';
+import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
+import { spawn } from 'node:child_process';
+import { hostLogExecutable, hostIntegrityExecutable } from '../../../../.build/desktop/hostLogs.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
@@ -352,6 +354,7 @@ export class AshApplication extends Disposable {
 	private invitationPersistence: Promise<void> = Promise.resolve();
 	private readonly loggerService = this._register(new LoggerService({
 		logsHome: app.getPath('logs'),
+		start: () => spawn(fileURLToPath(new URL(`../../../../${hostLogExecutable}`, import.meta.url)), [], { stdio: 'pipe', windowsHide: true }),
 		appServerLog: async () => {
 			if (this.appServerStartupMode === 'disabled') return undefined;
 			const connection = createAppServerDaemonLauncher({
@@ -680,7 +683,7 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IThemeMainService, this.themeMainService);
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
-		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, new ChecksumService()));
+		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(fileURLToPath(new URL(`../../../../${hostIntegrityExecutable}`, import.meta.url))))));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
@@ -1357,7 +1360,7 @@ export class AshApplication extends Disposable {
 		}, connectionKind);
 		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile) {
-			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile });
+			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile });
 			resources.add(this.developmentAppServerReloader.value.registerConnection(connection.launcher, supervisor));
 		}
 		return supervisor;
@@ -2042,7 +2045,7 @@ export class AshApplication extends Disposable {
 					if (authConnection) { windowDisposables.add(authConnection.launcher); }
 					const authentication = windowDisposables.add(new ChatGPTAuthentication(authConnection ? { enabled: true, launcher: authConnection.launcher } : { enabled: false }));
 					if (authConnection?.generationFile) {
-						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile: authConnection.generationFile }); }
+						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile: authConnection.generationFile }); }
 						windowDisposables.add(this.developmentAppServerReloader.value.registerConnection(authConnection.launcher, authentication));
 					}
 					const chatGPT = windowDisposables.add(this.windowServices.createInstance(ChatGPTTransport, {
@@ -2084,8 +2087,9 @@ export class AshApplication extends Disposable {
 								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
 							}
 							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
+							// SSH owns a remote Workbench connection; its directory is granted on that connection.
 							const relay = resources.add(isSSHAgentHost(target)
-								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id })
+								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
 								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
 							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
 							return Object.assign(resources, { connection: target });

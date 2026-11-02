@@ -177,6 +177,27 @@ test('History skips a Custom View whose contribution was removed', async () => {
 	assert.equal(view.canNavigateBack, false);
 });
 
+test('History distinguishes stateful pages and skips a removed state within the same contribution', async () => {
+	using sessions = new FakeSessionService([session('first', 'first-thread')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	const states = new Set(['pin-one', 'pin-two']);
+	using registration = custom.registerCustomView({ id: 'canvas', ctor: new SyncDescriptor(TestCustomView), acceptsState: state => states.has(state) }, { restore: false });
+	using view = createView(sessions, storage, custom);
+	await view.initialize();
+	custom.showCustomView('canvas', { state: 'pin-one' });
+	custom.showCustomView('canvas', { state: 'pin-two' });
+	view.navigateBack();
+	assert.equal(custom.activeCustomViewOpen.get()?.state, 'pin-one');
+	view.navigateForward();
+	assert.equal(custom.activeCustomViewOpen.get()?.state, 'pin-two');
+	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
+	states.delete('pin-one');
+	view.navigateBack();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(view.canNavigateBack, false);
+});
+
 test('welcome completion persists for a durable catalog and stays incomplete for drafts alone', async () => {
 	using storage = createTestStorage();
 	using drafts = new FakeSessionService([]);
@@ -584,6 +605,7 @@ class FakeSessionService implements ISessionsManagementService {
 	whenDirectoriesReady(): Promise<void> { return Promise.resolve(); }
 
 	async initialize(): Promise<void> { }
+	async refresh(): Promise<void> { }
 	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 

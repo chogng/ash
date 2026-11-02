@@ -11,8 +11,8 @@ import { CancellationToken, CancellationTokenSource } from '../../../../base/com
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { normalizeExtensionHostSnapshot } from '../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../../platform/extensions/browser/extensionHostProtocol.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, JsonValue } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { SpeechService } from '../../../contrib/speech/browser/speechService.js';
 import { KeywordRecognitionStatus, SpeechToTextStatus, TextToSpeechStatus, type ISpeechToTextEvent, type ISpeechToTextSession, type ISpeechProvider } from '../../../contrib/speech/common/speechService.js';
 import { MainThreadSpeech } from '../../browser/mainThreadSpeech.js';

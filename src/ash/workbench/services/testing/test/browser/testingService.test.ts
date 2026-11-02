@@ -134,6 +134,7 @@ class FakeTaskService extends Disposable implements ITaskService {
 	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
+	async getWorkspaceTasks() { return this.tasks; }
 	async refresh() { return this.tasks; }
 	async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this._register(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
 	async terminate(run: ITaskRun) { (run as FakeTaskRun).finish('canceled'); }

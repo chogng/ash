@@ -19,6 +19,7 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
 import { getIssueLabel, getPullRequestLabel, type IResolvedSessionIssue, type IResolvedSessionPullRequest } from '../../github/common/types.js';
+import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 
 /** Shows durable Issue associations and PRs resolved for the active Session. */
 export class SessionChatInputToolbar extends Disposable {
@@ -44,7 +45,7 @@ export class SessionChatInputToolbar extends Disposable {
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
-		this.domNode.className = 'ash-session-chat-input-prs';
+		this.domNode.className = `ash-session-chat-input-prs ${chatInputStackSlotClass}`;
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
 		container.append(this.domNode);
@@ -104,7 +105,10 @@ export class SessionChatInputToolbar extends Disposable {
 				);
 			},
 		}));
-		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(toDisposable(() => {
+			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
+			this.domNode.remove();
+		}));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(model.onDidChange(() => this.render()));
 	}
@@ -137,6 +141,7 @@ export class SessionChatInputToolbar extends Disposable {
 		}
 		this.renderIssues();
 		this.domNode.hidden = !this.model.sessionId;
+		setChatInputStackSlot(this.domNode, this.model.sessionId ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 	}
 
 	private renderIssues(reader?: IReader): void {

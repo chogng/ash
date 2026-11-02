@@ -46,6 +46,7 @@ suite('Conversation links', () => {
 		const announcements: string[] = [];
 		services.registerInstance(IAccessibilityService, { status: message => { announcements.push(message); } } as IAccessibilityService);
 		services.registerInstance(IAppServerApi, {
+			isAvailable: true,
 			get connectionGeneration() { return generation; },
 			getConnectionState: async () => 'ready',
 			getSlashCommands: async () => [],

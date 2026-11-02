@@ -413,7 +413,8 @@ export class ViewLayout extends Disposable {
 	}
 
 	public getLineNumberAtVerticalOffset(verticalOffset: number): number {
-		return this.linesLayout.getLineNumberAtVerticalOffset(verticalOffset) + 1;
+		// The internal index can equal lineCount below the text; callers need an existing line.
+		return Math.min(this.linesLayout.lineCount, this.linesLayout.getLineNumberAtVerticalOffset(verticalOffset) + 1);
 	}
 
 	public isAfterLines(verticalOffset: number): boolean {

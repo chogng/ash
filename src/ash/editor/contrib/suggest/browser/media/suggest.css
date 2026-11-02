@@ -21,7 +21,7 @@
 
 .stanza-editor-completion-option {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+	grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
 	gap: 8px;
 	align-items: center;
 	box-sizing: border-box;

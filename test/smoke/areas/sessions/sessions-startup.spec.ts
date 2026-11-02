@@ -35,6 +35,7 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		const opened = application.waitForEvent('window');
 		await workbench.page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
 		const agents = await opened;
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const input = agents.getByRole('textbox', { name: 'Chat message', exact: true });
 		await expect(input).toBeEditable();
 		const editor = new Editor(agents.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first());
@@ -43,6 +44,7 @@ test('Agents starts its connection before loading the page and reconnects on rel
 		await editor.waitForEditorContents(value => value === 'Keep this draft after reload');
 		expect(await application.evaluate(({ app }) => (app as StartupProbeApp).sessionsStartupProbe.events)).toEqual(['connection-started', 'page-loading']);
 		await agents.reload();
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(input).toBeEditable();
 		await editor.waitForEditorFocus();
 		await agents.keyboard.press('ControlOrMeta+A');

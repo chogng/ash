@@ -1,6 +1,128 @@
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import type { IPlaywrightService } from '../../browserView/common/playwrightService.js';
+import type { IBrowserViewOwner, IBrowserViewNetwork } from '../../browserView/common/browserView.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type * as Agent from './agent.js';
+import type { IProjectService } from '../../projects/common/projectService.js';
+import type { ISecretStorageStatusService } from '../../secrets/common/secrets.js';
+import type { IMessageHistoryService } from '../../messageHistory/common/messageHistory.js';
+import type { IExtensionBackendApi } from '../../extensions/common/extensionBackendApi.js';
+import type { ISymphonyBackend } from '../../symphony/common/symphonyService.js';
+import type { IInstructionService } from '../../instructions/common/instructionService.js';
+import type { IFileSearchService } from '../../search/common/fileSearch.js';
+import type { IAssetService } from '../../assets/common/assetService.js';
+import type { IIssueReporterService } from '../../issue/common/issue.js';
+import type { IGitHubService } from '../../github/common/githubService.js';
+import type { ILocalGitService } from '../../git/common/localGitService.js';
+import type { IBackupService } from '../../backup/common/backup.js';
+import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
+import type { IChannelService } from '../../collab/common/channelService.js';
+import type { ICallService } from '../../call/common/callService.js';
+import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
+import type { IMemoriesService } from '../../memories/common/memoriesService.js';
+import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
+import type { IAppServerApi, IResourceApi, IServerEventApi, IAppServerSkillApi, IAppServerHookApi } from './appServerApi.js';
+import type { IExtensionApi } from '../../extensions/common/extensionApi.js';
+import type { IFileApi } from '../../files/common/fileApi.js';
+import type { ISyntaxApi } from '../../syntax/common/syntaxApi.js';
+import type { IContentSearchConfigurationService } from '../../search/common/search.js';
+import type { IContentSearchApi } from '../../search/common/searchApi.js';
+import type { IAgentModelsService } from '../../models/common/agentModels.js';
+import type { ILanguageServerService } from '../../language/common/languageServerService.js';
+import type { ITerminalProcessService } from '../../terminal/common/terminal.js';
+import type { IDocumentCollaborationApi } from '../../collab/common/documentCollaborationApi.js';
+import type { ICodebaseApi } from '../../codebase/common/codebaseApi.js';
+import type { IConnectorApi } from '../../connectors/common/connectorApi.js';
+import type { IToolSearchApi } from '../../toolSearch/common/toolSearchApi.js';
+import type { ILanguageApi } from '../../language/common/languageApi.js';
+import type { IPluginManagementApi } from '../../extensionManagement/common/pluginManagementApi.js';
+import type { IExtensionHostApi } from '../../extensions/common/extensionHostApi.js';
+import type { ICodebaseSymbolsApi } from '../../codebaseSymbols/common/codebaseSymbolsApi.js';
+import type { IExtensionManagementApi } from '../../extensionManagement/common/extensionManagementApi.js';
+import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
+import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
+import type { IAgentToolsApi } from './agentToolsApi.js';
+import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusService.js';
+import type { IMcpServerManagementService } from '../../mcp/common/mcpServerManagementService.js';
+import type { IAgentExecutionSettingsService } from './agentExecutionSettingsService.js';
+import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
+import type { IAccountApi } from '../../accounts/common/accountApi.js';
+import type { ITurnChangesApi } from '../../turnChanges/common/turnChangesApi.js';
+import type { IAutomationBackendService } from '../../automations/common/automation.js';
+import type { ITeamApi } from '../../teams/common/teamApi.js';
+import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
+import type { ITestExecutionService } from '../../testing/common/testExecutionService.js';
+
+/** Domain capabilities borrowed from one backend connection. The runtime owns their lifetime and recovery. */
+export interface IAgentConnection {
+	readonly browserHost?: IAgentBrowserHostConnection;
+	readonly tcp?: import('../../network/common/tcp.js').ITcpService;
+	readonly workspaceConfigurationFiles?: IWorkspaceConfigurationFileApi;
+	/** Connection-owned callback registrations and immutable context transfer leases. */
+	readonly contextResourceHost?: IDisposable;
+	/** Available when the host supplies profile-backed recovery storage. */
+	readonly backup?: IBackupService;
+	readonly assets: IAssetService;
+	readonly projects: IProjectService;
+	readonly testing: ITestExecutionService;
+	readonly calls?: ICallService;
+	readonly channels?: IChannelService;
+	readonly agentVoice?: IAgentVoiceService;
+	readonly automation?: IAutomationBackendService;
+	readonly messageHistory?: IMessageHistoryService;
+	readonly symphony?: ISymphonyBackend;
+	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
+	readonly memories?: IMemoriesService;
+	readonly approvalEnvironment?: IApprovalEnvironmentService;
+	readonly appServer: IAppServerApi;
+	readonly accounts: IAccountApi;
+	readonly completions: IAgentHostInputCompletionService;
+	readonly session: IAgentSessionService;
+	readonly teams: ITeamApi;
+	readonly model: IAgentModelsService;
+	readonly secretStorage: ISecretStorageStatusService;
+	readonly thread: IAgentThreadService;
+	readonly turn: IAgentTurnService;
+	readonly turnChanges: ITurnChangesApi;
+	readonly skills: IAppServerSkillApi;
+	readonly instructions: IInstructionService;
+	readonly languageServers: ILanguageServerService;
+	readonly documentCollaboration: IDocumentCollaborationApi;
+	readonly resource: IResourceApi;
+	readonly extensions: IExtensionApi;
+	readonly extensionHost: IExtensionHostApi;
+	readonly extensionBackend: IExtensionBackendApi;
+	readonly fs: IFileApi;
+	readonly syntax: ISyntaxApi;
+	readonly language: ILanguageApi;
+	readonly fileSearch: IFileSearchService;
+	readonly contentSearch: IContentSearchApi;
+	readonly contentSearchConfiguration: IContentSearchConfigurationService;
+	readonly terminal: ITerminalProcessService;
+	readonly events: IServerEventApi;
+	readonly codebase: ICodebaseApi;
+	readonly codebaseSymbols: ICodebaseSymbolsApi;
+	readonly connectors: IConnectorApi;
+	readonly plugins: IPluginManagementApi;
+	readonly localGit: ILocalGitService;
+	readonly extensionManagement: IExtensionManagementApi;
+	readonly toolSearch: IToolSearchApi;
+	readonly workspaceTrust: IWorkspaceTrustApi;
+	readonly agentCapabilities: IAgentCapabilitiesService;
+	readonly agentTools: IAgentToolsApi;
+	readonly mcpServerStatus: IMcpServerStatusService;
+	readonly mcpServerManagement: IMcpServerManagementService;
+	readonly traceSettings: ITraceSettingsService;
+	readonly executionSettings: IAgentExecutionSettingsService;
+	readonly networkDiagnostics: INetworkDiagnosticsService;
+	readonly issueReporter: IIssueReporterService;
+	readonly github: IGitHubService;
+	readonly hooks: IAppServerHookApi;
+}
+
+export const IAgentConnection = createServiceIdentifier<IAgentConnection>('agentConnection');
 
 export const CanvasesEnabledSettingId = 'chat.canvases.enabled';
 
@@ -27,6 +149,8 @@ export interface IAgentCanvasOpenRequest {
 }
 
 export interface IAgentSessionService {
+	readonly onDidChangeSession: Event<Agent.AgentSessionChange>;
+	readonly onDidDeleteSession: Event<Agent.SessionId>;
 	/** Collects process logs from the runtime owning this Session, using connection-owned resources. */
 	collectDebugLogs(params: Agent.SessionReadParams, signal?: AbortSignal): Promise<{
 		readonly files: readonly {
@@ -58,6 +182,10 @@ export interface IAgentSessionService {
 }
 
 export interface IAgentThreadService {
+	canCreateSideChat(sessionId: string): boolean;
+	createSideChat(params: Agent.SessionMutationParams & {
+		readonly threadId: string; readonly sourceTurnId: string; readonly title: string; readonly selection?: string;
+	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	fork(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly title: string;
@@ -162,3 +290,22 @@ export interface IAgentVoiceService {
 	pttUp(id: string): Promise<void>;
 	rejectTask(request: Agent.AgentVoiceTaskRequest): Promise<void>;
 }
+
+/** The renderer protocol owner binds a secondary connection without exposing its transport client. */
+export interface IAgentBrowserHostConnection {
+	register(playwright: IPlaywrightService, configuration: IConfigurationService, canvases: IAgentCanvasHost, scope: IAgentBrowserHostScope, resolveNetwork: (owner: IBrowserViewOwner) => IBrowserViewNetwork | undefined): IDisposable;
+}
+
+export interface IAgentBrowserHostScope {
+	readonly providerId: string;
+	toFrontendIdentity(backendId: string): string;
+	toBackendIdentity(frontendId: string): string | undefined;
+}
+
+/** Host-owned discovery; the input editor owns presentation, edits and context admission. */
+export interface IAgentHostInputCompletionService {
+	readonly onDidChangeConnection: Event<void>;
+	getTriggerCharacters(sessionId?: string): readonly string[];
+	complete(request: Agent.AgentHostInputCompletionRequest, signal: AbortSignal): Promise<readonly Agent.AgentHostInputCompletionItem[]>;
+}
+export const IAgentHostInputCompletionService = createServiceIdentifier<IAgentHostInputCompletionService>('agentHostInputCompletionService');

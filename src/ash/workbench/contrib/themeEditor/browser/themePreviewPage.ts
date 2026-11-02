@@ -1,3 +1,5 @@
+import { IAgentSessionsService } from '../../chat/browser/agentSessions/agentSessionsService.js';
+import type { IAgentSessionsModel } from '../../chat/browser/agentSessions/agentSessionsModel.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -103,7 +105,23 @@ class ChatPreviewPane extends ChatViewPane {
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
-		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
+		const scope = instantiationService.createChild();
+		super(container, options, commandService, layoutService, scope, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
+		this._register(scope);
+		const owner = this;
+		const model: IAgentSessionsModel = {
+			onDidChangeSessions: this.changed.event, state: 'ready', error: undefined,
+			get sessions() {
+				return owner.entries.map(entry => ({
+					id: entry.id, resource: URI.from({ scheme: 'theme-preview', path: `/chat/${entry.id}` }),
+					label: entry.label, description: '', kind: 'draft' as const, target: { untitledSessionId: entry.id },
+					active: owner.selected === entry.id, isArchived: () => false, isPinned: () => false,
+					open: () => owner.activatePane(entry.id),
+				}));
+			},
+			getSession: resource => model.sessions.find(session => session.resource.toString() === resource.toString()),
+		};
+		scope.registerInstance(IAgentSessionsService, { model, getSession: resource => model.getSession(resource) });
 	}
 
 	public initialize(): void {
@@ -144,21 +162,12 @@ class ChatPreviewPane extends ChatViewPane {
 				this.paneHost, id, model, () => this.activatePane(this.entries[1]!.id),
 				this.contextMenuService, this.contextViewService,
 				this.commandService, this.accessibleViews, this.notifications, this.opener,
-				this.editorService, undefined, undefined,
+				this.editorService, undefined, undefined, undefined,
 			));
 			this.entries.push({ id, label, pane });
 		}
 		this.openedPaneIds = this.entries.map(entry => entry.id);
-		const owner = this;
-		this.initializeSessionsControl({
-			onDidChange: this.changed.event, state: 'ready', error: undefined,
-			get items() {
-				return owner.entries.map(entry => ({
-					id: entry.id, title: entry.label, description: '', kind: 'draft' as const,
-					active: owner.selected === entry.id, getActions: () => [], open: () => owner.activatePane(entry.id),
-				}));
-			},
-		}, () => this.activatePane(this.entries[1]!.id));
+		this.initializeSessionsControl(() => this.activatePane(this.entries[1]!.id), () => [], () => this.focusInput());
 		this.activatePane(this.entries[0]!.id);
 		this.updateSessionsLayout();
 		createPreviewDraft = () => this.activatePane(this.entries[1]!.id);
@@ -183,7 +192,7 @@ class ChatPreviewPane extends ChatViewPane {
 		this.changed.fire();
 	}
 	public override async openInNewWindow(): Promise<void> { throw chatUnavailable(); }
-	public override createQuickChat(): IQuickChatSession { throw chatUnavailable(); }
+	public override createEmbeddedChat(): IQuickChatSession { throw chatUnavailable(); }
 }
 
 if (chatPreview) {
@@ -294,7 +303,7 @@ const workbench = resources.add(
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
-			...(chatPreview ? ['workbench.contrib.chatEnablement', 'workbench.contrib.chatInputEditor'] : []),
+			...(chatPreview ? ['workbench.contrib.chatSetup', 'workbench.contrib.chatInputEditor'] : []),
 			...(scmPreview ? ['workbench.contrib.scmRepositories'] : []),
 			'workbench.contrib.layoutActionsContext',
 			'workbench.contrib.modernUI',

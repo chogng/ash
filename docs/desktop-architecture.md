@@ -29,10 +29,12 @@
 
 ## 1. 目标
 
+下述 Electron 分工描述当前宿主。产品退出 Node、Rust 宿主和前端渲染演进的目标与未完成阶段见 [Rust 运行时 roadmap](../TODO.md#roadmap--rust-运行时与-node-退场)，不能把当前 Electron 依赖视为最终边界。
+
 `ash` 是 Ash 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
 Session、Thread、Turn、ThreadItem、审批策略或持久化状态机。
 
-Desktop 只能通过版本化 App Server API 使用 crates：
+Desktop 的业务能力通过版本化 App Server API 使用 crates；启动级宿主日志使用下述独立 Rust 模块，不能成为绕过领域 API 的入口：
 
 ```text
 Renderer
@@ -719,21 +721,24 @@ Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露
 构建后的 preload 由 `build/desktop/host.ts` 检查这一约束。
 
 `createElectronRendererApi()` 组装领域化、强类型、可枚举的 `AshElectronRendererApi`。Electron 系统能力经平台适配器读取；跨宿主领域能力由其父接口
-`IRendererHost` 定义，Electron 专属能力保持以下精确形状：
+`workbench/browser/rendererApi.ts` 中仅供启动装配使用的 `IWorkbenchHost` 定义，Electron 专属能力由
+`workbench/electron-browser/rendererApi.ts` 声明：
 
 ```ts
-interface AshElectronRendererApi extends IRendererHost {
+interface AshElectronRendererApi extends IWorkbenchHost {
   readonly environment: IRuntimeEnvironment;
-  readonly browserView: IBrowserViewService;
-  readonly configuration: IConfigurationApi;
+  readonly keyboardLayout: INativeKeyboardLayoutApi;
+  readonly userKeyboardLayout: IUserKeyboardLayoutApi;
   readonly nativeContextMenu: INativeContextMenuApi;
-  readonly nativeMenubar: INativeMenubarApi;
+  readonly nativeHost: INativeHostApi;
+  readonly localFiles: IFileSystemProvider;
+  readonly userDataHome: URI;
   readonly workspace: IWorkspaceContextApi;
 }
 ```
 
-Workbench composition root 是聚合 `IRendererHost` 的唯一产品消费者：它把每个 transport
-capability 注入对应的领域 Service。Contribution 只能依赖 `IChatService`、`IGitService`、
+Workbench composition root 是聚合 `IWorkbenchHost` 的唯一产品消费者：它把每个 transport
+capability 注入对应的领域 Service，不注册全局宿主总服务。Contribution 只能依赖 `IChatService`、`IGitService`、
 `IContentSearchService`、`ITerminalService` 等前端契约和前端自有领域类型，不能取得整个
 Renderer Host，也不能导入生成 DTO。UI 与领域代码不能直接导入 sandbox globals；该桥接只由 IPC 等平台传输适配器消费。禁止提供绕过领域 capability 的通用 App Server 调用：
 
@@ -749,7 +754,7 @@ execute(method: string, params?: unknown): Promise<unknown>
 | ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 配置              | `IConfigurationService`（`configuration.ts`） | `IFileService` 的 Disk／IndexedDB provider 与通用文件 IPC                                                               | Workbench 创建窗口级 service                                                                                                                                                   |
 | 生命周期          | `ILifecycleService`                           | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等 joiner；Desktop 与 Agents 的入口加入日志 flush                                                                                               |
-| 日志              | `ILogService` / `ILogSink`                    | Console、System Output 与 Desktop 文件 sinks；Main `LoggerService` 拥有文件                                             | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供                                                                                                                  |
+| 日志              | `ILogService` / `ILogSink`                    | Console、System Output 与 Desktop 文件 sinks；Rust `host-logs` 拥有文件，Main `LoggerService` 适配管道                  | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供                                                                                                                  |
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService`        | Browser、Electron Main adapters                                                                                         | Connector host 注入适配器                                                                                                                                                      |
 | 编辑器打开        | `IEditorService`                              | `BrowserEditorService`                                                                                                  | Workbench 把具体 `EditorPart` 封装在 service 后面                                                                                                                              |
 | 窗口宿主操作      | `IWorkbenchHostService`                       | `WorkbenchWindow`                                                                                                       | Workbench 注册当前窗口实现                                                                                                                                                     |
@@ -985,13 +990,20 @@ Workspace。IPC 订阅保护仍在使用的 scope；真实目录、Agents、Appl
 状态不参与这项清理。App Server 的业务数据继续由 Rust 拥有。
 
 Desktop 结构化日志经 `platform/log/common/logIpc.ts` 与
-`platform/log/electron-main/logIpc.ts` 到达 `platform/log/node/loggerService.ts`。
+`platform/log/electron-main/logIpc.ts` 到达 `platform/log/electron-main/loggerService.ts`。
+Electron adapter 仅传递有界、顺序的私有管道帧；`crates/host-logs` 拥有文件写入、轮转、清理和读取，独立 `ash-host-logs` executable 随 Desktop host 构建和打包。不依赖 App Server 业务连接，不启动业务服务，也不链接 Node 原生绑定。
 每次启动在 Electron logs 目录创建独立会话目录，保存 `main.log` 与 `window-<id>.log`；
 记录时间、级别、类别、消息、错误栈、来源和写入进程 PID。Main 的连接阶段日志包含窗口 ID、
 连接 generation、前后状态及阶段耗时；`ready` 仍由 Renderer 完成协议初始化后的原有确认产生。
 窗口关闭等待日志 flush，进程退出等待文件队列结束。每个来源保留三份不超过 5 MiB 的日志，
 超出单条限制的记录报告错误；后台维护保留当前会话和最新九个旧会话，只删除日志 owner
 识别的会话目录，并在删除前确认目标位于 logs 目录内。
+
+日志 helper 是 Electron 过渡期的宿主基础设施，初始化早于业务窗口。Rust 产品宿主接管后直接复用 Rust 模块，移除 helper 进程适配。helper 故障拒绝未完成请求并报告到宿主控制台，不重放未知结果的写入，也不切回 Node 文件实现。已有 JSONL 和历史会话文件继续可读，后端原始日志保持其 daemon owner。
+
+安装完整性校验由独立 `ash-host-integrity` executable 负责清单验证、顺序文件扫描和 SHA-256；Electron 的 checksum channel 只绑定安装根目录、缓存当次结果并转换 URI。helper 与日志一样按内容摘要发布，打包仅携带选定版本，不依赖 App Server 或 CLI 产品。扫描通过目录 capability 限制在安装根目录内，仅接受普通文件，特殊文件不会阻塞等待；macOS 对签名后的最终文件重新生成清单，再封存应用签名。开发模式不扫描安装目录；缺失文件返回失败比较，非法清单或执行失败使检查失败，应用释放服务时终止未结束的扫描。
+
+开发构建日志属于 `build/` 工具，不由产品 `src/` 提供 writer；开发工具链的运行时迁移与默认产品退出 Node 分开验收。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
 Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用
@@ -1048,7 +1060,7 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:w
 Workbench 开发入口，本地文件夹由浏览器授权的 `HTMLFileSystemProvider` 直接读写，内容搜索通过
 `FileContentSearchService` 遍历同一文件服务；用户配置和备份写入 IndexedDB。内置声明式扩展及资源
 由构建生成的 Browser catalog 提供，可信开发扩展的 `browser` 入口通过页面持有的 Worker 执行。
-`IRendererHost.hasAppServer` 区分宿主能力与暂时断线：独立 Web 不创建 App Server 语言和语法 provider，
+`IAppServerApi.isAvailable` 区分宿主能力与暂时断线：独立 Web 不创建 App Server 语言和语法 provider，
 不读取后端账户，进程终端、任务和调试命令按能力禁用。Git 和 Agent 操作仍需连接后端。
 `build:web` / `start:web` 提供同一独立 Web 模式。当前本地
 `dev:web:full` 与 `build:web:full` / `start:web:full` 使用受管理 Rust App Server 的认证
@@ -1073,8 +1085,8 @@ Workbench 的“常规 → 听写”和 Sessions 的“常规”页使用同一�
 由 `chat.shared.contribution.ts` 注册服务与听写产品设置；同目录的输入会话负责目标编辑器的转写插入。
 `workbench/contrib/speech` 的 `ISpeechService` 拥有扩展语音 provider 与取消令牌约束的识别、合成和关键词会话。
 听写服务通过该公开契约使用扩展识别；录音无障碍提示合并两个服务的实际录音状态，避免重复播放。
-`platform/renderer/common/dictation.ts` 声明宿主听写能力及转写后端的领域契约，
-`platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.ts` 转换现有连接上的 App Server RPC 与通知；
+Ash 的统一本地／云端／Codex 听写后端归属 `platform/dictation`。`platform/dictation/common/dictation.ts` 声明宿主听写能力及转写后端的领域契约，
+`platform/dictation/browser/appServerVoiceCodeTranscriptionBackend.ts` 转换现有连接上的 App Server RPC 与通知；
 `workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.ts` 拥有云端／订阅听写会话、
 资源隔离与断连清理，通过配置服务和 `contrib/chat/common/constants.ts` 解析后端与语言，不导入生成协议。
 `IChatSpeechToTextService` 与 `IVoiceCodeTranscriptionClient` 的公开成员对应本地 VS Code 契约，
@@ -1082,7 +1094,7 @@ Workbench 的“常规 → 听写”和 Sessions 的“常规”页使用同一�
 PCM16 音频通过 `dictation/audio` 按资源顺序送往 App Server。本地推理和模型准备
 交给 `ILocalTranscriptionService`，模型库存与准备由 `ILocalTranscriptionModelService` 提供；
 两个本地服务标识解析到同一个窗口实例，Rust 管理凭据和识别资源。TUI 仍使用既有后端设备采音。
-旧 `platform/dictation`、`workbench/services/dictation` 目录及 Cowork 的听写服务副本已删除。
+旧 `workbench/services/dictation` 目录及 Cowork 的听写服务副本已删除。
 Workbench 和 Sessions 各自在窗口服务容器中注册一个听写服务，输入区通过构造注入使用它，
 不各自创建录音状态。`dictationSession.ts` 的标准函数绑定真实 `ICodeEditor`，负责编辑器归属、
 选区插入、撤销及提交统计。Ash 的 `DictationInput` 负责按钮、准备检查、临时预览及终端/文本框目标，
@@ -1161,9 +1173,9 @@ batching、resize coalescing、增量读取、两个游标、命令事件排序�
 实例绑定原始键盘和鼠标输入，Tasks、Debug 和 voice 使用 `sendText`。管理器 write/resize
 的 Promise 等待后端 RPC 确认，关闭或断线取消等待，恢复后不回放旧输入；确认不代替命令完成事件。
 process contract 位于
-platform layer 的 `ITerminalProcessService`。`IRendererHost` 直接提供该领域契约；Electron、
+platform layer 的 `ITerminalProcessService`。`IAgentConnection.terminal` 提供该领域契约；Electron、
 Vite development 和 disconnected runtime 分别实现它，wire DTO 只出现在对应 runtime
-implementation 内。Contribution 和 xterm view 都不直接调用 `IRendererHost`：
+implementation 内。Contribution 和 xterm view 都通过领域服务调用：
 
 ```text
 TerminalViewPane / xterm

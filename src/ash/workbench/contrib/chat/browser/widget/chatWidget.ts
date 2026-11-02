@@ -9,7 +9,7 @@ import { approvalModeDefinition } from '../../../../../platform/agentHost/common
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -22,15 +22,16 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
-import type { ChatTurnErrorAction } from './chatListItems.js';
+import type { ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
-import type { IChatListItem } from './chatListItems.js';
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
 import { addDisposableListener, getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
+import { IVoiceModeOnboardingService } from '../../../agentsVoice/browser/voiceModeOnboarding.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import type { IChatSessionHistoryStatus } from '../../../../../platform/chat/common/chatSessionHistory.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -45,16 +46,19 @@ import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath 
 import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ChatQueueEditor } from './input/chatInputPart.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
+import { ChatSideChatWidget } from '../chatSideChat.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
-import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
+	readonly thread?: import('../../../../services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
@@ -94,6 +98,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
+	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	public readonly input: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
 	private readonly olderHistoryElement: HTMLDivElement;
@@ -120,11 +125,13 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		editorService: IEditorService | undefined,
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
-		@IInstantiationService instantiationService: IInstantiationService,
+		private readonly viewOptions: IChatWidgetViewOptions | undefined,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IDialogService dialogs: IDialogService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super();
 		this.model = this._register(model);
@@ -252,8 +259,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				get isConnected() { return voiceClient.isConnected; },
 				toggle: () => this.runVoice(() => {
 					if (voiceClient.isActive) return voiceClient.disconnect();
-					if (model.inputState.aiDisabled) throw new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.'));
-					return voiceClient.connect(ownerDocument.defaultView!, (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+					return this.startVoiceConversation();
 				}),
 				interrupt: () => this.runVoice(() => voiceClient.stopSpeaking()),
 			},
@@ -294,8 +300,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		};
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
-			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
+			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
 		this._register(widgets.register(this));
+		this._register(scopedInstantiation.createInstance(ChatSideChatWidget, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -383,6 +390,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 	/** A floating control starts through this Chat's original source and task dispatcher. */
 	startVoiceConversation(): Promise<void> {
+		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));
+		this.voiceOnboarding.showIfNeeded();
 		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
 	}
 
@@ -416,7 +425,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
-		return this.input.acceptInput(value, options);
+		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
+	}
+
+	public async startEditing(requestId: string): Promise<void> {
+		if (this.queueEditor.value || !this.visible) return;
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		this.queueEditor.value = editor;
+		try { await editor.show(); }
+		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
 
 	private async runVoice(operation: () => Promise<void>): Promise<void> {
@@ -429,6 +446,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const model = this.model;
 		const generation = model.composerGeneration;
 		if (this.isDisposed || submissionSignal?.aborted) throw canceled();
+		if (this.viewOptions?.submitHandler && await this.viewOptions.submitHandler(text, mode, contexts, submissionSignal)) {
+			return;
+		}
+		if (this.isDisposed || submissionSignal?.aborted || generation !== model.composerGeneration) { throw canceled(); }
+
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {

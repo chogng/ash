@@ -227,6 +227,11 @@ export class SuggestController extends Disposable {
 			}
 			const position = selections[0]!.getPosition();
 			const modelVersion = this.view.viewport.textModel.version;
+			// Until a trigger's first response arrives, further typing still needs
+			// candidates for the new token rather than only cancelling the old request.
+			if (this.service.supportsTriggerCharacter(this.service.textModel.getLanguageId(), insertedText)) {
+				this.completionIsIncomplete = true;
+			}
 			const request = this.beginCompletionRequest();
 			void this.service.requestTriggerCharacter(
 				this.service.textModel.getLanguageId(),
@@ -263,6 +268,7 @@ export class SuggestController extends Disposable {
 			this.session.cancel();
 			return;
 		}
+		this.completionIsIncomplete = true;
 		const request = this.beginCompletionRequest();
 		try {
 			void this.service.request(

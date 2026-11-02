@@ -16,9 +16,9 @@ import { StartupEditorConfigurationKey, StartupPageRunnerContribution, type Star
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration<StartupEditor>({
 	key: StartupEditorConfigurationKey,
-	defaultValue: 'welcomePage',
+	defaultValue: 'agentSessionsWelcomePage',
 	parse(value: unknown): StartupEditor {
-		if (value === 'none' || value === 'welcomePage' || value === 'welcomePageInEmptyWorkbench') return value;
+		if (value === 'none' || value === 'welcomePage' || value === 'welcomePageInEmptyWorkbench' || value === 'agentSessionsWelcomePage') return value;
 		throw new TypeError(`Unknown startup editor: ${String(value)}`);
 	},
 	setting: {
@@ -29,6 +29,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			return [
 				{ value: 'none', label: localize('workbench.startupEditor.none', 'None') },
 				{ value: 'welcomePage', label: localize('workbench.startupEditor.welcomePage', 'Welcome') },
+				{ value: 'agentSessionsWelcomePage', label: localize('agentSessionsWelcome.title', 'Agent Sessions Welcome') },
 				{ value: 'welcomePageInEmptyWorkbench', label: localize('workbench.startupEditor.welcomePageInEmptyWorkbench', 'Welcome in empty workbench') },
 			] as const;
 		},

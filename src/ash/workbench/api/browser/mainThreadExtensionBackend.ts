@@ -2,11 +2,11 @@ import { IProgressService, ProgressLocation, type IProgressOptions } from '../..
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
-import { IExtensionBackendApi } from '../../../platform/agentHost/common/extensionBackendApi.js';
+import { IExtensionBackendApi } from '../../../platform/extensions/common/extensionBackendApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { type ExtensionClientSource, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { normalizeExtensionHostPayload } from '../../../platform/extensions/browser/extensionHostProtocol.js';
+import { type ExtensionClientSource, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { Emitter } from '../../../base/common/event.js';
 import { raceCancellationError, RunOnceScheduler } from '../../../base/common/async.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';

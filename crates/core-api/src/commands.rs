@@ -37,6 +37,15 @@ pub struct ForkThreadRequest {
     pub title: String,
 }
 
+/// Branches one accepted Turn without taking ownership of its running execution.
+pub struct CreateSideChatRequest {
+    pub command_id: CommandId,
+    pub source_thread_id: ThreadId,
+    pub source_turn_id: TurnId,
+    pub title: String,
+    pub selection: Option<String>,
+}
+
 /// Replaces an archived execution with a fresh branch of the same Agent.
 pub struct ReplaceThreadRequest {
     pub command_id: CommandId,

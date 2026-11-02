@@ -1,7 +1,6 @@
 .ash-chat-input-changes {
 	display: flex;
 	min-width: 0;
-	margin-bottom: var(--ash-spacing-size40);
 }
 
 .ash-chat-input-changes[hidden] {

@@ -2,7 +2,7 @@ import type { IExtensionService } from '../../../../src/ash/workbench/services/e
 import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../../../test/fixtures/academyExtension.js';
 import { MainThreadClientEditors } from '../../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
-import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../src/ash/platform/agentHost/common/extensionHostApi.js';
+import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../src/ash/platform/extensions/common/extensionHostApi.js';
 import { AdapterManager } from '../../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 import assert from 'node:assert/strict';
 import { before, test } from 'mocha';

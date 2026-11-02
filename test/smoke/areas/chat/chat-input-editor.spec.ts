@@ -9,7 +9,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toHaveClass(/empty/u);
 	await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
-	const layout = await chat.evaluate(element => {
+	const { surfaceHeight, surfaceCount, ...layout } = await chat.evaluate(element => {
 		const list = element.querySelector<HTMLElement>('.ash-chat-list-widget');
 		const input = element.querySelector<HTMLElement>('.ash-chat-input-part');
 		const composer = element.querySelector<HTMLElement>('.ash-chat-input-container');
@@ -23,7 +23,16 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 		const composerBounds = composer.getBoundingClientRect();
 		const editorBounds = editor.getBoundingClientRect();
 		const toolbarBounds = toolbar.getBoundingClientRect();
+		// A disconnected host can report a notice above an otherwise empty input.
+		// Its content height varies; the stack must add exactly one gap per visible surface.
+		const surfaces = Array.from(input.children).filter((child): child is HTMLElement =>
+			child instanceof HTMLElement && child !== composer
+			&& child.classList.contains('ash-chat-input-stack-slot')
+			&& !!(child.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING)
+			&& child.getBoundingClientRect().height > 0);
 		return {
+			surfaceHeight: surfaces.reduce((height, surface) => height + surface.getBoundingClientRect().height, 0),
+			surfaceCount: surfaces.length,
 			listHeight: list.getBoundingClientRect().height,
 			inputBottomInset: chatBounds.bottom - inputBounds.bottom,
 			composerTopInset: composerBounds.top - inputBounds.top,
@@ -47,7 +56,7 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	expect(layout).toEqual({
 		listHeight: 0,
 		inputBottomInset: 0,
-		composerTopInset: 4,
+		composerTopInset: 4 + surfaceHeight + surfaceCount * 8,
 		composerBottomInset: 30,
 		secondaryHeight: 22,
 		secondaryTopInset: 4,
@@ -206,7 +215,7 @@ test('Chat completes catalog commands from the keyboard and restores the empty i
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const editor = page.locator('.ash-chat-input-editor');
+	const editor = page.locator('.ash-chat-view-pane .ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
 	await page.keyboard.insertText('/history argument');
@@ -220,6 +229,28 @@ test('Chat completes catalog commands from the keyboard and restores the empty i
 	await input.press('ControlOrMeta+a');
 	await input.press('Backspace');
 	await expect(editor.locator('.stanza-editor-completion.visible')).toHaveCount(0);
+	await expect(editor.locator('.stanza-editor-placeholder-text')).toBeVisible();
+	await expect(input).toBeFocused();
+	await page.keyboard.insertText('/permission ');
+	await expect.poll(async () => (await editor.locator('.ash-chat-command-argument-hint').allTextContents()).join('')).toBe('<manual|auto|bypassPermissions>');
+	await page.keyboard.insertText('manual');
+	await expect(editor.locator('.ash-chat-command-argument-hint')).toHaveCount(0);
+	await input.press('ControlOrMeta+a');
+	await input.press('Backspace');
+	await input.press('Shift+Enter');
+	await input.pressSequentially('  /');
+	await expect(editor.locator('.stanza-editor-completion-label').getByText('/new', { exact: true })).toBeVisible();
+	await editor.locator('.stanza-editor-completion-label').getByText('/new', { exact: true }).click();
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  /new ']);
+	await input.press('Backspace');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  ']);
+	await input.press('ControlOrMeta+z');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  /new ']);
+	await input.press('ControlOrMeta+Shift+z');
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText(['', '  ']);
+	await expect(input).toBeFocused();
+	await input.press('ControlOrMeta+a');
+	await input.press('Backspace');
 	await expect(editor.locator('.stanza-editor-placeholder-text')).toBeVisible();
 	await expect(input).toBeFocused();
 });

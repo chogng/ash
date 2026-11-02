@@ -1,6 +1,7 @@
-import { parentPort, workerData } from 'node:worker_threads';
 import { readPdf } from './reader.js';
 import type { PdfReadRequest } from './requests.js';
 
-try { parentPort!.postMessage({ result: await readPdf(workerData as PdfReadRequest) }); }
-catch (error) { parentPort!.postMessage({ error: error instanceof Error ? error.message : String(error) }); }
+process.once('message', async (request: PdfReadRequest) => {
+	try { process.send!({ result: await readPdf(request) }); }
+	catch (error) { process.send!({ error: error instanceof Error ? error.message : String(error) }); }
+});

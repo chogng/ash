@@ -4,7 +4,7 @@ import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime } from '../../../../platform/extensions/common/extensionHostApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { SanitizeAttributeRule } from '../../../../base/browser/domSanitize.js';
 import type { MarkdownSanitizerConfig } from '../../../../base/browser/markdownRenderer.js';

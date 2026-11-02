@@ -1,8 +1,8 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { IExtensionHostApi } from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../../../platform/agentHost/browser/extensionHostApi.js';
+import { IExtensionHostApi } from '../../../../../platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../../../platform/extensions/browser/extensionHostApi.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';

@@ -10,6 +10,7 @@ import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { derived, observableValue } from '../../../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ChangesStatsWidget, getChangesStatsFilesLabel } from '../../../../../browser/changesStatsWidget.js';
+import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';
 
 /** Presents conversation snapshots and polls the optional Git provider while New Chat is visible. */
 export class ChatChangesPill extends Disposable {
@@ -32,10 +33,13 @@ export class ChatChangesPill extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this.domNode = h(container.ownerDocument, 'div', { className: 'ash-chat-input-changes' });
+		this.domNode = h(container.ownerDocument, 'div', { className: `ash-chat-input-changes ${chatInputStackSlotClass}` });
 		this.domNode.hidden = true;
 		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(toDisposable(() => {
+			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
+			this.domNode.remove();
+		}));
 		this.button = this._register(new Button(this.domNode, {
 			...defaultButtonStyles,
 			label: '',
@@ -103,6 +107,7 @@ export class ChatChangesPill extends Disposable {
 			this.focusInput();
 		}
 		this.domNode.hidden = !visible;
+		setChatInputStackSlot(this.domNode, visible ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 		if (!visible || !statistics) return;
 		this.counts.classList.toggle('partial', statistics?.partial === true);
 		this.button.label = getChangesStatsFilesLabel(statistics.files);

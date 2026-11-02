@@ -29,6 +29,14 @@
 	margin-bottom: 0;
 }
 
+/* Embedded hosts supply the page heading and outer content insets. */
+.ash-cowork
+	> .ash-chat-input-part.ash-sessions-cowork-input.cowork-composer.embedded-composer {
+	max-width: none;
+	margin: 0;
+	padding: 0;
+}
+
 .cowork-composer .ash-sessions-cowork-welcome-heading {
 	flex: 0 0 auto;
 	margin: 0 0 var(--ash-spacing-size240);

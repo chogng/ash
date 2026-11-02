@@ -3,8 +3,8 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
-import { IExtensionHostApi } from '../../../src/ash/platform/agentHost/common/extensionHostApi.js';
-import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/agentHost/browser/extensionHostApi.js';
+import { IExtensionHostApi } from '../../../src/ash/platform/extensions/common/extensionHostApi.js';
+import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/extensions/browser/extensionHostApi.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
@@ -59,7 +59,7 @@ const host = {
 		if (!response.ok) throw new Error('Markdown extension unavailable');
 		return response.json();
 	},
-	async invoke(request: import('../../../src/ash/platform/agentHost/common/extensionHostApi.js').ExtensionHostInvocationRequest, signal: AbortSignal) {
+	async invoke(request: import('../../../src/ash/platform/extensions/common/extensionHostApi.js').ExtensionHostInvocationRequest, signal: AbortSignal) {
 		const response = await fetch(`/__markdown_render?locale=${locale}&view=${encodeURIComponent(request.registrationId)}`, { signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify((request.payload as { document: unknown; }).document) });
 		if (!response.ok) throw new Error('Markdown extension failed');
 		return response.json();

@@ -18,7 +18,7 @@ function trace(scope: ISessionProviderScope, value: AgentTrace): AgentTrace {
 		threads: value.threads.map(thread => ({
 			...thread, threadId: scope.identity(thread.threadId), events: thread.events.map(record => {
 				const origin = record.event.origin;
-				return { ...record, event: { ...record.event, threadId: scope.identity(record.event.threadId), ...(isRecord(origin) ? { origin: { ...origin, ...(typeof origin.parentThreadId === 'string' ? { parentThreadId: scope.identity(origin.parentThreadId) } : {}), ...(typeof origin.sourceThreadId === 'string' ? { sourceThreadId: scope.identity(origin.sourceThreadId) } : {}) } } : {}) } };
+				return { ...record, event: { ...record.event, threadId: scope.identity(record.event.threadId), ...(isRecord(origin) ? { origin: { ...origin, ...(typeof origin.parentThreadId === 'string' ? { parentThreadId: scope.identity(origin.parentThreadId) } : {}), ...(typeof origin.contextThreadId === 'string' ? { contextThreadId: scope.identity(origin.contextThreadId) } : {}), ...(typeof origin.sourceThreadId === 'string' ? { sourceThreadId: scope.identity(origin.sourceThreadId) } : {}) } } : {}) } };
 			})
 		})),
 		...(value.overview ? { overview: { ...value.overview, threadCursors: Object.fromEntries(Object.entries(value.overview.threadCursors).map(([id, cursor]) => [scope.identity(id), cursor])) } } : {}),

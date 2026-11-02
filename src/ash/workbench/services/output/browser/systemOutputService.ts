@@ -44,7 +44,7 @@ export class SystemOutputService extends Disposable implements ILogSink {
 			);
 		});
 		if (files) {
-			logger?.info('logs', localize('output.windowLogReady', 'Window logging initialized.'));
+			logger?.trace('logs', localize('output.windowLogReady', 'Window logging initialized.'));
 			void files.list().then(sources => {
 				if (this.isDisposed) return;
 				const window = sources.find(source => source.currentWindow);

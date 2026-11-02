@@ -35,6 +35,7 @@ import { ILocalizationService } from '../../../src/ash/workbench/services/locali
 import { TestNotificationService } from './notificationFixture.js';
 import { BrowserUpdateService, createWebUpdateProvider } from '../../../src/ash/workbench/services/update/browser/updateService.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { registerTestTitlebarServices } from '../../../src/ash/workbench/test/common/testTitlebarServices.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import chinese from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
@@ -42,7 +43,7 @@ import chinese from '../../../extensions/language-pack-zh-cn/translations/workbe
 const resources = new DisposableStore();
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const root = document.querySelector<HTMLElement>('#app')!;
-const baseServices = resources.add(createTestEditorServices());
+const baseServices = resources.add(registerTestTitlebarServices(createTestEditorServices()));
 const services = resources.add(baseServices.createChild());
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);

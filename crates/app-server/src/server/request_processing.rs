@@ -97,6 +97,7 @@ impl RequestLane {
                 | ClientMethod::IssueReporterSearchCancel
                 | ClientMethod::ContentSearchCancel
                 | ClientMethod::FileFuzzyCancel
+                | ClientMethod::InputCompletionsCancel
                 | ClientMethod::FileGlobCancel
                 | ClientMethod::FsCancelElevatedWrite
                 | ClientMethod::ExtensionHostInvokeCancel

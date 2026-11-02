@@ -11,7 +11,7 @@ import { MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { MainThreadEditors } from '../../browser/mainThreadEditors.js';
 import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
-import type { ExtensionHostFleetSnapshot } from '../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionHostFleetSnapshot } from '../../../../platform/extensions/common/extensionHostApi.js';
 import type { IActionPromptOptions, IActionPromptResult, IOpenDialogOptions } from '../../../../platform/dialogs/common/dialogs.js';
 
 interface Copy {

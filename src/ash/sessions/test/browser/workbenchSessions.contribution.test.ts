@@ -1,9 +1,10 @@
+import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from '../../browser/sessionActionsService.js';
 import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
@@ -13,13 +14,14 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
@@ -97,21 +99,21 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	const api = {
 		...createDisconnectedRendererApi(),
 		session: {
+			...createDisconnectedRendererApi().session,
+			onDidChangeSession: () => { subscriptions++; return toDisposable(() => { }); },
 			async subscribeCatalog() { catalogLoads++; return { sessions: [] }; },
 			async unsubscribeCatalog() { },
 		},
 		model: { async readModel() { return null; } },
-		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
-	} as unknown as IRendererHost;
+	} as unknown as IWorkbenchHost;
 	using services = new InstantiationService();
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
-	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, api);
+	services.registerInstance(IAgentConnection, api);
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);
 	services.registerInstance(IAgentTurnService, api.turn);
-	services.registerInstance(IServerEventApi, api.events);
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
+	services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
 	using workspace = new TestWorkspaceService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);

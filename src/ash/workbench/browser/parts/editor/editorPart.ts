@@ -2,6 +2,7 @@ import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -13,7 +14,7 @@ import './media/editorpart.css';
 import { basename } from '../../../../base/common/resources.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { URI } from '../../../../base/common/uri.js';
-import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Emitter, PauseableEmitter, type Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { addDisposableListener, computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
@@ -176,7 +177,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	readonly onDidChangeModalVisibility: Event<boolean>;
 	private readonly gridSlot = this._register(new MutableDisposable<SerializableGrid<EditorGroupGridView>>());
 	private readonly gridChanges = this._register(new MutableDisposable<IDisposable>());
-	private readonly layoutEmitter = this._register(new Emitter<Dimension>());
+	private readonly layoutEmitter = this._register(new PauseableEmitter<Dimension>({ merge: events => events.at(-1)! }));
 	public readonly onDidLayout = this.layoutEmitter.event;
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
@@ -357,7 +358,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			type: 'branch', orientation: Orientation.HORIZONTAL, size: this.dimension.width, priority: LayoutPriority.Normal,
 			children: [...(rebound.type === 'branch' && rebound.orientation === Orientation.HORIZONTAL ? rebound.children : [rebound]), ...extra],
 		} : rebound;
-		this.preserveFocus(() => {
+		this.changeGrid(() => {
 			this.gridSlot.clear();
 			this.gridSlot.value = SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, combined, {
 				fromJSON: data => {
@@ -376,10 +377,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const target = this.groupHosts.get(typeof location === 'number' ? location : location.id)!;
 		if (source === target) return source.group;
 		const directions = { [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right, [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down };
-		this.preserveFocus(() => this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]));
-		this._groups.splice(this._groups.indexOf(source), 1);
-		this._groups.splice(this._groups.indexOf(target) + (direction === GroupDirection.LEFT || direction === GroupDirection.UP ? 0 : 1), 0, source);
-		this.layoutEditorContent();
+		this.changeGrid(() => {
+			this.editorGrid.moveView(source.view, Sizing.Split, target.view, directions[direction]);
+			this._groups.splice(this._groups.indexOf(source), 1);
+			this._groups.splice(this._groups.indexOf(target) + (direction === GroupDirection.LEFT || direction === GroupDirection.UP ? 0 : 1), 0, source);
+			this.layoutEditorContent();
+		});
 		return source.group;
 	}
 
@@ -579,6 +582,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private isSameEditor(left: IResourceEditorInput, right: IResourceEditorInput): boolean {
+		if (left instanceof EditorInput) return left.matches(right, this.uriIdentity.extUri);
+		if (right instanceof EditorInput) return right.matches(left, this.uriIdentity.extUri);
 		return left.editorId === right.editorId && this.uriIdentity.extUri.isEqual(left.resource, right.resource);
 	}
 
@@ -1055,10 +1060,14 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const sourceHost = this._groups[sourceIndex]!;
 		const created = this.createGroup(id);
 		const targetIndex = sourceIndex + 1;
-		this._groups.splice(targetIndex, 0, created);
-		this.preserveFocus(() => this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction));
-		this.layoutEditorContent();
-		this.notifyConstraintsChanged();
+		this.changeGrid(() => {
+			// Grid insertion can synchronously resize its parent. Publish the group only
+			// after those layout callbacks can query its registered Grid view.
+			this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction);
+			this._groups.splice(targetIndex, 0, created);
+			this.layoutEditorContent();
+			this.notifyConstraintsChanged();
+		});
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupAdded', group: created.group.getEditorState() }));
 		return created;
 	}
@@ -1068,14 +1077,18 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
 		if (this._groups.length === 1) throw new Error('EditorPart cannot remove its last group');
-		this.preserveFocus(() => this.editorGrid.removeView(host.view));
-		this._groups.splice(index, 1);
-		this.layoutEditorContent();
-		this.notifyConstraintsChanged();
-		if (this._activeGroup === host.group) {
-			const recent = this.editorsMru.find(editor => editor.groupId !== host.group.id);
-			this.setActiveGroup((this._groups.find(candidate => candidate.group.id === recent?.groupId) ?? this._groups[index] ?? this._groups[index - 1])!.group);
-		}
+		this.changeGrid(() => {
+			// Grid removal emits layout synchronously; observers must only see groups
+			// whose views still belong to that Grid.
+			this._groups.splice(index, 1);
+			this.editorGrid.removeView(host.view);
+			if (this._activeGroup === host.group) {
+				const recent = this.editorsMru.find(editor => editor.groupId !== host.group.id);
+				this.setActiveGroup((this._groups.find(candidate => candidate.group.id === recent?.groupId) ?? this._groups[index] ?? this._groups[index - 1])!.group);
+			}
+			this.layoutEditorContent();
+			this.notifyConstraintsChanged();
+		});
 		this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupRemoved', groupId: host.group.id }));
 		this.groupHosts.deleteAndDispose(host.group.id);
 	}
@@ -1086,12 +1099,19 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return index;
 	}
 
-	private preserveFocus(action: () => void): void {
+	private changeGrid(action: () => void): void {
 		const focused = this.domNode.ownerDocument.activeElement;
 		const owned = focused instanceof this.domNode.ownerDocument.defaultView!.HTMLElement && this.domNode.contains(focused);
-		action();
-		// Grid structure changes can reattach a retained pane; preserve its actual input focus.
-		if (owned && focused.isConnected) focused.focus({ preventScroll: true });
+		// Grid mutations notify before their view registry and our group list agree.
+		// Layout consumers may query every group, so publish only the completed change.
+		this.layoutEmitter.pause();
+		try {
+			action();
+			// Grid structure changes can reattach a retained pane; preserve its actual input focus.
+			if (owned && focused.isConnected) focused.focus({ preventScroll: true });
+		} finally {
+			this.layoutEmitter.resume();
+		}
 	}
 
 	private dropEditor(event: EditorTabDropEvent): void {
@@ -1267,7 +1287,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		for (const { group } of closing) {
 			for (const input of [...group.inputs]) await group.closeEditor(input, { reason: 'reset', skipConfirmation: true });
 		}
-		this.rebuildGroups(groups, layout, activeGroupIndex, retained, retainedLayout);
+		this.changeGrid(() => this.rebuildGroups(groups, layout, activeGroupIndex, retained, retainedLayout));
 		for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
 			const state = groups[groupIndex]!;
 			const group = this._groups[retained.length + groupIndex]!.group;

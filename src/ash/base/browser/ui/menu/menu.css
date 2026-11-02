@@ -12,8 +12,18 @@
 	overflow: auto;
 }
 
+[data-color-scheme="hcDark"] .ash-context-view-menu,
+[data-color-scheme="hcLight"] .ash-context-view-menu {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
 .ash-menu {
 	display: grid;
+	gap: 0;
+	box-sizing: border-box;
+	max-height: calc(100vh - var(--ash-spacing-size320));
+	overflow: auto;
 	color: var(--ash-menu-style-foreground-color, var(--ash-menu-foreground));
 	background: var(
 		--ash-menu-style-background-color,
@@ -54,6 +64,44 @@
 		--ash-menu-style-selection-background-color,
 		var(--ash-menu-selectionBackground)
 	);
+}
+
+.ash-menu:not(.pointer-navigation)
+	> .ash-action-view-item.focused
+	> .ash-button {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-menu::-webkit-scrollbar {
+	width: var(--ash-spacing-size80);
+	height: var(--ash-spacing-size80);
+}
+
+.ash-menu::-webkit-scrollbar-thumb {
+	background: var(
+		--ash-menu-style-scrollbar-background,
+		var(--ash-scrollbarSlider-background)
+	);
+}
+
+.ash-menu::-webkit-scrollbar-thumb:hover {
+	background: var(
+		--ash-menu-style-scrollbar-hover-background,
+		var(--ash-scrollbarSlider-hoverBackground)
+	);
+}
+
+.ash-menu::-webkit-scrollbar-thumb:active {
+	background: var(
+		--ash-menu-style-scrollbar-active-background,
+		var(--ash-scrollbarSlider-activeBackground)
+	);
+}
+
+.ash-menu.scrolled {
+	box-shadow: inset 0 4px 4px -4px
+		var(--ash-menu-style-scrollbar-shadow, var(--ash-scrollbar-shadow));
 }
 .ash-menu-leading-slot {
 	display: inline-flex;

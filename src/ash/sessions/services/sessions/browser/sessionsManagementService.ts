@@ -151,6 +151,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return this.initializePromise;
 	}
 
+	refresh(): Promise<void> {
+		this.initializePromise = this.loadSessions();
+		return this.initializePromise;
+	}
+
 
 	public whenDirectoriesReady(signal?: AbortSignal): Promise<void> {
 		if (this.isDisposed || signal?.aborted) { return Promise.reject(canceled()); }
@@ -209,7 +214,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
+	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
 		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
@@ -274,13 +279,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection, options?: { readonly devContainer: boolean; }): void {
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection, options?: { readonly devContainer?: boolean; readonly branchName?: string; }): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		// Once creation starts, its command identity and execution directory are immutable.
 		if (this.materializations.has(untitledSessionId)) throw new Error(localize('sessions.workspace.preparing', 'Wait for session preparation to finish before changing its workspace.'));
 		this._untitledSessions = this._untitledSessions.map(session => session === current
-			? { ...session, workspace, devContainer: options?.devContainer === true } : session);
+			? { ...session, workspace, devContainer: options?.devContainer === true, branchName: options?.branchName } : session);
 		this._onDidChange.fire();
 	}
 
@@ -297,7 +302,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
 			if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
 			const cancellation = new CancellationTokenSource();
-			const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId, { token: cancellation.token, devContainer: session.devContainer }));
+			const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId, { token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName }));
 			entry = { promise: creating, cancellation, waiters: 0, settled: false };
 			this.materializations.set(untitledSessionId, entry);
 			const owned = entry;

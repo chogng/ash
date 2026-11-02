@@ -2,6 +2,7 @@ import { toDisposable, type IDisposable } from '../../../../base/common/lifecycl
 import type { Position } from '../../../common/core/position.js';
 import type { Range } from '../../../common/core/range.js';
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
+import type { IEditorMouseEvent } from '../../../browser/editorBrowser.js';
 
 export interface HoverAnchor {
 	readonly position: Position;
@@ -27,6 +28,8 @@ export interface IRenderedHoverParts extends IDisposable {
 }
 
 export interface IEditorHoverParticipant {
+	/** Supplies a model anchor for a participant-owned widget that has no text hit position. */
+	suggestHoverAnchor?(mouseEvent: IEditorMouseEvent): HoverAnchor | null;
 	computeSync(anchor: HoverAnchor): IHoverPart[];
 	renderHoverParts(context: IEditorHoverRenderContext, parts: IHoverPart[]): IRenderedHoverParts;
 }

@@ -1,10 +1,12 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import bundledDarkTheme from '../../../extensions/theme-defaults/themes/ash-dark.json' with { type: 'json' };
 import bundledLightTheme from '../../../extensions/theme-defaults/themes/ash-light.json' with { type: 'json' };
 import bundledHighContrastDarkTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-dark.json' with { type: 'json' };
 import bundledHighContrastLightTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-light.json' with { type: 'json' };
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestEditorServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
@@ -2982,8 +2984,8 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('value');
 		const parent = StandaloneServices.initialize();
 		// Seed the host on the parent that owns the inherited label registrations.
-		if (!parent.has(IRendererHostService)) {
-			parent.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+		if (!parent.has(IAppServerApi)) {
+			registerTestWorkbenchHostServices(parent, createDisconnectedRendererApi());
 		}
 		const services = actionPreviewResources.add(parent.createChild());
 		const snapshots = actionPreviewResources.add(uriIdentityServices.createInstance(BrowserTextModelService, actionPreviewResources.add(new MemoryResourceStore([])), {}));

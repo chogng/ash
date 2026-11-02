@@ -9,6 +9,7 @@ use crate::PendingInteraction;
 use crate::PlanUpdate;
 use crate::StableTurnError;
 use crate::ThreadItem;
+use crate::ToolCallId;
 use crate::ToolMode;
 use crate::TurnId;
 use schemars::JsonSchema;
@@ -118,6 +119,11 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub pending_interaction: Option<PendingInteraction>,
+    /// Calls with durable execution-start evidence, including calls that have since finished.
+    /// Older snapshots omit this field; consumers must give results and pending interactions precedence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub started_tool_call_ids: Option<Vec<ToolCallId>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub error: Option<StableTurnError>,

@@ -5,11 +5,11 @@ import { observableValue, transaction, type IObservable } from '../../../../../b
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
+import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/automations/common/automation.js';
 import type { IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
 import type { AutomationCatalogueState, ICreateAutomationOptions, IGuardedAutomationUpdateResult, IUpdateAutomationOptions, IAutomationRunRequestResult } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { ISessionsProviderAutomations } from '../../../../services/sessions/common/sessionsProvider.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 
 /** One host's observable catalogue. It never schedules work or changes a run's authority. */
 export class AgentHostAutomationStore extends Disposable implements ISessionsProviderAutomations {
@@ -27,7 +27,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	constructor(
 		private readonly providerId: string,
 		private readonly connection: IObservable<'connecting' | 'connected' | 'disconnected'>,
-		@IRendererHostService host: IRendererHost,
+		@IAgentConnection host: IAgentConnection,
 	) {
 		super();
 		if (!host.automation) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));

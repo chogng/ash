@@ -1,3 +1,4 @@
+import { IWorkbenchHostService } from '../../../../../services/host/common/workbenchHostService.js';
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
 import '../../../../../common/theme.js';
@@ -26,7 +27,6 @@ import { ILocalizationService } from '../../../../../services/localization/commo
 import { IAppServerRemoteAgentService } from '../../../../../services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
-import { IWorkbenchHostService } from '../../../../../services/host/common/workbenchHostService.js';
 import { IPromptsService } from '../../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../common/promptSyntax/service/promptsServiceImpl.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';

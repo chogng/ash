@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
-import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
+import type { CustomModelProvider } from '../../../../../platform/models/common/agentModels.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';

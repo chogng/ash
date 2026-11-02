@@ -1,8 +1,13 @@
+.ash-icon-ash-titlebar-mark {
+	--ash-mark-duration: 780ms;
+	--ash-mark-easing: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 :where(button:is(:hover, :focus-visible))
 	.ash-icon-ash-titlebar-mark
 	.ash-icon-font-layer {
-	animation: ash-titlebar-mark-bloom 780ms cubic-bezier(0.16, 1, 0.3, 1)
-		var(--ash-mark-delay) both;
+	animation: ash-titlebar-mark-bloom var(--ash-mark-duration)
+		var(--ash-mark-easing) var(--ash-mark-delay) both;
 }
 
 .ash-icon-ash-titlebar-mark [data-ash-icon-layer="petal-center"] {

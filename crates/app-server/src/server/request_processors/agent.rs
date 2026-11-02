@@ -665,6 +665,37 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 self.context
                     .fork_session_request(mutation, parent_thread_id, title)?,
             )),
+            SessionRequest::CreateSideChat {
+                parent_thread_id,
+                source_turn_id,
+                title,
+                selection,
+            } => {
+                self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
+                let branch = self
+                    .context
+                    .agent_runtime()
+                    .create_side_chat(core_api::CreateSideChatRequest {
+                        command_id: mutation.command_id,
+                        source_thread_id: parent_thread_id,
+                        source_turn_id,
+                        title,
+                        selection,
+                    })
+                    .map_err(core_error)?;
+                self.updates.subscribe_session_thread(
+                    connection.connection_id,
+                    mutation.session_id.clone(),
+                    branch.thread_id.clone(),
+                    0,
+                );
+                self.notify_thread_updates(&branch.thread_id, 0)?;
+                self.updates.publish_session_changed(&mutation.session_id);
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&mutation.session_id)?,
+                    thread_id: branch.thread_id,
+                }))
+            }
             SessionRequest::ForkThread {
                 parent_thread_id,
                 title,
@@ -709,6 +740,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 )?,
             )),
             SessionRequest::StartTurn {
+                command_interpretation,
                 ide_window_id,
                 thread_id,
                 expected_sequence,
@@ -732,6 +764,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
                 reasoning_effort,
                 tool_mode,
+                command_interpretation.unwrap_or_default(),
                 input,
             )?)),
             SessionRequest::StartReview {
@@ -1112,7 +1145,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .mode;
         let mut normalized_input =
             self.normalize_input(Some(connection_id), &mutation.session_id, rewrite.input)?;
-        let selection = self.turn_instruction_selection(&mut normalized_input, mode)?;
+        let selection = self.turn_instruction_selection(
+            &mut normalized_input,
+            mode,
+            ash_protocol::CommandInterpretation::Product,
+        )?;
         let rewound = self
             .context
             .agent_runtime()
@@ -1458,6 +1495,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         model_selection: TurnModelSelection,
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
         requested_tool_mode: Option<ash_protocol::ToolMode>,
+        command_interpretation: ash_protocol::CommandInterpretation,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
         let tool_mode = match requested_tool_mode {
@@ -1466,7 +1504,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         };
         let mut input =
             self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
-        let selection = self.turn_instruction_selection(&mut input, mode)?;
+        let selection =
+            self.turn_instruction_selection(&mut input, mode, command_interpretation)?;
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -1485,7 +1524,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         &self,
         input: &mut Vec<UserInput>,
         mode: ash_protocol::CollaborationMode,
+        command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<TurnInstructionSelection, RpcError> {
+        if command_interpretation == ash_protocol::CommandInterpretation::Literal {
+            return Ok(TurnInstructionSelection::Agent);
+        }
         if product_command(input) != Some("/init") {
             // Analysis modes inspect workflow requests without starting their write-producing
             // orchestration. The selected approach still reaches the ordinary model Turn.

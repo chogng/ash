@@ -6,8 +6,8 @@ import { toDisposable, DisposableStore } from '../../../../../../base/common/lif
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import type { AppServerProtocolClient } from '../../../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { createAppServerVoiceCodeTranscriptionBackend } from '../../../../../../platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/renderer/common/dictation.js';
+import { createAppServerVoiceCodeTranscriptionBackend } from '../../../../../../platform/dictation/browser/appServerVoiceCodeTranscriptionBackend.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/dictation/common/dictation.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';

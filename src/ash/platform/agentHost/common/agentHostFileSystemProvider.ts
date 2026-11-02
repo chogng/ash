@@ -40,12 +40,10 @@ import {
 } from '../../files/common/files.js';
 import { workspaceRelativePath, workspaceResourceFromPath } from '../../workspace/common/workspace.js';
 import { dirname, extUri } from '../../../base/common/resources.js';
-import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.js';
+import type { FileInvalidation, IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
 import type { IWorkspaceConfigurationFileApi } from '../../workspace/common/workspaceIpc.js';
 
-type FileInvalidation = { readonly type: 'pathsChanged'; readonly dirId?: string; readonly paths: readonly string[]; }
-	| { readonly type: 'rescanRequired'; readonly dirId?: string; };
 type BinaryFile = Awaited<ReturnType<IFileApi['readBinaryFile']>>;
 type PathSensitivity = Awaited<ReturnType<IFileApi['readPathCaseSensitivity']>>['scopes'][number]['sensitivity'];
 
@@ -59,6 +57,7 @@ interface AgentHostFileSystemProviderOptions {
 	readonly directories?: () => readonly IFileSystemDirectory[];
 	/** Protocol readiness can precede directory authorization on this connection. */
 	readonly isConnectionReady?: () => boolean;
+	/** Additional scope invalidations, such as restored window directory authorization. */
 	readonly onDidChange?: Event<FileInvalidation>;
 }
 
@@ -150,6 +149,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			this.clearPathIdentity();
 		}));
 		this._register(toDisposable(() => { this.resetPathIdentities(); this.pathIdentities.clear(); this.resolvedDirectories.clear(); this.directoryRequests.clear(); }));
+		this._register(this.api.onDidChangeFiles(change => this.acceptFileChange(change)));
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
 	}
 

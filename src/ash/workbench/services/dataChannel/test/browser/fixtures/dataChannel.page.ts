@@ -12,8 +12,8 @@ import type { AppServerConnectionState } from '../../../../../../platform/agentH
 import { IContextKeyService, ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IDataChannelService, ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { DataChannelForwardingTelemetryService } from '../../../../../../platform/dataChannel/browser/forwardingTelemetryService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
-import { normalizeExtensionHostSnapshot } from '../../../../../../platform/agentHost/browser/extensionHostProtocol.js';
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from '../../../../../../platform/extensions/common/extensionHostApi.js';
+import { normalizeExtensionHostSnapshot } from '../../../../../../platform/extensions/browser/extensionHostProtocol.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';

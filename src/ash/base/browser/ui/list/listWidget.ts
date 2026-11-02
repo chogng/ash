@@ -208,21 +208,35 @@ export class List<T> extends Disposable {
 		const selectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
 		const anchorId = this.selectionAnchor === undefined ? undefined : this.itemId(this.items[this.selectionAnchor], this.selectionAnchor);
 
-		this.view.splice(start, deleteCount, elements);
-		const nextActive = focusedId === undefined ? -1 : this.indexOfId(focusedId);
+		const deleted = this.view.splice(start, deleteCount, elements);
+		const findRetainedIndex = (id: string): number => {
+			if (this.options.getId) {
+				return this.indexOfId(id);
+			}
+			// Positional IDs must follow surviving rows rather than identify their replacements.
+			const index = Number(id);
+			if (index < start) {
+				return index;
+			}
+			if (index < start + deleted.length) {
+				return -1;
+			}
+			return index + elements.length - deleted.length;
+		};
+		const nextActive = focusedId === undefined ? -1 : findRetainedIndex(focusedId);
 		if (nextActive >= 0) {
 			this._activeIndex = nextActive;
 		} else {
 			this._activeIndex = this.items.length > 0 && (this.options.mouseSupport !== false || this.options.keyboardNavigation === true) ? 0 : -1;
 		}
-		this._selectionIndexes = selectedIds.map((id) => this.indexOfId(id)).filter((index) => index >= 0);
-		const nextAnchor = anchorId === undefined ? -1 : this.indexOfId(anchorId);
+		this._selectionIndexes = selectedIds.map(findRetainedIndex).filter((index) => index >= 0);
+		const nextAnchor = anchorId === undefined ? -1 : findRetainedIndex(anchorId);
 		this.selectionAnchor = nextAnchor >= 0 ? nextAnchor : undefined;
 		this.syncRows();
 
 		const nextFocusedId = this.activeItem === undefined ? undefined : this.itemId(this.activeItem, this._activeIndex);
 		const nextSelectedIds = this._selectionIndexes.map((index) => this.itemId(this.items[index], index));
-		if (focusedId !== nextFocusedId) {
+		if (focusedId !== nextFocusedId || (focusedId !== undefined && nextActive < 0)) {
 			this.emitFocus(undefined);
 		}
 		if (!equals(selectedIds, nextSelectedIds)) {

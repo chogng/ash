@@ -34,7 +34,7 @@ function fixture() {
 	};
 	const host = { ...createDisconnectedRendererApi(), agentVoice: backend };
 	const scope: ISessionProviderScope = {
-		providerId: 'remote', services: { host } as SessionProviderServices, thread: host.thread,
+		providerId: 'remote', services: { host } as unknown as SessionProviderServices, thread: host.thread,
 		identity: value => sessionIdentity('remote', value, 'primary'),
 		backendIdentity: value => { const parsed = parseSessionIdentity(value, 'primary'); if (parsed.providerId !== 'remote') throw canceled(); return parsed.backendSessionId; },
 		assertCurrent: () => { if (retired) throw canceled(); },
@@ -101,6 +101,6 @@ test('voice absence and foreign frontend Session identities never inherit the pr
 	const voice = createSessionVoiceService(context.scope)!;
 	await assert.rejects(voice.start({ sessionId: 'same', threadId: 'thread' }, { connectionId: 'connection' }), isCancellationError);
 	assert.deepEqual(context.calls, []);
-	const missing = { ...context.scope, services: { host: createDisconnectedRendererApi() } as SessionProviderServices };
+	const missing = { ...context.scope, services: { host: createDisconnectedRendererApi() } as unknown as SessionProviderServices };
 	assert.equal(createSessionVoiceService(missing), undefined);
 });

@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test \"**/*.test.ts\"",
-    "test:prepared": "node --test \"**/*.test.ts\"",
+    "test": "node --test --test-concurrency=1 \"**/*.test.ts\"",
+    "test:prepared": "node --test --test-concurrency=1 \"**/*.test.ts\"",
     "typecheck": "bun check -p tsconfig.json --all",
     "pretest": "node protocol/generate.ts --no-build && pnpm --dir ../test/scenario compile",
     "pretypecheck": "node protocol/generate.ts --no-build"

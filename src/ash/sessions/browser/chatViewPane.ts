@@ -1,8 +1,8 @@
+import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
-import type { IQuickChatSession } from '../../workbench/contrib/chat/browser/chat.js';
-import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
+import type { IQuickChatSession, IChatWidgetViewOptions } from '../../workbench/contrib/chat/browser/chat.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { IAuxiliaryWindowService } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
@@ -28,7 +28,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { createAgentSessionsModel, createSessionItemActions } from './agentSessionsModel.js';
+import { createSessionItemActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
@@ -61,7 +61,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private failedSelectionRevision: number | undefined;
 	private readonly popouts = new Map<ChatWidget<ChatWidgetModel>, { shell: ChatAuxiliaryWindow; resources: DisposableStore; placeholder: HTMLElement; }>();
 	private readonly openingPopouts = new Map<ChatWidget<ChatWidgetModel>, Promise<void>>();
-	private quickChat: { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; } | undefined;
+	private readonly embeddedChats = new Map<ChatWidget<ChatWidgetModel>, { readonly session: IQuickChatSession; readonly placeholder: HTMLElement; readonly titleId: string; visible: boolean; }>();
+	private readonly embeddedOptions = new Map<string, IChatWidgetViewOptions>();
 	private readonly sessionsReady: Promise<void>;
 
 	constructor(
@@ -81,7 +82,6 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@ISessionGroupsService groups: ISessionGroupsService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService editorGroups: IEditorGroupsService,
@@ -92,12 +92,21 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
-		this.initializeSessionsControl(createAgentSessionsModel(sessionService, storage, groups,
-			selection => createSessionItemActions(selection, commandService, storage, notifications, () => this.openInNewWindow(selection)), preserveFocus => {
-				const focusChat = !this.sessionsSideBySide || !preserveFocus;
-				this.hideSessionsAfterSelection();
-				if (focusChat) this.focus();
-			}), () => { this.sessionService.createUntitledSession(); });
+		this.initializeSessionsControl(() => { this.sessionService.createUntitledSession(); }, item => {
+			const target = item.target;
+			const selection = 'untitledSessionId' in target
+				? sessionService.untitledSessions.find(draft => draft.untitledSessionId === target.untitledSessionId)
+				: sessionService.sessions.find(session => session.sessionId === target.sessionId);
+			if (!selection) return [];
+			const captured: SessionsViewSelection = 'untitledSessionId' in selection
+				? { kind: 'untitled', session: selection }
+				: { kind: 'session', active: { session: selection, threadId: 'threadId' in target ? target.threadId! : selection.chats[0]!.threadId } };
+			return createSessionItemActions(captured, commandService, storage, notifications, () => this.openInNewWindow(captured));
+		}, preserveFocus => {
+			const focusChat = !this.sessionsSideBySide || !preserveFocus;
+			this.hideSessionsAfterSelection();
+			if (focusChat) this.focus();
+		});
 		const storedSelection = storage.get('chat.viewState', StorageScope.WORKSPACE);
 		const restored = this.restoreViewState(storedSelection);
 		this._register(sessionService.onDidChange(() => {
@@ -111,7 +120,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
-			this.quickChat?.session.dispose();
+			for (const mount of this.embeddedChats.values()) { mount.session.dispose(); }
 			for (const popup of this.popouts.values()) popup.resources.dispose();
 			this.popouts.clear();
 			for (const pane of this.panes.values()) pane.dispose();
@@ -145,8 +154,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.sessionsReady = restoring;
 	}
 
-	protected override async restoreEditorPane(id: string): Promise<void> {
+	protected override async restoreEditorPane(id: string, signal: AbortSignal): Promise<void> {
 		await this.sessionsReady;
+		signal.throwIfAborted();
 		this.syncSessions(id);
 	}
 
@@ -284,13 +294,17 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		return this.sessionService.navigationRevision;
 	}
 
-	public override createQuickChat(parent: HTMLElement, titleId: string): IQuickChatSession {
-		this.quickChat?.session.dispose();
-		const draft = this.sessionService.createUntitledSession(localize('quickChat.title', 'Quick Chat'), undefined, undefined, false);
+	public override createEmbeddedChat(parent: HTMLElement, titleId: string, options: IChatWidgetViewOptions = {}): IQuickChatSession {
+		let disposed = false;
+		const draft = this.sessionService.createUntitledSession(localize('chat.title.new', 'New Chat'), undefined, undefined, false);
+		this.embeddedOptions.set(draft.untitledSessionId, {
+			get workspacePickerDelegate() { return disposed ? undefined : options.workspacePickerDelegate; },
+			submitHandler: (query, mode, contexts, signal) => disposed || !options.submitHandler ? Promise.resolve(false) : options.submitHandler(query, mode, contexts, signal),
+		});
 		const id = untitledSessionPaneId(draft);
 		this.syncSessions(id);
 		const pane = this.panes.get(id)!;
-		pane.model.selectMode('ask');
+		this.embeddedOptions.delete(draft.untitledSessionId);
 		const resources = new DisposableStore();
 		const retired = resources.add(new Emitter<void>());
 		setDisposableOwner(resources, this);
@@ -299,17 +313,17 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		resources.add(new Button(placeholder, {
 			...defaultButtonStyles,
 			presentation: 'quiet',
-			label: localize('quickChat.focus', 'Chat is open in Quick Chat'),
-			onClick: () => { void this.commandService.executeCommand('workbench.action.openQuickChat'); },
+			label: localize('chat.embedded.focus', 'Chat is open in another view'),
+			onClick: () => { pane.focusInput(); },
 		}));
-		let disposed = false;
 		const session: IQuickChatSession = {
 			[Symbol.dispose]: () => session.dispose(),
 			widget: pane,
 			onDidDispose: retired.event,
 			setVisible: visible => {
-				if (this.quickChat?.session !== session) return;
-				this.quickChat.visible = visible;
+				const mount = this.embeddedChats.get(pane);
+				if (mount?.session !== session) return;
+				mount.visible = visible;
 				pane.setVisible(visible);
 			},
 			reveal: () => {
@@ -322,7 +336,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			dispose: () => {
 				if (disposed) return;
 				disposed = true;
-				this.quickChat = undefined;
+				this.embeddedChats.delete(pane);
+				pane.input.render(pane.model.inputState);
 				this.paneHost.append(pane.element);
 				placeholder.remove();
 				retired.fire();
@@ -330,7 +345,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				queueMicrotask(() => { if (!this.viewDisposed) this.syncSessions(); });
 			},
 		};
-		this.quickChat = { session, placeholder, titleId, visible: true };
+		this.embeddedChats.set(pane, { session, placeholder, titleId, visible: true });
 		this.syncSessions();
 		parent.append(pane.element);
 		return session;
@@ -366,11 +381,11 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					this.openerService,
 					this.editorService,
 					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-					undefined,
+					undefined, this.embeddedOptions.get(untitledSession.untitledSessionId),
 				);
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
@@ -407,11 +422,11 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					this.openerService,
 					this.editorService,
 					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-					undefined,
+					undefined, undefined,
 				);
 				pane.bindDraftStorage({
-					read: identity => readNewChatDraftState(this.storage, identity),
-					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
 					flush: () => this.storage.flush(),
 				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
@@ -429,7 +444,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		for (const [paneId, pane] of this.panes) {
 			if (retainedPaneIds.has(paneId)) continue;
 			this.panes.delete(paneId);
-			if (this.quickChat?.session.widget === pane) this.quickChat.session.dispose();
+			this.embeddedChats.get(pane)?.session.dispose();
 			this.popouts.get(pane)?.resources.dispose();
 			pane.dispose();
 		}
@@ -437,8 +452,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		return {
 			activePaneId,
 			entries: entries.map(entry => {
-				if (this.quickChat?.session.widget === entry.pane) {
-					return { ...entry, detached: { placeholder: this.quickChat.placeholder, titleId: this.quickChat.titleId, visible: this.quickChat.visible } };
+				const embedded = this.embeddedChats.get(entry.pane);
+				if (embedded) {
+					return { ...entry, detached: { placeholder: embedded.placeholder, titleId: embedded.titleId, visible: embedded.visible } };
 				}
 				const popup = this.popouts.get(entry.pane);
 				if (!popup) {
@@ -529,7 +545,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					existing.dispose();
 				} else {
 					this.panes.delete(paneId);
-					if (this.quickChat?.session.widget === pane) this.quickChat.session.dispose();
+					this.embeddedChats.get(pane)?.session.dispose();
 					this.popouts.get(pane)?.resources.dispose();
 					pane.dispose();
 					continue;

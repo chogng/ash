@@ -52,12 +52,99 @@ use model_provider_info::ModelProviderConfig;
 use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
+
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+#[test]
+fn workspace_worktrees_can_be_listed_without_managed_thread_directories() {
+    let source = TestDir::new("workspace-worktree-source", "file.txt");
+    let checkout = source.path.join(".git").join("review");
+    for args in [
+        vec!["init", "-b", "main"],
+        vec!["add", "."],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-m",
+            "Initial",
+        ],
+        vec![
+            "worktree",
+            "add",
+            "--detach",
+            checkout.to_str().unwrap(),
+            "HEAD",
+        ],
+    ] {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&source.path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    assert!(server.dir_services.is_none());
+    let mut connection = server.product_host_connection();
+    let mut call = |id, method, params| -> serde_json::Value {
+        serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({
+                    "jsonrpc": "2.0", "id": id, "method": method, "params": params,
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap()
+    };
+    call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo": {"name": "desktop", "version": "1"}, "capabilities": {"directoryGrantsHost": {"version": 1}}}),
+    );
+    let bound = call(
+        2,
+        "env/dirs/set",
+        serde_json::json!({"dirs": [{"id": "project", "path": source.path, "grant": {"type": "host", "permissions": ["readFiles", "inspectRepository"]}}]}),
+    );
+    assert!(bound.get("error").is_none(), "{bound}");
+    let repositories = call(3, "git/repositories", serde_json::json!({}));
+    let repository_id = repositories["result"]["repositories"][0]["id"]
+        .as_str()
+        .expect("project repository");
+    let inventory = call(
+        4,
+        "git/worktree/list",
+        serde_json::json!({"repositoryId": repository_id}),
+    );
+    assert!(inventory.get("error").is_none(), "{inventory}");
+    let worktrees = inventory["result"]["worktrees"].as_array().unwrap();
+    assert_eq!(worktrees.len(), 2);
+    assert!(
+        worktrees
+            .iter()
+            .all(|worktree| worktree["state"] == "ready")
+    );
+    assert_eq!(
+        worktrees
+            .iter()
+            .filter(|worktree| worktree["current"] == true)
+            .count(),
+        1
+    );
+}
 #[derive(Default)]
 struct RequestRecordingModel {
     requests: Mutex<Vec<ash_protocol::ModelRequest>>,
@@ -253,7 +340,11 @@ fn init_does_not_import_external_instructions_into_agent_input() {
 
     server
         .agent_processor()
-        .turn_instruction_selection(&mut input, ash_protocol::CollaborationMode::Agent)
+        .turn_instruction_selection(
+            &mut input,
+            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::CommandInterpretation::Product,
+        )
         .unwrap();
 
     assert!(!input.iter().any(|item| match item {
@@ -5450,4 +5541,53 @@ fn web_session_exact_watcher_observed_withdrawal_cannot_revive_after_forget() {
         assert_eq!(std::fs::read(&path).unwrap(), b"after restriction");
         server.close_web_workspace();
     }
+}
+
+#[test]
+fn literal_messages_bypass_all_product_command_selection() {
+    let server = server();
+    for mode in [
+        ash_protocol::CollaborationMode::Agent,
+        ash_protocol::CollaborationMode::Ask,
+    ] {
+        for text in [
+            "/init",
+            "/init workspace",
+            "/develop add offline search",
+            "/team status",
+            "/advisor Question",
+            "/compact",
+        ] {
+            let mut input = vec![UserInput::Text { text: text.into() }];
+            let original = input.clone();
+            let selection = server
+                .agent_processor()
+                .turn_instruction_selection(
+                    &mut input,
+                    mode,
+                    ash_protocol::CommandInterpretation::Literal,
+                )
+                .unwrap();
+            assert!(matches!(
+                selection,
+                crate::server::operations::TurnInstructionSelection::Agent
+            ));
+            assert_eq!(input, original);
+        }
+    }
+    let mut input = vec![UserInput::Text {
+        text: "/develop add offline search".into(),
+    }];
+    let selection = server
+        .agent_processor()
+        .turn_instruction_selection(
+            &mut input,
+            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::CommandInterpretation::Product,
+        )
+        .unwrap();
+    assert!(matches!(
+        selection,
+        crate::server::operations::TurnInstructionSelection::Workflow(_)
+    ));
 }

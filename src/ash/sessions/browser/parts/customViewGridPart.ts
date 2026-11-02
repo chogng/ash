@@ -50,11 +50,16 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		scrolling.element.classList.add('ash-custom-view-scroll');
 		const page = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-page' });
 		page.dataset.customViewId = descriptor.id;
-		page.style.maxWidth = `${view.maxWidth ?? 960}px`;
+		page.style.maxWidth = descriptor.layout === 'fill' ? 'none' : `${view.maxWidth ?? 960}px`;
+		if (descriptor.layout === 'fill') {
+			scrolling.contentElement.classList.add('ash-custom-view-fill');
+			page.classList.add('fills-content');
+		}
 		const header = h(this.domNode.ownerDocument, 'header', { className: 'ash-custom-view-header' });
 		const title = h(this.domNode.ownerDocument, 'h1');
 		const description = h(this.domNode.ownerDocument, 'p');
 		const actions = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-actions' });
+		header.classList.toggle('has-toolbar', descriptor.actions?.style === 'toolbar');
 		header.append(title, description, actions);
 		page.append(header);
 		scrolling.contentElement.append(page);
@@ -74,6 +79,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 						...defaultButtonStyles,
 						label: action.label,
 						icon: action.icon,
+						iconOnly: descriptor.actions?.style === 'toolbar',
 						presentation: action.id === descriptor.actions?.primaryActionId ? 'primary' : 'quiet',
 						enabled: action.enabled,
 						onClick: () => {
@@ -86,7 +92,7 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 			lifetime.add(menu.onDidChange(update));
 			update();
 		}
-		const content = h(this.domNode.ownerDocument, 'div');
+		const content = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-body' });
 		page.append(content);
 		view.render(content);
 		view.layout(this.dimension.width, this.dimension.height);

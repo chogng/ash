@@ -1,5 +1,8 @@
 import { type FSWatcher, readFileSync, statSync, watch } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
 import { runPython } from '../python.ts';
@@ -44,7 +47,14 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 	return file === 'Cargo.toml' || file === 'Cargo.lock';
 }
 
-export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; environment?: NodeJS.ProcessEnv; } = {}): Promise<() => void> {
+export async function watchAppServer(options: {
+	skipInitial?: boolean;
+	javascriptRuntime?: 'host-provided-node' | 'packaged-node';
+	onDidBuild?: () => Promise<void>;
+	environment?: NodeJS.ProcessEnv;
+	buildLog?: string;
+	log?: (event: string, detail: object, error?: unknown) => void;
+} = {}): Promise<() => void> {
 	let buildRequested = !options.skipInitial;
 	let protocolRequested = buildRequested;
 	let fullBuildRequired = buildRequested;
@@ -60,6 +70,11 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	const watchStarted = Date.now();
 	const observedFiles = new Map<string, string>();
 	const environment = options.environment ?? process.env;
+	const log = options.log ?? ((event: string, detail: object, error?: unknown) => {
+		const message = `[app-server] ${event} ${JSON.stringify({ timestampMillis: Date.now(), processId: process.pid, ...detail })}`;
+		if (error === undefined) console.info(message);
+		else console.error(`${message}: ${error instanceof Error ? error.message : String(error)}`, error);
+	});
 	const liveDirectory = options.javascriptRuntime !== 'packaged-node' && environment.ASH_RUST_LIVE_DIRECTORY?.trim();
 	const liveBuilder = liveDirectory ? new LiveBuilder(repositoryRoot, environment) : undefined;
 
@@ -83,6 +98,7 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		throw error;
 	}
 	console.log('[app-server] Watching Rust App Server sources');
+	log('Build watcher started', { roots: ['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'], initialBuild: buildRequested, buildLog: options.buildLog });
 	if (buildRequested) void drainBuilds();
 	return stop;
 
@@ -127,12 +143,22 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 				buildRequested = false;
 				const sources = [...changedSources];
 				changedSources.clear();
+				const files = sources.map(source => relative(repositoryRoot, source).replaceAll('\\', '/')).sort();
+				const context = {
+					buildId: randomUUID(),
+					reason: sources.length ? 'source-change' : 'initial-build',
+					files: files.slice(0, 128), omittedFileCount: Math.max(0, files.length - 128),
+					...(options.buildLog ? { buildLog: options.buildLog } : {}),
+				};
+				const started = performance.now();
+				let contextDirectory: string | undefined;
 				fullBuildRequired ||= sources.length === 0 || !liveDirectory || sources.some(source => {
 					const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
 					return file === undefined || !file.endsWith('.rs');
 				});
 				let needsProtocol = protocolRequested || sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
 				protocolRequested = false;
+				log('Build started', { ...context, mode: fullBuildRequired ? 'runtime' : 'live', protocolRequested: needsProtocol });
 				try {
 					// Dependency/protocol builds retire the old semantic database before
 					// refreshing Cargo inputs. Adapter-only saves reuse it across edits.
@@ -153,14 +179,22 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 					// Only the stateless adapter has a live producer. Shared algorithms,
 					// manifests and protocols may affect other consumers and still rebuild.
 					const liveOnly = !fullBuildRequired;
-					await runBackendBuild(liveOnly);
+					// A temporary diagnostic context avoids OS command/environment size limits
+					// and is removed after the publisher has copied it into its publication record.
+					contextDirectory = await mkdtemp(join(tmpdir(), 'ash-development-build-'));
+					const contextFile = join(contextDirectory, 'context.json');
+					await writeFile(contextFile, JSON.stringify(context));
+					await runBackendBuild(liveOnly, contextFile);
 					if (!liveOnly) fullBuildRequired = false;
 					cancellation.signal.throwIfAborted();
+					log('Build completed', { ...context, mode: liveOnly ? 'live' : 'runtime', durationMillis: Math.round(performance.now() - started) });
 					if (!liveOnly) await options.onDidBuild?.();
 				} catch (error) {
 					// A failed export must be retried before the next backend build, even for a business save.
 					protocolRequested ||= needsProtocol || protocolDirectories === undefined || protocolManifestRevision !== manifestRevision;
-					if (!stopped) console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+					log(stopped ? 'Build cancelled' : 'Build failed', { ...context, durationMillis: Math.round(performance.now() - started) }, error);
+				} finally {
+					if (contextDirectory) await rm(contextDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(error => log('Build context cleanup failed', { buildId: context.buildId }, error));
 				}
 			}
 		} finally {
@@ -168,13 +202,13 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		}
 	}
 
-	async function runBackendBuild(liveOnly: boolean): Promise<void> {
+	async function runBackendBuild(liveOnly: boolean, contextFile: string): Promise<void> {
 		if (liveOnly && liveBuilder) return liveBuilder.build();
 		// Web owns a packaged Node runtime; Electron supplies Node from its host.
 		const buildArguments = options.javascriptRuntime === 'packaged-node'
 			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
 			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
-		await runPython(buildArguments, { cwd: repositoryRoot, environment, operation: 'backend build', signal: cancellation.signal });
+		await runPython(buildArguments, { cwd: repositoryRoot, environment: { ...environment, ASH_DEV_BUILD_CONTEXT_FILE: contextFile }, operation: 'backend build', signal: cancellation.signal });
 	}
 
 	function stop(): void {

@@ -1,9 +1,20 @@
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { test, suiteTeardown } from 'mocha';
+import { registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
+import { ChatQueueEditor } from '../../../browser/widget/input/chatInputPart.js';
+import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { IContextKeyService, ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IMenuService } from '../../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
+import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
+import { getSingletonServiceDescriptors } from '../../../../../../platform/instantiation/common/extensions.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
-import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatAcceptInputOptions } from '../../../browser/chat.js';
 import { registerChatQueueActions, ChatQueueMessageAction, ChatSteerWithMessageAction, ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction, ChatRemoveAllPendingRequestsAction } from '../../../browser/actions/chatQueueActions.js';
 import { IChatService, type QueuedMessage } from '../../../../../services/chat/common/chatService.js';
 import { IQuickInputService, type IQuickPick } from '../../../../../../platform/quickinput/common/quickInput.js';
@@ -14,12 +25,19 @@ import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js
 import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 registerChatQueueActions();
+const executeActions = registerChatExecuteActions();
+suiteTeardown(() => executeActions.dispose());
+
+function registerCommands(services: InstantiationService): void {
+	services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args) } as ICommandService);
+}
 
 test('queue commands carry an explicit intent to the focused composer without reading or clearing its draft', async () => {
 	using services = new InstantiationService();
+	registerCommands(services);
 	const inputs: unknown[] = [];
 	const widget = { visible: true, acceptInput: async (...args: unknown[]) => { inputs.push(args); } } as IChatWidget;
-	services.registerInstance(IChatWidgetService, { lastFocusedWidget: widget } as unknown as IChatWidgetService);
+	services.registerInstance(IChatWidgetService, { lastFocusedWidget: widget, getAllWidgets: () => [widget] } as unknown as IChatWidgetService);
 	for (const id of [ChatQueueMessageAction.ID, ChatSteerWithMessageAction.ID]) {
 		await services.invokeFunction(CommandsRegistry.getCommand(id)!);
 	}
@@ -56,6 +74,12 @@ function queueFixture() {
 	lifetime.add(toDisposable(() => container.remove()));
 	lifetime.add(setARIAContainer(container));
 	const services = lifetime.add(new InstantiationService());
+	registerCommands(services);
+	services.registerInstance(IContextKeyService, lifetime.add(new ContextKeyService()));
+	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
+	services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
+	services.registerSingleton(IActionViewItemService, () => services.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1]) as IActionViewItemService);
+	services.registerInstance(IContextMenuService, { showContextMenu: () => { throw new Error('Unexpected context menu'); } } as unknown as IContextMenuService);
 	const quickInput = lifetime.add(new TestQuickInputService({ container }));
 	const changed = lifetime.add(new Emitter<void>());
 	const hidden = lifetime.add(new Emitter<void>());
@@ -63,12 +87,20 @@ function queueFixture() {
 	const original: QueuedMessage = { sessionId: 'session', threadId: 'thread', commandId: 'queued', revision: 5, mode: 'agent', text: 'Original\nmessage', contextCount: 3, status: 'pending' };
 	let message = original;
 	let focus = 0;
-	const widget = { sessionId: 'session', threadId: 'thread', visible: true, domNode: container, onDidHide: hidden.event, onDidChangeViewModel: changed.event, focusInput: () => { focus++; } } as unknown as IChatWidget;
+	let editor: ChatQueueEditor | undefined;
+	const widget = {
+		sessionId: 'session', threadId: 'thread', visible: true, domNode: container, onDidHide: hidden.event, onDidChangeViewModel: changed.event, focusInput: () => { focus++; },
+		startEditing: async (requestId: string) => {
+			editor = lifetime.add(services.createInstance(ChatQueueEditor, widget, requestId));
+			try { await editor.show(); } finally { editor.dispose(); editor = undefined; }
+		},
+		acceptInput: async (value?: string, options?: IChatAcceptInputOptions) => editor?.acceptInput(value, options)
+	} as unknown as IChatWidget;
 	const chat = {
 		getPendingRequests: async () => [message],
 		pausePendingRequest: async (target: unknown) => { calls.push(['pause', target]); message = { ...message, status: 'paused', revision: 6 }; return message; },
 		resumePendingRequest: async (target: unknown) => { calls.push(['resume', target]); message = { ...message, status: 'pending', revision: 7 }; return message; },
-		editPendingRequest: async (target: unknown, text: string) => { calls.push(['edit', target, text]); message = { ...message, text, status: 'pending', revision: 7 }; return message; },
+		editPendingRequest: async (target: unknown, text: string, queue: unknown) => { calls.push(['edit', target, text, queue]); message = { ...message, text, status: 'pending', revision: 7 }; return message; },
 		removePendingRequest: async (target: unknown) => { calls.push(['remove', target]); return { ...message, status: 'cancelled' }; },
 		sendPendingRequestImmediately: async (target: unknown) => { calls.push(['send', target]); },
 	} as unknown as IChatService;
@@ -96,7 +128,7 @@ test('Queue edit saves multiline text at the paused revision and never uses the 
 	await ready(() => f.calls.length === 2);
 	await ready(() => !f.container.querySelector('dialog[open]'));
 	await operation;
-	assert.deepEqual(f.calls, [['pause', f.target], ['edit', { ...f.target, expectedRevision: 6 }, 'Edited\nmessage']]);
+	assert.deepEqual(f.calls, [['pause', f.target], ['edit', { ...f.target, expectedRevision: 6 }, 'Edited\nmessage', 'queued']]);
 	assert.equal(f.original.text, 'Original\nmessage');
 	assert.equal(f.focus(), 1);
 });
@@ -125,7 +157,7 @@ test('Failed queue edits retain text and keep the paused version for retry', asy
 	assert.equal(input.value, 'Keep failed edit');
 	assert.equal(f.calls.length, 1);
 	f.chat.editPendingRequest = save; submit(); await operation;
-	assert.deepEqual(f.calls.at(-1), ['edit', { ...f.target, expectedRevision: 6 }, 'Keep failed edit']);
+	assert.deepEqual(f.calls.at(-1), ['edit', { ...f.target, expectedRevision: 6 }, 'Keep failed edit', 'queued']);
 });
 
 test('Queue item actions reject stale or cross-conversation identities before mutation', async () => {

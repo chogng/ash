@@ -7,12 +7,14 @@ import './media/sessionChangesEditor.css';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, createThreadChangeFileResource } from '../../../../workbench/services/chat/common/chatService.js';
 import { EditorPanes } from '../../../../workbench/browser/editor.js';
 import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { isEditorPaneWithViewState, type IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
+import { createThreadMultiDiffEditorInput } from '../../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
+import type { IChangesThreadFileItem } from './changesViewRenderer.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -82,6 +84,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			}
 		}));
 		this._register(chat.onDidBecomeReady(() => { void this.refresh(); }));
+		this._register(chat.onDidUpdateThread(event => {
+			if (event.update.type !== 'committed' || event.update.event.type !== 'threadHistoryMoved') { return; }
+			if (this.input?.resource.path === `/${event.sessionId}` && new URLSearchParams(this.input.resource.query).get('thread') === event.threadId) { void this.refresh(); }
+		}));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -265,8 +271,8 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.viewState = state;
 	}
 
-	/** Resolves either comparison side to its current capture; only review actions require the review capability. */
-	public async getFileChange(resource: URI, options: { readonly review?: boolean; } = {}): Promise<ISessionFileChange | undefined> {
+	/** Resolves either comparison side to its checkpoint or Turn capture; stale revisions cannot be reviewed. */
+	public async getFileChange(resource: URI, options: { readonly review?: boolean; } = {}): Promise<ISessionFileChange | IChangesThreadFileItem | undefined> {
 		const comparison = this.comparisonInput;
 		const input = this.input;
 		const item = this.findComparisonItem(resource);
@@ -274,6 +280,23 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		if (!this.visible || !input || !comparison || !item || !signal) { return undefined; }
 		// A cumulative comparison may start in an earlier Turn; its modified side identifies the capture being reviewed.
 		const currentResource = item.modified.resource;
+		if (currentResource.scheme === 'ash-thread-change') {
+			const query = new URLSearchParams(currentResource.query);
+			const sessionId = query.get('session')!;
+			const threadId = query.get('thread')!;
+			const repositoryId = query.get('repository')!;
+			const summary = await raceCancellationError(this.chat.readThreadChanges(sessionId, threadId), signal);
+			if (this.isDisposed || !this.visible || this.comparisonInput !== comparison || summary.revision !== query.get('revision')) { return undefined; }
+			const file = summary.repositories.find(repository => repository.repositoryId === repositoryId)?.files.find(file =>
+				extUri.isEqual(currentResource, createThreadChangeFileResource(sessionId, threadId, summary.revision, repositoryId, file.path).with({ query: currentResource.query })));
+			if (!file) { return undefined; }
+			query.delete('side');
+			return {
+				type: 'file', id: JSON.stringify([repositoryId, file.path]), sessionId, threadId, repositoryId, revision: summary.revision,
+				uri: currentResource.with({ query: query.toString() }), originalUri: item.original.resource, modifiedUri: currentResource,
+				file, insertions: file.additions, deletions: file.deletions, warnings: summary.warnings,
+			};
+		}
 		const id = currentResource.path.split('/')[1];
 		if (!id) { return undefined; }
 		const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
@@ -303,7 +326,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private findComparisonItem(resource: URI): MultiDiffEditorInputItem | undefined {
 		const query = new URLSearchParams(resource.query);
 		const modified = query.has('side') ? resource : resource.with({ query: `${resource.query}&side=after` });
-		return this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, modified));
+		return this.comparisonInput?.items.find(item => extUri.isEqual(item.original.resource, resource) || extUri.isEqual(item.modified.resource, resource) || extUri.isEqual(item.modified.resource, modified));
 	}
 
 	private refresh(signal?: AbortSignal): Promise<void> {
@@ -380,6 +403,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					}
 				}));
 				comparison = createMultiDiffEditorInput(input.resource, items, selected.changeset.label, { kind: 'snapshot', label: selected.changeset.label });
+			} else if (!selected?.id) {
+				comparison = await createThreadMultiDiffEditorInput(this.chat, session.sessionId, threadId, undefined, controller.signal);
+				comparison = { ...comparison, items: comparison.items.map(item => ({ ...item, contextKeys: { ...item.contextKeys, 'sessions.changesCanReview': true } })) };
 			} else {
 				const changes = await raceCancellationError(this.chat.listTurnChanges(session.sessionId, threadId), controller.signal);
 				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
@@ -397,6 +423,14 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				comparison = await createTurnMultiDiffEditorInput(this.chat, { session, threadId }, 'throughCurrentTurn', selected?.id ? [selected.id] : undefined, controller.signal);
 			}
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
+				return;
+			}
+			if (!comparison.items.length) {
+				this.comparison.clear();
+				this.comparisonInput = undefined;
+				this.changesService.setChangesCount(input.resource, 0);
+				this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
+				this.messageDomNode.hidden = false;
 				return;
 			}
 			const pane = await EditorPanes.getEditorPane(comparison)!.create({ ...this.options, input: { ...input, editorId: this.id } });

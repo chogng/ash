@@ -183,6 +183,7 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
 
 fn input(id: &str) -> QueueInput {
     QueueInput {
+        command_interpretation: protocol::CommandInterpretation::Product,
         mode: Default::default(),
         model: None,
         reasoning_effort: None,
@@ -390,6 +391,173 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
     request.mode = protocol::CollaborationMode::Agent;
     assert!(matches!(
         reopened.enqueue(&request),
+        Err(QueueError::Conflict)
+    ));
+}
+
+#[test]
+fn literal_messages_preserve_command_interpretation_after_edit_and_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let store = QueueStore::open(&path).unwrap();
+    let mut request = input("literal-message");
+    request.command_interpretation = protocol::CommandInterpretation::Literal;
+    request.input = vec![UserInput::Text {
+        text: "/init".into(),
+    }];
+    let accepted = store.enqueue(&request).unwrap();
+    let paused = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            accepted.revision,
+            &crate::QueueEdit::Pause,
+        )
+        .unwrap();
+    let edited = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            &crate::QueueEdit::ReplaceText {
+                text: "/develop ordinary message".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        edited.request.command_interpretation,
+        protocol::CommandInterpretation::Literal
+    );
+    drop(store);
+    let store = QueueStore::open(&path).unwrap();
+    let saved = store.get(&request.command_id).unwrap().unwrap();
+    assert_eq!(
+        saved.request.command_interpretation,
+        protocol::CommandInterpretation::Literal
+    );
+    assert_eq!(
+        saved.request.input,
+        vec![UserInput::Text {
+            text: "/develop ordinary message".into()
+        }]
+    );
+}
+
+#[test]
+fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messages() {
+    let root = tempfile::tempdir().unwrap();
+    let store = QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+    let mut request = input("steering");
+    let turn = protocol::TurnId::new("active-turn").unwrap();
+    request.steer_turn = Some(turn.clone());
+    let context = UserInput::Context {
+        name: "captured".into(),
+        content: "original bytes".into(),
+    };
+    request.input.push(context.clone());
+    let original = store.enqueue(&request).unwrap();
+    let edit = |revision, action: &crate::QueueEdit| {
+        let paused = store.edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            revision,
+            &crate::QueueEdit::Pause,
+        )?;
+        store.edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            action,
+        )
+    };
+    let preserved = edit(
+        original.revision,
+        &crate::QueueEdit::ReplaceText {
+            text: "edited steering".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(preserved.request.steer_turn, Some(turn.clone()));
+    let queued = edit(
+        preserved.revision,
+        &crate::QueueEdit::ReplaceTextWithDelivery {
+            text: "queued".into(),
+            delivery: crate::QueueDelivery::Queued,
+        },
+    )
+    .unwrap();
+    assert_eq!(queued.request.steer_turn, None);
+    let ahead = store.enqueue(&input("ahead")).unwrap();
+    store
+        .edit(
+            &ahead.request.session_id,
+            &ahead.request.thread_id,
+            &ahead.request.command_id,
+            ahead.revision,
+            &crate::QueueEdit::Send { turn_id: None },
+        )
+        .unwrap();
+    let steering = edit(
+        queued.revision,
+        &crate::QueueEdit::ReplaceTextWithDelivery {
+            text: "steering again".into(),
+            delivery: crate::QueueDelivery::Steering {
+                turn_id: turn.clone(),
+            },
+        },
+    )
+    .unwrap();
+    assert_eq!(steering.request.steer_turn, Some(turn));
+    assert_eq!(
+        store.candidates(0).unwrap()[0].request.command_id,
+        request.command_id
+    );
+    assert_eq!(steering.request.input[1], context);
+    let front = store.enqueue(&input("front")).unwrap();
+    store
+        .edit(
+            &front.request.session_id,
+            &front.request.thread_id,
+            &front.request.command_id,
+            front.revision,
+            &crate::QueueEdit::Send { turn_id: None },
+        )
+        .unwrap();
+    let immediate = edit(
+        steering.revision,
+        &crate::QueueEdit::ReplaceTextWithDelivery {
+            text: "immediate edited text".into(),
+            delivery: crate::QueueDelivery::Immediate,
+        },
+    )
+    .unwrap();
+    assert!(immediate.revision > steering.revision);
+    assert_eq!(immediate.request.steer_turn, None);
+    assert_eq!(
+        immediate.request.input,
+        vec![
+            UserInput::Text {
+                text: "immediate edited text".into()
+            },
+            context
+        ]
+    );
+    assert_eq!(
+        store.candidates(0).unwrap()[0].request.command_id,
+        request.command_id
+    );
+    assert!(matches!(
+        edit(
+            steering.revision,
+            &crate::QueueEdit::ReplaceTextWithDelivery {
+                text: "stale".into(),
+                delivery: crate::QueueDelivery::Queued
+            }
+        ),
         Err(QueueError::Conflict)
     ));
 }

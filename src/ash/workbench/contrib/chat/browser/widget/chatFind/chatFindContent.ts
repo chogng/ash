@@ -1,6 +1,6 @@
 import { renderAsPlaintext } from '../../../../../../base/browser/markdownRenderer.js';
 import { Marked, type Token, type Tokens } from '../../../../../../base/common/marked/marked.js';
-import type { IChatListItem } from '../chatListItems.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 
 export interface IChatFindTextPart {
 	readonly text: string;

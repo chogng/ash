@@ -6,18 +6,20 @@ import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
-async function installService(application: ElectronApplication): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication }) => {
+async function installService(application: ElectronApplication, holdInitialization = false): Promise<void> {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication, holdInitialization }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
 		await fs.mkdir(home, { recursive: true });
 		await fs.writeFile(path.join(home, 'auth.json'), authentication);
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
+		let cancelledInitializations = 0;
+		const initializing = new Set<() => void>();
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
 		let head: string | null = null;
@@ -29,6 +31,12 @@ async function installService(application: ElectronApplication): Promise<void> {
 		};
 		globalThis.ashNativeFixture = {
 			get sends() { return sends; },
+			get pendingInitializations() { return initializing.size; },
+			get cancelledInitializations() { return cancelledInitializations; },
+			releaseInitialization() {
+				holdInitialization = false;
+				for (const release of [...initializing]) { release(); }
+			},
 			advance() {
 				step++;
 				reply!.enqueue(chunk(step === 1 ? 'First chunk, second chunk' : 'First chunk, second chunk, complete'));
@@ -53,7 +61,18 @@ async function installService(application: ElectronApplication): Promise<void> {
 			storage.fetch = async (input, init) => {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
-				if (url.pathname.endsWith('/models')) { return Response.json(catalog); }
+				if (url.pathname.endsWith('/models')) {
+					if (holdInitialization) {
+						await new Promise<void>((resolve, reject) => {
+							const release = () => { initializing.delete(release); init?.signal?.removeEventListener('abort', abort); resolve(); };
+							const abort = () => { cancelledInitializations++; initializing.delete(release); reject(init!.signal!.reason); };
+							init?.signal?.throwIfAborted();
+							initializing.add(release);
+							init?.signal?.addEventListener('abort', abort, { once: true });
+						});
+					}
+					return Response.json(catalog);
+				}
 				if (url.pathname.endsWith('/pins')) { return Response.json([{ item: { id: 'history-pin', title: 'Pinned native history' } }]); }
 				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) { return Response.json({ items: [], cursor: null }); }
 				if (url.pathname.endsWith('/conversations')) {
@@ -85,10 +104,35 @@ async function installService(application: ElectronApplication): Promise<void> {
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument() });
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization });
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
+	test.describe(`ChatGPT initialization lifecycle in ${locale}`, () => {
+		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale } });
+		test('closing and reopening during pending initialization cancels the old window and restores a usable chat', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, driver }, testInfo) => {
+			const application = browser as ElectronApplication;
+			await installService(application, true);
+			let page = await workbench.openAgentsWindow(target.kind);
+			for (let reopen = 0; reopen < 3; reopen++) {
+				await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(1);
+				await expect(page.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'true');
+				page = await workbench.reopenAgentsWindow(application, page);
+				await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.cancelledInitializations)).toBe(reopen + 1);
+				expect(driver.diagnostics.errors).toEqual([]);
+			}
+			await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(1);
+			await application.evaluate(() => globalThis.ashNativeFixture.releaseInitialization());
+			await expect(page.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
+			await expect(page.getByRole('button', { name: 'First native history', exact: true })).toBeVisible();
+			await page.getByRole('button', { name: 'First native history', exact: true }).click();
+			await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
+			expect(await application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(0);
+			expect(driver.diagnostics.errors).toEqual([]);
+			await testInfo.attach('chatgpt-after-initialization-close', { body: await page.screenshot(), contentType: 'image/png' });
+		});
+	});
+
 	test.describe(`ChatGPT entry in ${locale}`, () => {
 		test.use({ electronWindowMode: 'active' });
 		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {

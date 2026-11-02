@@ -20,12 +20,11 @@ export default defineThemedFixtureGroup({ path: 'shared/' }, {
 			for (const presentation of ['primary', 'secondary', 'quiet'] as const) {
 				disposableStore.add(new Button(container, { label: `${presentation} action`, presentation, ...defaultButtonStyles }));
 			}
-			disposableStore.add(new Menu(container, {
-				actions: [
-					{ id: 'fixture.open', label: 'Open item', tooltip: '', enabled: true, run() { } },
-					{ id: 'fixture.disabled', label: 'Unavailable action', tooltip: '', enabled: false, run() { } },
-				],
-				buttonStyles: defaultButtonStyles,
+			disposableStore.add(new Menu(container, [
+				{ id: 'fixture.open', label: 'Open item', tooltip: '', enabled: true, run() { } },
+				{ id: 'fixture.disabled', label: 'Unavailable action', tooltip: '', enabled: false, run() { } },
+			], {
+				buttonStyles: defaultButtonStyles
 			}, defaultMenuStyles));
 			return [container];
 		},
