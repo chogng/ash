@@ -265,6 +265,7 @@ impl ThreadSnapshot {
                         .as_ref()
                         .map(TurnInteraction::pending_state),
                     error: turn.failure.clone(),
+                    started_tool_call_ids: Some(self.started_tool_call_ids(&turn.turn_id)),
                 })
                 .collect(),
         }

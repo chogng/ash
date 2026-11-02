@@ -293,6 +293,7 @@ fn status_line_context_follows_thread_snapshots() {
             items: vec![],
             plan: None,
             pending_interaction: None,
+            started_tool_call_ids: None,
             error: None,
         }],
     };

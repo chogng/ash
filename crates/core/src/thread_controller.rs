@@ -3311,10 +3311,11 @@ impl ThreadController {
             .iter()
             .any(|event| matches!(event, ThreadEvent::ThreadHistoryMoved { .. }))
             && self.store.history_index_sequence(thread_id)? == Some(expected_sequence);
-        let completed_items = events
+        let changed_item_turns = events
             .iter()
             .filter_map(|event| match event {
-                ThreadEvent::ItemCompleted { turn_id, .. } => Some(turn_id.clone()),
+                ThreadEvent::ItemCompleted { turn_id, .. }
+                | ThreadEvent::ToolExecutionStarted { turn_id, .. } => Some(turn_id.clone()),
                 _ => None,
             })
             .collect::<BTreeSet<_>>();
@@ -3409,7 +3410,7 @@ impl ThreadController {
         let projection = projection.expect("a non-empty event batch always creates a projection");
         let catalog = thread_catalog_record(&projection);
         let history_index =
-            projection.history_index(previous_turns.as_deref(), index_ready, &completed_items);
+            projection.history_index(previous_turns.as_deref(), index_ready, &changed_item_turns);
         Ok((
             projection,
             crate::message_checkpoint::PreparedThreadBatch {

@@ -52,6 +52,28 @@ test('committed interaction history never grants delivery ownership', async () =
 	assert.deepEqual(offers, []);
 });
 
+test('tool execution start preserves the exact Turn and Call through the real decoder', async () => {
+	const transport = new InteractionTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAgentThreadService(client);
+	const updates: ThreadUpdateEnvelope[] = [];
+	using listener = api.onDidUpdateThread(update => updates.push(update));
+	await client.connect();
+	transport.frame({
+		method: 'session/thread/update', params: {
+			sessionId: 'session', threadId: 'thread', durableSequence: 3, update: {
+				type: 'committed', event: {
+					type: 'toolExecutionStarted', threadId: 'thread', turnId: 'turn', toolCallId: 'call',
+					actionDigest: 'digest', policyRevision: 'policy', authority: { type: 'sandboxed' },
+				}
+			},
+		}
+	});
+	assert.equal(client.state, 'ready');
+	assert.deepEqual(updates[0].update, { type: 'committed', event: { type: 'toolExecutionStarted', turnId: 'turn', toolCallId: 'call' } });
+});
+
 for (const type of ['interactionResolved', 'interactionCancelled', 'turnCompleted', 'turnFailed', 'turnInterrupted'] as const) {
 	test(`${type} retirement preserves the owning turn and request identity`, async () => {
 		const transport = new InteractionTransport();

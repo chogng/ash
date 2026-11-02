@@ -529,6 +529,15 @@ export interface Turn {
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly plan?: PlanUpdate | null;
+	/** Durable execution-start evidence; results and pending interactions take precedence. */
+	readonly startedToolCallIds?: readonly string[] | null;
+	/** Readable wait metadata; only an owner-directed offer grants access to the actionable request. */
+	readonly pendingInteraction?: {
+		readonly requestId: string;
+		readonly itemId?: string | null;
+		readonly kind: AgentRequest['type'];
+		readonly deadline?: { readonly expiresAtUnixMs: number; } | null;
+	} | null;
 	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
 	readonly error?: TurnError | null;
@@ -706,6 +715,7 @@ export interface AgentInteractionOffer {
 }
 
 export type ThreadCommittedEvent =
+	| { readonly type: 'toolExecutionStarted'; readonly turnId: string; readonly toolCallId: string; }
 	| { readonly type: 'interactionResolved' | 'interactionCancelled'; readonly turnId: string; readonly requestId: string; }
 	| { readonly type: 'turnCompleted' | 'turnFailed' | 'turnInterrupted'; readonly turnId: string; }
 	| { readonly type: 'interactionRequested'; readonly interaction: TurnInteraction; }
@@ -750,7 +760,6 @@ export type ThreadCommittedEvent =
 		| 'itemCompleted'
 		| 'planUpdated'
 		| 'hookRunUpdated'
-		| 'toolExecutionStarted'
 		| 'toolExecutionEscalated'
 		| 'turnCancelling'
 		| 'delegationRequested'

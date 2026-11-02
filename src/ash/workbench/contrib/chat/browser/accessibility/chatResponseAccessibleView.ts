@@ -42,9 +42,18 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 		const sections = [this.labels.getAriaLabel(item)];
 		const invocation = item.toolInvocation;
 		if (invocation) {
-			const { call, output, result, stopped } = invocation;
+			const { call, output, result, stopped, waitingFor, executionStarted } = invocation;
 			if (result) {
 				sections.push(result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name));
+			} else if (!stopped && waitingFor) {
+				switch (waitingFor) {
+					case 'approval': sections.push(localize('chat.tool.awaitingApproval', '{0} · Awaiting approval', call.name)); break;
+					case 'permissions': sections.push(localize('chat.tool.awaitingPermissions', '{0} · Awaiting permissions', call.name)); break;
+					case 'userInput': sections.push(localize('chat.tool.awaitingUserInput', '{0} · Awaiting your response', call.name)); break;
+					case 'dynamicTool': sections.push(localize('chat.tool.awaitingCapability', '{0} · Awaiting client tool', call.name)); break;
+				}
+			} else if (!stopped && (executionStarted || output.length > 0)) {
+				sections.push(localize('chat.tool.running', '{0} · Running', call.name));
 			} else {
 				sections.push(stopped ? localize('chat.tool.stopped', '{0} · No result', call.name) : localize('chat.tool.pending', '{0} · Awaiting result', call.name));
 			}

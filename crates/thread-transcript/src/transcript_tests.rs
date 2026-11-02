@@ -92,6 +92,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
                 steps: Vec::new(),
             }),
             pending_interaction: None,
+            started_tool_call_ids: None,
             error: None,
         }],
     });
@@ -743,6 +744,7 @@ fn thread_with_turn(id: TurnId, status: ash_protocol::TurnStatus) -> Thread {
         items: Vec::new(),
         plan: None,
         pending_interaction: None,
+        started_tool_call_ids: None,
         error: None,
     });
     thread

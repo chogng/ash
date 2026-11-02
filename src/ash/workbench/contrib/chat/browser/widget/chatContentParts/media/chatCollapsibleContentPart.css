@@ -18,6 +18,20 @@
 	background: var(--ash-list-hoverBackground);
 }
 
+.ash-chat-tool-status-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--ash-lxiconFontSize);
+	margin-inline-end: var(--ash-spacing-size80);
+	vertical-align: middle;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-tool-invocation.error .ash-chat-tool-status-icon {
+	color: var(--ash-error-foreground);
+}
+
 .ash-chat-tool-invocation > summary:focus-visible,
 .ash-chat-tool-io-section > summary:focus-visible,
 .ash-chat-tool-io-section > pre:focus-visible {

@@ -586,6 +586,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             items: Vec::new(),
             plan: None,
             pending_interaction: None,
+            started_tool_call_ids: None,
             error: None,
         }],
         hook_runs: Vec::new(),

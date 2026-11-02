@@ -27,6 +27,8 @@ export interface IChatListItem {
 		readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
 		readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];
 		readonly stopped: boolean;
+		readonly waitingFor?: NonNullable<Turn['pendingInteraction']>['kind'];
+		readonly executionStarted?: boolean;
 	};
 	readonly text: string;
 	/** Exact Core-accepted context body, independent of any current composer draft. */
@@ -81,6 +83,17 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 	}
 	const stoppedTurns = new Set(turns.filter(turn => turn.status === 'failed' || turn.status === 'interrupted' || turn.status === 'completed').map(turn => turn.turnId));
 	for (const entry of entries) if (entry.type === 'turnError') stoppedTurns.add(entry.turnId);
+	const startedCalls = new Set(turns.flatMap(turn => (turn.startedToolCallIds ?? []).map(callId => key(turn.turnId, callId))));
+	// Parallel calls can be in different states. Only the interaction's exact Item is waiting.
+	const pendingInteractions = new Map(turns.flatMap(turn => {
+		const pending = turn.pendingInteraction;
+		if (!pending?.itemId) return [];
+		const waitingStatus = {
+			approval: 'waitingForApproval', permissions: 'waitingForUserInput',
+			userInput: 'waitingForUserInput', dynamicTool: 'waitingForCapability',
+		};
+		return turn.status === waitingStatus[pending.kind] ? [[turn.turnId, pending] as const] : [];
+	}));
 	const calls = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolCall' && entry.item.name === 'advisor' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
 	const results = new Set(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolResult' ? [key(entry.turnId, entry.item.toolCallId)] : []));
 	return entries.flatMap<IChatListItem>(entry => {
@@ -93,11 +106,16 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 			const identity = key(entry.turnId, call.toolCallId);
 			const result = toolResults.get(identity);
 			const output = outputs.get(identity) ?? [];
+			const pending = pendingInteractions.get(entry.turnId);
 			return [{
 				id: entry.entryId, type: 'toolCall' as const,
 				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
-				toolInvocation: { call, result, output, stopped: stoppedTurns.has(entry.turnId) },
+				toolInvocation: {
+					call, result, output, stopped: stoppedTurns.has(entry.turnId),
+					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
+					executionStarted: startedCalls.has(identity),
+				},
 				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { ...source, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 			}];
 		}

@@ -873,6 +873,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         items: vec![],
         plan: None,
         pending_interaction: None,
+        started_tool_call_ids: None,
         error: None,
     }
 }

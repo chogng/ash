@@ -13,6 +13,7 @@ use ash_protocol::ThreadArchiveReason;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
+use ash_protocol::ToolCallId;
 use ash_protocol::ToolMode;
 use ash_protocol::ToolProfileSnapshot;
 use ash_protocol::Turn;
@@ -74,6 +75,7 @@ pub struct TurnView {
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
+    pub started_tool_call_ids: Vec<ToolCallId>,
     pub tool_profile: Option<ToolProfileSnapshot>,
     pub plan: Option<PlanUpdate>,
     pub usage: ModelUsageSummary,
@@ -129,6 +131,7 @@ impl ThreadView {
                         .as_ref()
                         .map(TurnInteraction::pending_state),
                     error: turn.failure.clone(),
+                    started_tool_call_ids: Some(turn.started_tool_call_ids.clone()),
                 })
                 .collect(),
         }

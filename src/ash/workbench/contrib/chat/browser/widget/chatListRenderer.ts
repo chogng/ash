@@ -546,6 +546,7 @@ export class ChatListItemRenderer extends Disposable {
 function sameToolInvocation(left: IChatListItem['toolInvocation'], right: IChatListItem['toolInvocation']): boolean {
 	if (left === right) return true;
 	return !!left && !!right && left.call === right.call && left.result === right.result && left.stopped === right.stopped
+		&& left.waitingFor === right.waitingFor && left.executionStarted === right.executionStarted
 		&& left.output.length === right.output.length && left.output.every((output, index) => output === right.output[index]);
 }
 

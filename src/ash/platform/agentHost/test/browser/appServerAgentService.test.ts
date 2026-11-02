@@ -208,6 +208,41 @@ function messageSnapshot(text: string, sequence = 1): SessionThreadReadResult {
 	};
 }
 
+for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test(`Thread ${operation} preserves detached pending interaction metadata without offering approval`, async () => {
+	const wire = messageSnapshot('Pending tool');
+	const pending = { requestId: 'approval-request', itemId: 'tool-item', kind: 'approval' as const, deadline: { expiresAtUnixMs: 1000 } };
+	wire.thread.turns[0].status = 'waitingForApproval';
+	wire.thread.turns[0].pendingInteraction = pending;
+	wire.thread.turns[0].startedToolCallIds = ['tool-call'];
+	using notifications = new Emitter<ServerNotification>();
+	const connection = {
+		onNotification: notifications.event,
+		async request(): Promise<unknown> {
+			const projection = { ...wire, updates: [] };
+			return operation === 'sessionSubscribe'
+				? { session: { sessionId: 'session', title: 'Pending tool', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [projection] }
+				: projection;
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerAgentThreadService(connection);
+	const offers: unknown[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	const params = { sessionId: 'session', threadId: 'thread' };
+	const result = operation === 'read' ? await api.read(params) : operation === 'subscribe' ? await api.subscribe({ ...params, afterSequence: 0 }) : (await createAppServerAgentSessionService(connection).subscribe({ sessionId: 'session' })).threadSnapshots[0];
+	const mapped = result.thread.turns[0].pendingInteraction;
+	assert.deepEqual(result.thread.turns[0].startedToolCallIds, ['tool-call']);
+	wire.thread.turns[0].startedToolCallIds.push('other-call');
+	assert.deepEqual(result.thread.turns[0].startedToolCallIds, ['tool-call']);
+	assert.deepEqual(mapped, pending);
+	assert.notEqual(mapped, pending);
+	assert.notEqual(mapped?.deadline, pending.deadline);
+	pending.itemId = 'another-item';
+	pending.deadline.expiresAtUnixMs = 2000;
+	assert.equal(mapped?.itemId, 'tool-item');
+	assert.equal(mapped?.deadline?.expiresAtUnixMs, 1000);
+	assert.deepEqual(offers, []);
+});
+
 for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test(`Thread ${operation} retains detached Item shells when immutable body values agree`, async () => {
 	const wire = messageSnapshot('Original body'.repeat(1024));
 	const expected = structuredClone(wire);

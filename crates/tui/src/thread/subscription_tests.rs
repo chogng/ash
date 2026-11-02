@@ -463,6 +463,7 @@ fn turn(turn_id: &str) -> Turn {
         items: Vec::new(),
         plan: None,
         pending_interaction: None,
+        started_tool_call_ids: None,
         error: None,
     }
 }

@@ -705,6 +705,13 @@ function toThread(thread: ThreadDto): Thread {
 			status: turn.status,
 			mode: turn.mode,
 			approvalMode: turn.approvalMode,
+			startedToolCallIds: turn.startedToolCallIds ? [...turn.startedToolCallIds] : turn.startedToolCallIds,
+			pendingInteraction: turn.pendingInteraction ? {
+				requestId: turn.pendingInteraction.requestId,
+				itemId: turn.pendingInteraction.itemId,
+				kind: turn.pendingInteraction.kind,
+				deadline: turn.pendingInteraction.deadline ? { ...turn.pendingInteraction.deadline } : turn.pendingInteraction.deadline,
+			} : turn.pendingInteraction,
 			model: turn.model ? { ...turn.model } : turn.model,
 			reasoningEffort: turn.reasoningEffort,
 			plan: turn.plan
@@ -758,6 +765,8 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 	switch (update.type) {
 		case 'committed': {
 			const event = update.event;
+			if (event.type === 'toolExecutionStarted')
+				return { type: 'committed', event: { type: event.type, turnId: event.turnId, toolCallId: event.toolCallId } };
 			if (event.type === 'interactionRequested')
 				return { type: 'committed', event: { type: event.type, interaction: toTurnInteraction(event.interaction) } };
 			if (event.type === 'turnModeChanged')

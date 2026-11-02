@@ -1,6 +1,16 @@
 impl From<crate::ThreadSnapshot> for core_api::ThreadView {
     fn from(snapshot: crate::ThreadSnapshot) -> Self {
         let agent = snapshot.agent_configuration().cloned();
+        let started_tool_calls = snapshot
+            .turns
+            .iter()
+            .map(|turn| {
+                (
+                    turn.turn_id.clone(),
+                    snapshot.started_tool_call_ids(&turn.turn_id),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
         Self {
             agent_id: snapshot.agent_id,
             origin: snapshot.origin,
@@ -25,27 +35,34 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
             turns: snapshot
                 .turns
                 .into_iter()
-                .map(|turn| core_api::TurnView {
-                    turn_id: turn.turn_id,
-                    status: turn.status,
-                    status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
-                    started_at_unix_ms: turn.started_at_unix_ms,
-                    duration_ms: turn.duration_ms,
-                    kind: turn.kind,
-                    mode: turn.mode,
-                    instructions: turn.instructions,
-                    model: turn.model,
-                    reasoning_effort: turn.reasoning_effort,
-                    advisor: turn.advisor,
-                    approval_mode: turn.approval_mode,
-                    tool_mode: turn.tool_mode,
-                    activated_skills: turn.activated_skills,
-                    failure: turn.failure,
-                    pending_interaction: turn.pending_interaction,
-                    tool_profile: turn.tool_profile,
-                    plan: turn.plan,
-                    usage: turn.usage,
-                    context_usage: turn.context_usage,
+                .map(|turn| {
+                    let started_tool_call_ids = started_tool_calls
+                        .get(&turn.turn_id)
+                        .cloned()
+                        .unwrap_or_default();
+                    core_api::TurnView {
+                        turn_id: turn.turn_id,
+                        status: turn.status,
+                        status_changed_at_unix_ms: turn.status_changed_at_unix_ms,
+                        started_at_unix_ms: turn.started_at_unix_ms,
+                        duration_ms: turn.duration_ms,
+                        kind: turn.kind,
+                        mode: turn.mode,
+                        instructions: turn.instructions,
+                        model: turn.model,
+                        reasoning_effort: turn.reasoning_effort,
+                        advisor: turn.advisor,
+                        approval_mode: turn.approval_mode,
+                        tool_mode: turn.tool_mode,
+                        activated_skills: turn.activated_skills,
+                        failure: turn.failure,
+                        pending_interaction: turn.pending_interaction,
+                        started_tool_call_ids,
+                        tool_profile: turn.tool_profile,
+                        plan: turn.plan,
+                        usage: turn.usage,
+                        context_usage: turn.context_usage,
+                    }
                 })
                 .collect(),
         }
@@ -53,6 +70,26 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
 }
 
 impl crate::ThreadSnapshot {
+    /// Projects existing execution facts only for calls owned by this Turn.
+    pub(crate) fn started_tool_call_ids(
+        &self,
+        turn_id: &ash_protocol::TurnId,
+    ) -> Vec<ash_protocol::ToolCallId> {
+        self.items
+            .iter()
+            .filter_map(|item| match item {
+                ash_protocol::ThreadItem::ToolCall {
+                    turn_id: owner,
+                    tool_call_id,
+                    ..
+                } if owner == turn_id && self.started_tool_calls.contains(tool_call_id) => {
+                    Some(tool_call_id.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     pub(crate) fn public_history_thread(
         &self,
         indices: impl Iterator<Item = usize>,
@@ -107,6 +144,7 @@ impl crate::ThreadSnapshot {
                         .as_ref()
                         .map(ash_protocol::TurnInteraction::pending_state),
                     error: turn.failure.clone(),
+                    started_tool_call_ids: Some(self.started_tool_call_ids(&turn.turn_id)),
                 })
                 .collect(),
         }
@@ -116,7 +154,7 @@ impl crate::ThreadSnapshot {
         &self,
         previous: Option<&[crate::TurnSnapshot]>,
         ready: bool,
-        completed_items: &std::collections::BTreeSet<ash_protocol::TurnId>,
+        changed_item_turns: &std::collections::BTreeSet<ash_protocol::TurnId>,
     ) -> ash_thread_store::ThreadHistoryIndexUpdate {
         use ash_thread_store::ThreadHistoryIndexMode;
         let mode = if ready
@@ -137,7 +175,7 @@ impl crate::ThreadSnapshot {
             .enumerate()
             .filter_map(|(ordinal, turn)| {
                 (mode == ThreadHistoryIndexMode::Replace
-                    || completed_items.contains(&turn.turn_id)
+                    || changed_item_turns.contains(&turn.turn_id)
                     || previous.and_then(|turns| turns.get(ordinal)) != Some(turn))
                 .then_some(ordinal)
             })

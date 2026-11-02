@@ -389,6 +389,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             }],
             plan: None,
             pending_interaction: None,
+            started_tool_call_ids: None,
             error: None,
         }],
     };

@@ -198,7 +198,7 @@ impl ToolExecutionOrchestrator {
         if matches!(authorization, ToolAuthorization::AutoReviewed(_)) {
             self.validate_review_environment(context.thread_id, reviewed)?;
         }
-        self.threads.record_tool_execution_started(
+        let sequence = self.threads.record_tool_execution_started(
             context.thread_id,
             context.turn_id,
             RecordToolExecutionStart {
@@ -213,6 +213,7 @@ impl ToolExecutionOrchestrator {
                 .then_some(context.review_sequence),
             },
         )?;
+        self.publish_execution_start(context.thread_id, sequence)?;
 
         if let Err(error) = self
             .execution_observer
@@ -287,7 +288,7 @@ impl ToolExecutionOrchestrator {
             execution_authority(&authorization),
             context.cancellation,
         )?;
-        self.threads.record_tool_execution_started(
+        let sequence = self.threads.record_tool_execution_started(
             context.thread_id,
             context.turn_id,
             RecordToolExecutionStart {
@@ -302,6 +303,7 @@ impl ToolExecutionOrchestrator {
                 .then_some(context.review_sequence),
             },
         )?;
+        self.publish_execution_start(context.thread_id, sequence)?;
         let output = match operation() {
             Ok(output) => output,
             Err(error @ CoreError::Cancelled(_)) => return Err(error),
@@ -319,7 +321,7 @@ impl ToolExecutionOrchestrator {
         reviewed: &ActionReviewRequest,
         authorization: &ToolAuthorization,
     ) -> Result<(), CoreError> {
-        self.threads.record_tool_execution_started(
+        let sequence = self.threads.record_tool_execution_started(
             context.thread_id,
             context.turn_id,
             RecordToolExecutionStart {
@@ -334,6 +336,19 @@ impl ToolExecutionOrchestrator {
                 .then_some(context.review_sequence),
             },
         )?;
+        self.publish_execution_start(context.thread_id, sequence)?;
+        Ok(())
+    }
+
+    /// Notify readers before entering a potentially silent or blocking tool operation.
+    fn publish_execution_start(
+        &self,
+        thread_id: &ThreadId,
+        sequence: u64,
+    ) -> Result<(), CoreError> {
+        for update in self.threads.thread_updates_after(thread_id, sequence - 1)? {
+            self.updates.publish(update);
+        }
         Ok(())
     }
 

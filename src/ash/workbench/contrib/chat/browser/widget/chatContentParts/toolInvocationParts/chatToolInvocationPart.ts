@@ -5,8 +5,10 @@ import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import '../media/chatCollapsibleContentPart.css';
 import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Emitter } from '../../../../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../../nls.js';
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatImageGenerationProgressPart } from './chatImageGenerationProgressPart.js';
@@ -19,6 +21,8 @@ export class ChatToolInvocationPart extends Disposable {
 	public readonly toolCallId: string;
 	private readonly details: HTMLDetailsElement;
 	private readonly summary: HTMLElement;
+	private readonly statusIcon: HTMLElement;
+	private readonly label: HTMLElement;
 	private readonly source: HTMLElement;
 	private readonly activity: HTMLElement;
 	private readonly inputOutput: ChatCollapsibleInputOutputContentPart;
@@ -43,6 +47,13 @@ export class ChatToolInvocationPart extends Disposable {
 		this.details = h(document, 'details');
 		this.details.className = 'ash-chat-tool-invocation';
 		this.summary = h(document, 'summary');
+		this.summary.setAttribute('aria-live', 'polite');
+		this.summary.setAttribute('aria-atomic', 'true');
+		this.statusIcon = h(document, 'span');
+		this.statusIcon.className = 'ash-chat-tool-status-icon';
+		this.statusIcon.setAttribute('aria-hidden', 'true');
+		this.label = h(document, 'span');
+		this.summary.append(this.statusIcon, this.label);
 		this.source = h(document, 'p');
 		this.source.className = 'ash-chat-tool-source';
 		this.activity = h(document, 'pre');
@@ -57,19 +68,75 @@ export class ChatToolInvocationPart extends Disposable {
 
 	/** Updates text in place so a streaming result retains its disclosure and keyboard focus. */
 	public render(invocation: NonNullable<IChatListItem['toolInvocation']>, source?: IChatListItem['attachmentSource']): void {
-		const { call, result, stopped } = invocation;
+		const { call, result, stopped, output, waitingFor, executionStarted } = invocation;
 		const imageGeneration = call.name === 'imagegen' || call.binding?.sourceChain.some(source => source.type === 'mcp' && source.remoteName === 'imagegen') === true;
 		const content = result?.content ?? [];
 		const generated = imageGeneration && result && !result.isError && content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment');
 		const activity = getActivityLabel(call);
-		this.summary.textContent = imageGeneration
-			? result ? result.isError ? localize('chat.imageGeneration.failed', 'Image generation failed') : localize('chat.imageGeneration.completed', 'Generated image')
-				: stopped ? localize('chat.imageGeneration.stopped', 'Image generation stopped') : localize('chat.imageGeneration.placeholder', 'Generating image')
-			: result
-				? result.isError ? localize('chat.tool.failed', '{0} · Failed', activity) : localize('chat.tool.completed', '{0} · Completed', activity)
-				: stopped ? localize('chat.tool.stopped', '{0} · No result', activity) : localize('chat.tool.pending', '{0} · Awaiting result', activity);
+		let state: 'pending' | 'waitingForApproval' | 'waitingForPermissions' | 'waitingForUserInput' | 'waitingForCapability' | 'running' | 'completed' | 'failed' | 'stopped';
+		let label: string;
+		if (result) {
+			state = result.isError ? 'failed' : 'completed';
+			if (imageGeneration) {
+				label = result.isError ? localize('chat.imageGeneration.failed', 'Image generation failed') : localize('chat.imageGeneration.completed', 'Generated image');
+			} else {
+				label = result.isError ? localize('chat.tool.failed', '{0} · Failed', activity) : localize('chat.tool.completed', '{0} · Completed', activity);
+			}
+		} else if (stopped) {
+			state = 'stopped';
+			label = imageGeneration ? localize('chat.imageGeneration.stopped', 'Image generation stopped') : localize('chat.tool.stopped', '{0} · No result', activity);
+		} else if (waitingFor) {
+			switch (waitingFor) {
+				case 'approval':
+					state = 'waitingForApproval';
+					label = localize('chat.tool.awaitingApproval', '{0} · Awaiting approval', activity);
+					break;
+				case 'permissions':
+					state = 'waitingForPermissions';
+					label = localize('chat.tool.awaitingPermissions', '{0} · Awaiting permissions', activity);
+					break;
+				case 'userInput':
+					state = 'waitingForUserInput';
+					label = localize('chat.tool.awaitingUserInput', '{0} · Awaiting your response', activity);
+					break;
+				case 'dynamicTool':
+					state = 'waitingForCapability';
+					label = localize('chat.tool.awaitingCapability', '{0} · Awaiting client tool', activity);
+					break;
+			}
+		} else if (imageGeneration) {
+			state = 'running';
+			label = localize('chat.imageGeneration.placeholder', 'Generating image');
+		} else if (executionStarted || output.length > 0) {
+			state = 'running';
+			label = localize('chat.tool.running', '{0} · Running', activity);
+		} else {
+			state = 'pending';
+			label = localize('chat.tool.pending', '{0} · Awaiting result', activity);
+		}
+		if (this.label.textContent !== label) {
+			this.label.textContent = label;
+		}
+		if (this.details.dataset.state !== state) {
+			this.details.dataset.state = state;
+			this.details.setAttribute('aria-busy', String(state === 'pending' || state === 'running'));
+			this.details.classList.toggle('running', state === 'running');
+			this.statusIcon.replaceChildren();
+			const icons = {
+				pending: Lxicon.clockface,
+				waitingForApproval: Lxicon.lock,
+				waitingForPermissions: Lxicon.lock,
+				waitingForUserInput: Lxicon.question,
+				waitingForCapability: Lxicon.plug,
+				running: Lxicon.play,
+				completed: Lxicon.check,
+				failed: Lxicon.error,
+				stopped: Lxicon.stopCircle,
+			};
+			appendIcon(icons[state], this.statusIcon);
+		}
 		this.details.classList.toggle('error', result?.isError === true);
-		if (imageGeneration && !result && !stopped) {
+		if (imageGeneration && !result && !stopped && !waitingFor) {
 			if (!this.imageProgress.value) {
 				const progress = this.imageProgress.value = this.instantiation.createInstance(ChatImageGenerationProgressPart, this.domNode.ownerDocument);
 				this.domNode.append(progress.domNode);

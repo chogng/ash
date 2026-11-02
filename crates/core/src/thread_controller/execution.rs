@@ -423,7 +423,7 @@ impl ThreadController {
         thread_id: &ThreadId,
         turn_id: &TurnId,
         start: RecordToolExecutionStart,
-    ) -> Result<(), CoreError> {
+    ) -> Result<u64, CoreError> {
         self.mutate_thread(thread_id, |snapshot| {
             if start
                 .expected_review_sequence
@@ -443,7 +443,8 @@ impl ThreadController {
                     policy_revision: start.policy_revision,
                     authority: start.authority,
                 }],
-            )
+            )?;
+            Ok(snapshot.sequence)
         })
     }
 
