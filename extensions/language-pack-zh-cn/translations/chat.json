@@ -1,5 +1,13 @@
 {
   "ash": {
+    "voiceInputMode.label": "语音输入",
+    "voiceInputMode.showButton": "显示语音对话按钮",
+    "voiceInputMode.showButtonDescription": "在 Chat 输入中显示语音对话控件。",
+    "voiceInputMode.showButtonInvalid": "显示语音按钮必须为布尔值。",
+    "voiceInputMode.pushToTalk": "当前为按住说话模式。请按住“语音：按住说话”的快捷键开始说话。",
+    "voiceInputMode.mute": "麦克风静音",
+    "voiceInputMode.unmute": "取消麦克风静音",
+    "voiceInputMode.help": "听写和语音对话均可用时，“语音输入”会将两个按钮组合显示。使用左右方向键移动，按 Enter 或空格启用。切换模式会停止当前输入中的另一种模式，所选模式会被记住。语音对话期间，“麦克风静音”会关闭音频输入，同时保持对话连接。",
     "chat.setup.title": "聊天：设置 Chat",
     "chat.setup.action": "设置 Chat",
     "chat.setup.placeholder": "选择 Chat 的设置方式",

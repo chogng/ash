@@ -1,5 +1,9 @@
 import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
+import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { AgentVoiceSessionState } from '../../../src/ash/platform/agentHost/common/agent.js';
+import { AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
+import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IChatSideChatService, ChatSideChatService } from '../../../src/ash/workbench/contrib/chat/common/chatSideChatService.js';
@@ -148,6 +152,9 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 
 declare global {
 	interface Window { ashChatInputIntegration: {
+		voiceInputState(): { starts: number; stops: number; muted: boolean; dictationCancelled: number; };
+		isDictationReady(): boolean;
+		setVoiceAvailable(available: boolean): void;
 		showIntroduction(): void;
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
@@ -240,7 +247,7 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID || id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 contextKeys.createKey('chatIsEnabled', true);
@@ -484,6 +491,35 @@ services.registerInstance(ILanguageModelsService, {
 	discoverProviderModels: async () => [],
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+if (new URLSearchParams(location.search).has('hideDictation')) await services.get(IConfigurationService).updateValue('dictation.showButton', false);
+if (new URLSearchParams(location.search).has('hideVoice')) await services.get(IConfigurationService).updateValue('agents.voice.showButton', false);
+const voiceFixture = new URLSearchParams(location.search).has('voiceInput');
+const voiceChanges = resources.add(new Emitter<void>());
+let voiceState: AgentVoiceSessionState | undefined;
+let voiceAvailable = voiceFixture;
+let voiceStarts = 0;
+let voiceStops = 0;
+let dictationCancelled = 0;
+const voice: IAgentVoiceService = {
+	get isAvailable() { return voiceAvailable; }, get state() { return voiceState; },
+	onDidChange: voiceChanges.event, onDidRequestTask: Event.None,
+	getOptions: async () => [],
+	start: async source => {
+		voiceStarts++;
+		voiceState = { ...source, resourceId: 'voice-input', state: 'connected', mediaEpoch: voiceStarts, sequence: 1, inputSequence: 0, inputMode: 'openMic', muted: false, listening: true, usageMilliseconds: 0 };
+		voiceChanges.fire();
+		return voiceState;
+	},
+	stop: async () => {
+		voiceStops++;
+		if (new URLSearchParams(location.search).has('hideOnVoiceStop')) part.setVisible(false);
+		if (voiceState) voiceState = { ...voiceState, state: 'ended', listening: false };
+		voiceChanges.fire();
+	},
+	interrupt: async () => { }, rejectTask: async () => { }, setInputMode: async () => { }, pttDown: async () => { }, pttUp: async () => { },
+	setMuted: async muted => { if (voiceState) voiceState = { ...voiceState, muted, listening: !muted }; voiceChanges.fire(); },
+};
+if (voiceFixture) services.registerInstance(IAgentVoiceService, voice);
 let dictationStops = 0;
 let emitDictation: ((text: string, final: boolean) => void) | undefined;
 let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
@@ -502,7 +538,7 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixtur
 				if (result.error) throw new Error(result.error);
 				transcript(result.text, true);
 			},
-			cancel: async () => { finishDictation?.({ text: '' }); },
+			cancel: async () => { dictationCancelled++; finishDictation?.({ text: '' }); },
 		};
 	},
 }) : undefined);
@@ -740,6 +776,16 @@ let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmissio
 let finishSubmission: ((error?: string) => void) | undefined;
 const cowork = ['cowork', 'project'].includes(new URLSearchParams(location.search).get('surface') ?? '');
 const delegate: ChatInputDelegate = {
+	voiceConversation: voiceFixture ? {
+		get isAvailable() { return voiceAvailable; },
+		get isActive() { return voiceState?.state === 'connected' || voiceState?.state === 'connecting'; },
+		get isConnected() { return voiceState?.state === 'connected'; },
+		toggle: async () => {
+			if (voiceState?.state === 'connected' || voiceState?.state === 'connecting') await voice.stop();
+			else await voice.start({ sessionId: 'session', threadId: 'thread' }, { connectionId: 'test', modelId: 'test' });
+		},
+		interrupt: () => voice.interrupt(),
+	} : undefined,
 	send: async (_text, _mode, _skills, contexts, _signal, queue) => {
 		queueEvents.push({ kind: 'send', text: _text, queue });
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -940,6 +986,7 @@ function renderModels(): void {
 	part.render({ ...state, interaction: undefined });
 }
 part.render(state);
+if (voiceFixture) resources.add(voiceChanges.event(() => part.render(state)));
 let replaceDraftOnClear = false;
 const recoveryDrafts: Parameters<ChatInputPart['restoreDraft']>[0][] = [];
 if (new URLSearchParams(location.search).has('holdSubmission')) {
@@ -957,6 +1004,9 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	voiceInputState: () => ({ starts: voiceStarts, stops: voiceStops, muted: voiceState?.muted === true, dictationCancelled }),
+	isDictationReady: () => emitDictation !== undefined,
+	setVoiceAvailable: available => { voiceAvailable = available; voiceChanges.fire(); },
 	setAgent: (selectedAgent, mode = 'agent') => {
 		state = { ...state, selectedAgent, mode, canSelectAgent: true };
 		part.render(state);

@@ -36,6 +36,7 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceInputModeService, VoiceInputModeService } from './voiceInputMode/voiceInputMode.js';
 import { IChatContextPickService, ChatContextPickService } from './attachments/chatContextPickService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
 import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
@@ -86,6 +87,7 @@ import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback
 // Both renderer hosts use these primitives; each host registers its own New and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
 registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
 registerSingleton(IChatInputNotificationService, ChatInputNotificationService, InstantiationType.Delayed);
 registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);

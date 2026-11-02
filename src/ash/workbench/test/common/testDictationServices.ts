@@ -1,4 +1,6 @@
 import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
 import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
@@ -121,6 +123,8 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(IAgentVoiceService)) services.registerInstance(IAgentVoiceService, undefined);
+	if (!services.has(IVoiceInputModeService)) services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	if (!services.has(IChatInputNoticeHubService)) services.registerSingleton(IChatInputNoticeHubService, () => services.createInstance(ChatInputNoticeHubService));
 	if (!services.has(IChatInputNotificationService)) services.registerSingleton(IChatInputNotificationService, () => services.createInstance(ChatInputNotificationService));
 	if (!services.has(IVoiceModeOnboardingService)) services.registerSingleton(IVoiceModeOnboardingService, () => services.createInstance(VoiceModeOnboardingService));

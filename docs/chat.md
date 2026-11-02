@@ -166,6 +166,8 @@ Desktop 只给已完成 Agent 回答提供 Read Aloud。`voiceChatActions.ts` �
 
 标准 HasSpeechProvider／SpeechToTextInProgress／TextToSpeechInProgress context keys 由 SpeechService 的事实驱动，不另存录音状态。无障碍提示、语言偏好、焦点、控制可用性均使用同一窗口服务；fixture 也必须在 window 级注册一次配置、ContextKey、ExtensionService 和 SpeechService。
 
+普通 Chat 工具栏在听写与实时语音均可用时，由 `browser/voiceInputMode/` 显示分段按钮；连接后保留连接开关、麦克风静音与原语音回复打断入口。`VoiceInputModeService` 只拥有 profile UI 选择状态（`chat.voiceInputMode.selected`，默认 `voice`），通过 `IStorageService` 持久化并向 context key 投影；录音、媒体连接和草稿仍由原服务与输入持有。切换模式等待当前输入的另一条录音链退出，隐藏或换输入后不继续启动。common 的监听／静音键由现有 AgentsVoice contribution 从 `IAgentVoiceService` 投影，`agents.voice.showButton` 为 WINDOW scope 的 UI 设置。Compact 输入沿用原布局策略。上游开发演示和专用 VoiceClient transport 未在此链创建平行实现。
+
 ### Ash 实时 Voice 的边界
 
 本地 Voice 接通 Call／LiveKit、麦克风门禁、VoiceAgent 和 VoiceModelSession；Core journal 保存无执行 Turn 的转写，agentHost 转换后用纯文本展示。人类任务提议携带来源 Session／Thread、媒体代次与原 Core command ID，经原 model start／queue／steer 进入 Core／Queue，审批、状态和结果仍由后端拥有。
