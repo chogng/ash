@@ -1,0 +1,26 @@
+.ash-chat-thinking {
+	min-width: 0;
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-thinking > summary {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-small);
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ash-chat-thinking > summary:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-chat-thinking > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-chat-thinking > .ash-chat-markdown-part {
+	min-width: 0;
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-foreground);
+}

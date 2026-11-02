@@ -823,6 +823,7 @@ window.ashChatTranscriptIntegration = {
 		const widget = {
 			visible: true, domNode: list.element,
 			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
+			focusCodeBlock: (reverse?: boolean) => list.focusCodeBlock(reverse),
 			getFocus: () => list.getFocus(),
 			getSibling: (item, type) => list.getSibling(item, type),
 			focus: item => list.focus(item),

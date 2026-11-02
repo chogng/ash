@@ -21,7 +21,7 @@ export class ChatAccessibilityProvider {
 			case 'agentMessage':
 				return 'Ash';
 			case 'reasoning':
-				return localize('chat.transcript.reasoning', 'Reasoning');
+				return item.transient ? localize('chat.thinking.active', 'Thinking…') : localize('chat.thinking.complete', 'Reasoning complete');
 			case 'plan':
 				return localize('chat.transcript.plan', 'Plan');
 			case 'toolCall':

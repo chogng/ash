@@ -14,7 +14,7 @@ suite('Chat image generation', () => {
 		await page.goto('/chatTranscript.html');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showImageGeneration('pending'));
 		const tool = page.locator('.ash-chat-tool-invocation');
-		const summary = tool.locator('summary');
+		const summary = tool.locator(':scope > summary');
 		await expect(summary).toHaveText('Generating image');
 		await expect(tool).not.toHaveAttribute('open');
 		const loading = page.locator('.ash-chat-image-generation-placeholder');
@@ -84,7 +84,7 @@ suite('Chat image generation', () => {
 			const download = page.waitForEvent('download');
 			await result.getByRole('button', { name: locale === 'en' ? 'Download' : '下载', exact: true }).click();
 			expect((await download).suggestedFilename()).toMatch(/\.png$/);
-			await page.locator('.ash-chat-tool-invocation summary').focus();
+			await page.locator('.ash-chat-tool-invocation > summary').focus();
 			await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true));
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Generated images appear outside/ : /生成的图片会显示在工具详情之外/);
 			await page.keyboard.press('Escape');
@@ -125,7 +125,7 @@ suite('Chat image generation', () => {
 			await page.evaluate(state => window.ashChatTranscriptIntegration.showImageGeneration(state), state);
 			await expect(page.locator('.ash-chat-image-glyphs')).toHaveCount(0);
 			await expect(page.locator('.ash-chat-generated-image-result')).toHaveCount(0);
-			await expect(page.locator('.ash-chat-tool-invocation summary')).toHaveText(state === 'failure' ? 'Image generation failed' : 'Image generation stopped');
+			await expect(page.locator('.ash-chat-tool-invocation > summary')).toHaveText(state === 'failure' ? 'Image generation failed' : 'Image generation stopped');
 		});
 	}
 

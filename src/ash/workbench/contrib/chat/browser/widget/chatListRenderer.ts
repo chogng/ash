@@ -24,6 +24,7 @@ import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
 import { ChatHookContentPart } from './chatContentParts/chatHookContentPart.js';
+import { ChatThinkingContentPart } from './chatContentParts/chatThinkingContentPart.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
@@ -36,6 +37,7 @@ interface ChatListItemRendererOptions {
 	/** Borrowed view state remains owned by the list across row replacements. */
 	readonly advisorExpansion: Map<string, boolean>;
 	readonly contextExpansion: Map<string, boolean>;
+	readonly thinkingExpansion: Map<string, boolean>;
 	readonly onDidChangeHeight: () => void;
 	readonly onDidChangeMarkdownHeight: (id: string) => void;
 	readonly onDidChangeContent: () => void;
@@ -65,6 +67,7 @@ export class ChatListItemRenderer extends Disposable {
 	public readonly element: HTMLElement;
 	public toolPart: ChatToolInvocationPart | undefined;
 	public markdownPart: ChatMarkdownContentPart | undefined;
+	public thinkingPart: ChatThinkingContentPart | undefined;
 	public context: { readonly disclosure: HTMLDetailsElement; readonly summary: HTMLElement; readonly content: HTMLElement; } | undefined;
 	private attachments: HTMLElement | undefined;
 	private hookPart: ChatHookContentPart | undefined;
@@ -115,6 +118,10 @@ export class ChatListItemRenderer extends Disposable {
 			this.toolPart.render(item.toolInvocation, item.attachmentSource);
 			this.item = item;
 			this.updateState();
+		} else if (this.thinkingPart && item.type === 'reasoning') {
+			this.thinkingPart.updateThinking(item);
+			this.item = item;
+			this.updateState();
 		} else if (this.markdownPart && !sameItem(this.item, item) && this.item.type === item.type && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
 			&& (this.item.text === item.text && this.item.transient === item.transient
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
@@ -147,7 +154,11 @@ export class ChatListItemRenderer extends Disposable {
 		if (!visible) this.reading.clear();
 		this.media.value?.setVisible(visible);
 		this.toolPart?.setVisible(visible);
-		this.markdownPart?.setVisible(visible);
+		if (this.thinkingPart) {
+			this.thinkingPart.setVisible(visible);
+		} else {
+			this.markdownPart?.setVisible(visible);
+		}
 	}
 
 	public override dispose(): void {
@@ -458,7 +469,9 @@ export class ChatListItemRenderer extends Disposable {
 		label.className = `${this.options.classPrefix}-item-label`;
 		label.textContent = this.accessibilityProvider.getAriaLabel(item);
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
-		body.append(label);
+		if (item.type !== 'reasoning') {
+			body.append(label);
+		}
 		if (body !== article) {
 			const disclosure = body as HTMLDetailsElement;
 			disclosure.open = this.options.advisorExpansion.get(item.id) ?? true;
@@ -469,7 +482,7 @@ export class ChatListItemRenderer extends Disposable {
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
-				visible: this.options.isVisible(),
+				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
@@ -484,7 +497,22 @@ export class ChatListItemRenderer extends Disposable {
 				this.options.onDidChangeContent();
 			}));
 			markdownPart = markdown;
-			body.append(markdown.domNode);
+			if (item.type === 'reasoning') {
+				const thinking = disposables.add(new ChatThinkingContentPart(article.ownerDocument, markdown, {
+					expanded: this.options.thinkingExpansion.get(item.id) ?? false,
+					visible: this.options.isVisible(),
+				}));
+				thinking.updateThinking(item);
+				disposables.add(thinking.onDidChangeHeight(() => {
+					this.options.thinkingExpansion.set(item.id, thinking.domNode.open);
+					this.options.onDidChangeHeight();
+					this.options.onDidChangeContent();
+				}));
+				this.thinkingPart = thinking;
+				body.append(thinking.domNode);
+			} else {
+				body.append(markdown.domNode);
+			}
 		} else {
 			const content = h(this.element.ownerDocument, 'pre');
 			content.textContent = item.text;
