@@ -1,5 +1,7 @@
-import type { FileInvalidation } from '../../../../../../platform/files/common/fileApi.js';
+import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
+import { IRemoteAgentHostService } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IAgentConnection } from '../../../../../../platform/agentHost/common/agentService.js';
+import type { FileInvalidation } from '../../../../../../platform/files/common/fileApi.js';
 import { SessionFileSystemContribution } from '../../../agentHost/browser/sessionFileSystemContribution.js';
 import { ISessionProviderScopeService } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { projectSession } from '../../../../../services/sessions/common/sessionIdentity.js';
@@ -41,7 +43,8 @@ import { FileService } from '../../../../../../platform/files/common/fileService
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../../platform/remote/common/remote.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import { IRendererHostService, type IRendererAgentHost, type IRendererAgentHostConnection, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import { type IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
+import { type IRemoteAgentHostProtocolClient, type IRemoteAgentHostConnectionInfo } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -86,7 +89,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const closed: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
-	let openResult: ((target: RemoteAgentHostConnection, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
+	let openResult: ((target: RemoteAgentHostConnection, host: IRemoteAgentHostProtocolClient) => Promise<IRemoteAgentHostProtocolClient>) | undefined;
 	const renderer = createDisconnectedRendererApi();
 	let containerSessions = false;
 	const sessionDirectoryRequests: unknown[] = [];
@@ -97,7 +100,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		isModelVisible: () => true, setModelVisible: async () => { },
 	});
 	const hostChanges = lifetime.add(new Emitter<void>());
-	const hosts = new Map<string, IRendererAgentHostConnection>();
+	const hosts = new Map<string, IRemoteAgentHostConnectionInfo>();
 	const disconnect = (id: string): void => {
 		const entry = [...hosts.entries()].find(([, value]) => value.id === id);
 		if (entry) entry[1].host?.dispose();
@@ -121,9 +124,10 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const resourceRequests: string[] = [];
 	const openResources = new Set<string>();
 
-	services.registerInstance(IRendererHostService, {
+	registerTestWorkbenchHostServices(services, {
 		...renderer,
 		agentHosts: {
+			isAvailable: true,
 			get connections() { return [...hosts.values()]; },
 			onDidChangeConnections: hostChanges.event,
 			disconnect,
@@ -172,7 +176,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 					disk.set(path, { bytes: Buffer.from(bytes), revision });
 					return { metadata: { fileType: 'file' as const, sizeBytes: bytes.byteLength, readonly: false, modifiedAtMillis: null }, revision };
 				};
-				const api: IRendererHost = {
+				const api: IWorkbenchHost = {
 					...renderer, automation,
 					resource: {
 						connectionGeneration: 0,
@@ -238,7 +242,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						rename: async params => { renamed.push(`${target.name}:${params.sessionId}`); return { session: { ...session, title: params.title }, agentTree: { roots: [] } }; },
 					},
 				};
-				const host: IRendererAgentHost = {
+				const host: IRemoteAgentHostProtocolClient = {
 					id: target.name, connection: target, api, directory: { uri: remoteAgentHostRoot(target, target.name), target: { type: 'environment', dirId: `agent-host:${target.name}` } }, ...toDisposable(() => {
 						closed.push(target.name);
 						if (hosts.get(key)?.host === host) { hosts.delete(key); hostChanges.fire(); }
@@ -254,7 +258,6 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			},
 		},
 	});
-	services.registerInstance(IAgentConnection, services.get(IRendererHostService));
 	services.registerInstance(IAgentHostConnectionsService, lifetime.add(services.createInstance(AgentHostConnectionsService)));
 	const commands = lifetime.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
@@ -289,23 +292,23 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		services, commands, contribution, scopeOwner, registry, automations, quickInput, errors,
 		opened, closed, renamed, deleted, connect, choose, picker, sessionDirectoryRequests,
 		containerSessions: () => { containerSessions = true; },
-		connectTarget: (target: RemoteAgentHostConnection) => services.get(IRendererHostService).agentHosts!.connect(target, new AbortController().signal), files, fileRequests, primaryRequests, resourceRequests, openResources,
+		connectTarget: (target: RemoteAgentHostConnection) => (services.get(IAgentConnection) as IWorkbenchHost).agentHosts!.connect(target, new AbortController().signal), files, fileRequests, primaryRequests, resourceRequests, openResources,
 		publishSessions: (sessions: readonly ISession[]) => { canonicalSessions = sessions; catalogChanges.fire(); },
 		changeFiles: (name: string, path: string) => hostFileChanges.get(name)!.fire({ type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] }),
 		deferOpen: (next: typeof openResult) => { openResult = next; },
 	};
 }
 
-test('remote provider scopes bind their own connection while borrowing the window host', async () => {
+test('remote provider scopes bind their own connection while borrowing window connection management', async () => {
 	using context = fixture();
-	const windowHost = context.services.get(IRendererHostService);
+	const windowHost = (context.services.get(IAgentConnection) as IWorkbenchHost);
 	await context.connect('build-a');
 	const provider = context.registry.getProviders()[0]!;
 	const scope = provider.instantiationService!;
 	const connection = scope.get(IAgentConnection);
 	assert.equal(connection, windowHost.agentHosts!.connections[0]!.host!.api);
 	assert.notEqual(connection, windowHost);
-	assert.equal(scope.get(IRendererHostService), windowHost, 'window capabilities cannot be replaced by a remote execution scope');
+	assert.equal(scope.get(IRemoteAgentHostService), context.services.get(IRemoteAgentHostService), 'window connection management remains with the parent scope');
 	const sessions = await provider.list();
 	await provider.renameSession(sessions[0]!, 'Remote task');
 	assert.deepEqual(context.renamed, ['build-a:same-session']);

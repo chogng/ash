@@ -4,7 +4,7 @@ import type { AgentToolsCatalog } from '../../../../../../platform/agentHost/com
 import { createDisconnectedAgentToolsApi } from '../../../../../../platform/agentHost/browser/agentToolsApi.js';
 import { IAgentToolsApi } from '../../../../../../platform/agentHost/common/agentToolsApi.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import { unavailableOperation, WebAppServerUnavailableError } from '../../../../../../platform/renderer/browser/disconnectedHost.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../../../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { LanguageModelToolsService } from '../../../browser/tools/languageModelToolsService.js';
 import { createDisconnectedAppServerApi } from '../../../../../../platform/agentHost/browser/appServerApi.js';
 import { IAppServerApi } from '../../../../../../platform/agentHost/common/appServerApi.js';

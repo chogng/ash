@@ -66,6 +66,7 @@ suite('Copy conversation', () => {
 		services.registerInstance(IChatSessionNavigationService, navigation);
 		if (options.registerAmbientConnection !== false) {
 			services.registerInstance(IAppServerApi, {
+				isAvailable: true,
 				get connectionGeneration() { return generation; },
 				getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None,
 			} as IAppServerApi);

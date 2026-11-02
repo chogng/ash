@@ -1,4 +1,4 @@
-import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
+import { createTestPathService, testAppServerApi } from '../../../../test/common/workbenchHostTestServices.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
@@ -260,8 +260,8 @@ test('ExplorerView opens workspace files on single click', async () => {
 		services.registerInstance(IResourceIconRenderer, resourceIconRenderer);
 		services.registerInstance(IHoverService, hoverService);
 		services.registerInstance(IDecorationsService, decorations);
-		const paths = new BrowserPathService(createDisconnectedRendererApi(), workspaceContextService);
-		using labels = new LabelService(workspaceContextService, paths, createDisconnectedRendererApi());
+		const paths = createTestPathService(createDisconnectedRendererApi(), workspaceContextService);
+		using labels = new LabelService(workspaceContextService, paths, testAppServerApi(createDisconnectedRendererApi()));
 		services.registerInstance(ILabelService, labels);
 		services.registerInstance(IPathService, paths);
 		using storageService = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: workspaceContextService.getWorkspace().id, flushInterval: 0, onError: () => { } });

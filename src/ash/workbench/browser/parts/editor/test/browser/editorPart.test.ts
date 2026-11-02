@@ -1,3 +1,4 @@
+import { testWorkbenchHostServices } from '../../../../../test/common/workbenchHostTestServices.js';
 import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import { LocalSelectionTransfer } from '../../../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../editorTabDragAndDrop.js';
@@ -58,7 +59,7 @@ import { IConfigurationResolverService } from '../../../../../services/configura
 import { ConfigurationResolverService } from '../../../../../services/configurationResolver/browser/configurationResolverService.js';
 import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
-import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { ITerminalProcessService } from '../../../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
@@ -6750,10 +6751,7 @@ for (const scenario of [
 			const environment = new DeferredPromise<Record<string, string>>();
 			using executionServices = services.createChild(
 				new ServiceCollection(
-					[
-						IRendererHostService,
-						{ ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: scenario.os } },
-					],
+					...testWorkbenchHostServices({ ...base, appServer: { ...base.appServer, operatingSystem: scenario.os, isAvailable: true } }).entries(),
 					[IWorkspaceContextService, workspace],
 					[IEditorService, editors],
 					[ICodeEditorService, codeEditors],

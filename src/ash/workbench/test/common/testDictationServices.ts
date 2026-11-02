@@ -17,7 +17,7 @@ import { ChatInputNotificationService, IChatInputNotificationService } from '../
 import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from '../../contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { AgentsVoiceStorageKeys } from '../../contrib/agentsVoice/common/agentsVoice.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
-import { IVoiceCodeTranscriptionBackendService, type DictationBackend, type IDictationInputOptions } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend, type IDictationInputOptions } from '../../../platform/dictation/common/dictation.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';

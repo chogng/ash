@@ -1,6 +1,6 @@
+import { createTestPathService, testAppServerApi } from '../../../../../test/common/workbenchHostTestServices.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
-import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import { isWindows } from '../../../../../../base/common/platform.js';
@@ -235,6 +235,6 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api, appServer: { ...api.appServer, operatingSystem: os, isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }

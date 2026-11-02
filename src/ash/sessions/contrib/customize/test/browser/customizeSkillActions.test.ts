@@ -1,4 +1,5 @@
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { registerTestWorkbenchHostServices } from '../../../../../workbench/test/common/workbenchHostTestServices.js';
+import { type IWorkbenchHost } from '../../../../../workbench/browser/rendererApi.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -39,7 +40,7 @@ function fixture(profileAvailable = true) {
 	services.registerInstance(IFileService, files);
 	services.registerInstance(IDialogService, { input: async () => state.input, prompt: async () => ({}) } as unknown as IDialogService);
 	services.registerInstance(IPathService, { userHome: async () => home, getHostPath: async (resource: URI) => resource.path } as IPathService);
-	services.registerInstance(IRendererHostService, { userDataHome: profileAvailable ? home : undefined } as IRendererHost);
+	registerTestWorkbenchHostServices(services, { userDataHome: profileAvailable ? home : undefined } as IWorkbenchHost);
 	services.registerInstance(ISessionPrimaryProviderServices, {
 		prompts: {
 			registerSkillSource: async (root: string) => {

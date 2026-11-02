@@ -18,15 +18,38 @@ import { ISessionsManagementService } from '../../services/sessions/common/sessi
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
-import '../../browser/actions/approvalEnvironmentActions.js';
+import '../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
+import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { SessionActionsService } from '../../browser/sessionActionsService.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../browser/actions/sessionsChatActions.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 
 const scanOptions: ReviewEnvironmentScanOptions = { recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: false, history: { sessions: 50, commandsPerSession: 200, days: null } };
 
+test('shared Guardian command reports an unavailable capability without resolving a project or opening a picker', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(IApprovalEnvironmentService, undefined);
+	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+		createQuickPick() { assert.fail('an unavailable capability must not open a picker'); }, input: async () => undefined,
+	} satisfies QuickInput);
+	using commands = new CommandService(services);
+	await assert.rejects(commands.executeCommand('chat.guardian.setup', { inputState: {} } as IChatWidgetModel), /Review environment preparation or the selected model is unavailable/u);
+});
+
+function registerSessionActions(services: InstantiationService, workspace: IWorkspaceContextService = { getWorkspace: () => ({ id: 'empty', folders: [] }) } as unknown as IWorkspaceContextService): void {
+	services.registerInstance(IStorageService, {} as IStorageService);
+	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
+}
+
 test('permission command uses stable IDs and keeps bypass confirmation on the requesting composer', async () => {
 	using services = new InstantiationService();
+	registerSessionActions(services);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	const choices: string[] = [];
@@ -90,6 +113,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using services = new InstantiationService();
+	registerSessionActions(services);
 	const choices = ['扫描项目…', '用当前任务模型整理资料', '包含项目近期会话', '会话上限：50', '每会话命令数：200', '时间范围：所有日期', '继续，生成草稿', 'curl', '接受为项目背景资料', '保存已接受的条目'];
 	const seen: string[] = [];
 	const sourceDetails: string[] = [];
@@ -139,6 +163,7 @@ test('Chinese environment preparation keeps scan scope explicit and saves only r
 
 test('closing a running environment scan calls the backend cancellation API and never saves', async () => {
 	using services = new InstantiationService();
+	registerSessionActions(services);
 	const choices = ['Scan project…', 'Continue — generate draft'];
 	let cancel: (() => void) | undefined;
 	let cancelledId: string | undefined;
@@ -167,6 +192,7 @@ test('closing a running environment scan calls the backend cancellation API and 
 test('rescanning replaces untouched observations while retaining explicit edits of the same source version', async () => {
 	for (const edited of [false, true]) {
 		using services = new InstantiationService();
+		registerSessionActions(services);
 		const choices = ['Scan project…', 'Continue — generate draft', ...(edited ? ['package.json', 'Edit description…'] : []), 'Scan project…', 'Continue — generate draft', edited ? 'package.json' : 'Build summary', 'Accept as project background', 'Save accepted entries'];
 		let scans = 0;
 		services.registerInstance(IApprovalEnvironmentService, {
@@ -195,8 +221,10 @@ test('rescanning replaces untouched observations while retaining explicit edits 
 
 
 test('review preparation refuses explicit, window and durable remote targets before contacting the backend', async () => {
-	for (const scope of ['draft', 'window', 'thread'] as const) {
+	for (const scope of ['draft', 'window', 'thread', 'wsl', 'tunnel', 'provider'] as const) {
 		using services = new InstantiationService();
+		using context = new TestWorkspaceService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });
+		registerSessionActions(services, context);
 		services.registerInstance(IQuickInputService, { ...quickInputServiceTestControls, createQuickPick() { assert.fail('remote scopes do not open project preparation'); }, input: async () => undefined } satisfies QuickInput);
 		services.registerInstance(IApprovalEnvironmentService, {
 			read: async () => { assert.fail('remote root must not be read by the local backend'); },
@@ -206,18 +234,72 @@ test('review preparation refuses explicit, window and durable remote targets bef
 		services.registerInstance(INotificationService, {} as INotificationService);
 		services.registerInstance(ISessionsManagementService, {
 			sessions: [{ sessionId: 'remote', workspace: { authorityId: 'ssh+build-host', root: '/same-as-local' }, chats: [{ threadId: 'remote-thread' }] }],
-			untitledSessions: [{ untitledSessionId: 'chosen', workspace: scope === 'window' ? { type: 'current' } : { type: 'ssh', host: 'build-host', root: '/same-as-local' } }],
+			untitledSessions: [{
+				untitledSessionId: 'chosen', workspace: scope === 'window' ? { type: 'current' }
+					: scope === 'wsl' || scope === 'tunnel' ? { type: 'remote', authority: `${scope}+build-host`, root: '/same-as-local' }
+						: scope === 'provider' ? { type: 'provider', providerId: 'sandbox', workspace: 'build-host', root: '/same-as-local' }
+							: { type: 'ssh', host: 'build-host', root: '/same-as-local' }
+			}],
 		} as unknown as ISessionsManagementService);
-		using context = new TestWorkspaceService({ id: 'remote-workspace', folders: [{ id: 'folder', index: 0, name: 'Project', uri: createSshRemoteWorkspaceUri('build-host', '/same-as-local') }] });
-		services.registerInstance(IWorkspaceContextService, context);
 		using commands = new CommandService(services);
 		await assert.rejects(commands.executeCommand('chat.guardian.setup', { ...(scope === 'thread' ? { sessionId: 'remote', threadId: 'remote-thread' } : { untitledSessionId: 'chosen' }), inputState: {} } as IChatWidgetModel), /remote project is not supported yet/u);
+	}
+});
+
+test('shared Guardian command resolves the requesting branch without changing the active conversation', async () => {
+	using services = new InstantiationService();
+	registerSessionActions(services);
+	const active = { sessionId: 'active-elsewhere', threadId: 'active-thread' };
+	services.registerInstance(ISessionsManagementService, {
+		active,
+		sessions: [{ sessionId: 'requested', workspace: { authorityId: 'remote+parent', root: '/parent' }, chats: [{ threadId: 'branch', workspace: { authorityId: 'local', root: '/branch' } }] }],
+		untitledSessions: [],
+	} as unknown as ISessionsManagementService);
+	const reads: unknown[] = [];
+	services.registerInstance(IApprovalEnvironmentService, {
+		read: async scope => { reads.push(scope); return { root: '/branch', revision: 1, entries: [], scanOptions }; },
+		scan: async () => { assert.fail('opening a review does not scan'); }, cancel: async () => { assert.fail('no scan started'); },
+		save: async () => { assert.fail('closing a review does not save'); },
+	} satisfies EnvironmentService);
+	services.registerInstance(INotificationService, {} as INotificationService);
+	services.registerInstance(IQuickInputService, {
+		...quickInputServiceTestControls,
+		createQuickPick: <T extends IQuickPickItem>(): IQuickPick<T> => new Picker<T>(picker => {
+			assert.equal(picker.ariaLabel, 'Review environment: /branch');
+			picker.hide();
+		}), input: async () => undefined,
+	} satisfies QuickInput);
+	using commands = new CommandService(services);
+	const model = { sessionId: 'requested', threadId: 'branch', inputState: {} } as IChatWidgetModel;
+	await commands.executeCommand('chat.guardian.setup', model);
+	await commands.executeCommand('chat.guardian.setup', model, 'setup');
+	assert.deepEqual(reads, [{ type: 'thread', threadId: 'branch' }, { type: 'thread', threadId: 'branch' }]);
+	assert.equal(services.get(ISessionsManagementService).active, active);
+});
+
+test('Guardian rejects an unavailable or non-filesystem branch instead of using the parent project', async () => {
+	for (const workspace of [null, undefined, { authorityId: 'ssh+branch', root: '/branch' }]) {
+		using services = new InstantiationService();
+		registerSessionActions(services);
+		services.registerInstance(ISessionsManagementService, {
+			sessions: [{ sessionId: 'requested', workspace: { authorityId: 'local', root: '/parent' }, chats: workspace === undefined ? [] : [{ threadId: 'branch', workspace }] }],
+			untitledSessions: [],
+		} as unknown as ISessionsManagementService);
+		services.registerInstance(INotificationService, {} as INotificationService);
+		services.registerInstance(IQuickInputService, { ...quickInputServiceTestControls, createQuickPick() { assert.fail('unavailable branches do not open a picker'); }, input: async () => undefined } satisfies QuickInput);
+		services.registerInstance(IApprovalEnvironmentService, {
+			read: async () => { assert.fail('unavailable branches must not reach the backend'); },
+			scan: async () => { assert.fail('no scan started'); }, cancel: async () => { assert.fail('no scan started'); }, save: async () => { assert.fail('no review opened'); },
+		} satisfies EnvironmentService);
+		using commands = new CommandService(services);
+		await assert.rejects(commands.executeCommand('chat.guardian.setup', { sessionId: 'requested', threadId: 'branch', inputState: {} } as IChatWidgetModel), workspace ? /remote project is not supported/u : /Choose a project/u);
 	}
 });
 
 test('multiple project review selection binds the selected local folder and cancellation has no side effects', async () => {
 	for (const cancelled of [false, true]) {
 		using services = new InstantiationService();
+		registerSessionActions(services);
 		const workspace: SessionWorkspaceSelection = { type: 'multiple', folders: [{ label: 'First', target: { type: 'local', root: '/first' } }, { label: 'Selected', target: { type: 'local', root: '/selected' } }] };
 		services.registerInstance(ISessionsManagementService, { sessions: [], untitledSessions: [{ untitledSessionId: 'chosen', workspace }] } as unknown as ISessionsManagementService);
 		services.registerInstance(INotificationService, {} as INotificationService);

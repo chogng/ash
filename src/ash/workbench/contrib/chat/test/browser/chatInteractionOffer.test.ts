@@ -23,7 +23,7 @@ function fixture() {
 	let generation = 1;
 	let pending: Promise<ThreadSubscription> = Promise.resolve(snapshot());
 	let subscriptions = 0; let unsubscriptions = 0;
-	const api = { get connectionGeneration() { return generation; }, getConnectionState: async () => state, onConnectionState: states.event } as unknown as IAppServerApi;
+	const api = { isAvailable: true, get connectionGeneration() { return generation; }, getConnectionState: async () => state, onConnectionState: states.event } as unknown as IAppServerApi;
 	const threads = { onDidOfferInteraction: offers.event, onDidUpdateThread: updates.event, onDidUpdateThreadTranscript: Event.None, subscribe: () => { subscriptions++; return pending; }, unsubscribe: async () => { unsubscriptions++; } } as unknown as IAgentThreadService;
 	const sessions = { onDidChangeSession: Event.None } as IAgentSessionService;
 	const service = lifetime.add(new ChatService({} as IAgentModelsService, sessions, threads, {} as IAgentTurnService, {} as ITurnChangesApi, api, { subscribe: () => ({ dispose() { } }) } as IServerEventApi, {} as IAgentExecutionSettingsService, lifetime.add(new TestConfigurationService())));

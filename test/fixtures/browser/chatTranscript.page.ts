@@ -11,7 +11,7 @@ import { ImageEditorService } from '../../../src/ash/workbench/services/imageEdi
 const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ImagePreviewEditor } from '../../../src/ash/workbench/contrib/mediaPreview/browser/imagePreviewEditor.js';
 import { MediaPreview } from '../../../src/ash/workbench/contrib/mediaPreview/browser/mediaPreview.js';
@@ -106,7 +106,7 @@ import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench
 import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
@@ -1276,11 +1276,10 @@ window.ashChatTranscriptIntegration = {
 		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
-		lifecycleServices.registerInstance(IRendererHostService, disconnected);
-		lifecycleServices.registerInstance(IAgentConnection, lifecycleServices.get(IRendererHostService));
+		lifecycleServices.registerInstance(IAgentConnection, disconnected);
 		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
-		lifecycleServices.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
+		lifecycleServices.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
 		lifecycleServices.registerInstance(IServerEventApi, { subscribe: () => Disposable.None });
 		lifecycleServices.registerInstance(IAgentModelsService, disconnected.model);
 		lifecycleServices.registerInstance(IAgentTurnService, disconnected.turn);

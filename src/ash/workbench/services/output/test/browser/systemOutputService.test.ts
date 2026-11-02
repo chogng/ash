@@ -18,6 +18,7 @@ test('window logging initialization is recorded only at trace level', async () =
 		const entries: LogEntry[] = [];
 		using logger = new LogService({ level, sinks: [{ log: entry => entries.push(entry) }] });
 		using service = new SystemOutputService(output, {
+			isAvailable: true,
 			connectionGeneration: 0, getConnectionState: async () => 'stopped',
 			getSlashCommands: async () => [], onConnectionState: Event.None,
 		}, logger, { list: async () => [], read: async () => { throw new Error('No saved sources'); } });
@@ -29,6 +30,7 @@ test('window logging initialization is recorded only at trace level', async () =
 test('SystemOutputService projects App Server lifecycle', async () => {
 	const listeners = new Set<(state: AppServerConnectionState) => void>();
 	const appServer: IAppServerApi = {
+		isAvailable: true,
 		connectionGeneration: 1,
 		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],
@@ -47,7 +49,7 @@ test('SystemOutputService projects App Server lifecycle', async () => {
 test('system Output preserves producer time, severity, category and error context', () => {
 	using resources = new DisposableStore();
 	const output = workbenchInstantiationService(resources).get(IOutputService);
-	using service = new SystemOutputService(output, { connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }) });
+	using service = new SystemOutputService(output, { isAvailable: true, connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }) });
 	service.log({ timestampMillis: 42, level: 'warning', category: 'workspace/read', message: 'unavailable', error: new Error('permission denied') });
 	const entry = output.getChannel(windowLogId)!.entries[0]!;
 	assert.deepEqual([entry.timestamp, entry.severity, entry.category], [42, 'warning', 'workspace/read']);
@@ -100,7 +102,7 @@ test('recording level is producer-owned while Output filtering preserves retaine
 	using resources = new DisposableStore();
 	const output = workbenchInstantiationService(resources).get(IOutputService);
 	using logger = new LogService();
-	using service = new SystemOutputService(output, { connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }) }, logger);
+	using service = new SystemOutputService(output, { isAvailable: true, connectionGeneration: 0, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }) }, logger);
 	using sink = logger.registerSink(service);
 	logger.trace('hidden at source');
 	logger.info('retained');

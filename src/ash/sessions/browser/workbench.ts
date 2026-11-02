@@ -1,3 +1,5 @@
+import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
+import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
 import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -136,12 +138,11 @@ import { ISessionsProvidersService } from '../services/sessions/browser/sessions
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/common/dictation.js';
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
 import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
-import './actions/approvalEnvironmentActions.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -196,7 +197,7 @@ import { ILifecycleService, LifecyclePhase, type ShutdownReason } from '../../wo
 import { NotificationService } from '../../workbench/services/notification/common/notificationService.js';
 import { INotificationsCenter, NotificationsCenter } from '../../workbench/browser/parts/notifications/notificationsCenter.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
-import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import { type IWorkbenchHost } from '../../workbench/browser/rendererApi.js';
 import { AgentHostConnectionsService } from '../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
@@ -349,7 +350,7 @@ export interface IWorkbenchOptions {
 	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly contributionIds: readonly string[];
 	readonly profile: SessionsProfile;
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
 	readonly browserFileSystemProvider?: IFileSystemProvider;
@@ -439,7 +440,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
 		if (!serviceCollection.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
-		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
+		services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, options.api.dictation);
 		services.registerInstance(IAgentVoiceService, options.api.agentVoice);
 		if (options.api.channels) services.registerInstance(IChannelService, options.api.channels);
@@ -491,8 +492,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		if (!services.has(IBrowserPasswordService)) { services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService); }
 		services.registerInstance(AppServerApiId, options.api.appServer);
-		services.registerInstance(IRendererHostService, options.api);
+		Object.assign(services.get(IWorkbenchEnvironmentService), { userHome: options.api.localUserHome, userRoamingDataHome: options.api.userDataHome });
 		services.registerInstance(IAgentConnection, options.api);
+		services.registerInstance(ISymphonyBackendService, options.api.symphony);
+		services.registerInstance(IRemoteAgentHostService, options.api.agentHosts ?? new NullRemoteAgentHostService());
 		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, options.api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
@@ -542,7 +545,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
 		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
-		if (!options.api.hasAppServer) services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
+		if (!options.api.appServer.isAvailable) services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
@@ -579,7 +582,7 @@ export abstract class Workbench extends Disposable {
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
-		if (!options.api.hasAppServer) services.registerInstance(IContentSearchService, new FileContentSearchService(fileService));
+		if (!options.api.appServer.isAvailable) services.registerInstance(IContentSearchService, new FileContentSearchService(fileService));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		primaryHostServices.registerInstance(IChatService, chat);
@@ -599,11 +602,11 @@ export abstract class Workbench extends Disposable {
 		const checkWorkspaceTrust = !!options.nativeHostApi;
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
-		const languageLifecycle = options.api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
-		const languageProviders = options.api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
+		const languageLifecycle = options.api.appServer.isAvailable ? services.get(ILanguageServerLifecycleService) : undefined;
+		const languageProviders = options.api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		// A disconnected preview needs local syntax, not server diagnostics or model sync.
 		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust);
-		const languageDiagnosticsService = options.api.hasAppServer ? this._register(createDiagnostics()) : undefined;
+		const languageDiagnosticsService = options.api.appServer.isAvailable ? this._register(createDiagnostics()) : undefined;
 		if (languageDiagnosticsService) {
 			services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 			this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
@@ -613,7 +616,7 @@ export abstract class Workbench extends Disposable {
 		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
 		services.registerInstance(ISessionProviderScopeService, providerScopes);
 		this._register(services.createInstance(SessionFileSystemContribution, provider.id));
-		if (options.api.hasAppServer) {
+		if (options.api.appServer.isAvailable) {
 			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 			services.registerInstance(IFileSearchService, search);
 			services.registerInstance(IAgentHostInputCompletionService, search);
@@ -701,7 +704,7 @@ export abstract class Workbench extends Disposable {
 		}
 		const contextKeys = this._register(new ContextKeyService());
 		IsDevelopmentContext.bindTo(contextKeys).set(!services.get(IWorkbenchEnvironmentService).isBuilt);
-		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);
+		AppServerAvailableContext.bindTo(contextKeys).set(options.api.appServer.isAvailable);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
@@ -979,7 +982,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		if (options.api.hasAppServer) services.get(ILanguageServerStatusService);
+		if (options.api.appServer.isAvailable) services.get(ILanguageServerStatusService);
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));
@@ -1068,7 +1071,7 @@ export abstract class Workbench extends Disposable {
 				if (legacyBrowser && !editor.groups.some(group => group.inputs.some(input => input.resource.scheme === BrowserViewUri.scheme))) {
 					await editor.applyWorkingSet(JSON.parse(legacyBrowser) as EditorWorkingSet, { preserveFocus: true, preserveGroups: [...previousGroups] });
 				}
-				if (options.api.hasAppServer) {
+				if (options.api.appServer.isAvailable) {
 					const terminals = services.get(ITerminalService);
 					await terminals.whenConnected;
 					for (const instance of terminals.instances) {

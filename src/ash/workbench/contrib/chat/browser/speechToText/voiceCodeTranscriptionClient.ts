@@ -5,7 +5,7 @@ import { canceled } from '../../../../../base/common/errors.js';
 import { raceCancellationError } from '../../../../../base/common/async.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService, type DictationBackend } from '../../../../../platform/dictation/common/dictation.js';
 import { dictationBackend, dictationInputOptions } from '../../common/constants.js';
 import { localize } from '../../../../../nls.js';
 

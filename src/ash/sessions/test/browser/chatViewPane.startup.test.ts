@@ -51,7 +51,7 @@ import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession
 import { ISessionsManagementService, type SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 

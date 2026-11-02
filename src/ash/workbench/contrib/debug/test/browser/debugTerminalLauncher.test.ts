@@ -1,3 +1,4 @@
+import { testWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
@@ -18,7 +19,7 @@ import { emptyEditorServiceState } from '../../../../test/common/testEditorServi
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -101,7 +102,7 @@ suite('DAP terminal availability', () => {
 				resize: async () => { }, close: async () => { calls.push('close'); },
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(createDisconnectedRendererApi()).entries(), [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
@@ -140,7 +141,7 @@ suite('DAP terminal availability', () => {
 				close: async options => { calls.push(`close:${options.terminalId}`); },
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
-			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(createDisconnectedRendererApi()).entries(), [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
@@ -312,7 +313,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 		create: unexpectedProcess, write: unexpectedProcess, resize: unexpectedProcess, read: unexpectedProcess, close: unexpectedProcess,
 	};
 	const parentServices = workbenchInstantiationService(resources, storage);
-	const services = parentServices.createChild(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+	const services = parentServices.createChild(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(createDisconnectedRendererApi()).entries(), [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, new SyncDescriptor(FileService)],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)], [ILabelService, new SyncDescriptor(LabelService)],
 		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],

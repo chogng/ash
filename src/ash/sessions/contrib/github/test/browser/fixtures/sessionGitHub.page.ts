@@ -10,7 +10,7 @@ import { IChatService, type StartTurnOptions } from '../../../../../../workbench
 import { IGitHubService as IGitHubApi } from '../../../../../../platform/github/common/githubService.js';
 import { IGitHubService as ISessionGitHubService } from '../../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
-import type { IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
 import { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
@@ -205,9 +205,9 @@ resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undef
 const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
 const scm = { onDidAddRepository: Event.None, onDidRemoveRepository: Event.None, repositories: git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: (listener: () => void) => statusChanged.event(() => listener()) } })) } as unknown as ISCMService;
 const baseHost = createDisconnectedRendererApi();
-const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
+const hostEvents = resources.add(new Emitter<Parameters<Parameters<IWorkbenchHost['events']['subscribe']>[0]>[0]>());
 resources.add(accountsChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
-const host: IRendererHost = {
+const host: IWorkbenchHost = {
 	...baseHost, automation: resources.add(new AppServerAutomationService(client)), github: new AppServerGitHubService(client), events: { subscribe: hostEvents.event },
 	appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready', onConnectionState: listener => client.onStateChange(listener) },
 	localGit: {

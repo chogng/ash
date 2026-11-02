@@ -7,19 +7,19 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { tunnelEndpoint } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 
 /** Connects Ash's authenticated loopback URL after the user establishes its SSH forward. */
 export class TunnelAgentHostContribution extends Disposable {
 	public static readonly ID = 'sessions.contrib.tunnelAgentHostContribution';
 	private readonly pending = this._register(new DisposableStore());
 	constructor(
-		@IRendererHostService private readonly renderer: IRendererHost,
+		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		if (!renderer.agentHosts) return;
+		if (!remoteHosts.isAvailable) return;
 		const id = 'sessions.action.connectTunnelAgentHost';
 		this._register(CommandsRegistry.register(id, () => this.connect()));
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id, title: localize2('sessions.hosts.connectTunnel', 'Agents: Connect to Ash Tunnel…') } }));
@@ -43,7 +43,7 @@ export class TunnelAgentHostContribution extends Disposable {
 			if (!link || resources.isDisposed) return;
 			const { endpoint, ticket } = parseTunnelLink(link);
 			link = undefined;
-			await this.renderer.agentHosts!.connect({ type: 'tunnel', name: localize('sessions.hosts.tunnelName', 'Ash Tunnel ({0})', new URL(endpoint).port), endpoint, workspace: '/' }, controller.signal, ticket);
+			await this.remoteHosts.connect({ type: 'tunnel', name: localize('sessions.hosts.tunnelName', 'Ash Tunnel ({0})', new URL(endpoint).port), endpoint, workspace: '/' }, controller.signal, ticket);
 		} catch (error) {
 			if (!this.isDisposed && !controller.signal.aborted && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 		} finally { this.pending.delete(resources); resources.dispose(); }

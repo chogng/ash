@@ -1,3 +1,5 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
+import { IAppServerApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
@@ -125,7 +127,7 @@ import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/
 import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -284,7 +286,7 @@ let focusedHistoryView: string | undefined;
 
 function createSessionChangesPane(): SessionChangesEditor {
 	if (!sessionServices) {
-		if (!editorServices.has(IRendererHostService)) { editorServices.registerInstance(IRendererHostService, createDisconnectedRendererApi()); }
+		if (!editorServices.has(IAppServerApi)) { registerTestWorkbenchHostServices(editorServices, createDisconnectedRendererApi()); }
 		const parentServices = resources.add(createTestEditorServices(undefined, editorServices));
 		if (!editorServices.has(IFileService)) { editorServices.registerInstance(IFileService, parentServices.get(IFileService)); }
 		sessionServices = resources.add(parentServices.createChild());

@@ -172,7 +172,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILocalTranscriptionModelService, transcription);
 	services.registerInstance(ILocalTranscriptionService, transcription);
-	const { IVoiceCodeTranscriptionBackendService } = await import('../../../platform/renderer/common/dictation.js');
+	const { IVoiceCodeTranscriptionBackendService } = await import('../../../platform/dictation/common/dictation.js');
 	const { ISpeechService } = await import('../../../workbench/contrib/speech/common/speechService.js');
 	const { SpeechService } = await import('../../../workbench/contrib/speech/browser/speechService.js');
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);

@@ -31,7 +31,7 @@ import { AppServerConnectionRecovery, AppServerProtocolClient, type AppServerPro
 import { createAppServerFileApi } from '../../platform/files/browser/fileApi.js';
 import { createAppServerExtensionApi } from '../../platform/extensions/browser/extensionApi.js';
 import { createAppServerSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
-import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
+import { mergeWorkbenchHostCapabilities, type IWorkbenchHost, type WorkbenchHostCapabilities } from './rendererApi.js';
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
 import { createAppServerAgentHostInputCompletionService, createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createAppServerAgentModelsService } from '../../platform/models/browser/appServerAgentModels.js';
@@ -56,10 +56,10 @@ import { createAppServerTurnChangesApi } from '../../platform/turnChanges/browse
 import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
 import { createAppServerTeamApi } from '../../platform/teams/browser/teamApi.js';
 
-export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost['appServer']) => RendererHostCapabilities;
+export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IWorkbenchHost['appServer']) => WorkbenchHostCapabilities;
 
 export interface ConnectedWebRendererApi {
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	readonly metadata: AppServerConnectionMetadata;
 	dispose(): void;
 }
@@ -104,19 +104,19 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
  * Workbench composes domain adapters; the supplied client remains the connection owner.
  * For a host-bound SSH client, domain paths retain that host while the wire uses server-local paths.
  */
-export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], remoteHost?: string | { readonly authority: string; }, recovery?: IAppServerConnectionRecovery): IRendererHost {
+export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], remoteHost?: string | { readonly authority: string; }, recovery?: IAppServerConnectionRecovery): IWorkbenchHost {
 	const contextResourceHost = connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
 	const snapshots = contextResourceHost?.add(new AgentHostResourceService());
 	try {
 		if (contextResourceHost && snapshots) { contextResourceHost.add(registerAgentHostResourceHost(connection, snapshots)); }
 		const appServer = createAppServerAppServerApi(connection, recovery);
 		const resource = createAppServerResourceApi(connection);
-		const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
+		const capabilities = mergeWorkbenchHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 		return {
 			appServer,
 			tcp: new AppServerTcpService(connection),
 			contextResourceHost,
-			hasAppServer: true,
+
 			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 			approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 			accounts: createAppServerAccountApi(connection, connectorHostServices),

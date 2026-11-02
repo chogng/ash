@@ -1,3 +1,4 @@
+import { testWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
@@ -9,7 +10,7 @@ import { initializeTestLocalization } from '../../../../services/localization/te
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -645,8 +646,8 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugSession> {
 	using workspace = new TestWorkspaceService({ id: 'test', uri: options.workspace });
 	const base = createDisconnectedRendererApi();
-	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
-	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)]));
+	const host = { ...base, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows, isAvailable: true } };
+	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(host).entries(), [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	using resolver = services.createInstance(ConfigurationResolverService);
 	const resolvedConfiguration = await resolver.resolveAsync(workspace.getWorkspace().folders[0], { adapter: options.configuration.adapter, arguments: options.configuration.arguments });

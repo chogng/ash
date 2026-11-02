@@ -107,6 +107,7 @@ function createFixture() {
 		},
 	};
 	services.registerInstance(IAppServerApi, {
+		isAvailable: true,
 		connectionGeneration: 1,
 		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],

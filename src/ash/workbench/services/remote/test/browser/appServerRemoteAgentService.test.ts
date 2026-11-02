@@ -99,6 +99,7 @@ test('remote agent delegates path-free runtime rollback only for SSH connections
 });
 
 class TestAppServerApi extends Disposable implements IAppServerApi {
+	readonly isAvailable = true;
 	readonly connectionGeneration = 1;
 	private readonly stateEmitter = this._register(new Emitter<AppServerConnectionState>());
 	private readonly initial = deferred<AppServerConnectionState>();

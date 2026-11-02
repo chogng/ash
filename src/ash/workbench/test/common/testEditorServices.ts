@@ -1,3 +1,5 @@
+import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IChatLayoutService } from '../../contrib/chat/common/widget/chatLayoutService.js';
 import { ChatLayoutService } from '../../contrib/chat/browser/widget/chatLayoutService.js';
@@ -18,7 +20,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../browser/rendererApi.js';
 import { IElevatedFileService } from '../../services/files/common/elevatedFileService.js';
 import { BrowserElevatedFileService } from '../../services/files/browser/elevatedFileService.js';
@@ -188,7 +190,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IStatusbarService)) services.registerSingleton(IStatusbarService, () => new StatusbarService());
 	if (!services.has(IMessageHistoryService)) services.registerInstance(IMessageHistoryService, undefined);
 	if (!services.has(IQuickInputService)) services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) }));
-	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	if (!services.has(IAppServerApi)) registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	if (!services.has(ILabelService)) services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => services.createInstance(BrowserWorkingCopyService));

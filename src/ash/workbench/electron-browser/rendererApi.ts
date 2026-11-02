@@ -1,18 +1,28 @@
+import type {
+	IRuntimeEnvironment,
+} from '../../base/common/environment.js';
+import type { INativeKeyboardLayoutApi } from '../../platform/keyboardLayout/common/nativeKeyboardLayout.js';
+import type { IUserKeyboardLayoutApi } from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import type {
+	INativeContextMenuApi,
+} from '../../base/parts/contextmenu/common/contextmenu.js';
+import type {
+	IWorkspaceContextApi,
+} from '../../platform/workspace/common/workspaceIpc.js';
+import type { IFileSystemProvider } from '../../platform/files/common/files.js';
+import type {
+	INativeHostApi,
+} from '../../platform/native/common/nativeHost.js';
+import { RemoteAgentHostService } from '../../platform/agentHost/electron-browser/remoteAgentHostService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
 import { AppServerTcpService } from '../../platform/network/browser/appServerTcpService.js';
-import type { IFileSystemDirectory } from '../../platform/files/common/fileApi.js';
-import { canonicalAgentHostConnection, isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../platform/agentHost/common/remoteAgentHostService.js';
-import { REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
+import { isSSHAgentHost, remoteAgentHostRoot } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import { APP_SERVER_METHODS, type EnvDirSetEntry } from '../../../../.build/protocol/typescript/index.js';
 import { TERMINAL_WINDOW_LIFETIME_CHANNEL } from '../../platform/terminal/common/terminal.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
-import { generateUuid } from '../../base/common/uuid.js';
-import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import { Emitter, Event } from '../../base/common/event.js';
-import { agentHostConnectionAddress } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
-import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from '../../platform/collab/browser/appServerChannelService.js';
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -24,7 +34,7 @@ import { EDIT_USER_CONFIGURATION_CHANNEL } from '../../platform/native/common/na
 import { AppServerBackupService } from '../../platform/backup/browser/appServerBackupService.js';
 import { AppServerCallService } from '../../platform/call/browser/appServerCallService.js';
 import { AppServerAgentVoiceService } from '../../platform/agentHost/browser/appServerAgentService.js';
-import { createAppServerVoiceCodeTranscriptionBackend } from '../../platform/renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
+import { createAppServerVoiceCodeTranscriptionBackend } from '../../platform/dictation/browser/appServerVoiceCodeTranscriptionBackend.js';
 import { AppServerMemoriesService } from '../../platform/memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
@@ -36,7 +46,7 @@ import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace, initializeWorkspaceDirectories } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import type { IRendererHost, IRendererAgentHost } from '../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../browser/rendererApi.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../platform/terminal/browser/reconnectableTerminalProcessService.js';
@@ -57,21 +67,30 @@ import { createUserKeyboardLayoutApi } from '../../platform/keyboardLayout/elect
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
 import { URI } from '../../base/common/uri.js';
 import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
-import type { AshElectronRendererApi } from '../../platform/native/common/rendererApi.js';
 import { createNativeHostApi } from '../../platform/native/electron-browser/nativeHostApi.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
-import type { IAppServerApi, IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
-import type { RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
+import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
 import { createRemoteAgentApi } from '../../platform/remote/electron-browser/remoteAgentApi.js';
 import { createRemoteConnectionApi } from '../../platform/remote/electron-browser/remoteConnectionApi.js';
-import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
 import type { IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { isCancellationError, CancellationError } from '../../base/common/errors.js';
+
+/** Desktop startup capabilities assembled by the Electron host. */
+export interface AshElectronRendererApi extends IWorkbenchHost {
+	readonly environment: IRuntimeEnvironment;
+	readonly keyboardLayout: INativeKeyboardLayoutApi;
+	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
+	readonly nativeContextMenu: INativeContextMenuApi;
+	readonly nativeHost: INativeHostApi;
+	readonly localFiles: IFileSystemProvider;
+	readonly userDataHome: URI;
+	readonly workspace: IWorkspaceContextApi;
+}
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
@@ -116,7 +135,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const enabled = await agentHost.connect();
 		const connection = agentHost.connection;
 		const client = agentHost.client;
-		let backend: IRendererHost;
+		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
 		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
@@ -235,67 +254,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}));
 			performance.mark('ash.rendererApi.workspace-initialized');
 		} else {
-			backend = createDisconnectedRendererApi();
+			// Desktop supports server features even when the UI development host starts disconnected.
+			backend = createDisconnectedRendererApi(true);
 		}
 
-		interface HostScope {
-			readonly id: string;
-			target: RemoteAgentHostConnection;
-			readonly resources: DisposableStore;
-			readonly controller: AbortController;
-			readonly ready: Promise<IRendererAgentHost>;
-			directory?: IFileSystemDirectory;
-			lease?: LocalAgentHostServiceClient;
-			host?: IRendererAgentHost;
-			initialization?: Promise<void>;
-			initializing?: boolean;
-			error?: unknown;
-		}
-		const hostChanges = resources.add(new Emitter<void>());
-		const hostScopes = new Map<string, HostScope>();
-		const hostState = (scope: HostScope): import('../../platform/agentHost/common/appServerApi.js').AppServerConnectionState => {
-			if (scope.resources.isDisposed) return 'stopped';
-			const state = scope.lease?.client.state ?? 'starting';
-			if (state !== 'ready') return state;
-			return scope.error ? 'crashed' : scope.initializing ? 'initializing' : state;
-		};
-		const releaseScope = (scope: HostScope): void => {
-			const key = agentHostConnectionAddress(scope.target);
-			if (hostScopes.get(key) !== scope) return;
-			hostScopes.delete(key);
-			resources.delete(scope.resources);
-			scope.resources.dispose();
-			hostChanges.fire();
-		};
-		resources.add(toDisposable(() => { for (const scope of [...hostScopes.values()]) releaseScope(scope); }));
-		const openHostScope = async (scope: HostScope, ticket?: string): Promise<IRendererAgentHost> => {
-			const { id, resources: hostResources, controller } = scope;
-			const signal = controller.signal;
-			const release = (): void => releaseScope(scope);
-			try {
-				throwIfCancelled(signal);
-				const target = canonicalAgentHostConnection(await raceCancellationError(invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: scope.target, ...(ticket ? { ticket } : {}) }), signal));
-				scope.target = target;
-				throwIfCancelled(signal);
-				if (hostResources.isDisposed) { throw new CancellationError(); }
-				const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
-					clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-					capabilities: { ...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
-				}));
-				scope.lease = lease;
-				hostResources.add(lease.client.onStateChange(state => {
-					// Protocol readiness precedes restoring this scope's directory environment.
-					if (state !== 'ready') scope.initializing = true;
-					hostChanges.fire();
-				}));
-				// Each scope observes device power, but keeps its own retry and protocol generation.
-				const suspend = nativeHost.onDidSuspendOS(() => lease.recovery.suspend());
-				const resume = nativeHost.onDidResumeOS(() => lease.recovery.resume());
-				hostResources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
-				const enabled = await lease.connect();
-				throwIfCancelled(signal);
-				if (!enabled) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.unavailable' }, 'Agent host connections are unavailable in this window.')); }
-				if (hostResources.isDisposed) { throw new CancellationError(); }
+		const agentHosts = hostCapabilities.agentHosts ? resources.add(connectionServices.createInstance(RemoteAgentHostService, {
+			browser: hostCapabilities.browser,
+			onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),
+			onDidResumeOS: listener => nativeHost.onDidResumeOS(listener),
+			initializeDirectories: (client, trust, directories) => initializeWorkspaceDirectories(client, workspaceTrust, trust, directories),
+			createApi: (lease, target, hostResources, id) => {
 				let api = createRendererHost(lease.client, {
 					externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
 					callbackHost: {
@@ -310,125 +278,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (lease.client.capabilities?.contracts.automation?.version === 1) {
 					api = { ...api, automation: hostResources.add(new AppServerAutomationService(lease.client)) };
 				}
-				const connectionApi = api.appServer;
-				hostResources.add(lease.recovery.onDidChange(() => hostChanges.fire()));
-				const reconnect = async (): Promise<void> => {
-					throwIfCancelled(signal);
-					await lease.recovery.reconnect();
-					await scope.initialization;
-					throwIfCancelled(signal);
+				return {
+					...api,
+					browserHost: hostCapabilities.browser ? { register: (playwright, configuration, canvases, browserScope, resolveNetwork) => hostResources.add(registerAppServerBrowserHost(lease.client, playwright, mainProcessService, configuration, canvases, resolveNetwork, browserScope)) } : undefined,
 				};
-				api = {
-					...api, browserHost: hostCapabilities.browser ? { register: (playwright, configuration, canvases, browserScope, resolveNetwork) => hostResources.add(registerAppServerBrowserHost(lease.client, playwright, mainProcessService, configuration, canvases, resolveNetwork, browserScope)) } : undefined, appServer: {
-						get connectionGeneration() { return connectionApi.connectionGeneration; },
-						get operatingSystem() { return connectionApi.operatingSystem; },
-						get userHome() { return connectionApi.userHome; },
-						recovery: {
-							get phase() {
-								return lease.recovery.status === 'idle' && (scope.initializing || scope.error) ? 'workspace' : 'connection';
-							},
-							get status() {
-								const status = lease.recovery.status;
-								return status === 'unavailable' || status === 'suspended' ? status : scope.error ? 'failed' : scope.initializing && status === 'idle' ? 'recovering' : status;
-							},
-							get error() { return lease.recovery.status === 'unavailable' ? lease.recovery.error : scope.error instanceof Error ? scope.error.message : lease.recovery.error; },
-							onDidChange: hostChanges.event,
-							reconnect,
-						},
-						getConnectionState: async () => hostState(scope),
-						getSlashCommands: () => connectionApi.getSlashCommands(),
-						onConnectionState: listener => {
-							let previous = hostState(scope);
-							return hostChanges.event(() => { const state = hostState(scope); if (state !== previous) { previous = state; listener(state); } });
-						},
-					}
-				};
-				const initialize = async (): Promise<void> => {
-					const root = remoteAgentHostRoot(target, id);
-					if (isSSHAgentHost(target) || target.type === 'wsl') {
-						await initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, label: root.toString() }]);
-					}
-					// A Tunnel uses the Web session's existing grant, never Desktop host privileges.
-					const directory = await api.fs.resolvePath(root);
-					if (directory.uri.toString() !== root.toString()) throw new Error(localize('agentHost.rootChanged', 'The host returned a different workspace directory.'));
-					scope.directory = directory;
-				};
-				const restoreDirectories = (): Promise<void> => {
-					const task = scope.initialization = initialize();
-					scope.initializing = true;
-					scope.error = undefined;
-					hostChanges.fire();
-					void task.then(() => {
-						if (scope.initialization !== task || hostResources.isDisposed) return;
-						scope.initializing = false;
-						hostChanges.fire();
-					}, error => {
-						if (scope.initialization !== task || hostResources.isDisposed) return;
-						scope.initializing = false;
-						scope.error = error;
-						hostChanges.fire();
-						if (!isCancellationError(error)) connectionLogger.error('app-server', 'Agent host directory recovery failed', error);
-					});
-					return task;
-				};
-				await restoreDirectories();
-				throwIfCancelled(signal);
-				if (hostResources.isDisposed) { throw new CancellationError(); }
-				hostResources.add(lease.onDidReconnect(() => { void restoreDirectories().catch(() => { }); }));
-				scope.host = { id, connection: target, api, get directory() { return scope.directory!; }, dispose: release, [Symbol.dispose]: release };
-				hostChanges.fire();
-				throwIfCancelled(signal);
-				return scope.host;
-			} catch (error) {
-				release();
-				throw error;
-			}
-		};
-		const agentHosts: IRendererHost['agentHosts'] = hostCapabilities.agentHosts ? {
-			get connections() {
-				return [...hostScopes.values()].map(scope => ({ id: scope.id, connection: scope.target, state: hostState(scope), host: scope.host }));
 			},
-			onDidChangeConnections: hostChanges.event,
-			listWSLDistros: () => invoke<readonly string[]>(REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL),
-			connect: (input, signal, ticket) => {
-				const target = canonicalAgentHostConnection(input);
-				throwIfCancelled(signal);
-				if (resources.isDisposed) throw new CancellationError();
-				const key = agentHostConnectionAddress(target);
-				const existing = hostScopes.get(key);
-				if (existing) {
-					if (ticket && !isSSHAgentHost(target) && target.type === 'tunnel') releaseScope(existing);
-					else return raceCancellationError(existing.ready, signal);
-				}
-				const controller = new AbortController();
-				const hostResources = new DisposableStore();
-				const ready = new DeferredPromise<IRendererAgentHost>();
-				const scope: HostScope = { id: generateUuid(), target, controller, resources: hostResources, ready: ready.p };
-				hostScopes.set(key, scope);
-				hostResources.add(toDisposable(() => controller.abort()));
-				hostResources.add(toDisposable(() => { void invoke(REMOTE_AGENT_HOST_CLOSE_CHANNEL, { id: scope.id }).catch(error => { if (!resources.isDisposed) connectionLogger.error('app-server', 'Agent host release failed', error); }); }));
-				const cancel = (): void => releaseScope(scope);
-				signal.addEventListener('abort', cancel, { once: true });
-				hostResources.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
-				resources.add(hostResources);
-				hostChanges.fire();
-				void openHostScope(scope, ticket).then(host => { signal.removeEventListener('abort', cancel); void ready.complete(host); }, error => { void ready.error(error); });
-				return ready.p;
-			},
-			disconnect: id => { const scope = [...hostScopes.values()].find(scope => scope.id === id); if (scope) releaseScope(scope); },
-			reconnect: async id => {
-				const scope = [...hostScopes.values()].find(scope => scope.id === id);
-				if (!scope) throw new CancellationError();
-				await scope.ready;
-				if (scope.resources.isDisposed) throw new CancellationError();
-				await scope.host!.api.appServer.recovery!.reconnect();
-			},
-		} : undefined;
+		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0])) : undefined;
 
 		return {
 			...backend,
-			// Desktop supports the server-backed feature set even when its UI development host starts disconnected.
-			hasAppServer: true,
+
 			dispose: () => resources.dispose(),
 			[Symbol.dispose]: () => resources.dispose(),
 			environment: {

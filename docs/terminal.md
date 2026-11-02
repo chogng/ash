@@ -26,7 +26,7 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 托管产品运行时的 `exec-server` 终端服务通过当前后端分发包的 `--terminal-host` 内部角色，连接 profile 独立的 PTY 进程。该宿主只拥有终端资源，不打开 App Server 的业务服务；Main 不解析或路由终端协议。私有本地 socket 校验同用户及相同提权上下文，内部请求有版本和大小上限，连接 ID 在宿主内重新分配，避免新 App Server 复用旧连接的访问权。运行中的宿主持有自己的分发包租约；后端更新不会回收其仍需使用的文件。
 
-宿主在 `IRendererHost.terminal` 提供进程服务，Workbench 与 Sessions 通过同一个 DI 标识消费。已连接 Web 使用 `AppServerTerminalProcessService`；Desktop 本地与远程使用 `ReconnectableTerminalProcessService`。无后端的 UI 环境通过 `DisconnectedTerminalProcessService` 明确拒绝进程操作。
+宿主在 `IAgentConnection.terminal` 提供进程服务，Workbench 与 Sessions 通过同一个 DI 标识消费。已连接 Web 使用 `AppServerTerminalProcessService`；Desktop 本地与远程使用 `ReconnectableTerminalProcessService`。无后端的 UI 环境通过 `DisconnectedTerminalProcessService` 明确拒绝进程操作。
 
 后端资源由 `terminalId` 与创建时的 `dirId` 共同定位；保留的多根工作区终端继续使用原目录路由。前端实例身份独立于 PID，重启 Shell 可以更换 PID。终端编辑器资源包含实例 incarnation，失效资源显示不可用，不根据旧身份自动启动新 Shell。
 

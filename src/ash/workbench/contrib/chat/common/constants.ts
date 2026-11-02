@@ -1,7 +1,7 @@
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import type { DictationBackend } from '../../../../platform/renderer/common/dictation.js';
+import type { DictationBackend } from '../../../../platform/dictation/common/dictation.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
 
 export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';

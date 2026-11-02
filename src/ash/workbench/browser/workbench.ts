@@ -1,3 +1,5 @@
+import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
+import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import { ILanguageServerStatusService } from '../services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService } from '../services/log/common/defaultLogLevels.js';
@@ -52,7 +54,7 @@ import { ILanguageModelsService, LanguageModelsService } from '../contrib/chat/c
 import { ILanguageModelsConfigurationService } from '../contrib/chat/common/languageModelsConfiguration.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../contrib/chat/browser/languageModelsConfigurationService.js';
 import { IAgentVoiceService } from '../../platform/agentHost/common/agentService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/common/dictation.js';
 import { ExtensionColorThemeService } from '../services/extensions/browser/extensionColorThemeService.js';
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
@@ -100,7 +102,7 @@ import { IExtensionResourceLoaderService } from '../../platform/extensionResourc
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
 import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
-import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import { type IWorkbenchHost } from './rendererApi.js';
 import { AgentHostConnectionsService } from '../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
@@ -346,7 +348,7 @@ export interface IStartWorkbenchOptions {
 	readonly contributionIds?: readonly string[];
 	/** Host-specific presentations share the registered views' identity, commands and layout. */
 	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
@@ -525,7 +527,7 @@ export class Workbench extends Disposable {
 	constructor(
 		productName: string,
 		defaultLayout: WorkbenchDefaultLayout | undefined,
-		api: IRendererHost,
+		api: IWorkbenchHost,
 		extensionHost: IExtensionHostApi | undefined,
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
@@ -630,8 +632,10 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, logService);
-		services.registerInstance(IRendererHostService, api);
+		Object.assign(services.get(IWorkbenchEnvironmentService), { userHome: api.localUserHome, userRoamingDataHome: api.userDataHome });
 		services.registerInstance(IAgentConnection, api);
+		services.registerInstance(ISymphonyBackendService, api.symphony);
+		services.registerInstance(IRemoteAgentHostService, api.agentHosts ?? new NullRemoteAgentHostService());
 		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
@@ -651,7 +655,7 @@ export class Workbench extends Disposable {
 		const lifecycleService = this.lifecycleService = this._register(createLifecycleService(services));
 		services.registerInstance(ILifecycleService, lifecycleService);
 
-		AppServerAvailableContext.bindTo(contextKeys).set(api.hasAppServer);
+		AppServerAvailableContext.bindTo(contextKeys).set(api.appServer.isAvailable);
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, api.dictation);
 		services.registerInstance(IAgentVoiceService, api.agentVoice);
 		const localTranscription = api.localTranscription ?? this._register(new NullLocalTranscriptionService());
@@ -675,7 +679,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAssetService, api.assets);
 		services.registerInstance(IProjectService, api.projects);
 		services.registerInstance(ITestExecutionService, api.testing);
-		if (api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment); }
+		services.registerInstance(IApprovalEnvironmentService, api.approvalEnvironment);
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
 		if (api.channels) services.registerInstance(IChannelService, api.channels);
@@ -798,14 +802,14 @@ export class Workbench extends Disposable {
 		const checkWorkspaceTrust = !!nativeHostApi;
 		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
-		const languageLifecycle = api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
-		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
+		const languageLifecycle = api.appServer.isAvailable ? services.get(ILanguageServerLifecycleService) : undefined;
+		const languageProviders = api.appServer.isAvailable ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		services.registerSingleton(ICodeIntelligenceDocumentService, () => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols));
 		// Disconnected hosts render local syntax without backend document synchronization.
 		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, api.language, services.get(ICodeIntelligenceDocumentService), checkWorkspaceTrust);
-		const languageDiagnosticsService = api.hasAppServer ? this._register(createDiagnostics()) : undefined;
+		const languageDiagnosticsService = api.appServer.isAvailable ? this._register(createDiagnostics()) : undefined;
 		if (languageDiagnosticsService) services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		const markerService = this._register(new MarkerService());
@@ -817,10 +821,10 @@ export class Workbench extends Disposable {
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
-		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
+		services.registerInstance(IFileSearchService, api.appServer.isAvailable ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
 			IContentSearchService,
-			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService),
+			api.appServer.isAvailable ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService),
 		);
 		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerInstance(ITerminalProcessService, api.terminal);
@@ -1284,7 +1288,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		if (api.hasAppServer) services.get(ILanguageServerStatusService);
+		if (api.appServer.isAvailable) services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });

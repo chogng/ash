@@ -1236,7 +1236,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
 	});
 	services.registerInstance(IExtensionBackendApi, { request: async () => assert.fail('Unexpected extension backend request') });
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: () => api.getConnectionState(), getSlashCommands: async () => [], onConnectionState: listener => api.onConnectionState(listener) });
+	services.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: () => api.getConnectionState(), getSlashCommands: async () => [], onConnectionState: listener => api.onConnectionState(listener) });
 	services.registerInstance(IServerEventApi, { subscribe: () => toDisposable(() => { }) });
 	services.registerInstance(ISCMService, services.resources.add(new SCMService()));
 	services.registerSingleton(ISCMViewService, () => services.createInstance(SCMViewService));

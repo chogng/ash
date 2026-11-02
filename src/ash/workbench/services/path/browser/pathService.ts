@@ -8,13 +8,15 @@ import { localize } from '../../../../nls.js';
 import { getRemoteWorkspacePath, isWindowsRemotePath } from '../../../../platform/remote/common/remote.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
-import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { IWorkbenchEnvironmentService } from '../../environment/common/environmentService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 /** Reads connection-owned host facts without caching a second copy of them. */
 export class BrowserPathService implements IPathService {
 	constructor(
-		@IRendererHostService private readonly host: IRendererHost,
+		@IAppServerApi private readonly appServer: IAppServerApi,
+		@IWorkbenchEnvironmentService private readonly environment: IWorkbenchEnvironmentService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) { }
 
@@ -24,9 +26,9 @@ export class BrowserPathService implements IPathService {
 	}
 
 	public get resolvedUserHome(): URI | undefined {
-		const path = this.host.appServer.userHome;
-		if (!this.host.hasAppServer) {
-			return this.host.localUserHome;
+		const path = this.appServer.userHome;
+		if (!this.appServer.isAvailable) {
+			return this.environment.userHome;
 		}
 		return path === undefined ? undefined : this.toFileURI(path);
 	}
@@ -34,10 +36,10 @@ export class BrowserPathService implements IPathService {
 	public userHome(options: { preferLocal: true; }): URI;
 	public userHome(options?: { preferLocal: boolean; }): Promise<URI>;
 	public userHome(options?: { preferLocal: boolean; }): URI | Promise<URI> {
-		if (options?.preferLocal || !this.host.hasAppServer) {
+		if (options?.preferLocal || !this.appServer.isAvailable) {
 			const workspace = this.workspace.getWorkspace();
 			// Web has no OS home: match VS Code's workspace-derived fallback for dialog callers.
-			const local = this.host.localUserHome ?? workspace.folders[0]?.uri ?? (workspace.configuration ? dirname(workspace.configuration) : URI.from({ scheme: Schemas.file, path: '/' }));
+			const local = this.environment.userHome ?? workspace.folders[0]?.uri ?? (workspace.configuration ? dirname(workspace.configuration) : URI.from({ scheme: Schemas.file, path: '/' }));
 			return options?.preferLocal ? local : Promise.resolve(local);
 		}
 		const home = this.resolvedUserHome;
@@ -106,7 +108,7 @@ export class BrowserPathService implements IPathService {
 	}
 
 	private get hostOperatingSystem(): OperatingSystem | undefined {
-		return this.host.hasAppServer ? this.host.appServer.operatingSystem : operatingSystem;
+		return this.appServer.isAvailable ? this.appServer.operatingSystem : operatingSystem;
 	}
 
 	public async hasValidBasename(resource: URI, name: string = basename(resource)): Promise<boolean> {

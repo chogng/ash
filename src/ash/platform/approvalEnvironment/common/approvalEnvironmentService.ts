@@ -30,4 +30,5 @@ export interface IApprovalEnvironmentService {
 	cancel(operationId: string): Promise<void>;
 	save(scope: ReviewEnvironmentScope, commandId: string, expectedRevision: number, entries: readonly ReviewEnvironmentInput[], draftId?: string): Promise<ReviewEnvironmentProfile>;
 }
-export const IApprovalEnvironmentService = createServiceIdentifier<IApprovalEnvironmentService>('approvalEnvironmentService');
+/** The host registers an absent capability explicitly when its backend does not offer preparation. */
+export const IApprovalEnvironmentService = createServiceIdentifier<IApprovalEnvironmentService | undefined>('approvalEnvironmentService');

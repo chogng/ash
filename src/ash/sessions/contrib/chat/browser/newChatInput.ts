@@ -25,6 +25,8 @@ import { IChatAttachmentResolveService } from '../../../../workbench/contrib/cha
 import { PermissionPickerActionItem } from '../../../../workbench/contrib/chat/browser/widget/input/permissionPickerActionItem.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
+import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -61,6 +63,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
 		@ICommandService commands: ICommandService,
+		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
@@ -89,14 +92,19 @@ export class NewChatInputWidget extends ChatInputPart {
 			get enabled() { return !owner.model.inputState.aiDisabled && owner.model.inputState.phase !== 'submitting'; },
 			run: () => this.permissionPicker.show(),
 		}, model.onDidChange, {
-			getActions: () => approvalModeDefinitions.map(definition => ({
+			getActions: () => [...approvalModeDefinitions.map(definition => ({
 				id: definition.id,
 				label: localize(definition.label.key, definition.label.text),
 				tooltip: localize(definition.description.key, definition.description.text),
 				enabled: true,
 				checked: definition.id === model.inputState.approvalMode,
 				run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
-			})),
+			})), ...(approvalEnvironment ? [{
+				id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
+				label: localize('approvalEnvironment.title', 'Prepare review environment…'),
+				enabled: true,
+				run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
+			}] : [])],
 		}));
 		this.permissionPicker.render(permissionHost);
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {

@@ -244,7 +244,7 @@ test('long provider conversation links preserve short backend coordinates and ca
 	using context = fixture();
 	const providerId = `ssh-agent-host:${JSON.stringify(['host', '/' + 'long directory/'.repeat(40)])}`;
 	using registration = context.registry.registerProvider({ ...context.remote, id: providerId } as ISessionsProvider);
-	Object.assign(context.remoteHost.appServer, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: Event.None });
+	Object.assign(context.remoteHost.appServer, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: Event.None });
 	const reads: unknown[] = [];
 	context.remoteChat.readThread = async (sessionId, threadId) => {
 		reads.push({ sessionId, threadId });

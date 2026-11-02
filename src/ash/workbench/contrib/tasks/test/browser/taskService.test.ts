@@ -1,5 +1,7 @@
+import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
+import { testWorkbenchHostServices, registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import type { NotificationService } from '../../../../services/notification/common/notificationService.js';
@@ -471,12 +473,12 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 // Fixture paths describe the execution host, independently of the test runner's OS.
 function testRendererHost(os = OperatingSystem.Linux) {
 	const renderer = createDisconnectedRendererApi();
-	return { ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: os } };
+	return { ...renderer, appServer: { ...renderer.appServer, operatingSystem: os, isAvailable: true } };
 }
 
 function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
 	const host = createDisconnectedRendererApi();
-	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
+	return createTestPathService({ ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } }, workspace);
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
@@ -501,7 +503,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 	registerTestWorkbenchInteractionServices(owner, parent);
 	const services = parent.createChild(new ServiceCollection(
 		[IFileService, owner.add(createTestFileService(files))], [IWorkspaceContextService, workspace],
-		[IPathService, testPathService(workspace, os)], [IRendererHostService, testRendererHost(os)], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[IPathService, testPathService(workspace, os)], ...testWorkbenchHostServices(testRendererHost(os)).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[ITerminalProcessService, {
 			operatingSystem: os, onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
@@ -1054,7 +1056,7 @@ test('TaskService discovers tasks without terminal execution and rejects dispatc
 	registerTestWorkbenchInteractionServices(resources, parent);
 	registerTestExtensionService(resources, parent);
 	parent.registerInstance(IPathService, testPathService(parent.get(IWorkspaceContextService)));
-	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()], [ITerminalProcessService, createDisconnectedRendererApi().terminal], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)]), resources);
+	const services = parent.createChild(new ServiceCollection([IFileService, resources.add(createTestFileService(new FakeFileService(URI.file('/workspace'), {})))], [ILogService, new NullLoggerService()], [ITerminalProcessService, createDisconnectedRendererApi().terminal], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)]), resources);
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	const tasks = resources.add(services.createInstance(TaskService));
 	const events: ITaskRun[] = [];
@@ -1107,7 +1109,7 @@ suite('TaskService terminal availability', () => {
 			const output = { createChannel: () => ({ ...Disposable.None, appendLine: (entry: { text: string; }) => { logs.push(entry.text); } }) } as unknown as IOutputService;
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
-				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))], [IWorkspaceContextService, workspace], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
@@ -1179,7 +1181,7 @@ suite('TaskService terminal availability', () => {
 			const services = resources.add(new InstantiationService(new ServiceCollection([IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)],
 				[IMarkerService, resources.add(new MarkerService())], [IModelService, { getModel: () => null }],
 				[IFileService, resources.add(createTestFileService(new FakeFileService(root, {})))],
-				[IWorkspaceContextService, workspace], [IRendererHostService, testRendererHost()], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+				[IWorkspaceContextService, workspace], ...testWorkbenchHostServices(testRendererHost()).entries(), [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes],
 				[IOutputService, output],
 				[ILogService, new NullLoggerService()],
@@ -1247,7 +1249,7 @@ suite('Task terminal reuse policies', () => {
 			write: async () => { }, resize: async () => { },
 			close: async options => { closed.push(options.terminalId); await closing.wait(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
@@ -2182,7 +2184,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			...(placement === 'defaultsPlatform' ? { linux: { group } } : {}),
 		};
 		services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
-		services.registerInstance(IPathService, new BrowserPathService({ ...createDisconnectedRendererApi(), hasAppServer: true, appServer: { ...createDisconnectedRendererApi().appServer, operatingSystem: OperatingSystem.Linux } }, workspace));
+		services.registerInstance(IPathService, createTestPathService({ ...createDisconnectedRendererApi(), appServer: { ...createDisconnectedRendererApi().appServer, operatingSystem: OperatingSystem.Linux, isAvailable: true } }, workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 		registerTestExtensionService(resources, services);
@@ -2201,7 +2203,7 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			read: async () => ({ terminalId: 'resolved-task', commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 			write: async () => { }, resize: async () => { }, close: async options => { closed.push(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);
@@ -2262,7 +2264,7 @@ suite('Extension task execution lifecycle', () => {
 					close: async () => { void releaseRequested.complete(undefined); await releaseAcknowledged.p; },
 				};
 				services.registerInstance(ITerminalProcessService, processes);
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2443,7 +2445,7 @@ suite('Task rerun variable policy through the execution owners', () => {
 					read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 					write: async () => { }, resize: async () => { }, close: async () => { },
 				});
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2551,7 +2553,7 @@ suite('Task instance limits through the execution owners', () => {
 					read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 					write: async () => { }, resize: async () => { }, close: async () => { if (holdClose) await closeRelease.p; },
 				});
-				services.registerInstance(IRendererHostService, testRendererHost());
+				registerTestWorkbenchHostServices(services, testRendererHost());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTaskProfiles(services);
@@ -2805,7 +2807,7 @@ suite('Task instance policies through the execution owners', () => {
 			read: async options => ({ terminalId: options.terminalId, commandEventGap: false, chunks: [], nextSequence: 0, commandEvents: [], nextCommandSequence: 0, exited: false, exitCode: undefined, outputGap: false }),
 			write: async () => { }, resize: async () => { }, close: async options => { peer.closed.push(options.terminalId); await peer.close(options.terminalId); },
 		});
-		services.registerInstance(IRendererHostService, testRendererHost());
+		registerTestWorkbenchHostServices(services, testRendererHost());
 		services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
 		registerTaskProfiles(services);

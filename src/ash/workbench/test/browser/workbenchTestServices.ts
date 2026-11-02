@@ -1,3 +1,4 @@
+import { createTestPathService } from '../common/workbenchHostTestServices.js';
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
 import { DEFAULT_LOG_LEVEL, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
@@ -63,9 +64,8 @@ import { ISearchService } from '../../services/search/common/search.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { TestHostService } from '../../services/host/test/browser/testHostService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { ITerminalProcessService } from '../../../platform/terminal/common/terminal.js';
-import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../browser/rendererApi.js';
 import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../platform/workspace/common/workspaceTrust.js';
 import { TestWorkspaceTrustManagementService } from '../common/workbenchTestServices.js';
@@ -105,7 +105,7 @@ export function registerTestTerminalCreationServices(services: InstantiationServ
 		getPanelPosition: () => Position.BOTTOM,
 		onDidChangePanelPosition: Event.None,
 	} as unknown as IWorkbenchLayoutService);
-	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => new BrowserPathService({ hasAppServer: true, appServer: { operatingSystem: services.get(ITerminalProcessService).operatingSystem } } as IRendererHost, services.get(IWorkspaceContextService)));
+	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => createTestPathService({ appServer: { operatingSystem: services.get(ITerminalProcessService).operatingSystem, isAvailable: true } } as IWorkbenchHost, services.get(IWorkspaceContextService)));
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, save: async () => ({ success: true, editors: [] }), saveAll: async () => ({ success: true, editors: [] }) });
 	// Low-level lifecycle fixtures do not open UI. Keep the real creation services

@@ -1,3 +1,4 @@
+import { testWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import '../../browser/pathService.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
@@ -109,9 +110,9 @@ suite('PathService', () => {
 		assert.deepEqual(results, [false, true, false, true]);
 	});
 
-	test('requires its host dependency through the registered creation path', () => {
+	test('requires its connection dependency through the registered creation path', () => {
 		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors()));
-		assert.throws(() => services.get(IPathService), /rendererHostService/);
+		assert.throws(() => services.get(IPathService), /AppServerApi/);
 	});
 
 	test('converts server paths using connection facts and preserves POSIX filename characters', async () => {
@@ -146,12 +147,12 @@ suite('PathService', () => {
 
 function createServices(getOS: () => OperatingSystem | undefined, getHome: () => string | undefined = () => undefined, localUserHome?: URI): InstantiationService {
 	const host = createDisconnectedRendererApi();
-	const services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), [IRendererHostService, {
+	const services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(), ...testWorkbenchHostServices({
 		...host,
-		hasAppServer: true,
+
 		localUserHome,
-		appServer: { ...host.appServer, get operatingSystem() { return getOS(); }, get userHome() { return getHome(); } },
-	}]));
+		appServer: { ...host.appServer, get operatingSystem() { return getOS(); }, get userHome() { return getHome(); }, isAvailable: true },
+	}).entries()));
 	services.registerSingleton(IWorkspaceContextService, () => new TestWorkspaceService({ id: 'path-test', folders: [] }));
 	return services;
 }

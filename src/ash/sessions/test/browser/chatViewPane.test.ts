@@ -18,7 +18,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
@@ -64,7 +64,7 @@ import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSetti
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
@@ -76,7 +76,7 @@ import { test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
-import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -252,12 +252,11 @@ const unavailableAccessibleViewService = { getOpenAriaHint: () => undefined } as
 const notifications = new TestNotificationService();
 
 class SessionsManagementService extends BaseSessionsManagementService {
-	constructor(api: IRendererHost) {
+	constructor(api: IWorkbenchHost) {
 		const services = inputResources.add(new InstantiationService());
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 		services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
-		services.registerInstance(IRendererHostService, api);
-		services.registerInstance(IAgentConnection, services.get(IRendererHostService));
+		services.registerInstance(IAgentConnection, api);
 		services.registerInstance(IAppServerApi, api.appServer);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
@@ -1499,16 +1498,16 @@ test('sending from one session preserves a later draft during first-session crea
 	const composerStorage = editorResources.add(createTestStorage());
 	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
 		fileSearch: async () => ({ results: [], messages: [] }),
 		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
 	});
-	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerSingleton(IImageEditorService, () => new class extends ImageEditorService { async capture(): Promise<never> { throw new Error('Image capture is outside this fixture'); } }());
+	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	editorServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
-	editorServices.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
 	editorServices.registerInstance(ISessionsGitHubService, {
 		onDidChange: Event.None,
 		getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { },
@@ -2731,7 +2730,7 @@ function createWidgetModel(chat: IChatService, selection: import('../../browser/
 	services.registerInstance(IConfigurationService, configuration ?? configurationServices.get(chat) ?? inputResources.add(new WorkbenchConfigurationService()));
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
-function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
+function createChatService(api: IWorkbenchHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
 	const storage = storageService ?? createTestStorage();
 	if (!storageService) testStorages.push(storage);
 	const services = inputResources.add(new InstantiationService());
@@ -2750,11 +2749,10 @@ function createChatService(api: IRendererHost, configurationService?: WorkbenchC
 	return chat;
 }
 
-function registerChatBackend(services: InstantiationService, api: IRendererHost, omitted?: unknown, configuration?: WorkbenchConfigurationService): void {
+function registerChatBackend(services: InstantiationService, api: IWorkbenchHost, omitted?: unknown, configuration?: WorkbenchConfigurationService): void {
 	if (omitted !== IConfigurationService) { services.registerInstance(IConfigurationService, configuration ?? inputResources.add(new WorkbenchConfigurationService())); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
-	services.registerInstance(IRendererHostService, api);
-	services.registerInstance(IAgentConnection, services.get(IRendererHostService));
+	services.registerInstance(IAgentConnection, api);
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, api.session); }
 	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
@@ -3057,7 +3055,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const pending: DeferredPromise<Awaited<ReturnType<IAppServerSkillApi['list']>>>[] = [];
 		const scopes: (string | undefined)[] = [];
 		const catalog = (name: string) => ({ generation: 1, skills: [{ id: { source: 'directory:skill-source:test', name }, description: name, contentDigest: `sha256:${name}`, enabled: true, compatible: true }] });
-		const api: IRendererHost = {
+		const api: IWorkbenchHost = {
 			...fake.api, skills: {
 				...fake.api.skills, onDidChangeSkills: changed.event, list: async (_reload, sessionId) => {
 					scopes.push(sessionId);
@@ -3296,7 +3294,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	discovered.settings.service_tiers = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
 	discovered.settings.acceleration = { type: 'service_tier', service_tier: 'priority' };
 	discovered.acceleration_options = [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }];
-	const initial = new DeferredPromise<Awaited<ReturnType<IRendererHost['model']['listModels']>>>();
+	const initial = new DeferredPromise<Awaited<ReturnType<IWorkbenchHost['model']['listModels']>>>();
 	const fake = fakeApi();
 	let loads = 0;
 	using chat = createChatService({
@@ -3650,9 +3648,9 @@ test('ChatWidgetModel queues a new mode while keeping the active Turn unchanged'
 	assert.equal(fake.turnSteerRequests.length, 0);
 	assert.deepEqual(fake.queuedRequests, [{
 		commandId: fake.queuedRequests[0]!.commandId,
-		commandInterpretation: undefined,
 		sessionId: 'session-1', threadId: 'thread-1', mode: 'multitask',
 		model: undefined, reasoningEffort: undefined,
+		commandInterpretation: undefined,
 		input: [{ type: 'image', url: 'data:image/png;base64,aGVsbG8=' }, { type: 'text', text: 'Implement independent steps' }],
 		approvalMode: 'auto',
 	}]);
@@ -3861,7 +3859,7 @@ const testChatPartService = {
 } as IPaneCompositePartService;
 
 function fakeApi(options: FakeOptions = {}): {
-	readonly api: IRendererHost;
+	readonly api: IWorkbenchHost;
 	readonly archiveRequests: readonly SessionMutationParams[];
 	readonly stopRequests: readonly SessionMutationParams[];
 	readonly createSessionRequests: readonly SessionCreateParams[];
@@ -3917,6 +3915,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const api = {
 		accounts: { read: async () => ({ revision: '1', accounts: [] }) },
 		appServer: {
+			isAvailable: true,
 			get connectionGeneration() { return connectionGeneration; },
 			getConnectionState: async () => 'ready' as const,
 			getSlashCommands: async () => [],
@@ -4075,7 +4074,7 @@ function fakeApi(options: FakeOptions = {}): {
 				return { dispose: () => { listeners.delete(next); } };
 			},
 		},
-	} as unknown as IRendererHost;
+	} as unknown as IWorkbenchHost;
 	return {
 		api,
 		archiveRequests,
@@ -4212,7 +4211,7 @@ function pagedChatFixture(initialCount = 65) {
 	};
 	const active = session('session-1', 'thread-1');
 	const fake = fakeApi({ sessions: [active], thread: full });
-	const api: IRendererHost = {
+	const api: IWorkbenchHost = {
 		...fake.api,
 		thread: {
 			...fake.api.thread,
@@ -5162,7 +5161,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 		],
 	};
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });
-	const api: IRendererHost = {
+	const api: IWorkbenchHost = {
 		...fake.api,
 		thread: {
 			...fake.api.thread,

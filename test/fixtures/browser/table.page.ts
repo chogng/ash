@@ -37,7 +37,7 @@ import { IStorageService, StorageScope } from '../../../src/ash/platform/storage
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
 import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';

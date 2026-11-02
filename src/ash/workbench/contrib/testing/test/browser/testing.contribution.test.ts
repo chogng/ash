@@ -18,7 +18,7 @@ import '../../browser/testing.contribution.js';
 ensureNoDisposablesAreLeakedInTestSuite();
 
 function appServer(state: () => AppServerConnectionState): IAppServerApi {
-	return { connectionGeneration: 1, getConnectionState: async () => state(), onConnectionState: Event.None, getSlashCommands: async () => [] };
+	return { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => state(), onConnectionState: Event.None, getSlashCommands: async () => [] };
 }
 
 test('Testing navigation follows capability in the production contribution and releases its context', async () => {

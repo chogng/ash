@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
 import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
@@ -22,7 +23,7 @@ import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/
 import { createDiffEditorInput } from '../../../src/ash/workbench/common/editor/diffEditorInput.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
@@ -123,7 +124,7 @@ import { TestNotificationService } from './notificationFixture.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { createTestDictationBackend, installTestDictationAudio, registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
@@ -710,7 +711,7 @@ services.registerInstance(IFileTextModelService, {
 	acquire: async () => { throw new Error('Chat context fixture has no shared file models'); },
 });
 services.registerInstance(ISearchService, resources.add(services.createInstance(SearchService)));
-services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 services.registerInstance(IPathService, services.createInstance(BrowserPathService));
 
 const submission = document.createElement('output');

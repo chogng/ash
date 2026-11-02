@@ -12,7 +12,7 @@ import { IPlaywrightService } from '../../../../../platform/browserView/common/p
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
-import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../../workbench/browser/rendererApi.js';
 import { IAgentHostCanvasCollection, type ICanvasProvider } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { IBrowserViewWorkbenchService } from '../../../../../workbench/contrib/browserView/common/browserView.js';
 import { IExtensionService } from '../../../../../workbench/services/extensions/common/extensionService.js';
@@ -72,7 +72,7 @@ test('remote Canvas refreshes borrow one connection fleet and callbacks preserve
 	services.registerInstance(IConfigurationService, { getValue: () => ({}), getConfigurationData: () => null } as unknown as IConfigurationService);
 	services.registerInstance(IBrowserViewWorkbenchService, { resolveNetwork: () => ({ authority: 'ssh+server' }) } as unknown as IBrowserViewWorkbenchService);
 	services.registerInstance(ILogService, new NullLoggerService());
-	const api = { extensionHost: runtime, browserHost: { register: (_playwright: IPlaywrightService, _configuration: IConfigurationService, value: IAgentCanvasHost) => { callbacks = value; return toDisposable(() => { callbacks = undefined; }); } } } as unknown as IRendererHost;
+	const api = { extensionHost: runtime, browserHost: { register: (_playwright: IPlaywrightService, _configuration: IConfigurationService, value: IAgentCanvasHost) => { callbacks = value; return toDisposable(() => { callbacks = undefined; }); } } } as unknown as IWorkbenchHost;
 	const hosts = { onDidChangeConnections: Event.None, connections: [{ id: 'connection', isAmbient: false, connection: api, remoteConnection: connection, directory: { uri: URI.parse('ash-remote://ssh+server/project') } }] } as unknown as IAgentHostConnectionsService;
 	const owner = lifetime.add(new RemoteCanvasHostContribution(hosts, services));
 	await settle();

@@ -53,7 +53,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { Event as AshEvent, Emitter } from '../../../../../base/common/event.js';
 import { ILocalTranscriptionModelService, ILocalTranscriptionService, DictationModelState, type ILocalTranscriptionModelSnapshot } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { Severity } from '../../../../../platform/notification/common/notification.js';

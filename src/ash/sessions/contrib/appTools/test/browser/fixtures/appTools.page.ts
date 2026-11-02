@@ -1,5 +1,7 @@
+import { createTestPathService } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
+import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IRendererHostService } from '../../../../../../platform/renderer/common/rendererHost.js';
+
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../../workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../../../../platform/instantiation/common/extensions.js';
@@ -57,7 +59,6 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { IConfigurationResolverService } from '../../../../../../workbench/services/configurationResolver/common/configurationResolver.js';
 import { ConfigurationResolverService } from '../../../../../../workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../../../../platform/path/common/pathService.js';
-import { BrowserPathService } from '../../../../../../workbench/services/path/browser/pathService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
@@ -192,9 +193,9 @@ const terminalProcesses: ITerminalProcessService = {
 };
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 const renderer = createDisconnectedRendererApi();
-services.registerInstance(IRendererHostService, { ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: executionOS } });
+registerTestWorkbenchHostServices(services, { ...renderer,  appServer: { ...renderer.appServer, operatingSystem: executionOS , isAvailable: true } });
 services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-services.registerInstance(IPathService, new BrowserPathService({ ...renderer, hasAppServer: true, appServer: { ...renderer.appServer, operatingSystem: executionOS } }, workspace));
+services.registerInstance(IPathService, createTestPathService({ ...renderer,  appServer: { ...renderer.appServer, operatingSystem: executionOS , isAvailable: true } }, workspace));
 services.registerInstance(IWorkspaceContextService, workspace);
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(ITerminalProcessService, terminalProcesses);

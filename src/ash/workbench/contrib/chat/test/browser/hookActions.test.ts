@@ -1,3 +1,4 @@
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -19,7 +20,6 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
-import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { openHookConfiguration, showConfigureHooksQuickPick } from '../../browser/promptSyntax/hookActions.js';

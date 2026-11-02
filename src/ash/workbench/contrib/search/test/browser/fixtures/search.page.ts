@@ -1,9 +1,9 @@
+import { createTestPathService, testAppServerApi } from '../../../../../test/common/workbenchHostTestServices.js';
 import { StatusbarService } from '../../../../../browser/parts/statusbar/statusbarPart.js';
 import { ActivityService } from '../../../../../services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../../services/activity/common/activity.js';
 import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
-import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../../browser/rendererApi.js';
 import { BrowserFileSearchService } from '../../../../../../platform/search/browser/browserFileSearchService.js';
 import { IFileSearchService } from '../../../../../../platform/search/common/fileSearch.js';
@@ -396,6 +396,6 @@ declare global {
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api,  appServer: { ...api.appServer, operatingSystem: os , isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }

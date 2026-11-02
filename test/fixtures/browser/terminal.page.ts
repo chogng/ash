@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { ITerminalCompletionService, TerminalCompletionService } from '../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
 import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
@@ -49,7 +50,7 @@ import { IConfigurationResolverService } from '../../../src/ash/workbench/servic
 import { ConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/browser/configurationResolverService.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../src/ash/workbench/services/path/browser/pathService.js';
-import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
@@ -93,7 +94,7 @@ import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { GeneralShellType, ITerminalLogService, PosixShellType } from '../../../src/ash/platform/terminal/common/terminal.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
@@ -183,7 +184,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	const api = createDisconnectedRendererApi();
-	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: OperatingSystem.Linux, userHome: '/home/test' } });
+	registerTestWorkbenchHostServices(services, { ...api,  appServer: { ...api.appServer, operatingSystem: OperatingSystem.Linux, userHome: '/home/test' , isAvailable: true } });
 	if (!services.has(IWorkspaceContextService)) services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'terminal-paths', folders: [] })));
 	if (!services.has(IViewsService)) services.registerInstance(IViewsService, {
 		getViewProgressIndicator: () => undefined,

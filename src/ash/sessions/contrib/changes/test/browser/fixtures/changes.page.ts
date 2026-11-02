@@ -52,7 +52,7 @@ import chineseWorkbench from '../../../../../../../../extensions/language-pack-z
 import { IChecksOperationService } from '../../../common/checksOperationService.js';
 import { ChecksOperationService } from '../../../browser/checksOperationService.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
-import type { IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { CustomViewService, ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 
@@ -193,7 +193,7 @@ services.registerInstance(IContextMenuService, resources.add(services.createInst
 services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.' } as unknown as IAccessibleViewService);
 const baseHost = createDisconnectedRendererApi();
-const host: IRendererHost = {
+const host: IWorkbenchHost = {
 	...baseHost,
 	github: services.get(IGitHubApi),
 	localGit: {

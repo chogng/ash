@@ -6,7 +6,7 @@ import type { ExtensionCatalog, ExtensionResourceRequest, IExtensionApi } from '
 import { createAppServerExtensionApi, createDisconnectedExtensionApi, withEnabledBuiltInExtensions } from '../../browser/extensionApi.js';
 import { Event } from '../../../../base/common/event.js';
 import { ExtensionResourceLoaderService } from '../../../extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { unavailableOperation, WebAppServerUnavailableError } from '../../../renderer/browser/disconnectedHost.js';
+import { unavailableOperation, WebAppServerUnavailableError } from '../../../agentHost/browser/disconnectedAppServer.js';
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { normalizeExtensionCatalog } from '../../common/extensionApi.js';

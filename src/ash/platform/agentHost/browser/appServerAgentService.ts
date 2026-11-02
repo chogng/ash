@@ -57,7 +57,7 @@ import type {
 } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest, voidResult } from './appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../common/agentService.js';
 import type { SessionMutationParams } from '../common/agent.js';
 

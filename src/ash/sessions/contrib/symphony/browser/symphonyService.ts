@@ -3,7 +3,7 @@ import { observableValue, type IObservable } from '../../../../base/common/obser
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { IRendererHostService, type IRendererHost } from '../../../../platform/renderer/common/rendererHost.js';
+import { ISymphonyBackendService, type ISymphonyBackend } from '../../../../platform/symphony/common/symphonyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { SymphonyControl, SymphonyMessage, SymphonySnapshot } from '../../../../platform/symphony/common/symphonyService.js';
 
@@ -41,11 +41,11 @@ export class SymphonyService extends Disposable implements ISymphonyService {
 	private pollingGeneration = 0;
 	private selected: string | undefined;
 
-	constructor(@IRendererHostService private readonly host: IRendererHost, @IStorageService private readonly storage: IStorageService) {
+	constructor(@ISymphonyBackendService private readonly backend: ISymphonyBackend | undefined, @IStorageService private readonly storage: IStorageService) {
 		super();
-		this.available = !!host.symphony;
+		this.available = !!backend;
 		this.selected = storage.get('sessions.symphony.selected', StorageScope.WORKSPACE);
-		if (host.symphony) { this._register(host.symphony.onDidChange(() => { if (this.watchers) { void this.refresh(); } })); }
+		if (backend) { this._register(backend.onDidChange(() => { if (this.watchers) { void this.refresh(); } })); }
 		this._register(toDisposable(() => clearTimeout(this.timer)));
 	}
 
@@ -63,7 +63,7 @@ export class SymphonyService extends Disposable implements ISymphonyService {
 		return this.refreshing;
 	}
 	private async read(): Promise<void> {
-		const backend = this.host.symphony;
+		const backend = this.backend;
 		if (!backend) { this.view.set({ ...this.view.get(), error: localize('symphony.unavailable', 'Connect Ash to an App Server with Symphony support to schedule tasks.') }); return; }
 		const generation = this.selectionGeneration;
 		try {
@@ -93,10 +93,10 @@ export class SymphonyService extends Disposable implements ISymphonyService {
 		catch (error) { if (!this.isDisposed) { this.commandError = String(error); this.view.set({ ...this.view.get(), error: this.commandError }); } }
 		finally { if (!this.isDisposed) { this.view.set({ ...this.view.get(), loading: false }); } }
 	}
-	public configure(path: string): Promise<void> { return this.mutate(() => this.host.symphony!.configure(path)); }
+	public configure(path: string): Promise<void> { return this.mutate(() => this.backend!.configure(path)); }
 	public submit(workflowId: string, title: string, prompt: string): Promise<void> {
-		return this.mutate(async () => { const conversation = await this.host.symphony!.submit(workflowId, title, prompt); this.select(conversation.id); });
+		return this.mutate(async () => { const conversation = await this.backend!.submit(workflowId, title, prompt); this.select(conversation.id); });
 	}
-	public control(id: string, control: SymphonyControl): Promise<void> { return this.mutate(() => this.host.symphony!.control(id, control)); }
-	public enable(workflowId: string, enabled: boolean): Promise<void> { return this.mutate(() => this.host.symphony!.enable(workflowId, enabled)); }
+	public control(id: string, control: SymphonyControl): Promise<void> { return this.mutate(() => this.backend!.control(id, control)); }
+	public enable(workflowId: string, enabled: boolean): Promise<void> { return this.mutate(() => this.backend!.enable(workflowId, enabled)); }
 }

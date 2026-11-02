@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { expectIconFontLoaded } from '../../../../../../../test/automation/iconFonts.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -9,7 +10,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import '../../../../services/path/browser/pathService.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -1043,7 +1044,7 @@ function createExplorerService(workspace: TestWorkspaceService): ExplorerService
 function createFileActionServices(os: OperatingSystem = OperatingSystem.Linux): InstantiationService {
 	const host = createDisconnectedRendererApi();
 	const services = configurations.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
-	services.registerInstance(IRendererHostService, { ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } });
+	registerTestWorkbenchHostServices(services, { ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } });
 	services.registerInstance(IConfigurationService, configurations.add(new InMemoryConfigurationService()));
 	return services;
 }

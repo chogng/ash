@@ -3,12 +3,13 @@ import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { decodeBase64, VSBuffer } from '../../../base/common/buffer.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
-import { inertSubscription, type UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import { inertSubscription, type UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest, voidResult } from './appServerRequest.js';
 
-export function createDisconnectedAppServerApi(unavailable: UnavailableOperation): IAppServerApi {
+export function createDisconnectedAppServerApi(unavailable: UnavailableOperation, isAvailable = false): IAppServerApi {
 	return {
+		isAvailable,
 		connectionGeneration: 0,
 		getConnectionState: () => Promise.resolve('stopped'),
 		getSlashCommands: () => unavailable('appServer.getSlashCommands'),
@@ -31,6 +32,7 @@ export function createDisconnectedServerEventApi(): IServerEventApi {
 
 export function createAppServerAppServerApi(connection: AppServerProtocolClient, recovery?: IAppServerConnectionRecovery): IAppServerApi {
 	return {
+		isAvailable: true,
 		get connectionGeneration() { return connection.generation; },
 		recovery,
 		get operatingSystem() { return connection.operatingSystem; },

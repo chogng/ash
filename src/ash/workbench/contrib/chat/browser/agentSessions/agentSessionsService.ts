@@ -3,6 +3,8 @@ import { localize } from '../../../../../nls.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../../base/common/uri.js';
 import type { IAgentSession, IAgentSessionsModel } from './agentSessionsModel.js';
+import type { ReviewEnvironmentScope } from '../../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import type { IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 
 /** The runtime supplies one catalog projection; Workbench owns its presentations. */
 export interface IAgentSessionsService {
@@ -26,11 +28,20 @@ export interface IAgentSessionActionTarget {
 	resolve(): Promise<IAgentSessionActionItem>;
 }
 
+/** Remote targets remain explicit so choosing a project cannot fall back to the local backend. */
+export interface IAgentSessionReviewEnvironmentTarget {
+	readonly label: string;
+	readonly description?: string;
+	readonly scope: ReviewEnvironmentScope | { readonly type: 'remote'; };
+}
+
 /** Borrowed Session operations; Workbench owns command presentation and confirmation. */
 export interface IAgentSessionActionsService {
 	readonly sessions: readonly IAgentSessionActionItem[];
 	initialize(): Promise<void>;
 	resolveTarget(argument: unknown, useActive?: boolean): IAgentSessionActionTarget;
+	/** Resolve the requesting composer's identity, without materializing a draft or changing selection. */
+	getReviewEnvironmentTargets(target: { readonly sessionId?: string; readonly threadId?: string; readonly untitledSessionId?: string; }, workspace: IWorkspace): readonly IAgentSessionReviewEnvironmentTarget[];
 	discardDraft(argument: unknown): boolean;
 	togglePin(argument: unknown): Promise<string>;
 	archiveSession(id: string): Promise<void>;

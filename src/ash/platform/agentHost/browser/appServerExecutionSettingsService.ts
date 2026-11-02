@@ -2,7 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest } from './appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { IAgentExecutionSettingsService } from '../common/agentExecutionSettingsService.js';
 
 export function createAppServerExecutionSettingsService(

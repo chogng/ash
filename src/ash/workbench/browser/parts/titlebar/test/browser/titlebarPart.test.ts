@@ -1,3 +1,4 @@
+import { createTestPathService, testAppServerApi } from '../../../../../test/common/workbenchHostTestServices.js';
 import { createLabelKeybindingService } from '../../../../../../platform/keybinding/test/common/keybindingTestUtils.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
@@ -8,7 +9,6 @@ import { IPathService } from '../../../../../../platform/path/common/pathService
 import { emptyEditorServiceState } from '../../../../../test/common/testEditorService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { operatingSystem, OperatingSystem } from '../../../../../../base/common/platform.js';
-import { BrowserPathService } from '../../../../../services/path/browser/pathService.js';
 import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
@@ -618,8 +618,8 @@ test('browser titlebar hosts the application menu in an ActionBar', () => {
 
 function createTestLabelService(workspace: ConstructorParameters<typeof LabelService>[0], os: OperatingSystem = operatingSystem): import('../../../../../services/label/common/labelService.js').LabelService {
 	const api = createDisconnectedRendererApi();
-	const host = { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os } };
-	return new LabelService(workspace, new BrowserPathService(host, workspace), host);
+	const host = { ...api, appServer: { ...api.appServer, operatingSystem: os, isAvailable: true } };
+	return new LabelService(workspace, createTestPathService(host, workspace), testAppServerApi(host));
 }
 
 

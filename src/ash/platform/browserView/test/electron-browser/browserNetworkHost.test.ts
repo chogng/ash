@@ -6,7 +6,8 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import { URI } from '../../../../base/common/uri.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import type { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
-import type { IRendererAgentHostConnection, IRendererHost } from '../../../renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../workbench/browser/rendererApi.js';
+import type { IRemoteAgentHostConnectionInfo } from '../../../agentHost/common/remoteAgentHostService.js';
 import { AgentHostConnectionsService } from '../../../agentHost/browser/agentHostConnectionsService.js';
 import type { RemoteAgentHostConnection } from '../../../agentHost/common/remoteAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
@@ -17,19 +18,17 @@ import { registerBrowserNetworkHost } from '../../electron-browser/browserNetwor
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function registry(ambient: IRendererHost, entries: IRendererAgentHostConnection[]): AgentHostConnectionsService {
-	return new AgentHostConnectionsService({
-		...ambient,
-		agentHosts: {
-			get connections() { return entries; }, onDidChangeConnections: Event.None,
-			connect: async () => { throw new Error('Routing borrows existing connections'); },
-			disconnect: () => { throw new Error('Routing cannot retire connections'); },
-			reconnect: async () => { }, listWSLDistros: async () => [],
-		},
+function registry(ambient: IWorkbenchHost, entries: IRemoteAgentHostConnectionInfo[]): AgentHostConnectionsService {
+	return new AgentHostConnectionsService(ambient, {
+		isAvailable: true,
+		get connections() { return entries; }, onDidChangeConnections: Event.None,
+		connect: async () => { throw new Error('Routing borrows existing connections'); },
+		disconnect: () => { throw new Error('Routing cannot retire connections'); },
+		reconnect: async () => { }, listWSLDistros: async () => [],
 	});
 }
 
-function endpoint(authority: string, path: string, api: IRendererHost): IRendererAgentHostConnection {
+function endpoint(authority: string, path: string, api: IWorkbenchHost): IRemoteAgentHostConnectionInfo {
 	let connection: RemoteAgentHostConnection = { name: path, host: authority.slice(4), workspace: path };
 	if (authority.startsWith('wsl+')) {
 		connection = { type: 'wsl', name: path, distro: 'distro', workspace: path };

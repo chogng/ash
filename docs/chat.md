@@ -143,14 +143,14 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本地默认是 Rust 后端的 Paraformer 模型包，云端选择是 OpenAI／xAI API 或 Codex 订阅，`dictation.model` 只表示本地模型包；本地服务使用受管缓存并拒绝尚不支持的 Foundry runtime、代理及语言参数。模型准备与缓存操作仍走原服务，未加入运行时或模型迁移。代码测试与真实账户、物理设备及音质的覆盖边界见[历史验证与复测入口](#历史验证与复测入口)。
 
-| 职责             | 唯一 owner 与范围                                                                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 听写编排         | `browser/speechToText/chatSpeechToTextService.ts` 处理会话与累计转写，配置解析归 common constants                                                                  |
-| 云端转写         | `voiceCodeTranscriptionClient.ts` 处理连接、发送顺序、PTT 音频、停止确认及断线；领域宿主契约在 `platform/renderer/common/dictation.ts`，adapter 只做 RPC／通知转换 |
-| 浏览器采音       | `pcmCaptureWorklet.ts` 输出 PCM16 并提供 flush 屏障；Rust 持有凭据与识别，本地模型使用 `ILocalTranscriptionService`，TUI 可继续后端采音                            |
-| 标准扩展 Speech  | `vscode.speech.registerSpeechProvider` → Node／V8 Host capability 和精确注册代次 → MainThreadSpeech → SpeechService                                                |
-| Widget 实时语音  | `browser/voiceClient/voiceSessionController.ts`、ChatWidget／Cowork 的原输入生命周期                                                                               |
-| Ash 语音领域适配 | agentHost `agent.ts` 数据契约、`agentService.ts` 服务契约与 `appServerAgentService.ts` adapter；optional `RendererHost.agentVoice`，不新设 platform/voice          |
+| 职责             | 唯一 owner 与范围                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 听写编排         | `browser/speechToText/chatSpeechToTextService.ts` 处理会话与累计转写，配置解析归 common constants                                                                   |
+| 云端转写         | `voiceCodeTranscriptionClient.ts` 处理连接、发送顺序、PTT 音频、停止确认及断线；领域宿主契约在 `platform/dictation/common/dictation.ts`，adapter 只做 RPC／通知转换 |
+| 浏览器采音       | `pcmCaptureWorklet.ts` 输出 PCM16 并提供 flush 屏障；Rust 持有凭据与识别，本地模型使用 `ILocalTranscriptionService`，TUI 可继续后端采音                             |
+| 标准扩展 Speech  | `vscode.speech.registerSpeechProvider` → Node／V8 Host capability 和精确注册代次 → MainThreadSpeech → SpeechService                                                 |
+| Widget 实时语音  | `browser/voiceClient/voiceSessionController.ts`、ChatWidget／Cowork 的原输入生命周期                                                                                |
+| Ash 语音领域适配 | agentHost `agent.ts` 数据契约、`agentService.ts` 服务契约与 `appServerAgentService.ts` adapter；optional `IWorkbenchHost.agentVoice`，不新设 platform/voice         |
 
 标准 provider 唯一拥有 STT／TTS／keyword session。Host bridge 只持有 bounded invoke／read／close、opaque session ID 与取消 token；撤销或关闭释放该精确 registration／incarnation／activationGeneration 的全部会话，迟到创建显式 close，不能把清理送到 replacement。无选择的多 provider 明确拒绝，不按启动顺序抢占。SpeechService 的 availability 只指注册／声明的 Speech provider；原无扩展听写不冒充 TTS／keyword。
 

@@ -1153,6 +1153,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	let connectionGeneration = 1;
 	let catalogSubscribed = false;
 	const appServer: IAppServerApi = {
+		isAvailable: true,
 		get connectionGeneration() { return connectionGeneration; },
 		getConnectionState: async () => connectionState,
 		getSlashCommands: async () => [],

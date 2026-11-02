@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { BrowserHostService } from '../../../host/browser/browserHostService.js';
 import type { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
@@ -13,7 +14,7 @@ import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.j
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import '../../../path/browser/pathService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -450,6 +451,6 @@ function createServices(os: OperatingSystem, userHome?: string): InstantiationSe
 	const services = serviceFixtures.add(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors())));
 	services.registerInstance(IHostService, new TestHostService());
 	services.registerInstance(IWorkspaceContextService, serviceFixtures.add(new TestWorkspaceService({ id: 'dialog-test', folders: [] })));
-	services.registerInstance(IRendererHostService, { ...api, hasAppServer: true, appServer: { ...api.appServer, operatingSystem: os, userHome } });
+	registerTestWorkbenchHostServices(services, { ...api, appServer: { ...api.appServer, operatingSystem: os, userHome, isAvailable: true } });
 	return services;
 }

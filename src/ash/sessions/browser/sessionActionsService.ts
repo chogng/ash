@@ -8,10 +8,13 @@ import {
 	type IAgentSessionActionsService,
 	type IAgentSessionActionItem,
 	type IAgentSessionActionTarget,
+	type IAgentSessionReviewEnvironmentTarget,
 } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../services/sessions/common/session.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
+import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 
 /** Resolve the captured item only after its picker/confirmation is accepted. */
 export function captureSessionActionTarget(sessions: ISessionsManagementService, storage: IStorageService, navigation: IChatSessionNavigationService, argument: unknown, useActive = false): { readonly title: string; resolve(): Promise<ISession>; } {
@@ -74,6 +77,26 @@ export class SessionActionsService implements IAgentSessionActionsService {
 	resolveTarget(argument: unknown, useActive = false): IAgentSessionActionTarget {
 		const captured = captureSessionActionTarget(this.sessionsOwner, this.storage, this.navigation, argument, useActive);
 		return { title: captured.title, resolve: async () => actionItem(await captured.resolve()) };
+	}
+
+	getReviewEnvironmentTargets(target: { readonly sessionId?: string; readonly threadId?: string; readonly untitledSessionId?: string; }, currentWorkspace: IWorkspace): readonly IAgentSessionReviewEnvironmentTarget[] {
+		if (target.threadId) {
+			const session = this.sessionsOwner.sessions.find(session => session.sessionId === target.sessionId);
+			const chat = session?.chats.find(chat => chat.threadId === target.threadId);
+			if (!chat || chat.workspace === null) return [];
+			const workspace = chat.workspace ?? session?.workspace;
+			// An unknown directory cannot establish which backend owns the Thread.
+			if (!workspace) return [];
+			return [{ label: workspace.root, scope: workspace.authorityId === 'local' ? { type: 'thread', threadId: target.threadId } : { type: 'remote' } }];
+		}
+		const draft = this.sessionsOwner.untitledSessions.find(session => session.untitledSessionId === target.untitledSessionId);
+		if (!draft) return [];
+		const workspace = draft.workspace.type === 'current' ? selectionFromWorkspace(currentWorkspace) : draft.workspace;
+		const folders = workspace.type === 'multiple' ? workspace.folders : workspace.type === 'current' ? [] : [{ label: workspace.root, target: workspace }];
+		return folders.map(({ label, target }) => ({
+			label, description: target.type === 'ssh' ? `${target.host}:${target.root}` : target.root,
+			scope: target.type === 'local' ? { type: 'directory', root: target.root } : { type: 'remote' },
+		}));
 	}
 
 	discardDraft(argument: unknown): boolean {

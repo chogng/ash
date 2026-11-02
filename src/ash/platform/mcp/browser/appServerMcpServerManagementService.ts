@@ -8,7 +8,7 @@ import { localize } from '../../../nls.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { McpOAuthClientRequiredError } from '../common/mcpServerManagementService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot, McpOAuthLoginOptions } from '../common/mcpServerManagementService.js';
 

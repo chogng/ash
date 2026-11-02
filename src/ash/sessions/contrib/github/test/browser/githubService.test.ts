@@ -29,7 +29,7 @@ import type { ISessionsManagementService } from '../../../../services/sessions/c
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
-import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { IWorkbenchHost } from '../../../../../workbench/browser/rendererApi.js';
 import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { parseSessionIdentity, sessionIdentity } from '../../../../services/sessions/common/sessionIdentity.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -64,13 +64,13 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	resources.add(statusChanged.event(value => Object.assign(status, value)));
 	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => { }));
 	const scm = { onDidAddRepository: repositoriesChanged.event, onDidRemoveRepository: Event.None, get repositories() { return git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: statusChanged.event } })); } } as unknown as ISCMService;
-	const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
+	const hostEvents = resources.add(new Emitter<Parameters<Parameters<IWorkbenchHost['events']['subscribe']>[0]>[0]>());
 	resources.add(accountChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
 	const scopeChanges = resources.add(new Emitter<void>());
 	const hostScopes = new Map<string, ISessionProviderScope>();
 	const catalog: ISession[] = [session];
 	const base = createDisconnectedRendererApi();
-	const host: IRendererHost = {
+	const host: IWorkbenchHost = {
 		...base, github, events: { subscribe: hostEvents.event },
 		localGit: {
 			...base.localGit, readRepositoryContexts: async () => Promise.all(git.repositories.map(async repository => ({
@@ -79,7 +79,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 			})))
 		},
 	};
-	const addHost = (providerId: string, api: IRendererHost): ISessionProviderScope => {
+	const addHost = (providerId: string, api: IWorkbenchHost): ISessionProviderScope => {
 		const scope: ISessionProviderScope = {
 			providerId, services: { host: api } as unknown as SessionProviderServices, thread: api.thread,
 			identity: value => sessionIdentity(providerId, value, 'primary'),
@@ -123,7 +123,7 @@ suite('Session GitHub associations', () => {
 		using context = fixture({ attachSessionPullRequest: async id => { calls.push(`primary:${id}`); } });
 		const changed = new Emitter<string>();
 		try {
-			const host: IRendererHost = {
+			const host: IWorkbenchHost = {
 				...context.host,
 				events: { subscribe: Event.None },
 				github: {

@@ -31,7 +31,7 @@ function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
 	const backend = { request: async (method, params, signal) => { calls.push({ method, params }); if (request) return request(method, params, signal); return { revision: 1, git: { autofetch: 'off', autofetchPeriod: 180 }, gitConfigured: true, providers: { token: 'private' } }; } } satisfies IExtensionBackendApi;
-	const connection = { getConnectionState: async () => 'ready', getSlashCommands: async () => [], connectionGeneration: 1, onConnectionState: Event.None } satisfies IAppServerApi;
+	const connection = { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], connectionGeneration: 1, onConnectionState: Event.None } satisfies IAppServerApi;
 	const notifications = new Emitter<ServerNotification>();
 	const events: IServerEventApi = { subscribe: listener => notifications.event(listener) };
 	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;

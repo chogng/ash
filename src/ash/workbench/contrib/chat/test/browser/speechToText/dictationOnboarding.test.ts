@@ -6,7 +6,7 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { installEditorTestDom } from '../../../../../../editor/test/browser/editorTestGlobals.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/dictation/common/dictation.js';
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IPreferencesService } from '../../../../../services/preferences/common/preferences.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';

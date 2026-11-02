@@ -173,6 +173,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 		readDiscovery: undefined as ((connection: string) => Promise<ModelListResult['models']>) | undefined,
 	};
 	services.registerInstance(IAppServerApi, {
+		isAvailable: true,
 		get connectionGeneration() { return source.generation; },
 		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],

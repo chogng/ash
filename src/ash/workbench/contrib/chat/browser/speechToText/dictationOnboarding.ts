@@ -1,7 +1,7 @@
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { readDictationPreparation, readDictationOptions } from './dictationInput.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';

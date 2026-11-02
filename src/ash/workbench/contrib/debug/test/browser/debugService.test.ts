@@ -1,3 +1,5 @@
+import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
+import { testWorkbenchHostServices, registerTestWorkbenchHostServices } from '../../../../test/common/workbenchHostTestServices.js';
 import { installTestElementHeights } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { DebugStorage } from '../../common/debugStorage.js';
@@ -40,7 +42,7 @@ import { createHash } from 'node:crypto';
 import { registerTestExtensionService, TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
+
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -586,7 +588,7 @@ function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscod
 // Fixture paths describe the execution host, independently of the test runner's OS.
 function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
 	const host = createDisconnectedRendererApi();
-	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
+	return createTestPathService({ ...host, appServer: { ...host.appServer, operatingSystem: os, isAvailable: true } }, workspace);
 }
 
 function registerTerminalProfiles(services: InstantiationService): void {
@@ -607,9 +609,9 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 
 function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; configuration?: IConfigurationService; executionOS?: OperatingSystem; textFiles?: ITextFileService; log?: ILogService; }): DebugService {
 	const baseHost = createDisconnectedRendererApi();
-	const host = { ...baseHost, hasAppServer: true, appServer: { ...baseHost.appServer, operatingSystem: options?.executionOS ?? OperatingSystem.Linux } };
+	const host = { ...baseHost, appServer: { ...baseHost.appServer, operatingSystem: options?.executionOS ?? OperatingSystem.Linux, isAvailable: true } };
 	const parentServices = workbenchInstantiationService(owner, storage);
-	const services = parentServices.createChild(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, host], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+	const services = parentServices.createChild(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], ...testWorkbenchHostServices(host).entries(), [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 		[IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
@@ -645,7 +647,7 @@ test('DebugService rejects missing process registration and reports an explicitl
 	const workspace = workspaceService(root);
 	using tasks = new FakeTaskService();
 	using adapters = new AdapterManager();
-	using missing = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IFileService, resources.add(createTestFileService(files))], [IWorkspaceContextService, workspace]));
+	using missing = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(createDisconnectedRendererApi()).entries(), [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IFileService, resources.add(createTestFileService(files))], [IWorkspaceContextService, workspace]));
 	assert.throws(() => missing.createInstance(DebugService), /Unknown service: debugAdapterProcessService/);
 	using service = createDebugService(resources, files, workspace, undefined, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'unavailable', name: 'Unavailable', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} }), /This host does not provide the Code debug adapter capability/);
@@ -1630,7 +1632,7 @@ for (const selection of ['accept', 'escape', 'workspace replacement'] as const) 
 			{ id: 'initial', type: 'example', triggerKind: DebugConfigurationProviderTriggerKind.Initial, provideDebugConfigurations: () => assert.fail('Selection must not query Initial providers') },
 			{ id: 'dynamic', type: 'example', triggerKind: DebugConfigurationProviderTriggerKind.Dynamic, provideDebugConfigurations: (folder, signal) => { assert.equal(folder?.toString(), root.toString()); void entered.complete(signal); return finish.p; } },
 		]);
-		const actionServices = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IDebugService, service], [IWorkspaceContextService, workspace], [IQuickInputService, quickInput])));
+		const actionServices = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], ...testWorkbenchHostServices(createDisconnectedRendererApi()).entries(), [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [IDebugService, service], [IWorkspaceContextService, workspace], [IQuickInputService, quickInput])));
 		const commands = new CommandService(actionServices);
 		const pending = commands.executeCommand(SELECT_AND_START_ID);
 		const signal = await entered.p;
@@ -1775,7 +1777,7 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-			services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+			registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);
@@ -1854,7 +1856,7 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-				services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+				registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTerminalProfiles(services);
@@ -2144,7 +2146,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 	registerTestExtensionService(resources, services);
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 	registerTerminalProfiles(services);
@@ -2458,7 +2460,7 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-			services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+			registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);

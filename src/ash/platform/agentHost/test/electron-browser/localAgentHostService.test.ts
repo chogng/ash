@@ -12,10 +12,15 @@ import { ILogService, type LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../remote/common/remoteSocketFactoryService.js';
 import { AppServerCallService } from '../../../call/browser/appServerCallService.js';
-import { createAppServerVoiceCodeTranscriptionBackend } from '../../../renderer/browser/appServerVoiceCodeTranscriptionBackend.js';
+import { createAppServerVoiceCodeTranscriptionBackend } from '../../../dictation/browser/appServerVoiceCodeTranscriptionBackend.js';
 import { APP_SERVER_METHODS } from '../../../../../../.build/protocol/typescript/index.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { AppServerConnectionStoppedError } from '../../common/appServerError.js';
+import { Event } from '../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../common/remoteAgentHostService.js';
+import { createDisconnectedRendererApi } from '../../../../workbench/browser/rendererApi.js';
+import { createAppServerAppServerApi } from '../../browser/appServerApi.js';
 
 suite('Local Agent Host connection service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -26,6 +31,10 @@ suite('Local Agent Host connection service', () => {
 	const portChannels: string[] = [];
 	const restarts = new Set<(value: unknown) => void>();
 	let Service: typeof import('../../electron-browser/localAgentHostService.js').LocalAgentHostServiceClient;
+	let RemoteService: typeof import('../../electron-browser/remoteAgentHostService.js').RemoteAgentHostService;
+	const opened: string[] = [];
+	const closed: string[] = [];
+	let openGate: DeferredPromise<void> | undefined;
 	let tracking: ReturnType<typeof installDisposableTracker>;
 	let tracker: DisposableTracker;
 	let acquisitions: number;
@@ -46,6 +55,13 @@ suite('Local Agent Host connection service', () => {
 				return { dispose: () => { restarts.delete(listener); } };
 			},
 			invoke: async (channel, params) => {
+				if (channel === 'ash:remote:agent-host:open') {
+					const request = params as { id: string; connection: RemoteAgentHostConnection; };
+					opened.push(request.id);
+					await openGate?.p;
+					return request.connection;
+				}
+				if (channel === 'ash:remote:agent-host:close') { closed.push((params as { id: string; }).id); return; }
 				if (channel.endsWith(':initialized')) { initialized++; return; }
 				if (channel.endsWith(':recover-runtime')) { repairs++; return true; }
 				assert.match(channel, /^ash:app-server(?::local|:host:[0-9a-f-]{36})?:acquire$/);
@@ -90,6 +106,7 @@ suite('Local Agent Host connection service', () => {
 		Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
 		Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });
 		Service = (await import('../../electron-browser/localAgentHostService.js')).LocalAgentHostServiceClient;
+		RemoteService = (await import('../../electron-browser/remoteAgentHostService.js')).RemoteAgentHostService;
 	});
 	suiteTeardown(() => {
 		if (previousWindow) { Object.defineProperty(globalThis, 'window', previousWindow); } else { Reflect.deleteProperty(globalThis, 'window'); }
@@ -103,6 +120,8 @@ suite('Local Agent Host connection service', () => {
 		mismatch = failAcquisition = false;
 		pendingAcquisition = undefined;
 		beforeAcquireReply = undefined;
+		opened.length = closed.length = 0;
+		openGate = undefined;
 		tracker = new DisposableTracker();
 		tracking = installDisposableTracker(tracker);
 	});
@@ -119,6 +138,75 @@ suite('Local Agent Host connection service', () => {
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		return services.createInstance(Service, { clientName: 'test-desktop' });
 	}
+
+	function assembleRemote(services: InstantiationService, logger: ILogService, restore: () => Promise<void> = async () => { }) {
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
+		services.registerInstance(ILogService, logger);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
+		return services.createInstance(RemoteService, {
+			browser: false, onDidSuspendOS: Event.None, onDidResumeOS: Event.None,
+			initializeDirectories: restore,
+			createApi: (lease, target, _resources, id) => {
+				const api = createDisconnectedRendererApi();
+				return {
+					...api, appServer: createAppServerAppServerApi(lease.client, lease.recovery),
+					fs: { ...api.fs, resolvePath: async () => ({ uri: remoteAgentHostRoot(target, id), target: { type: 'environment', dirId: id } }) },
+				};
+			},
+		} satisfies ConstructorParameters<typeof RemoteService>[0]);
+	}
+
+	test('remote registry deduplicates acquisition and retires only the selected connection', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		using remote = assembleRemote(services, logger);
+		const target = { name: 'Build', host: 'build', workspace: '/repo' };
+		const signal = new AbortController().signal;
+		const first = remote.connect(target, signal);
+		const duplicate = remote.connect(target, signal);
+		assert.equal(await first, await duplicate);
+		const second = await remote.connect({ ...target, workspace: '/other' }, signal);
+		assert.equal(opened.length, 2);
+		assert.equal(remote.connections.length, 2);
+		remote.disconnect((await first).id);
+		assert.deepEqual(closed, [(await first).id]);
+		assert.equal(remote.connections[0]!.host, second);
+		remote.dispose();
+		assert.deepEqual(closed, [(await first).id, second.id]);
+	});
+
+	test('remote cancellation retires pending acquisition and ignores its late reply', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		using remote = assembleRemote(services, logger);
+		openGate = new DeferredPromise<void>();
+		const controller = new AbortController();
+		const result = assert.rejects(remote.connect({ name: 'Build', host: 'build', workspace: '/repo' }, controller.signal), { name: 'CancellationError' });
+		controller.abort();
+		await result;
+		await openGate.complete();
+		assert.equal(remote.connections.length, 0);
+		assert.deepEqual(closed, opened);
+		assert.equal(acquisitions, 0);
+	});
+
+	test('remote protocol readiness stays initializing until directory grants complete', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		const entered = new DeferredPromise<void>();
+		const restored = new DeferredPromise<void>();
+		using remote = assembleRemote(services, logger, async () => { await entered.complete(); await restored.p; });
+		const ready = remote.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
+		await entered.p;
+		assert.equal(remote.connections[0]!.state, 'initializing');
+		assert.equal(remote.connections[0]!.host, undefined);
+		await restored.complete();
+		const host = await ready;
+		assert.equal(remote.connections[0]!.state, 'ready');
+		assert.equal(remote.connections[0]!.host, host);
+		await remote.reconnect(host.id);
+		assert.equal(remote.connections[0]!.state, 'ready');
+	});
 
 	test('SSH workspace and local media use distinct carriers and keep Agent requests on the workspace', async () => {
 		using services = new InstantiationService();

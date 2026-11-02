@@ -22,7 +22,7 @@ import { Event } from '../../../../../../base/common/event.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { ScreenshotContextValuePick } from '../../actions/chatContext.js';
 import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
-import { ChatPasteProvidersFeature, createChatFileAttachments } from './editor/chatPasteProviders.js';
+import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
@@ -71,7 +71,7 @@ import { status as announceStatus } from '../../../../../../base/browser/ui/aria
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
 import { ChatWidgetPasteTarget } from '../../attachments/chatWidgetPasteTarget.js';
-import { IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
+import { createChatFileAttachments, IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../../services/chat/common/chatContextService.js';

@@ -1,7 +1,7 @@
 import { APP_SERVER_METHODS, type AppServerMethod, type LanguageOperationParams, type MethodParams, type MethodResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import { runCancellableLanguageRequest, type ILanguageApi, type LanguageRequestOptions } from '../common/languageApi.js';
 
 export function createDisconnectedLanguageApi(unavailable: UnavailableOperation): ILanguageApi {

@@ -9,7 +9,7 @@ import type {
 } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
-import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
 import type { CustomModelProvider, IAgentModelsService } from '../common/agentModels.js';
 import { withSecretStorageErrors } from '../../secrets/browser/appServerSecretStorageStatusService.js';
 

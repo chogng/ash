@@ -11,7 +11,7 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';

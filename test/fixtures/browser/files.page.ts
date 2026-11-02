@@ -365,7 +365,7 @@ const integration = {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
 			executeCommand: async () => { throw new Error('Unexpected extension command'); },
 		});
-		services.registerInstance(IAppServerApi, {
+		services.registerInstance(IAppServerApi, { isAvailable: true,
 			connectionGeneration: 0,
 			getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => toDisposable(() => { }),
 		});

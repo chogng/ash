@@ -1,3 +1,4 @@
+import { registerTestWorkbenchHostServices } from '../../../workbench/test/common/workbenchHostTestServices.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
@@ -7,7 +8,7 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
-import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
+
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
 import { BrowserPathService } from '../../../workbench/services/path/browser/pathService.js';
@@ -33,7 +34,7 @@ import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -273,7 +274,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const services = resources.add(editorRoot.createChild());
 	services.registerInstance(IHostService, new TestHostService());
-	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));

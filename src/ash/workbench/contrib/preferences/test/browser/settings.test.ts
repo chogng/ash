@@ -1,3 +1,4 @@
+import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import { ChatWidgetService } from '../../../chat/browser/widget/chatWidgetService.js';
 import '../../../advisor/browser/advisor.contribution.js';
@@ -54,7 +55,7 @@ import { IFileTextModelService } from '../../../../services/textmodelResolver/co
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -91,7 +92,6 @@ import type {
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IWorkbenchHostService } from '../../../../services/host/common/workbenchHostService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';

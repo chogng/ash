@@ -18,6 +18,8 @@ export interface IAppServerConnectionRecovery {
 
 /** App Server connection lifecycle visible to a renderer host. */
 export interface IAppServerApi {
+	/** Stable host support, independent of a temporary connection failure. */
+	readonly isAvailable: boolean;
 	readonly recovery?: IAppServerConnectionRecovery;
 	/** Changes when the protocol client starts a replacement connection. */
 	readonly connectionGeneration: number;
