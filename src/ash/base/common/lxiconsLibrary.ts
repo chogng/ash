@@ -257,6 +257,7 @@ export const lxiconsLibrary = {
 	repoFetch: registerLxicon("repo-fetch", 0xe0dd),
 	repoPull: registerLxicon("repo-pull", 0xe0de),
 	repoPush: registerLxicon("repo-push", 0xe0df),
+	rocket: registerLxicon("rocket", 0xe161),
 	rss: registerLxicon("rss", 0xe0e0),
 	sandbox: registerLxicon("sandbox", 0xe0e1),
 	save: registerLxicon("save", 0xe0e2),

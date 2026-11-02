@@ -1267,6 +1267,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "rocket",
+      "file": "rocket.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "rss",
       "file": "rss.svg",
       "rendering": "symbolic"

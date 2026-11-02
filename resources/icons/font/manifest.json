@@ -352,7 +352,8 @@
     "thumbsup-filled": "E15D",
     "thumbsdown-filled": "E15E",
     "thumbsdown": "E15F",
-    "thumbsup": "E160"
+    "thumbsup": "E160",
+    "rocket": "E161"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -608,6 +609,7 @@
     "repo-fetch": "12224aa48fa72479679df72677c2fa910134af5ef16fab0ad28fa0274ede9783",
     "repo-pull": "374fee804ef613406dad3149f84bd4a061694b1a8472602312eedad4aa44adb6",
     "repo-push": "810a2f8f3f9d81c65f72cbc21eea50d13d34b2c6edccdcbcd8ff4ee4c11a4689",
+    "rocket": "02b056a2ae7c8f0bb745bfc28459d5657d664109c88a18f0558157d6ef35aa0a",
     "rss": "d29bd74b68e1165236846b738470f31b0ef25e8a02f1e511c1d4a737a56d2b34",
     "sandbox": "1802f39aa40a161732aba612152e43db90c5d450d7bd0f652baf4f01f1f4fc66",
     "save": "9c68632f77449751a93a57235a5c39a5bd0f978f9ef5e3f5d5e460aac8e99731",
