@@ -1,5 +1,5 @@
 import { withProcessRun } from '../../build/processes.ts';
-import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
@@ -96,6 +96,14 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		// Reflinks keep the snapshot independent of compiler writes without copying
 		// every byte on filesystems that support them; elsewhere Node copies normally.
 		cpSync(compiledDirectory, outputDirectory, { recursive: true, mode: constants.COPYFILE_FICLONE });
+		// Emitting extension sources relocates them away from their package's dependencies.
+		// Retain that scope without exposing extension-only packages to host tests.
+		const extensionsDirectory = resolve(outputDirectory, 'extensions');
+		for (const extension of existsSync(extensionsDirectory) ? readdirSync(extensionsDirectory, { withFileTypes: true }) : []) {
+			if (!extension.isDirectory()) continue;
+			const dependencies = resolve(desktopDirectory, 'extensions', extension.name, 'node_modules');
+			if (existsSync(dependencies)) symlinkSync(dependencies, resolve(extensionsDirectory, extension.name, 'node_modules'), 'junction');
+		}
 		// TypeScript resolves vendored declarations but does not emit their adjacent JavaScript implementations.
 		for (const path of ['src/ash/base/common/marked/marked.js', 'src/ash/base/browser/dompurify/dompurify.js']) {
 			const output = resolve(outputDirectory, path);

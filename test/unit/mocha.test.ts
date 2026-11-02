@@ -114,6 +114,27 @@ test('default discovery and source filters include extension-owned units alongsi
 	assert.match(selected.output, /1 tests executed across 1 files; 0 failed files/);
 });
 
+test('emitted extensions resolve their own dependencies without exposing them to host tests', () => {
+	const extension = join(outputDirectory, 'extensions/json-language-features/localization.js');
+	mkdirSync(dirname(extension), { recursive: true });
+	writeFileSync(extension, `export { t } from '@vscode/l10n';`);
+	const fixture = join(directory, 'extension-dependencies.test.js');
+	const specifier = relative(dirname(fixture), extension).replaceAll('\\', '/');
+	writeFileSync(fixture, `
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { test } from 'mocha';
+import { t } from ${JSON.stringify(specifier)};
+test('package dependency scope', () => {
+ assert.equal(t('Extension dependency scope'), 'Extension dependency scope');
+ assert.throws(() => createRequire(import.meta.url).resolve('@vscode/l10n'), { code: 'MODULE_NOT_FOUND' });
+});
+`);
+	const result = run(['--run', relative(outputDirectory, fixture).replaceAll('\\', '/')]);
+	assert.equal(result.status, 0, result.output);
+	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
+});
+
 test('invalid unit filters fail before copying outputs or starting the selected file', () => {
 	for (const args of [['--grep', ''], ['--grep', '   '], ['--grepp', 'selected'], ['--', '--grep', 'selected'], ['--workers', '0'], ['--workers', '-1'], ['--workers', '1.5'], ['--workers', 'NaN']]) {
 		const result = run(['--run', first, ...args], 'test/unit/run.ts', join(directory, 'missing-compiler-output'));
