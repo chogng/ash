@@ -54,13 +54,18 @@ import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoic
 import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/browser/webview.js';
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { IContentSearchService } from '../../../src/ash/platform/search/common/search.js';
+import { FileContentSearchService } from '../../../src/ash/platform/search/browser/searchService.js';
+import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { SearchService } from '../../../src/ash/workbench/services/search/common/searchService.js';
+import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
 import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IAgentThreadService, IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import toneWav from '../../../crates/utils/audio/tests/fixtures/tone.wav?url';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotification } from '../../../.build/protocol/typescript/index.js';
@@ -88,7 +93,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
-import { createAppServerAgentThreadService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -164,6 +169,11 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
+services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
+// This fixture hosts standalone editors rather than tabbed Workbench groups.
+services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
+services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 services.registerSingleton(IImageEditorService, () => new class extends ImageEditorService {
 	async capture(): Promise<never> { throw new Error('Image capture is outside this transcript fixture'); }
 }());
