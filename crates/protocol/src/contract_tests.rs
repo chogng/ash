@@ -1632,3 +1632,67 @@ fn tool_scopes_validate_composition_and_preserve_empty_positive_ceilings() {
     assert!(!profile.allows_tool(&name));
     assert!(!profile.allows_tool(&ToolName::new("exec").unwrap()));
 }
+
+#[test]
+fn tool_result_review_is_a_redacted_disclosure_decision() {
+    let interaction: TurnInteraction = serde_json::from_value(serde_json::json!({
+        "requestId":"result-review", "itemId":"tool-item",
+        "request":{"type":"toolResultReview","request":{
+            "toolCallId":"tool-call", "toolName":"read_private",
+            "review":{"reason":"Sensitive output", "content":[{"type":"text","text":"private evidence"}], "isError":false}
+        }}
+    })).unwrap();
+    assert_eq!(
+        interaction.request.kind(),
+        AgentInteractionKind::ToolResultReview
+    );
+    let public = serde_json::to_value(interaction.pending_state()).unwrap();
+    assert_eq!(public["kind"], "toolResultReview");
+    assert!(!public.to_string().contains("private evidence"));
+    let event = ThreadEvent::InteractionRequested {
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        interaction: interaction.clone(),
+    };
+    let update = ThreadUpdateEnvelope {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        durable_sequence: 3,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed {
+            event: event.clone(),
+        },
+    };
+    let watch = serde_json::to_string(&update).unwrap();
+    assert!(!watch.contains("private evidence"));
+    assert!(!watch.contains("Sensitive output"));
+    assert!(
+        serde_json::to_string(&event)
+            .unwrap()
+            .contains("private evidence")
+    );
+    let delivery = AgentRequestEnvelope {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        interaction: interaction.clone(),
+    };
+    assert!(
+        serde_json::to_string(&delivery)
+            .unwrap()
+            .contains("private evidence")
+    );
+    for decision in ["share", "skip"] {
+        let response: AgentResponse = serde_json::from_value(
+            serde_json::json!({"type":"toolResultReview","response":{"decision":decision}}),
+        )
+        .unwrap();
+        assert_eq!(response.kind(), interaction.request.kind());
+    }
+    for response in [
+        serde_json::json!({"decision":"approveOnce"}),
+        serde_json::json!({"decision":"share", "content":"substituted result"}),
+    ] {
+        assert!(serde_json::from_value::<crate::ToolResultReviewResponse>(response).is_err());
+    }
+}

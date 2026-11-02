@@ -26,12 +26,25 @@ import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/cha
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
+import { IChatService } from '../../workbench/services/chat/common/chatService.js';
+import type { ToolResultPresentation } from '../../platform/agentHost/common/agent.js';
 
 class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
 	constructor(
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
+		@IChatService private readonly chat: IChatService,
 	) { }
+
+	async openToolResult(sourceSessionId: string, target: ToolResultPresentation, signal: AbortSignal): Promise<void> {
+		if (signal.aborted || target.type !== 'sessionTarget' || !this.sessions.sessions.some(session => session.sessionId === sourceSessionId)) {
+			throw new Error(localize('chat.tool.resultUnavailable', 'This result is unavailable on its originating host.'));
+		}
+		const revision = this.revision;
+		await this.chat.readThread(target.sessionId, target.threadId);
+		if (signal.aborted || revision !== this.revision) return;
+		await this.openConversation(target.sessionId, target.threadId);
+	}
 
 	async createNewConversation(): Promise<void> {
 		this.sessions.createUntitledSession();

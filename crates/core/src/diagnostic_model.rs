@@ -32,6 +32,7 @@ impl InvocationTimer {
         let text = match event {
             ModelStreamEvent::TextDelta(text) | ModelStreamEvent::MessageDelta { text, .. } => text,
             ModelStreamEvent::ReasoningDelta(_)
+            | ModelStreamEvent::ToolCallDelta { .. }
             | ModelStreamEvent::MessageStarted { .. }
             | ModelStreamEvent::MessageCompleted(_) => return,
         };

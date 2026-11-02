@@ -12,7 +12,10 @@ export interface ISessionCreateOptions {
 	readonly token: CancellationToken;
 }
 
-export interface ISessionsProviderAutomations extends IAutomationStore { }
+export interface ISessionsProviderAutomations extends IAutomationStore {
+	/** Resolve a tool receipt on this provider without exposing the catalogue's composite ID format. */
+	getAutomationByBackendId?(id: string): import('../../../../workbench/contrib/chat/common/automations/automation.js').IAutomationDescriptor | undefined;
+}
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {

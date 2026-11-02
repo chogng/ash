@@ -101,6 +101,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 		if (!pending?.itemId) return [];
 		const waitingStatus = {
 			approval: 'waitingForApproval', permissions: 'waitingForUserInput',
+			toolResultReview: 'waitingForApproval',
 			userInput: 'waitingForUserInput', dynamicTool: 'waitingForCapability',
 		};
 		return turn.status === waitingStatus[pending.kind] ? [[turn.turnId, pending] as const] : [];
@@ -123,7 +124,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
 				toolInvocation: {
-					call, result, output, stopped: stoppedTurns.has(entry.turnId),
+					call, result, output, streaming: entry.transient && !result && !stoppedTurns.has(entry.turnId), stopped: stoppedTurns.has(entry.turnId),
 					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
 					executionStarted: startedCalls.has(identity),
 				},

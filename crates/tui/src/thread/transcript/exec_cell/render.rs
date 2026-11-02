@@ -149,6 +149,7 @@ impl ExecCall {
                 | ToolActivity::Search { .. }
                 | ToolActivity::List { .. }
                 | ToolActivity::Edit { .. }
+                | ToolActivity::Confirmation { .. }
                 | ToolActivity::Run,
             )
             | None => {

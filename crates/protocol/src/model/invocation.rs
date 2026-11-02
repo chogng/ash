@@ -164,6 +164,12 @@ pub struct AssistantMessage {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", content = "text", rename_all = "camelCase")]
 pub enum ModelStreamEvent {
+    /// Incremental arguments are display evidence only; the final response admits execution.
+    ToolCallDelta {
+        id: String,
+        name: String,
+        arguments: String,
+    },
     TextDelta(String),
     ReasoningDelta(String),
     MessageStarted {

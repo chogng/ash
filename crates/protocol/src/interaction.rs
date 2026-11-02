@@ -10,6 +10,7 @@ pub use permissions::PermissionResponse;
 pub use permissions::RequestedDirectoryGrant;
 mod dynamic_tool;
 mod request_user_input;
+mod tool_result_review;
 mod turn_interaction;
 mod user_input;
 
@@ -29,6 +30,10 @@ pub use request_user_input::RequestUserInputResponse;
 pub use request_user_input::UserInputAnswer;
 pub use request_user_input::UserInputOption;
 pub use request_user_input::UserInputQuestion;
+pub use tool_result_review::ToolResultReview;
+pub use tool_result_review::ToolResultReviewDecision;
+pub use tool_result_review::ToolResultReviewRequest;
+pub use tool_result_review::ToolResultReviewResponse;
 pub use turn_interaction::AgentInteractionKind;
 pub use turn_interaction::AgentRequest;
 pub use turn_interaction::AgentRequestEnvelope;

@@ -1,3 +1,4 @@
+import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import type { ChatRequestQueueKind, ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
@@ -53,6 +54,8 @@ export interface ChatInputState {
 	readonly agentName?: string;
 	readonly canSelectAgent: boolean;
 	readonly interaction?: TurnInteraction;
+	readonly toolInvocation?: IChatToolInvocation;
+	readonly toolInvocations?: readonly IChatToolInvocation[];
 }
 
 /** Operations that the input area may request from its owning Chat pane. */

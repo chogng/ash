@@ -13,6 +13,75 @@ pub(crate) fn project_tool_result(
     result: CallToolResult,
     maximum_bytes: usize,
 ) -> Result<ToolOutput, McpCallError> {
+    let presentation = result
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("ash/resultPresentation"))
+        .map(|value| {
+            if value.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
+                return Err(McpCallError::InvalidResult(
+                    "unsupported result presentation version".into(),
+                ));
+            }
+            let target: ash_protocol::ToolResultPresentation = serde_json::from_value(
+                value.get("target").cloned().unwrap_or_default(),
+            )
+            .map_err(|error| {
+                McpCallError::InvalidResult(format!("invalid result presentation: {error}"))
+            })?;
+            let (label, id) = match &target {
+                ash_protocol::ToolResultPresentation::SessionTarget {
+                    label, thread_id, ..
+                } => (label, thread_id.as_str()),
+                ash_protocol::ToolResultPresentation::AutomationConfigured {
+                    label,
+                    automation_id,
+                } => (label, automation_id.as_str()),
+            };
+            if label.trim().is_empty()
+                || label.len() > 512
+                || id.trim().is_empty()
+                || id.len() > 256
+            {
+                return Err(McpCallError::InvalidResult(
+                    "result presentation has an invalid label or identity".into(),
+                ));
+            }
+            let mut artifact = ToolOutputArtifact::new(
+                ToolOutputArtifactSource::ViewMetadata,
+                "application/vnd.ash.tool-result+json".into(),
+                ToolOutputArtifactData::Text {
+                    text: String::new(),
+                },
+            );
+            artifact.presentation = Some(target);
+            Ok(artifact)
+        })
+        .transpose()?;
+    // This is an Ash protocol extension requested by the producing tool, not a policy heuristic.
+    let result_review = result
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("ash/resultReview"))
+        .map(|value| {
+            let object = value.as_object().ok_or_else(|| {
+                McpCallError::InvalidResult("result review must be an object".into())
+            })?;
+            if object.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
+                return Err(McpCallError::InvalidResult(
+                    "unsupported result review version".into(),
+                ));
+            }
+            let reason = object
+                .get("reason")
+                .and_then(serde_json::Value::as_str)
+                .filter(|reason| !reason.trim().is_empty() && reason.len() <= 8192)
+                .ok_or_else(|| {
+                    McpCallError::InvalidResult("result review needs a bounded reason".into())
+                })?;
+            Ok(reason.to_owned())
+        })
+        .transpose()?;
     if result.content.len() > 128 {
         return Err(McpCallError::InvalidResult(
             "tool output has too many content parts".into(),
@@ -62,12 +131,19 @@ pub(crate) fn project_tool_result(
             },
         )
     });
-    let mut artifact_metadata_bytes = metadata.as_ref().map_or(0, |artifact| {
-        let ToolOutputArtifactData::Json { json } = &artifact.data else {
-            unreachable!()
-        };
-        json.len() + artifact.mime_type.len()
-    });
+    let mut artifact_metadata_bytes = metadata
+        .as_ref()
+        .map_or(0, |artifact| {
+            let ToolOutputArtifactData::Json { json } = &artifact.data else {
+                unreachable!()
+            };
+            json.len() + artifact.mime_type.len()
+        })
+        .saturating_add(presentation.as_ref().map_or(0, |artifact| {
+            serde_json::to_vec(artifact)
+                .expect("presentation is JSON")
+                .len()
+        }));
     if artifact_metadata_bytes > maximum_bytes {
         return Err(McpCallError::InvalidResult(
             "content metadata byte limit exceeded".into(),
@@ -243,11 +319,19 @@ pub(crate) fn project_tool_result(
     if let Some(metadata) = metadata {
         content.push(ToolContent::Artifact(metadata));
     }
-    let output = if result.is_error.unwrap_or(false) {
+    if let Some(presentation) = presentation {
+        content.push(ToolContent::Artifact(presentation));
+    }
+    let mut output = if result.is_error.unwrap_or(false) {
         ToolOutput::error(content)
     } else {
         ToolOutput::success(content)
     };
+    if let Some(reason) = result_review {
+        output = output
+            .require_result_confirmation(reason)
+            .map_err(|error| McpCallError::InvalidResult(error.to_string()))?;
+    }
     let text_budget = maximum_bytes
         .saturating_sub(media_bytes)
         .saturating_sub(artifact_metadata_bytes);

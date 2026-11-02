@@ -79,6 +79,8 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 	public getFileTreeInfos() { return this.output.getFileTreeInfos(); }
 	public getLastFocusedFileTree() { return this.output.getLastFocusedFileTree(); }
 
+	public get codeblocks() { return this.output.codeblocks; }
+
 	public setVisible(visible: boolean): void {
 		this.output.setVisible(visible);
 	}

@@ -115,7 +115,7 @@ Markdown 沿 `ChatListWidget` → `ChatMarkdownContentPart` → `MarkdownElement
 
 持久图片／音频经已有来源授权取得 bytes。独立只读预览沿 `ChatAttachmentsContentPart` → response resource provider 的 exact bytes association → `IEditorService`／MediaPreview。来源更换即撤回旧 action；音频移交前暂停原行播放，不从任意 URL 抓取宿主文件。隐藏 retained Chat／Cowork 停止自身 Voice、暂停自身 HTMLAudioElement，保留草稿／快照／媒体字节，重显不自动播放；其他 Widget 的媒体不受影响。详见[媒体交付](media-delivery.md)。
 
-工具状态和输出分别由 `ChatToolProgressSubPart` 与 `ChatToolOutputSubPart` 拥有，并直接消费公共 `IChatToolInvocation` 只读快照。普通审批与命令审批分别由 `ToolConfirmationSubPart` 和 `ChatTerminalToolConfirmationSubPart` 呈现，共享 `AbstractToolConfirmationSubPart` 的能力范围和动作生命周期。命令确认保留后端沙箱拒绝证据、精确 argv、输出及退出状态；安全重试仍属执行前授权。输入 owner 保留请求身份和允许决策校验，按钮与快捷键采用同一提交门禁。完整目录对应、公开契约缺口及验证边界见[工具调用组件对应](chat-tool-invocation-alignment.md)。
+工具状态和输出分别由 `ChatToolProgressSubPart` 与 `ChatToolOutputSubPart` 拥有，并直接消费公共 `IChatToolInvocation` 只读快照。普通审批与命令审批分别由 `ToolConfirmationSubPart` 和 `ChatTerminalToolConfirmationSubPart` 呈现，共享 `AbstractToolConfirmationSubPart` 的能力范围和动作生命周期。命令确认保留后端沙箱拒绝证据、精确 argv、输出及退出状态；安全重试仍属执行前授权。输入 owner 保留请求身份和允许决策校验，按钮与快捷键采用同一提交门禁。工具可显式请求执行后结果复核，由 `ChatToolPostExecuteConfirmationPart` 预览已捕获的输出；分享交付原结果，跳过不分享且不撤销修改。Core 持久保留候选结果，恢复不重新执行；未请求复核的结果正常交付。完整目录对应、公开契约缺口及验证边界见[工具调用组件对应](chat-tool-invocation-alignment.md)。
 
 图片生成由列表识别原生 `imagegen`，或 MCP 来源明确声明的同名远程工具。列表拥有稳定的 `ChatImageGenerationBatchPart`，按存活的调用成员关联同一 Turn 内连续的图片批次，统一管理 `ChatImageGenerationProgressPart` 动画和 `ChatGeneratedImageResultSubPart` 画廊，在最后一个工具行的可折叠详情之外显示。追加调用或移除原行不会重新读取已有图片；重挂载后只恢复原画廊内部的焦点，不抢占外部控件。失败或轮次停止结束进度，不从轮次结束推断生成成功。恢复已完成历史直接显示图片，不重播生成动画。
 

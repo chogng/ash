@@ -72,6 +72,30 @@ pub struct ToolOutputArtifact {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub resource_metadata: Option<String>,
+    /// Typed, view-only navigation emitted by the result producer; never an execution grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub presentation: Option<ToolResultPresentation>,
+}
+
+/// Exact navigation coordinates in a successful tool result, independent of its model text.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ToolResultPresentation {
+    SessionTarget {
+        session_id: crate::SessionId,
+        thread_id: crate::ThreadId,
+        label: String,
+    },
+    AutomationConfigured {
+        automation_id: String,
+        label: String,
+    },
 }
 
 impl ToolOutputArtifact {
@@ -94,6 +118,7 @@ impl ToolOutputArtifact {
             truncated: false,
             app_csp: None,
             resource_metadata: None,
+            presentation: None,
         }
     }
 
@@ -131,6 +156,7 @@ impl ToolOutputArtifact {
         artifact.truncated = true;
         artifact.resource_metadata = self.resource_metadata.clone();
         artifact.app_csp = self.app_csp.clone();
+        artifact.presentation = self.presentation.clone();
         artifact
     }
 }

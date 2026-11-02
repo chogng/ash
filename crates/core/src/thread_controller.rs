@@ -3703,6 +3703,11 @@ fn validate_request_id(request_id: &RequestId) -> Result<(), CoreError> {
 
 fn resolution_command(request: &ResolveTurnInteractionRequest) -> ThreadCommand {
     match &request.response {
+        AgentResponse::ToolResultReview { response } => ThreadCommand::ResolveToolResultReview {
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
             turn_id: request.turn_id.clone(),
             request_id: request.request_id.clone(),
@@ -3923,6 +3928,7 @@ fn latest_catalog_turn(
 
 fn interaction_question(request: &AgentRequest) -> String {
     match request {
+        AgentRequest::ToolResultReview { request } => request.review.reason.clone(),
         AgentRequest::Approval { request } => request.reason.clone(),
         AgentRequest::Permissions { request } => request.reason.clone(),
         AgentRequest::UserInput { request } => request

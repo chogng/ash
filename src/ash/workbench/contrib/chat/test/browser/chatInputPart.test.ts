@@ -83,6 +83,9 @@ import { getIconDefinition } from '../../../../../platform/theme/common/iconRegi
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { IMcpServerManagementService } from '../../../../../platform/mcp/common/mcpServerManagementService.js';
+import type { ToolConfirmationPresentation } from '../../../../../platform/agentHost/common/agent.js';
+import type { IChatToolInvocation } from '../../common/chatService/chatService.js';
 
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 
@@ -112,7 +115,7 @@ class ObservableInputPart extends ChatInputPart {
 	clientCommandsForTest!: IChatSlashCommandService;
 }
 
-function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact'): ObservableInputPart {
+function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact', mcp?: IMcpServerManagementService): ObservableInputPart {
 	const container = document.createElement('div');
 	document.body.append(container);
 	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -129,6 +132,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		registerTestDictationOnboarding(services);
 	}
 	const partServices = inputResources.add(services.createChild());
+	if (mcp) partServices.registerInstance(IMcpServerManagementService, mcp);
 	if (!partServices.has(IFileService)) partServices.registerInstance(IFileService, { hasProvider: () => false } as unknown as IFileService);
 	if (!partServices.has(IChatPasteTargetService)) partServices.registerSingleton(IChatPasteTargetService, () => new ChatPasteTargetService());
 	if (!partServices.has(IChatAttachmentResolveService)) {
@@ -1512,6 +1516,62 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 		[...interaction.querySelectorAll('button')].find(button => button.textContent === label)!.click();
 	}
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
+});
+
+test('result review retains literal evidence and sends only the exact offer decision', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'result-review', request: {
+				type: 'toolResultReview', request: {
+					toolCallId: 'call', toolName: 'read_resource', review: { reason: 'Share protected results?', isError: false, content: [{ type: 'text', text: '<img src=x> private evidence' }] },
+				}
+			}
+		},
+	};
+	part.render(state);
+	const preview = part.element.querySelector('pre[aria-label="Results awaiting review"]')!;
+	assert.equal(preview.textContent, '<img src=x> private evidence');
+	assert.equal(preview.querySelector('img'), null);
+	const buttons = [...part.element.querySelectorAll<HTMLButtonElement>('.ash-chat-tool-result-review button')];
+	assert.deepEqual(buttons.map(button => button.textContent), ['Skip results', 'Share results']);
+	buttons[1].click();
+	assert.deepEqual(responses, [{ requestId: 'result-review', response: { type: 'toolResultReview', response: { decision: 'share' } } }]);
+	await part.acceptActiveToolConfirmation();
+	assert.equal(responses.length, 1);
+	await part.skipActiveToolPostConfirmation();
+	assert.deepEqual(responses[1], { requestId: 'result-review', response: { type: 'toolResultReview', response: { decision: 'skip' } } });
+	part.render({ ...state, interaction: { ...state.interaction!, requestId: 'next-review' } });
+	buttons[0].click();
+	assert.equal(responses.length, 2);
+	part.setVisible(false);
+	part.element.querySelector<HTMLButtonElement>('.ash-chat-tool-result-review button')!.click();
+	await part.acceptActiveToolPostConfirmation();
+	assert.equal(responses.length, 2);
+});
+
+test('client tool skip targets its exact offer and retired controls cannot answer another call', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'client-offer', request: { type: 'dynamicTool', call: { callId: 'client-call', name: '<img src=x>', definitionDigest: 'frozen-definition', arguments: { literal: '<script>data</script>' } } } },
+	};
+	part.render(state);
+	const region = part.element.querySelector('[aria-label="Client tool arguments"]')!;
+	assert.equal(region.textContent, JSON.stringify({ literal: '<script>data</script>' }, null, 2));
+	assert.equal(part.element.querySelector('img,script'), null);
+	const skip = [...part.element.querySelectorAll('button')].find(button => button.textContent === 'Skip this tool')!;
+	skip.click();
+	assert.deepEqual(responses, [{ requestId: 'client-offer', response: { type: 'dynamicTool', response: { callId: 'client-call', success: false, content: [{ type: 'text', text: 'The user skipped this client tool call.' }] } } }]);
+	part.render({ ...state, interaction: { ...state.interaction!, requestId: 'successor' } });
+	skip.click();
+	assert.equal(responses.length, 1);
+	part.setVisible(false);
+	[...part.element.querySelectorAll('button')].find(button => button.textContent === 'Skip this tool')!.click();
+	assert.equal(responses.length, 1);
 });
 
 test('sandbox approval retains captured output and submits only offered decisions for the current request', async () => {
@@ -3634,6 +3694,36 @@ suite('chatInput browser component', () => {
 
 	for (const locale of ['en', 'zh-CN']) {
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+			test(`result review preserves literal evidence and accessible keyboard actions in ${locale} ${theme}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?inlineCode&locale=${locale}&theme=${theme}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showResultReview());
+				const chinese = locale === 'zh-CN';
+				const review = page.locator('.ash-chat-tool-result-review');
+				const preview = review.getByRole('region', { name: chinese ? '等待复核的结果' : 'Results awaiting review' });
+				await expect(preview).toContainText('<img src=x> private evidence');
+				await expect(review.locator('img')).toHaveCount(0);
+				await preview.focus();
+				const accessible = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+				expect(accessible.content).toContain('<img src=x> private evidence');
+				expect(accessible.content?.split('\n')).toContain('<img src=x> private evidence');
+				expect(accessible.help).toContain(chinese ? '不会撤销修改' : 'without undoing changes');
+				await page.evaluate(() => window.ashChatInputIntegration.refresh());
+				await expect(preview).toBeFocused();
+				await preview.press('Tab');
+				const skip = review.getByRole('button', { name: chinese ? '跳过结果' : 'Skip results', exact: true });
+				await expect(skip).toBeFocused();
+				await skip.press('Enter');
+				await expect(page.getByRole('status', { name: 'Decision' })).toHaveText('skip');
+				await skip.press('Tab');
+				const share = review.getByRole('button', { name: chinese ? '分享结果' : 'Share results', exact: true });
+				await expect(share).toBeFocused();
+				await share.press('Space');
+				await expect(page.getByRole('status', { name: 'Decision' })).toHaveText('share');
+				await expect(share).toHaveCSS('outline-style', 'solid');
+				await page.setViewportSize({ width: 320, height: 600 });
+				expect(await review.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			});
 			test(`sandbox approval preserves evidence and keyboard focus in ${locale} ${theme}`, async function () {
 				const { page } = browserTests;
 				await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}`);
@@ -4978,4 +5068,97 @@ test('/btw composer captures the untrimmed question and shifts frozen reference 
 	await assert.rejects(part.acceptInput(), /Synthetic side chat failure/);
 	assert.equal(sends, 0);
 	assert.deepEqual((await part.captureDraft())!.draft, captured);
+});
+
+function reviewTool(presentation: ToolConfirmationPresentation, itemId = 'rich-tool'): IChatToolInvocation {
+	return {
+		call: {
+			type: 'toolCall', itemId, turnId: 'rich-turn', toolCallId: itemId, name: 'review_tool', argumentsJson: '{}',
+			binding: {
+				registryGeneration: 1, definitionDigest: 'catalogue-definition', caller: { type: 'direct' },
+				sourceChain: [{ type: 'mcp', serverId: 'source-host:mcp', remoteName: 'review', catalogGeneration: 1, connectionGeneration: 1 }],
+				activity: { type: 'confirmation', presentation }
+			},
+		}, output: [], stopped: false
+	};
+}
+function richApprovalState(tool: IChatToolInvocation): ChatInputState {
+	return {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: { requestId: 'rich-offer', itemId: tool.call.itemId, request: { type: 'approval', request: { reason: 'Review these changes', capabilities: [] } } }, toolInvocation: tool, toolInvocations: [tool]
+	};
+}
+
+test('typed confirmation evidence reaches the real approval factory and retains exact offer authority', async () => {
+	for (const [presentation, evidence] of [
+		[{ type: 'modifiedFiles', files: [{ path: 'a.ts', original: '<old>', modified: '<script>new</script>' }] }, '<script>new</script>'],
+		[{ type: 'agentFeedbackReview', message: '<script>feedback</script>' }, '<script>feedback</script>'],
+		[{ type: 'extensionsInstall', extensions: ['publisher.<script>extension</script>'] }, 'publisher.<script>extension</script>'],
+		[{ type: 'sandboxPrerequisite', dependencies: ['<script>dependency</script>'], remediations: ['Install dependency'] }, '<script>dependency</script>'],
+	] satisfies [ToolConfirmationPresentation, string][]) {
+		const responses: unknown[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+		const state = richApprovalState(reviewTool(presentation));
+		part.render(state);
+		const retained = part.element.querySelector<HTMLButtonElement>('.ash-chat-interaction button');
+		retained?.focus();
+		part.render({ ...state, toolInvocation: { ...state.toolInvocation!, call: structuredClone(state.toolInvocation!.call) } });
+		assert.equal(part.element.querySelector('.ash-chat-interaction button'), retained);
+		assert.equal(document.activeElement, retained);
+		const content = part.element.querySelector('.ash-chat-interaction')!;
+		assert.ok(content.textContent!.includes(evidence));
+		assert.equal(content.querySelector('script'), null);
+		const retired = [...content.querySelectorAll('button')].find(button => button.textContent === 'Approve once')!;
+		await part.acceptActiveToolConfirmation();
+		assert.deepEqual(responses, [{ requestId: 'rich-offer', response: { type: 'approval', response: { decision: 'approveOnce' } } }]);
+		part.render({ ...state, interaction: { ...state.interaction!, requestId: 'new-offer' } });
+		retired.click();
+		assert.equal(responses.length, 1);
+	}
+});
+
+test('confirmation carousel reviews adjacent evidence without granting another call approval', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	const current = reviewTool({ type: 'extensionsInstall', extensions: ['publisher.current'] });
+	const adjacent = reviewTool({ type: 'agentFeedbackReview', message: 'feedback' }, 'adjacent');
+	const state = { ...richApprovalState(current), toolInvocations: [current, adjacent] };
+	part.render(state);
+	edit(part, 'Keep the draft');
+	const click = (label: string) => [...part.element.querySelectorAll('button')].find(button => button.textContent === label)!.click();
+	click('Next tool');
+	assert.match(part.element.querySelector('[aria-label="Read-only tool evidence"]')!.textContent!, /review_tool/);
+	await part.acceptActiveToolConfirmation();
+	await part.skipActiveToolConfirmation();
+	assert.deepEqual(responses, []);
+	part.render(state);
+	await part.acceptActiveToolConfirmation();
+	assert.deepEqual(responses, []);
+	click('Return to current approval');
+	await part.acceptActiveToolConfirmation();
+	assert.deepEqual(responses, [{ requestId: 'rich-offer', response: { type: 'approval', response: { decision: 'approveOnce' } } }]);
+	assert.equal(part.element.querySelector('textarea')!.value, 'Keep the draft');
+});
+
+test('authentication uses the bound MCP host and cancels hidden login without approving execution', async () => {
+	const attempts: { serverId: string; signal?: AbortSignal; }[] = [];
+	const login = new DeferredPromise<void>();
+	const servers = { isOAuthAvailable: true, login: async (serverId: string, _options: unknown, signal?: AbortSignal) => { attempts.push({ serverId, signal }); await login.p; } } as unknown as IMcpServerManagementService;
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } }, undefined, undefined, undefined, undefined, servers);
+	const state = richApprovalState(reviewTool({ type: 'authentication', provider: 'Source provider' }));
+	part.render(state);
+	const signIn = [...part.element.querySelectorAll('button')].find(button => button.textContent === 'Sign in to Source provider')!;
+	signIn.click();
+	assert.equal(attempts[0]?.serverId, 'source-host:mcp');
+	assert.equal(attempts[0]?.signal?.aborted, false);
+	part.setVisible(false);
+	assert.equal(attempts[0]?.signal?.aborted, true);
+	await login.complete();
+	await Promise.resolve();
+	assert.deepEqual(responses, []);
+	part.setVisible(true);
+	assert.equal(signIn.disabled, false);
+	await part.acceptActiveToolConfirmation();
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveOnce' } }]);
 });

@@ -3067,9 +3067,13 @@ use ash_protocol::ToolCallCaller;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolCategory;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolConfirmationPresentation;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolExecutionAuthority;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolMode;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolModifiedFile;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolOutputArtifact;
 #[cfg(any(test, feature = "export"))]
@@ -3086,6 +3090,16 @@ use ash_protocol::ToolProductStatus;
 use ash_protocol::ToolProfileSnapshot;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolReplaySafety;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultPresentation;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReview;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewDecision;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewRequest;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolScope;
 #[cfg(any(test, feature = "export"))]
@@ -7212,6 +7226,10 @@ typescript_bindings! {
     ActionApprovalDecision,
     ActionApprovalResponse,
     ActionApprovalRiskAssessment,
+    ToolResultReview,
+    ToolResultReviewDecision,
+    ToolResultReviewRequest,
+    ToolResultReviewResponse,
     RiskLevel,
     AgentInteractionKind,
     AgentRequest,
@@ -7231,6 +7249,8 @@ typescript_bindings! {
     DynamicToolOutput,
     ThreadItem,
     ToolActivity,
+    ToolConfirmationPresentation,
+    ToolModifiedFile,
     ToolCallBinding,
     ToolSourceProvenance,
     ToolCallCaller,
@@ -7275,6 +7295,7 @@ typescript_bindings! {
     Thread,
     ToolExecutionAuthority,
     ToolOutputArtifact,
+    ToolResultPresentation,
     ToolOutputArtifactData,
     ToolOutputArtifactSource,
     McpAppResourceCsp,

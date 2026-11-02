@@ -76,6 +76,19 @@ impl RmcpClientOptions {
         self
     }
 
+    /// Advertises the host's durable, tool-requested result disclosure protocol.
+    pub fn with_result_review(mut self) -> Self {
+        self.client_info
+            .capabilities
+            .extensions
+            .get_or_insert_with(Default::default)
+            .insert(
+                "ash/resultReview".into(),
+                serde_json::Map::from_iter([("versions".into(), serde_json::json!([1]))]),
+            );
+        self
+    }
+
     /// Advertises validated form elicitation when the installed host can durably route it.
     pub fn with_form_elicitation(mut self) -> Self {
         self.client_info.capabilities.elicitation = Some(

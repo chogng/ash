@@ -21,6 +21,7 @@ import { AppServerRemoteError } from '../common/appServerError.js';
 import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
+	ContentPart as ContentPartDto,
 	Thread as ThreadDto,
 	ThreadItem as ThreadItemDto,
 	ThreadTranscriptEntry as ThreadTranscriptEntryDto,
@@ -741,17 +742,19 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 		requestId: interaction.requestId,
 		itemId: interaction.itemId,
 		deadline: interaction.deadline ? { ...interaction.deadline } : interaction.deadline,
-		request: request.type === 'approval'
-			? {
-				type: 'approval', request: {
-					reason: request.request.reason,
-					allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
-					command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
-					sandboxDenial: request.request.sandboxDenial ? structuredClone(request.request.sandboxDenial) : request.request.sandboxDenial,
-					riskAssessment: request.request.riskAssessment ? { riskLevel: request.request.riskAssessment.riskLevel, reason: request.request.riskAssessment.reason } : request.request.riskAssessment,
-					capabilities: request.request.capabilities.map(capability => ({ ...capability })),
+		request: request.type === 'toolResultReview'
+			? { type: 'toolResultReview', request: { toolCallId: request.request.toolCallId, toolName: request.request.toolName, review: { ...request.request.review, content: request.request.review.content.map(toChatContentPart) } } }
+			: request.type === 'approval'
+				? {
+					type: 'approval', request: {
+						reason: request.request.reason,
+						allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
+						command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
+						sandboxDenial: request.request.sandboxDenial ? structuredClone(request.request.sandboxDenial) : request.request.sandboxDenial,
+						riskAssessment: request.request.riskAssessment ? { riskLevel: request.request.riskAssessment.riskLevel, reason: request.request.riskAssessment.reason } : request.request.riskAssessment,
+						capabilities: request.request.capabilities.map(capability => ({ ...capability })),
+					}
 				}
-			}
 			: request.type === 'permissions'
 				? { type: 'permissions', request: structuredClone(request.request) }
 				: request.type === 'userInput'
@@ -906,32 +909,37 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 		}
 		case 'toolResult': return {
 			...item,
-			content: item.content == null ? item.content : item.content.map((part): ChatContentPart => {
-				switch (part.type) {
-					case 'artifact': {
-						const artifact = part.artifact;
-						const data = artifact.data;
-						return {
-							type: 'artifact', artifact: {
-								mimeType: artifact.mimeType, contentDigest: artifact.contentDigest, truncated: artifact.truncated,
-								...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }), source: { ...artifact.source },
-								data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
-									: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
-							},
-						};
-					}
-					case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
-					case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
-					default: return { ...part };
-				}
-			}),
+			content: item.content == null ? item.content : item.content.map(toChatContentPart),
 		};
 		default: return { ...item };
 	}
 }
 
+function toChatContentPart(part: ContentPartDto): ChatContentPart {
+	switch (part.type) {
+		case 'artifact': {
+			const artifact = part.artifact;
+			const data = artifact.data;
+			return {
+				type: 'artifact', artifact: {
+					...(artifact.presentation == null ? {} : { presentation: { ...artifact.presentation } }),
+					mimeType: artifact.mimeType, contentDigest: artifact.contentDigest, truncated: artifact.truncated,
+					...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }), source: { ...artifact.source },
+					data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
+						: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
+				},
+			};
+		}
+		case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
+		case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
+		default: return { ...part };
+	}
+}
+
 function toAgentResponse(response: AgentResponse): AgentResponseDto {
 	switch (response.type) {
+		case 'toolResultReview':
+			return { type: 'toolResultReview', response: { ...response.response } };
 		case 'approval':
 			return { type: 'approval', response: { ...response.response } };
 		case 'permissions':

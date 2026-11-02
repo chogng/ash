@@ -1,3 +1,4 @@
+import { IMcpServerManagementService } from '../../../platform/mcp/common/mcpServerManagementService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { IInstructionService } from '../../../platform/instructions/common/instructionService.js';
@@ -97,6 +98,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 			},
 		});
 		child.registerInstance(ILanguageModelToolsService, scope.services.tools);
+		child.registerInstance(IMcpServerManagementService, scope.services.host.mcpServerManagement);
 		child.registerInstance(ILanguageModelsService, scope.services.models);
 		child.registerInstance(IAgentExecutionSettingsService, scope.services.execution);
 		child.registerInstance(IPromptsService, new SessionScopedPromptsService(scope));

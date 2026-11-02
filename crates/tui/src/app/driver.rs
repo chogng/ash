@@ -829,6 +829,12 @@ fn refresh_server_event(
                 let turn_id = envelope.turn_id;
                 let request_id = envelope.interaction.request_id;
                 match envelope.interaction.request {
+                    ash_protocol::AgentRequest::ToolResultReview { request } => {
+                        match Query::open_result_review(turn_id, request_id, request) {
+                            Ok(query) => app.update(ThreadEvent::QueryRequested(query)),
+                            Err(error) => app.update(ThreadEvent::FailureReported(error)),
+                        }
+                    }
                     ash_protocol::AgentRequest::Approval { request } => {
                         app.update(ThreadEvent::ApprovalRequested(Approval::open(
                             turn_id, request_id, request,

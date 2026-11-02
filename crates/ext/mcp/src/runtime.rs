@@ -48,6 +48,7 @@ struct RuntimeStartup {
     app_definitions: Vec<ToolDefinition>,
     app_tools: BTreeMap<ToolName, serde_json::Value>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
+    activities: BTreeMap<ToolName, serde_json::Value>,
     status: McpRuntimeStatusSnapshot,
 }
 
@@ -60,9 +61,13 @@ struct RuntimeStartup {
 pub(crate) struct McpPreparedCall {
     binding: McpToolBinding,
     arguments: serde_json::Value,
+    activity: Option<ash_protocol::ToolActivity>,
 }
 
 impl McpPreparedCall {
+    pub(crate) fn activity(&self) -> Option<ash_protocol::ToolActivity> {
+        self.activity.clone()
+    }
     pub(crate) fn binding(&self) -> &McpToolBinding {
         &self.binding
     }
@@ -78,6 +83,7 @@ pub(crate) struct McpRuntimeOwner {
     app_tools: BTreeMap<ToolName, serde_json::Value>,
     definitions: Vec<ToolDefinition>,
     bindings: BTreeMap<ToolName, McpToolBinding>,
+    activities: BTreeMap<ToolName, serde_json::Value>,
     status: McpRuntimeStatusSnapshot,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
@@ -120,6 +126,7 @@ impl McpRuntimeOwner {
             app_definitions: startup.app_definitions,
             app_tools: startup.app_tools,
             bindings: startup.bindings,
+            activities: startup.activities,
             status: startup.status,
             worker: Mutex::new(Some(worker)),
         })
@@ -177,7 +184,91 @@ impl McpRuntimeOwner {
         let binding = self.bindings.get(name).cloned().ok_or_else(|| {
             McpCallError::NotStarted(format!("MCP tool is not available: {name}"))
         })?;
-        Ok(McpPreparedCall { binding, arguments })
+        let activity = self
+            .activities
+            .get(name)
+            .map(|declaration| {
+                if declaration
+                    .get("version")
+                    .and_then(serde_json::Value::as_u64)
+                    != Some(1)
+                {
+                    return Err(McpCallError::NotStarted(
+                        "unsupported tool activity version".into(),
+                    ));
+                }
+                let value = if let Some(pointer) = declaration
+                    .get("argumentPointer")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    if !pointer.starts_with('/') || pointer.len() > 512 {
+                        return Err(McpCallError::NotStarted(
+                            "invalid tool activity argument pointer".into(),
+                        ));
+                    }
+                    arguments.pointer(pointer).cloned().ok_or_else(|| {
+                        McpCallError::NotStarted("tool activity argument is missing".into())
+                    })?
+                } else {
+                    declaration.get("activity").cloned().unwrap_or_default()
+                };
+                if value.to_string().len() > 128 * 1024 {
+                    return Err(McpCallError::NotStarted(
+                        "tool activity exceeds its byte limit".into(),
+                    ));
+                }
+                let activity: ash_protocol::ToolActivity =
+                    serde_json::from_value(value).map_err(|error| {
+                        McpCallError::NotStarted(format!("invalid tool activity: {error}"))
+                    })?;
+                // These values cross the MCP boundary and will become durable, literal review evidence.
+                if let ash_protocol::ToolActivity::Confirmation { presentation } = &activity {
+                    use ash_protocol::ToolConfirmationPresentation as P;
+                    let text = |value: &str, limit: usize| {
+                        !value.trim().is_empty() && value.len() <= limit
+                    };
+                    let list = |values: &[String]| {
+                        !values.is_empty()
+                            && values.len() <= 32
+                            && values.iter().all(|value| text(value, 4096))
+                    };
+                    let valid = match presentation {
+                        P::ModifiedFiles { files } => {
+                            !files.is_empty()
+                                && files.len() <= 32
+                                && files.iter().all(|file| {
+                                    text(&file.path, 4096)
+                                        && file.modified.len() <= 65536
+                                        && file
+                                            .original
+                                            .as_ref()
+                                            .is_none_or(|original| original.len() <= 65536)
+                                })
+                        }
+                        P::AgentFeedbackReview { message } => text(message, 65536),
+                        P::ExtensionsInstall { extensions } => {
+                            list(extensions) && extensions.iter().all(|id| id.len() <= 256)
+                        }
+                        P::SandboxPrerequisite {
+                            dependencies,
+                            remediations,
+                        } => list(dependencies) && list(remediations),
+                        P::Authentication { provider } => text(provider, 256),
+                    };
+                    if !valid {
+                        return Err(McpCallError::NotStarted(
+                            "tool confirmation evidence is empty or exceeds its limits".into(),
+                        ));
+                    }
+                }
+                Ok(activity)
+            })
+            .transpose()?;
+        Ok(McpPreparedCall {
+            binding,
+            arguments,
+            activity,
+        })
     }
 
     pub(crate) fn read_resource(
@@ -319,6 +410,10 @@ fn run_worker(
                 )
             })
             .collect();
+        let activities = mcp.catalog().tools().iter().filter_map(|tool| {
+            tool.app_definition().get("_meta").and_then(|meta| meta.get("ash/activity"))
+                .map(|value| (tool.binding().exposed_name().clone(), value.clone()))
+        }).collect();
         let status = runtime_status(&mcp, &server_metadata);
         if startup
             .send(Ok(RuntimeStartup {
@@ -326,6 +421,7 @@ fn run_worker(
                 app_definitions,
                 app_tools,
                 bindings,
+                activities,
                 status,
             }))
             .is_err()

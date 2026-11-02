@@ -59,11 +59,17 @@ export class ChatToolProgressSubPart extends BaseChatToolInvocationSubPart<HTMLD
 		} else if (stopped) {
 			state = 'stopped';
 			label = imageGeneration ? localize('chat.imageGeneration.stopped', 'Image generation stopped') : localize('chat.tool.stopped', '{0} · No result', activity);
+		} else if (invocation.streaming) {
+			state = 'pending';
+			label = localize('chat.tool.preparing', '{0} · Receiving arguments', activity);
 		} else if (waitingFor) {
 			switch (waitingFor) {
 				case 'approval':
+				case 'toolResultReview':
 					state = 'waitingForApproval';
-					label = localize('chat.tool.awaitingApproval', '{0} · Awaiting approval', activity);
+					label = waitingFor === 'toolResultReview'
+						? localize('chat.resultReview.waiting', '{0} · Awaiting result review', activity)
+						: localize('chat.tool.awaitingApproval', '{0} · Awaiting approval', activity);
 					break;
 				case 'permissions':
 					state = 'waitingForPermissions';

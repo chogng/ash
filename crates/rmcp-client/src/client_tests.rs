@@ -248,8 +248,19 @@ impl ServerHandler for TestServer {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        assert_eq!(
+            context
+                .peer
+                .peer_info()
+                .unwrap()
+                .capabilities
+                .extensions
+                .as_ref()
+                .unwrap()["ash/resultReview"]["versions"],
+            serde_json::json!([1])
+        );
         Ok(CallToolResult::success(vec![ContentBlock::text(request.name.into_owned())]).into())
     }
 }
@@ -267,6 +278,7 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
             .expect("join test server")
     });
     let options = RmcpClientOptions::new("ash-rmcp-client-test", "0")
+        .with_result_review()
         .with_mcp_apps()
         .with_timeouts(RmcpTimeouts {
             initialize: Duration::from_secs(2),

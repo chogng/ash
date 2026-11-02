@@ -11,6 +11,9 @@ import { browserEnvironment } from '../../../../../../../editor/test/browser/tes
 import { createTestEditorServices } from '../../../../../../test/common/testEditorServices.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../../nls.js';
 import type { ChatToolCallBinding } from '../../../../../../../platform/agentHost/common/agent.js';
+import type { ToolResultPresentation } from '../../../../../../../platform/agentHost/common/agent.js';
+import { IChatSessionNavigationService } from '../../../../../../services/chat/common/chatSessionNavigationService.js';
+import { ChatToolOutputSubPart } from '../../../../browser/widget/chatContentParts/toolInvocationParts/chatToolOutputPart.js';
 import { ChatListWidget } from '../../../../browser/widget/chatListWidget.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry, Turn } from '../../../../../../services/chat/common/chatService.js';
@@ -228,6 +231,85 @@ suite('Tool activity and input/output presentation', () => {
 		selection.removeAllRanges();
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`streaming argument evidence binds in place and never implies execution in ${locale}`, () => {
+			if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+			try {
+				using resources = new DisposableStore();
+				const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+				const container = document.createElement('main'); document.body.append(container);
+				resources.add(toDisposable(() => container.remove()));
+				using widget = services.createInstance(ChatListWidget, container, {});
+				const initial = toolItem().toolInvocation!.call;
+				const entry: ThreadTranscriptEntry = { type: 'item', entryId: 'streamed', turnId: initial.turnId, transient: true, item: { ...initial, argumentsJson: '{"path":', binding: undefined } };
+				widget.render(chatTranscriptListItems([entry]));
+				const details = container.querySelector<HTMLDetailsElement>('.ash-chat-tool-invocation')!;
+				const summary = details.querySelector('summary')!;
+				const streamingProgress = [...details.querySelectorAll('p')].find(p => p.textContent?.startsWith(locale === 'en' ? 'Receiving tool arguments:' : '正在接收工具参数：'))!;
+				assert.equal(streamingProgress.hidden, false);
+				assert.equal(summary.textContent, `fixture_tool · ${locale === 'en' ? 'Receiving arguments' : '正在接收参数'}`);
+				details.open = true; summary.focus();
+				const final: ThreadTranscriptEntry = { ...entry, transient: false, item: { ...initial, argumentsJson: '{"path":"a"}', binding: { ...initial.binding!, activity: { type: 'command' as const, program: 'cat', arguments: ['a'], workingDirectory: '/workspace' } } } };
+				widget.render(chatTranscriptListItems([final]));
+				assert.equal(container.querySelector('.ash-chat-tool-invocation'), details);
+				assert.equal(document.activeElement, summary);
+				assert.equal(details.open, true);
+				assert.equal(details.dataset.state, 'pending');
+				assert.equal(streamingProgress.hidden, true);
+				assert.equal(details.querySelector('[data-tool-section="input"] pre')!.textContent, '{"path":"a"}');
+			} finally { resetNlsResolver(); }
+		});
+	}
+
+	test('typed result navigation carries its original host and cancels retired actions without parsing ordinary JSON', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const requests: { source: string; target: ToolResultPresentation; signal: AbortSignal; }[] = [];
+		services.registerInstance(IChatSessionNavigationService, { openToolResult: async (source: string, target: ToolResultPresentation, signal: AbortSignal) => { requests.push({ source, target, signal }); await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true })); } } as unknown as IChatSessionNavigationService);
+		using part = services.createInstance(ChatToolOutputSubPart, document);
+		document.body.append(part.domNode);
+		const base = toolItem().toolInvocation!;
+		const source = { sessionId: 'originating-host-session', threadId: 'originating-thread', itemId: 'result', kind: 'toolResult' as const };
+		const targets: ToolResultPresentation[] = [
+			{ type: 'sessionTarget', sessionId: 'child-session', threadId: 'child-thread', label: '<script>Child</script>' },
+			{ type: 'automationConfigured', automationId: 'automation', label: '<script>Automation</script>' },
+		];
+		const result = (target: ToolResultPresentation) => ({ type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', isError: false, text: 'created', content: [{ type: 'artifact' as const, artifact: { source: { type: 'viewMetadata' as const }, mimeType: 'application/vnd.ash.tool-result+json', data: { type: 'text' as const, text: '' }, contentDigest: 'metadata', truncated: false, presentation: target } }] });
+		part.render({ ...base, result: { ...result(targets[0]), content: undefined, text: JSON.stringify(targets[0]) } }, source, { generatedImages: false });
+		assert.equal(part.domNode.querySelectorAll('button').length, 0);
+		for (const target of targets) {
+			part.render({ ...base, result: result(target) }, source, { generatedImages: false });
+			assert.equal(part.domNode.querySelector('script'), null);
+			const button = part.domNode.querySelector('button')!;
+			button.click();
+			assert.equal(requests.at(-1)?.source, source.sessionId);
+			assert.deepEqual(requests.at(-1)?.target, target);
+			assert.equal(requests.at(-1)?.signal.aborted, false);
+			part.setVisible(false);
+			assert.equal(requests.at(-1)?.signal.aborted, true);
+			button.click(); assert.equal(requests.length, targets.indexOf(target) + 1);
+			part.setVisible(true); assert.equal(button.disabled, false);
+		}
+		part.render({ ...base, result: { ...result(targets[0]), isError: true } }, source, { generatedImages: false });
+		assert.equal(part.domNode.querySelectorAll('button').length, 0);
+	});
+
+	test('completed parameterless tools use a literal compact result and restore full output when evidence grows', () => {
+		using resources = new DisposableStore();
+		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+		const item = toolItem();
+		const invocation = { ...item.toolInvocation!, call: { ...item.toolInvocation!.call, argumentsJson: '{}' }, result: { type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', text: '<script>literal</script>', isError: false } };
+		widget.render([{ ...item, toolInvocation: invocation }]);
+		const compact = [...widget.element.querySelectorAll<HTMLElement>('pre[aria-label="Result"]')].find(element => !element.closest('[hidden]'))!;
+		assert.equal(compact.textContent, '<script>literal</script>');
+		assert.equal(compact.hidden, false);
+		assert.equal(compact.querySelector('script'), null);
+		widget.render([{ ...item, toolInvocation: { ...invocation, output: [{ type: 'toolOutput', entryId: 'late', turnId: 'turn', toolCallId: 'call', stream: 'stderr', text: 'late evidence' }] } }]);
+		assert.equal(compact.hidden, true);
+		assert.equal(widget.element.querySelector('[data-tool-section="stderr"] pre')!.textContent, 'late evidence');
+	});
+
 	test('Chinese activity summaries and region labels retain untranslated evidence', () => {
 		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try {
@@ -286,6 +368,8 @@ suite('Rendered tool input/output', () => {
 			await expect(summary).toHaveText('Run git "diff" · Running');
 			await expect(summary).toBeFocused();
 			await page.keyboard.press('Enter');
+			// The first key establishes the user's choice even if output admission opened it.
+			if (await outer.getAttribute('open') === null) await page.keyboard.press('Enter');
 			await expect(outer.getByText('Working directory: /workspace', { exact: true })).toBeVisible();
 			const copyCommand = outer.getByRole('button', { name: 'Copy command and arguments', exact: true });
 			await copyCommand.focus();
@@ -340,6 +424,36 @@ suite('Rendered tool input/output', () => {
 			await retained?.dispose();
 		});
 	}
+
+	test('typed Markdown results keep raw resources, sanitize previews and retain the code editor', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const item = toolItem();
+		const artifact = { source: { type: 'embeddedResource' as const, uri: 'docs://report' }, mimeType: 'text/markdown', data: { type: 'text' as const, text: '# Report\n\n```ts\nconst value = 1;\n```\n\n<script>window.toolPreviewExecuted=true</script>' }, contentDigest: 'digest', truncated: false };
+		const rendering = { ...item, toolInvocation: { ...item.toolInvocation!, result: { type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', text: 'report', isError: false, content: [{ type: 'artifact' as const, artifact }] } } };
+		await page.evaluate(rendering => window.ashChatTranscriptIntegration.renderItems([rendering]), rendering);
+		const outer = page.locator('.ash-chat-tool-invocation');
+		await outer.locator(':scope > summary').click();
+		const preview = outer.getByText('Preview formatted results', { exact: true }).locator('..');
+		await preview.locator(':scope > summary').click();
+		await expect(preview.getByRole('heading', { name: 'Report', exact: true })).toBeVisible();
+		await expect(preview.locator('script')).toHaveCount(0);
+		await expect(outer.getByText('1 result resources', { exact: true })).toBeVisible();
+		await expect(outer.locator('.ash-chat-resources pre')).toHaveText(artifact.data.text);
+		const editor = preview.locator('.ash-chat-code-block-editor');
+		const retained = await editor.elementHandle();
+		await page.evaluate(rendering => window.ashChatTranscriptIntegration.renderItems([{ ...rendering, toolInvocation: { ...rendering.toolInvocation, result: { ...rendering.toolInvocation.result, content: [{ type: 'artifact', artifact: { ...rendering.toolInvocation.result.content[0].artifact, contentDigest: 'next', data: { type: 'text', text: '# Report\n\n```ts\nconst value = 2;\n```' } } }] } } }]), rendering);
+		await expect(editor).toHaveCount(1);
+		assert.equal(await editor.evaluate((element, retained) => element === retained, retained), true);
+		await preview.locator(':scope > summary').click();
+		await outer.locator(':scope > summary').click();
+		await outer.locator(':scope > summary').focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runNavigationCommand('workbench.action.chat.nextCodeBlock'));
+		await expect(outer).toHaveAttribute('open');
+		await expect(preview).toHaveAttribute('open');
+		await expect(editor.locator('.stanza-editor-input')).toBeFocused();
+		await retained?.dispose();
+	});
 
 	test('command output admission cancels fast completion and respects user disclosure choices', async () => {
 		const { page } = browserTests;

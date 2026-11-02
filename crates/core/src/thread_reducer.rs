@@ -1787,6 +1787,27 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     "a Turn cannot wait for more than one interaction".into(),
                 ));
             }
+            if let AgentRequest::ToolResultReview { request } = &interaction.request {
+                let matching_call = snapshot.items.iter().any(|item| matches!(item,
+                    ThreadItem::ToolCall { item_id, turn_id: call_turn_id, tool_call_id, name, .. }
+                    if interaction.item_id.as_ref() == Some(item_id)
+                        && call_turn_id == turn_id && *tool_call_id == request.tool_call_id && *name == request.tool_name
+                ));
+                let already_completed = snapshot.items.iter().any(|item| {
+                    matches!(item,
+                        ThreadItem::ToolResult { turn_id: result_turn_id, tool_call_id, .. }
+                        if result_turn_id == turn_id && *tool_call_id == request.tool_call_id
+                    )
+                });
+                if !matching_call
+                    || already_completed
+                    || !snapshot.started_tool_calls.contains(&request.tool_call_id)
+                {
+                    return Err(CoreError::Journal(
+                        "result review does not match an executed tool call".into(),
+                    ));
+                }
+            }
             transition_turn(
                 &mut snapshot,
                 turn_id,
@@ -3057,6 +3078,29 @@ fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
+    if let AgentRequest::ToolResultReview { request } = request {
+        if request.review.reason.trim().is_empty() || request.review.reason.len() > 8192 {
+            return Err("result review must have a bounded, nonempty reason".into());
+        }
+        // A candidate has no committed ToolResult item from which clients can read attachments.
+        // Producers must carry inspectable media in the captured payload before requesting review.
+        if request.review.content.iter().any(|part| {
+            matches!(
+                part,
+                ash_protocol::ContentPart::ImageAttachment { .. }
+                    | ash_protocol::ContentPart::AudioAttachment { .. }
+            )
+        }) {
+            return Err("result review cannot reference uncommitted media attachments".into());
+        }
+        let size = serde_json::to_vec(&request.review)
+            .map_err(|error| error.to_string())?
+            .len();
+        if size > 4 * 1024 * 1024 {
+            return Err("result review exceeds the 4 MiB interaction limit".into());
+        }
+        return Ok(());
+    }
     if let AgentRequest::Permissions { request } = request {
         return request.validate();
     }
@@ -3359,7 +3403,9 @@ fn pending_interaction(
 
 fn waiting_status_for(request: &AgentRequest) -> TurnStatus {
     match request {
-        AgentRequest::Approval { .. } => TurnStatus::WaitingForApproval,
+        AgentRequest::Approval { .. } | AgentRequest::ToolResultReview { .. } => {
+            TurnStatus::WaitingForApproval
+        }
         AgentRequest::UserInput { .. } | AgentRequest::Permissions { .. } => {
             TurnStatus::WaitingForUserInput
         }
@@ -3373,6 +3419,11 @@ fn resolution_command(
     response: &AgentResponse,
 ) -> ThreadCommand {
     match response {
+        AgentResponse::ToolResultReview { response } => ThreadCommand::ResolveToolResultReview {
+            turn_id: turn_id.clone(),
+            request_id: request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
             turn_id: turn_id.clone(),
             request_id: request_id.clone(),

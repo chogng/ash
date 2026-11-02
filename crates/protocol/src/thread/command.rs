@@ -25,6 +25,11 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadCommand {
+    ResolveToolResultReview {
+        turn_id: TurnId,
+        request_id: RequestId,
+        response: crate::ToolResultReviewResponse,
+    },
     Rename {
         title: String,
         source: crate::ThreadTitleSource,

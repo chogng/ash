@@ -1,3 +1,4 @@
+import { IMcpServerManagementService } from '../../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IAgentToolsApi } from '../../../../../platform/agentHost/common/agentToolsApi.js';
 import { LanguageModelToolsService } from '../../../../../workbench/contrib/chat/browser/tools/languageModelToolsService.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
@@ -22,6 +23,7 @@ import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devC
 export function createAgentHostSessionScope(parent: IInstantiationService, api: IAgentConnection, lifetime: DisposableStore): IInstantiationService {
 	const scope = lifetime.add(parent.createChild());
 	scope.registerInstance(IAgentConnection, api);
+	scope.registerInstance(IMcpServerManagementService, api.mcpServerManagement);
 	scope.registerInstance(IAppServerApi, api.appServer);
 	scope.registerInstance(IServerEventApi, api.events);
 	scope.registerInstance(IAgentSessionService, api.session);

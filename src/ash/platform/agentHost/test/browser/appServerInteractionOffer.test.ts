@@ -60,6 +60,30 @@ for (const required of [undefined, false, true]) {
 	});
 }
 
+test('result review decodes captured content only through the owner-directed offer', async () => {
+	const transport = new InteractionTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAgentThreadService(client);
+	const offers: AgentInteractionOffer[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	await client.connect();
+	const request = {
+		...interaction, requestId: 'review', request: {
+			type: 'toolResultReview', request: {
+				toolCallId: 'executed-call', toolName: 'read_private', review: { reason: 'Review captured evidence', content: [{ type: 'text', text: 'private <img src=x>' }], isError: true },
+			}
+		}
+	};
+	transport.frame({ method: 'session/thread/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 2, streamCursor: null, update: { type: 'committed', event: { type: 'interactionRequested', ...identity, interaction: request } } } });
+	assert.equal(offers.length, 0);
+	transport.frame({ method: 'agent/request', params: { ...identity, interaction: request } });
+	assert.equal(client.state, 'ready');
+	assert.equal(offers.length, 1);
+	assert.deepEqual(offers[0].interaction.request, request.request);
+	assert.equal(offers[0].interaction.requestId, 'review');
+});
+
 test('committed interaction history never grants delivery ownership', async () => {
 	const transport = new InteractionTransport();
 	const client = new AppServerProtocolClient(transport);

@@ -26,6 +26,14 @@ fn timing_ignores_empty_reasoning_and_complete_snapshots() {
 #[test]
 fn timing_keeps_first_body_delta_and_counts_only_incremental_body() {
     let mut timing = InvocationTimer::start();
+    timing.observe(
+        &ModelStreamEvent::ToolCallDelta {
+            id: "call".into(),
+            name: "read".into(),
+            arguments: "{\"path\":".into(),
+        },
+        5,
+    );
     timing.observe(&ModelStreamEvent::TextDelta("a".into()), 20);
     timing.observe(&ModelStreamEvent::ReasoningDelta("thought".into()), 30);
     timing.observe(

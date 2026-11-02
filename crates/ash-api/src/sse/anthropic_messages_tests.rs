@@ -81,16 +81,12 @@ fn messages_decoder_separates_thinking_and_tool_json_deltas() {
     decoder
         .decode(&event(
             "content_block_start",
-            r#"{"type":"content_block_start","index":1,"content_block":{"type":"tool_use"}}"#,
+            r#"{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call","name":"weather"}}"#,
         ))
         .unwrap();
-    assert!(decoder
-        .decode(&event(
-            "content_block_delta",
-            r#"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}"#,
-        ))
-        .unwrap()
-        .is_empty());
+    assert_eq!(decoder.decode(&event("content_block_delta",
+        r#"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}"#,
+    )).unwrap(), vec![ModelStreamEvent::ToolCallDelta { id: "call".into(), name: "weather".into(), arguments: "{\"city\":".into() }]);
 }
 
 #[test]

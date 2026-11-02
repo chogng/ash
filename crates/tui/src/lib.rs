@@ -100,6 +100,7 @@ pub fn client_capabilities() -> ClientCapabilities {
                 AgentInteractionKind::Approval,
                 AgentInteractionKind::Permissions,
                 AgentInteractionKind::UserInput,
+                AgentInteractionKind::ToolResultReview,
             ],
             dynamic_tools: None,
         }),

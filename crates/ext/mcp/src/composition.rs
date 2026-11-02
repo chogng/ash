@@ -691,6 +691,12 @@ fn invocation_capabilities(
 }
 
 impl ToolService for McpToolService {
+    fn activity(&self, call: &ToolCall) -> Option<ash_protocol::ToolActivity> {
+        self.prepared_call(call)
+            .ok()
+            .and_then(|prepared| prepared.activity())
+    }
+
     fn list_app_tools(
         &self,
         origin: &ToolCall,
@@ -948,6 +954,15 @@ fn protocol_execution_output(output: ToolOutput) -> Result<ToolExecutionOutput, 
             },
         })
         .collect::<Vec<_>>();
+    if let Some(reason) = output.result_confirmation() {
+        return Ok(ToolExecutionOutput::NeedsResultConfirmation(
+            ash_protocol::ToolResultReview {
+                reason: reason.to_owned(),
+                content,
+                is_error: output.status() == ToolOutputStatus::Error,
+            },
+        ));
+    }
     Ok(match output.status() {
         ToolOutputStatus::Success => ToolExecutionOutput::SuccessContent(content),
         ToolOutputStatus::Error => ToolExecutionOutput::FailureContent(content),

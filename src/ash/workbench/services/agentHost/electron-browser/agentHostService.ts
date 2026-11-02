@@ -104,7 +104,7 @@ export class WorkbenchAgentHostService extends Disposable {
 	private executionCapabilities(desktopTools = true) {
 		const capabilities = this.options.capabilities;
 		return {
-			agentInteractions: { version: 1 as const, kinds: ['approval', 'permissions', 'userInput'] as ('approval' | 'permissions' | 'userInput')[] },
+			agentInteractions: { version: 1 as const, kinds: ['approval', 'permissions', 'userInput', 'toolResultReview'] as ('approval' | 'permissions' | 'userInput' | 'toolResultReview')[] },
 			...(capabilities.browser ? { browser: { version: 4 as const, observe: true, input: true } } : {}),
 			...(capabilities.textDocuments ? { textDocuments: { version: 2 as const } } : {}),
 			...(desktopTools && capabilities.appTools ? { appTools: { version: 1 as const, agents: true, desktop: true } } : {}),

@@ -136,6 +136,16 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 export function getToolSpecificDataDescription(activity: ChatToolCallBinding['activity']): string {
 	if (!activity) return '';
 	switch (activity.type) {
+		case 'confirmation': {
+			const value = activity.presentation;
+			switch (value.type) {
+				case 'modifiedFiles': return value.files.map(file => [file.path, file.original, file.modified].filter(text => text !== undefined && text !== null).join('\n')).join('\n\n');
+				case 'agentFeedbackReview': return value.message;
+				case 'extensionsInstall': return [localize('chat.tool.installExtensions', 'Extensions requested for installation'), ...value.extensions].join('\n');
+				case 'sandboxPrerequisite': return [localize('chat.tool.sandboxDependencies', 'Required sandbox dependencies'), ...value.dependencies, localize('chat.tool.sandboxRemediations', 'Proposed sandbox remediation'), ...value.remediations].join('\n');
+				case 'authentication': return localize('chat.tool.signInProvider', 'Sign in to {0}', value.provider);
+			}
+		}
 		case 'command': return localize('chat.tool.command', 'Command: {0}\nArguments: {1}\nDirectory: {2}', activity.program, JSON.stringify(activity.arguments), activity.workingDirectory);
 		case 'fileRead': return localize('chat.tool.read', 'Read: {0}', activity.path);
 		case 'fileSearch': return localize('chat.tool.search', 'Search: {0}\nDirectory: {1}', activity.pattern, activity.path);

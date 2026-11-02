@@ -1,4 +1,12 @@
+import { ChatToolConfirmationCarouselPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationCarouselPart.js';
+import { ExtensionsInstallConfirmationWidgetSubPart } from '../chatContentParts/toolInvocationParts/chatExtensionsInstallToolSubPart.js';
+import { ChatToolAuthenticationSubPart } from '../chatContentParts/toolInvocationParts/chatToolAuthenticationSubPart.js';
+import { ChatSandboxPrerequisiteConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatSandboxPrerequisiteConfirmationSubPart.js';
+import { ChatAgentFeedbackReviewConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatAgentFeedbackReviewConfirmationSubPart.js';
+import { ChatModifiedFilesConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatModifiedFilesConfirmationSubPart.js';
+import { ChatOtherClientToolProgressPart } from '../chatContentParts/toolInvocationParts/chatOtherClientToolProgressPart.js';
 import { ToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.js';
+import { ChatToolPostExecuteConfirmationPart } from '../chatContentParts/toolInvocationParts/chatToolPostExecuteConfirmationPart.js';
 import { ChatTerminalToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.js';
 import { BuiltinDynamicCompletions } from './editor/chatInputCompletions.js';
 import { InputEditorDecorations } from './editor/chatInputEditorContrib.js';
@@ -196,6 +204,8 @@ export interface IChatInputPart extends IDisposable {
 	supportsImages(): boolean;
 	acceptActiveToolConfirmation(): Promise<void>;
 	skipActiveToolConfirmation(): Promise<void>;
+	acceptActiveToolPostConfirmation(): Promise<void>;
+	skipActiveToolPostConfirmation(): Promise<void>;
 	acceptElicitation(): void;
 	focusConfirmation(): boolean;
 	setVisible(visible: boolean): void;
@@ -213,7 +223,7 @@ type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly en
 
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable implements IChatInputPart {
-	private toolConfirmation: ChatTerminalToolConfirmationSubPart | undefined;
+	private toolConfirmation: ChatTerminalToolConfirmationSubPart | ChatToolAuthenticationSubPart | undefined;
 	readonly noticeHost = this._register(new ChatInputNoticeHost(() => { if (!this.isDisposed && this.visible) this.focus(); }));
 	private readonly notificationUri = URI.from({ scheme: 'ash-chat-input', path: `/${createUuid()}` });
 	private readonly notificationVisible = observableValue(this, true);
@@ -234,6 +244,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
+	private renderedToolIdentity: string | undefined;
+	private confirmationCarousel: ChatToolConfirmationCarouselPart | undefined;
 	private readonly elicitationFocused: IContextKey<boolean>;
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
 	private readonly attachAction: IAction = {
@@ -493,6 +505,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
+					const resultReview = focused?.closest<HTMLElement>('.ash-chat-tool-result-review');
+					if (resultReview && this.interaction.contains(resultReview) && this.visible && !this.interaction.hidden) {
+						return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type },
+							() => type === AccessibleViewType.Help ? this.getAccessibilityHelpContent()
+								: [resultReview.getAttribute('aria-label'), ...[...resultReview.querySelectorAll('p, pre, button, figcaption')].map(element => element.textContent), ...[...resultReview.querySelectorAll('img')].map(image => image.alt)].filter(Boolean).join('\n'),
+							() => focused?.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
+					}
 					if (focused && this.canvasPills?.domNode.contains(focused)) {
 						const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View ? this.canvasPills!.getAccessibleContent() : localize('canvas.pillHelp', 'Canvas buttons open interactive pages from this conversation. Use Tab to reach an Open Canvas or Close Canvas button, and Enter or Space to activate it. Close Canvas ends its page. Closing the editor tab only hides it; use its Canvas button or Open Canvas to reopen it. Canvas actions do not attach content to the message.'), () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
 						provider.onDidChangeContent = this.canvasPills.onDidChangeContent;
@@ -1146,6 +1165,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	protected getAccessibilityHelpContent(): string {
 		return [
 			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0),
+			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 		].filter(Boolean).join('\n');
@@ -1153,6 +1173,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	public focusConfirmation(): boolean {
 		if (this.isDisposed || !this.visible || this.interaction.hidden) { return false; }
+		if (this.confirmationCarousel && !this.interaction.contains(this.interaction.ownerDocument.activeElement)) return this.confirmationCarousel.focusCurrentConfirmation();
 		const control = [...this.interaction.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([type="hidden"]), textarea:not(:disabled), select:not(:disabled)')]
 			.find(element => !element.closest('[hidden]'));
 		if (!control) { return false; }
@@ -1163,6 +1184,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	public acceptActiveToolConfirmation(): Promise<void> { return this.confirmTool('approveOnce'); }
 	public skipActiveToolConfirmation(): Promise<void> { return this.confirmTool('decline'); }
+	public acceptActiveToolPostConfirmation(): Promise<void> { return this.reviewToolResult('share'); }
+	public skipActiveToolPostConfirmation(): Promise<void> { return this.reviewToolResult('skip'); }
+
+	private reviewToolResult(decision: 'share' | 'skip'): Promise<void> {
+		const interaction = this.state.interaction;
+		if (!interaction || interaction.request.type !== 'toolResultReview') { return Promise.resolve(); }
+		return this.resolveInteraction(interaction, { type: 'toolResultReview', response: { decision } });
+	}
 
 	private confirmTool(decision: 'approveOnce' | 'decline'): Promise<void> {
 		const interaction = this.state.interaction;
@@ -1181,6 +1210,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			return Promise.resolve();
 		}
 		if (response.type === 'approval') {
+			if (this.confirmationCarousel && !this.confirmationCarousel.isCurrentSelected) return Promise.resolve();
 			if (interaction.request.type !== 'approval') { return Promise.resolve(); }
 			const decisions = interaction.request.request.allowedDecisions ?? ['approveOnce', 'decline'];
 			if (!decisions.includes(response.response.decision)) { return Promise.resolve(); }
@@ -1828,9 +1858,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderInteraction(state: ChatInputState): void {
 		const interaction = state.interaction;
+		this.toolConfirmation?.setVisible(this.visible && !state.aiDisabled && state.phase !== 'submitting');
 		this.elicitationFocused.set(interaction?.request.type === 'userInput' && !state.aiDisabled);
 		// Streaming and catalog updates must not replace the approval button under keyboard focus.
-		if (interaction && interaction === this.renderedInteraction) return;
+		const tool = state.toolInvocation?.call.itemId === interaction?.itemId ? state.toolInvocation : undefined;
+		const adjacent = state.toolInvocations?.filter(item => item.call.turnId === tool?.call.turnId) ?? [];
+		const toolIdentity = tool ? JSON.stringify([tool.call.turnId, tool.call.itemId, tool.call.name, tool.call.binding]) : undefined;
+		if (interaction && interaction === this.renderedInteraction && this.renderedToolIdentity === toolIdentity) {
+			if (tool) this.confirmationCarousel?.render(adjacent, tool.call.itemId);
+			return;
+		}
+		this.renderedToolIdentity = toolIdentity;
+		this.confirmationCarousel = undefined;
 		this.renderedInteraction = interaction;
 		this.toolConfirmation = undefined;
 		this.interactionListeners.clear();
@@ -1844,6 +1883,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Detached forms and buttons must never answer a successor interaction.
 		const resolve = (response: Parameters<ChatInputDelegate['resolveInteraction']>[0]): Promise<void> => this.resolveInteraction(interaction, response);
 		switch (request.type) {
+			case 'toolResultReview': {
+				const confirmation = this.interactionListeners.add(this.instantiationService.createInstance(ChatToolPostExecuteConfirmationPart, this.element.ownerDocument, request.request, resolve));
+				this.interaction.append(confirmation.domNode);
+				break;
+			}
 			case 'approval': {
 				const conversation = state.conversation;
 				const explanationContext = conversation ? {
@@ -1853,15 +1897,28 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						&& this.state.conversation?.sessionId === conversation.sessionId
 						&& this.state.conversation?.threadId === conversation.threadId,
 				} : undefined;
-				const confirmation = this.interactionListeners.add(request.request.command || request.request.sandboxDenial
+				const activity = tool?.call.binding?.activity;
+				const presentation = activity?.type === 'confirmation' ? activity.presentation : undefined;
+				const server = tool?.call.binding?.sourceChain.slice().reverse().find(source => source.type === 'mcp');
+				const specialized = presentation?.type === 'modifiedFiles' ? new ChatModifiedFilesConfirmationSubPart(this.element.ownerDocument, resolve, presentation)
+					: presentation?.type === 'agentFeedbackReview' ? new ChatAgentFeedbackReviewConfirmationSubPart(this.element.ownerDocument, resolve, presentation)
+						: presentation?.type === 'sandboxPrerequisite' ? new ChatSandboxPrerequisiteConfirmationSubPart(this.element.ownerDocument, resolve, presentation)
+							: presentation?.type === 'extensionsInstall' ? new ExtensionsInstallConfirmationWidgetSubPart(this.element.ownerDocument, resolve, presentation)
+								: presentation?.type === 'authentication' && server?.type === 'mcp' ? this.instantiationService.createInstance(ChatToolAuthenticationSubPart, this.element.ownerDocument, resolve, presentation, server.serverId)
+									: undefined;
+				const confirmation = this.interactionListeners.add(specialized ?? (request.request.command || request.request.sandboxDenial
 					? this.instantiationService.createInstance(ChatTerminalToolConfirmationSubPart, this.element.ownerDocument, resolve, explanationContext)
-					: new ToolConfirmationSubPart(this.element.ownerDocument, resolve));
+					: new ToolConfirmationSubPart(this.element.ownerDocument, resolve)));
 				confirmation.render(request.request);
-				if (confirmation instanceof ChatTerminalToolConfirmationSubPart) {
+				if (confirmation instanceof ChatTerminalToolConfirmationSubPart || confirmation instanceof ChatToolAuthenticationSubPart) {
 					this.toolConfirmation = confirmation;
-					confirmation.setVisible(this.visible);
+					confirmation.setVisible(this.visible && !state.aiDisabled && state.phase !== 'submitting');
 				}
-				this.interaction.append(confirmation.domNode);
+				if (tool && adjacent.length > 1) {
+					const carousel = this.confirmationCarousel = this.interactionListeners.add(new ChatToolConfirmationCarouselPart(this.element.ownerDocument, confirmation.domNode));
+					carousel.render(adjacent, tool.call.itemId);
+					this.interaction.append(carousel.domNode);
+				} else this.interaction.append(confirmation.domNode);
 				break;
 			}
 			case 'permissions': {
@@ -1967,9 +2024,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				}));
 				break;
 			}
-			case 'dynamicTool':
-				this.interaction.textContent = `Waiting for dynamic tool: ${request.call.name}`;
+			case 'dynamicTool': {
+				const progress = this.interactionListeners.add(new ChatOtherClientToolProgressPart(this.element.ownerDocument, request.call, resolve));
+				this.interaction.append(progress.domNode);
 				break;
+			}
 		}
 	}
 

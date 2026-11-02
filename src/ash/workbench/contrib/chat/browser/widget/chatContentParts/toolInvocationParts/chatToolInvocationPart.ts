@@ -1,4 +1,6 @@
+import { ChatToolStreamingSubPart } from './chatToolStreamingSubPart.js';
 import { ChatTerminalToolProgressPart } from './chatTerminalToolProgressPart.js';
+import { ChatSimpleToolProgressPart } from './chatSimpleToolProgressPart.js';
 import { TerminalToolAutoExpand } from './terminalToolAutoExpand.js';
 import { IConfigurationService } from '../../../../../../../platform/configuration/common/configuration.js';
 import { ChatConfiguration } from '../../../../common/constants.js';
@@ -8,7 +10,7 @@ import type { IChatMcpAppDelegate } from './chatMcpAppModel.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { h } from '../../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../../base/common/event.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { ChatToolOutputSubPart } from './chatToolOutputPart.js';
 import { ChatToolProgressSubPart } from './chatToolProgressPart.js';
@@ -23,7 +25,10 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 	public readonly toolCallId: string;
 	private readonly details: HTMLDetailsElement;
 	private readonly progress: ChatToolProgressSubPart;
-	private readonly output: ChatToolOutputSubPart | ChatTerminalToolProgressPart;
+	private output!: ChatToolOutputSubPart | ChatTerminalToolProgressPart;
+	private readonly outputLifetime = this._register(new MutableDisposable<DisposableStore>());
+	private readonly streaming: ChatToolStreamingSubPart;
+	private readonly simple: ChatSimpleToolProgressPart;
 	private readonly app = this._register(new MutableDisposable<ChatMcpAppSubPart>());
 	private readonly appChanges = this._register(new MutableDisposable());
 	private visible = true;
@@ -49,25 +54,35 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 			this.app.value?.setVisible(this.visible && this.details.open);
 			this._onDidChangeHeight.fire();
 		}));
-		this.output = this._register(invocation.call.binding?.activity?.type === 'command'
-			? this.instantiation.createInstance(ChatTerminalToolProgressPart, document)
-			: this.instantiation.createInstance(ChatToolOutputSubPart, document));
-		this._register(this.output.onDidChangeHeight(() => this._onDidChangeHeight.fire()));
+		this.streaming = this._register(new ChatToolStreamingSubPart(document));
+		this.simple = this._register(new ChatSimpleToolProgressPart(document));
+		this.details.append(this.streaming.domNode, this.simple.domNode);
+		this.installOutput(invocation);
+		this.domNode.append(this.details);
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.render(invocation, source);
+	}
+
+	private installOutput(invocation: IChatToolInvocation): void {
+		const lifetime = new DisposableStore();
+		this.outputLifetime.value = lifetime;
+		this.output = lifetime.add(invocation.call.binding?.activity?.type === 'command'
+			? this.instantiation.createInstance(ChatTerminalToolProgressPart, this.domNode.ownerDocument)
+			: this.instantiation.createInstance(ChatToolOutputSubPart, this.domNode.ownerDocument));
+		lifetime.add(this.output.onDidChangeHeight(() => this._onDidChangeHeight.fire()));
 		if (this.output instanceof ChatTerminalToolProgressPart) {
 			const terminal = this.output;
-			const autoExpand = this._register(new TerminalToolAutoExpand({
+			const autoExpand = lifetime.add(new TerminalToolAutoExpand({
 				onCommandExecuted: terminal.onCommandExecuted,
 				onCommandFinished: terminal.onCommandFinished,
 				onWillData: terminal.onWillData,
 				shouldAutoExpand: () => this.visible && !this.details.open && !this.progress.hasUserInteracted,
 				hasRealOutput: () => terminal.hasRealOutput,
 			}));
-			this._register(autoExpand.onDidRequestExpand(() => { this.autoExpanded = true; this.details.open = true; }));
+			lifetime.add(autoExpand.onDidRequestExpand(() => { this.autoExpanded = true; this.details.open = true; }));
 		}
-		this.details.append(this.output.domNode);
-		this.domNode.append(this.details);
-		this._register(toDisposable(() => this.domNode.remove()));
-		this.render(invocation, source);
+		this.output.setVisible(this.visible);
+		this.details.insertBefore(this.output.domNode, this.simple.domNode);
 	}
 
 	/** Updates text in place so a streaming result retains its disclosure and keyboard focus. */
@@ -77,9 +92,18 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		this.progress.render(invocation);
 		const imageGeneration = isImageGenerationToolInvocation(invocation);
 		const content = result?.content ?? [];
+		const command = invocation.call.binding?.activity?.type === 'command';
+		const active = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+		const focusedOutput = active && this.output.domNode.contains(active) ? active : undefined;
+		if (command !== (this.output instanceof ChatTerminalToolProgressPart)) this.installOutput(invocation);
+		this.streaming.render(invocation);
 		this.output.render(invocation, source, {
 			generatedImages: imageGeneration && !!result && !result.isError && content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment'),
 		});
+		this.output.domNode.hidden = this.simple.render(invocation);
+		if (focusedOutput && !focusedOutput.isConnected && this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body) {
+			this.output.domNode.querySelector<HTMLElement>('[data-tool-section="input"] pre')?.focus({ preventScroll: true });
+		}
 		if (this.output instanceof ChatTerminalToolProgressPart && !this.progress.hasUserInteracted) {
 			if (result?.isError && this.configuration.getValue<boolean>(ChatConfiguration.AutoExpandToolFailures) !== false) {
 				this.autoExpanded = true;
@@ -109,12 +133,22 @@ export class ChatToolInvocationPart extends Disposable implements IChatContentPa
 		}
 	}
 
+	public get codeblocks() {
+		return this.output.codeblocks.map(info => ({
+			...info, focus: () => {
+				if (this.isDisposed || !this.visible) return;
+				this.details.open = true;
+				info.focus();
+			}
+		}));
+	}
+
 	public hasSameContent(other: IChatListItem): boolean {
 		const next = other.toolInvocation;
 		const current = this.invocation;
 		if (current === next) { return true; }
 		return !!next && current.call === next.call && current.result === next.result && current.stopped === next.stopped
-			&& current.waitingFor === next.waitingFor && current.executionStarted === next.executionStarted
+			&& current.waitingFor === next.waitingFor && current.executionStarted === next.executionStarted && current.streaming === next.streaming
 			&& current.output.length === next.output.length && current.output.every((output, index) => output === next.output[index]);
 	}
 

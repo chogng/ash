@@ -306,6 +306,7 @@ impl model_provider::ModelEventSink for FirstToken {
             | protocol::ModelStreamEvent::ReasoningDelta(text)
             | protocol::ModelStreamEvent::MessageDelta { text, .. } => !text.is_empty(),
             protocol::ModelStreamEvent::MessageCompleted(_)
+            | protocol::ModelStreamEvent::ToolCallDelta { .. }
             | protocol::ModelStreamEvent::MessageStarted { .. } => false,
         };
         if nonempty && self.elapsed.is_none() {

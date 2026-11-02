@@ -64,6 +64,7 @@ export function reviveChatTreeData(json: string): IChatTreeData | undefined {
  * may answer an approval; this snapshot carries its kind for presentation, not reply authority.
  */
 export interface IChatToolInvocation {
+	readonly streaming?: boolean;
 	readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
 	readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
 	readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];

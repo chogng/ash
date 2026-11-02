@@ -275,6 +275,27 @@ impl ToolScheduler {
                     &pending.call,
                 )
             {
+                if let (
+                    AgentRequest::ToolResultReview { request },
+                    AgentResponse::ToolResultReview { response },
+                ) = (request, response)
+                {
+                    ToolExecutionOrchestrator::new(
+                        Arc::clone(&self.threads),
+                        Arc::clone(&self.tools),
+                        Arc::clone(&self.policy),
+                        self.review_environment.clone(),
+                        Arc::clone(&self.updates),
+                        Arc::clone(&self.execution_observer),
+                    )
+                    .complete_result_review(
+                        &execution,
+                        pending.call,
+                        request,
+                        response.decision,
+                    )?;
+                    continue;
+                }
                 let output = self
                     .tools
                     .resolve_execution_interaction(&pending.call, request, response)?
@@ -1108,6 +1129,12 @@ fn resolved_execution_interaction<'a>(
             return None;
         }
         match (&resolved.interaction.request, &resolved.response) {
+            (
+                AgentRequest::ToolResultReview { request },
+                response @ AgentResponse::ToolResultReview { .. },
+            ) if request.tool_call_id == call.id && request.tool_name == call.name => {
+                Some((&resolved.interaction.request, response))
+            }
             (
                 AgentRequest::DynamicTool { call: request },
                 response @ AgentResponse::DynamicTool { response: result },

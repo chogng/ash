@@ -159,6 +159,7 @@ declare global {
 		setVoiceAvailable(available: boolean): void;
 		openWorkspace(): Promise<unknown>;
 		showIntroduction(): void;
+		showResultReview(): void;
 		showSandboxApproval(): void;
 		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
 		triggerInputSuggestions(): Promise<unknown>;
@@ -831,7 +832,7 @@ const delegate: ChatInputDelegate = {
 	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: mode => { state = { ...state, mode }; part.render(state); }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
-	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
+	resolveInteraction: async response => { if (response.type === 'approval' || response.type === 'toolResultReview') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
@@ -1186,6 +1187,12 @@ window.ashChatInputIntegration = {
 	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
+	showResultReview: () => {
+		state = { ...state, interaction: { requestId: 'review-result', request: { type: 'toolResultReview', request: {
+			toolCallId: 'captured-call', toolName: 'capture_result', review: { reason: 'Review captured output', isError: false, content: [{ type: 'text', text: '<img src=x> private evidence\n' + 'long-output'.repeat(100) }] },
+		} } } };
+		part.render(state);
+	},
 	showSandboxApproval: () => {
 		state = {
 			...state, conversation: { sessionId: 'input-session', threadId: 'input-thread' }, interaction: {

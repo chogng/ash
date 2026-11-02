@@ -395,7 +395,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.input.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
+		this.input.render({ ...this.model.inputState, toolInvocations: this.model.items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []), toolInvocation: this.model.items.find(item => item.toolInvocation?.call.itemId === this.model.inputState.interaction?.itemId)?.toolInvocation, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private renderGoal(): void {

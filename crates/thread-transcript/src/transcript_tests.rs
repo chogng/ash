@@ -1026,3 +1026,66 @@ fn voice_transcripts_have_no_execution_owner_and_keep_their_original_snapshot_an
     next.after_item_id = Some(ItemId::new("outside-history-page").unwrap());
     assert!(empty.with_voice_transcripts(&[next]).entries.is_empty());
 }
+
+#[test]
+fn tool_arguments_accumulate_transiently_and_cannot_overwrite_the_bound_call() {
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let delta = |arguments: &str| ThreadUpdate::ItemDelta {
+        turn_id: turn_id(),
+        item_id: item_id("streamed-call"),
+        delta: ItemDelta::ToolCallArguments {
+            tool_call_id: ToolCallId::new("provider-call").unwrap(),
+            name: ash_protocol::ToolName::new("weather").unwrap(),
+            arguments: arguments.into(),
+        },
+    };
+    apply(&mut accumulator, transient(1, delta("{\"city\":")));
+    let second = apply(&mut accumulator, transient(2, delta("\"Paris\"}")));
+    let TranscriptApplyResult::Applied(update) = second else {
+        panic!("expected argument progress");
+    };
+    assert!(
+        matches!(&update.changes[0], ThreadTranscriptChange::Upsert { entry: ThreadTranscriptEntry::Item { entry_id, item: ThreadItem::ToolCall { binding: None, arguments_json, .. }, transient: true, .. } } if entry_id == "item:streamed-call" && arguments_json == "{\"city\":\"Paris\"}")
+    );
+    let bound = ThreadItem::ToolCall {
+        item_id: item_id("streamed-call"),
+        turn_id: turn_id(),
+        tool_call_id: ToolCallId::new("provider-call").unwrap(),
+        name: ash_protocol::ToolName::new("weather").unwrap(),
+        arguments_json: "{\"city\":\"Paris\"}".into(),
+        binding: Some(ash_protocol::ToolCallBinding {
+            registry_incarnation: None,
+            registry_generation: 1,
+            definition_digest: "weather-definition".into(),
+            source_chain: vec![],
+            activity: Some(ash_protocol::ToolActivity::Run),
+            caller: ash_protocol::ToolCallCaller::Direct,
+        }),
+    };
+    let committed = apply(
+        &mut accumulator,
+        durable(
+            1,
+            ThreadEvent::ItemCompleted {
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
+                thread_id: thread_id(),
+                turn_id: turn_id(),
+                item: bound.clone(),
+            },
+        ),
+    );
+    let TranscriptApplyResult::Applied(update) = committed else {
+        panic!("expected bound call");
+    };
+    assert!(
+        matches!(&update.changes[0], ThreadTranscriptChange::Upsert { entry: ThreadTranscriptEntry::Item { item, transient: false, .. } } if item == &bound)
+    );
+    assert_eq!(
+        apply(
+            &mut accumulator,
+            transient(3, delta("malicious late fragment"))
+        ),
+        TranscriptApplyResult::Ignored
+    );
+}

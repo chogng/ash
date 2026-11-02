@@ -1170,6 +1170,8 @@ impl ModelAttemptTrace {
             return;
         };
         let addition = match event {
+            // Tool arguments belong to the final response's calls, not partial assistant text.
+            ModelStreamEvent::ToolCallDelta { .. } => 0,
             ModelStreamEvent::TextDelta(text)
             | ModelStreamEvent::ReasoningDelta(text)
             | ModelStreamEvent::MessageDelta { text, .. } => text.len(),
@@ -1203,7 +1205,9 @@ impl ModelAttemptTrace {
             ModelStreamEvent::MessageCompleted(message) => {
                 Some((&message.id, message.phase.clone(), None))
             }
-            ModelStreamEvent::TextDelta(_) | ModelStreamEvent::ReasoningDelta(_) => None,
+            ModelStreamEvent::TextDelta(_)
+            | ModelStreamEvent::ReasoningDelta(_)
+            | ModelStreamEvent::ToolCallDelta { .. } => None,
         };
         if let Some((id, phase, delta)) = message {
             let index = active.messages.iter().position(|message| &message.id == id);
@@ -1239,7 +1243,9 @@ impl ModelAttemptTrace {
                 active.text.push_str(text)
             }
             ModelStreamEvent::ReasoningDelta(text) => active.reasoning.push_str(text),
-            ModelStreamEvent::MessageStarted { .. } | ModelStreamEvent::MessageCompleted(_) => {}
+            ModelStreamEvent::MessageStarted { .. }
+            | ModelStreamEvent::MessageCompleted(_)
+            | ModelStreamEvent::ToolCallDelta { .. } => {}
         }
     }
     pub fn complete(&mut self, response: &ModelResponse) {

@@ -11,6 +11,8 @@ import { createToolSelectionAttachment, showToolsPicker } from './chatToolPicker
 
 export const AcceptToolConfirmationActionId = 'workbench.action.chat.acceptTool';
 export const SkipToolConfirmationActionId = 'workbench.action.chat.skipTool';
+export const AcceptToolPostConfirmationActionId = 'workbench.action.chat.acceptToolPostExecution';
+export const SkipToolPostConfirmationActionId = 'workbench.action.chat.skipToolPostExecution';
 
 /** Commands act only on the approval currently presented by the focused composer. */
 export function registerChatToolActions(): DisposableStore {
@@ -18,6 +20,8 @@ export function registerChatToolActions(): DisposableStore {
 	for (const [id, title, operation] of [
 		[AcceptToolConfirmationActionId, localize2('chat.tools.accept', 'Chat: Approve Tool Once'), 'acceptActiveToolConfirmation'],
 		[SkipToolConfirmationActionId, localize2('chat.tools.skip', 'Chat: Decline Tool'), 'skipActiveToolConfirmation'],
+		[AcceptToolPostConfirmationActionId, localize2('chat.resultReview.shareCommand', 'Chat: Share Tool Results'), 'acceptActiveToolPostConfirmation'],
+		[SkipToolPostConfirmationActionId, localize2('chat.resultReview.skipCommand', 'Chat: Skip Tool Results'), 'skipActiveToolPostConfirmation'],
 	] as const) {
 		store.add(registerAction2(class extends Action2 {
 			constructor() { super({ id, title, f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) }); }

@@ -57,10 +57,23 @@ pub enum ToolOutputStream {
     rename_all_fields = "camelCase"
 )]
 pub enum ItemDelta {
-    AgentMessage { text: String },
-    AgentMessagePhase { phase: Option<crate::MessagePhase> },
-    Reasoning { text: String },
-    Plan { text: String },
+    ToolCallArguments {
+        tool_call_id: crate::ToolCallId,
+        name: crate::ToolName,
+        arguments: String,
+    },
+    AgentMessage {
+        text: String,
+    },
+    AgentMessagePhase {
+        phase: Option<crate::MessagePhase>,
+    },
+    Reasoning {
+        text: String,
+    },
+    Plan {
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -73,5 +86,35 @@ pub struct ThreadUpdateEnvelope {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub stream_cursor: Option<StreamCursor>,
+    /// Subscriptions carry wait metadata; only AgentRequestEnvelope discloses a review candidate.
+    #[serde(serialize_with = "serialize_public_update")]
     pub update: ThreadUpdate,
+}
+
+fn serialize_public_update<S: serde::Serializer>(
+    update: &ThreadUpdate,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    if let ThreadUpdate::Committed {
+        event: crate::ThreadEvent::InteractionRequested { interaction, .. },
+    } = update
+        && matches!(
+            &interaction.request,
+            crate::AgentRequest::ToolResultReview { .. }
+        )
+    {
+        // Keep the durable event intact for recovery and owner selection. The public update
+        // still identifies the call and wait, but cannot become an alternate disclosure path.
+        let mut public = update.clone();
+        if let ThreadUpdate::Committed {
+            event: crate::ThreadEvent::InteractionRequested { interaction, .. },
+        } = &mut public
+            && let crate::AgentRequest::ToolResultReview { request } = &mut interaction.request
+        {
+            request.review.reason.clear();
+            request.review.content.clear();
+        }
+        return public.serialize(serializer);
+    }
+    update.serialize(serializer)
 }

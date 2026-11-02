@@ -1,0 +1,20 @@
+---
+source: crates/tui/src/thread/interaction/query_tests.rs
+expression: initial
+---
+┌复 核 工 具 结 果 ──────────────────────────────────────────────────────────────────────────────────┐
+│工 具 已 经 执 行 。 跳 过 不 会 撤 销 修 改 。 Page Up/Down 滚 动 输 出 。                                        │
+│capture_result                                                                                │
+│Review captured output                                                                        │
+│                                                                                              │
+│Literal evidence line 1                                                                       │
+│Literal evidence line 2                                                                       │
+│Literal evidence line 3                                                                       │
+│Literal evidence line 4                                                                       │
+│Literal evidence line 5                                                                       │
+│Literal evidence line 6                                                                       │
+│Literal evidence line 7                                                                       │
+│Literal evidence line 8                                                                       │
+│> 跳 过 结 果   保 留 执 行 记 录 ， 不 将 结 果 分 享 给 模 型 。                                                 │
+│  分 享 结 果   将 此 原 始 结 果 分 享 给 模 型 。                                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -137,6 +137,7 @@ import { ICustomViewService } from '../services/customView/browser/customViewSer
 import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
 import { ISessionsProvidersService } from '../services/sessions/browser/sessionsProvidersService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IAutomationDialogService } from '../../workbench/contrib/chat/common/automations/automationDialogService.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/common/dictation.js';
 import '../../workbench/browser/style.js';
@@ -865,6 +866,35 @@ export abstract class Workbench extends Disposable {
 		updateSessionsPart();
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		services.registerInstance(IChatSessionNavigationService, {
+			openToolResult: async (sourceSessionId, target, signal) => {
+				const scope = providerScopes.getScope(sourceSessionId);
+				const revision = view.navigationRevision;
+				const connection = scope.services.host.appServer;
+				const generation = connection.connectionGeneration;
+				let retired = false;
+				const listener = connection.onConnectionState(() => { retired = true; });
+				const assertCurrent = (): void => {
+					scope.assertCurrent();
+					if (signal.aborted || retired || generation !== connection.connectionGeneration || revision !== view.navigationRevision) throw canceled();
+				};
+				try {
+					assertCurrent();
+					if (target.type === 'sessionTarget') {
+						await scope.services.chat.readThread(target.sessionId, target.threadId);
+						assertCurrent();
+						await view.openThread(scope.identity(target.sessionId), scope.identity(target.threadId));
+						if (!signal.aborted && !layout.isPartVisible('sessions')) await this.showChat();
+					} else {
+						const store = services.get(ISessionsProvidersService).getProvider(scope.providerId)?.automations;
+						if (!store?.getAutomationByBackendId) throw new Error(localize('chat.tool.resultUnavailable', 'This result is unavailable on its originating host.'));
+						await store.refresh();
+						assertCurrent();
+						const existing = store.getAutomationByBackendId(target.automationId);
+						if (!existing) throw new Error(localize('chat.tool.resultUnavailable', 'This result is unavailable on its originating host.'));
+						await services.get(IAutomationDialogService).showAutomationDialog({ existing });
+					}
+				} finally { listener.dispose(); }
+			},
 			createNewConversation: async () => { await commandService.executeCommand('sessions.newSession'); },
 			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
 			get revision() { return view.navigationRevision; },

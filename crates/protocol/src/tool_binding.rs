@@ -70,6 +70,10 @@ pub enum ToolCallCaller {
     rename_all_fields = "camelCase"
 )]
 pub enum ToolActivity {
+    /// Rich confirmation content declared by the bound producer; capabilities still govern execution.
+    Confirmation {
+        presentation: ToolConfirmationPresentation,
+    },
     Read {
         target: String,
     },
@@ -109,6 +113,43 @@ pub enum ToolActivity {
         arguments: Vec<String>,
         working_directory: String,
     },
+}
+
+/// Read-only evidence displayed before deciding an ordinary policy approval.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ToolConfirmationPresentation {
+    ModifiedFiles {
+        files: Vec<ToolModifiedFile>,
+    },
+    AgentFeedbackReview {
+        message: String,
+    },
+    ExtensionsInstall {
+        extensions: Vec<String>,
+    },
+    SandboxPrerequisite {
+        dependencies: Vec<String>,
+        remediations: Vec<String>,
+    },
+    Authentication {
+        provider: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolModifiedFile {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub original: Option<String>,
+    pub modified: String,
 }
 
 /// Durable binding between one Tool Call and the exact definition/source generation it selected.

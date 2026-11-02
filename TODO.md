@@ -198,5 +198,3 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## Chat accessibility · 缺失宿主入口
 
 - [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。
-
-- [ ] **后端／共享模型前置 · 工具调用组件完整对齐** · 当前生产链路已接入共享内容等价契约、实际代码块导航、普通／终端进度、延迟自动展开及设置、原审批 offer 关联的命令旁聊解释、沙箱重试证据、策略绑定的风险展示、图片批次和 MCP App 生命周期。其余 14 个路径的契约缺口见[工具调用组件对应](docs/chat-tool-invocation-alignment.md#全目录对应)：参数流、presentation、集成终端关联、多 offer 集合、执行后／认证／文件复核及结构化自动化／会话结果尚无完整生产链。保留当前唯一业务 owner，不能用空组件或推断工具 JSON 代替这些协议。跨产品同场景运行验证仍缺上游实机证据。

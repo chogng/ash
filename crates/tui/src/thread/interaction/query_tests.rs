@@ -324,6 +324,106 @@ fn optional_question_projects_the_protocol_and_preserves_explicit_false() {
 }
 
 #[test]
+fn result_review_displays_literal_evidence_and_returns_only_the_selected_decision() {
+    for (selection, expected) in [
+        (0, ash_protocol::ToolResultReviewDecision::Skip),
+        (1, ash_protocol::ToolResultReviewDecision::Share),
+    ] {
+        let mut query = Query::open_result_review(
+            ash_protocol::TurnId::new("turn").unwrap(),
+            ash_protocol::RequestId::new("review").unwrap(),
+            ash_protocol::ToolResultReviewRequest {
+                tool_call_id: ash_protocol::ToolCallId::new("call").unwrap(),
+                tool_name: ash_protocol::ToolName::new("read_resource").unwrap(),
+                review: ash_protocol::ToolResultReview {
+                    reason: "Share sensitive evidence?".into(),
+                    content: vec![ash_protocol::ContentPart::Text("literal <data>".into())],
+                    is_error: false,
+                },
+            },
+        )
+        .unwrap();
+        assert!(query.view().question.prompt.contains("literal <data>"));
+        let QueryOutcome::Completed(answers) = query.activate(selection) else {
+            panic!("expected a result decision");
+        };
+        assert!(
+            matches!(query.response(answers).response, ash_protocol::AgentResponse::ToolResultReview { response } if response.decision == expected)
+        );
+    }
+}
+
+#[test]
+fn result_review_scrolls_long_evidence_and_localizes_controls() {
+    let mut query = Query::open_result_review(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("review").unwrap(),
+        ash_protocol::ToolResultReviewRequest {
+            tool_call_id: ash_protocol::ToolCallId::new("call").unwrap(),
+            tool_name: ash_protocol::ToolName::new("capture_result").unwrap(),
+            review: ash_protocol::ToolResultReview {
+                reason: "Review captured output".into(),
+                content: vec![ash_protocol::ContentPart::Text(
+                    (1..=18)
+                        .map(|line| format!("Literal evidence line {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )],
+                is_error: false,
+            },
+        },
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(96, 16)).unwrap();
+    let mut render = |query: &Query| {
+        terminal
+            .draw(|frame| {
+                super::draw(
+                    frame,
+                    Rect::new(0, 0, 96, 16),
+                    query.view(),
+                    None,
+                    None,
+                    crate::render::test_context().with_language(crate::nls::Language::Chinese),
+                )
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..16)
+            .map(|row| {
+                (0..96)
+                    .map(|column| buffer[(column, row)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let initial = render(&query);
+    assert!(initial.contains("Literal evidence line 1"));
+    insta::assert_snapshot!("result_review_initial_zh", initial);
+    for _ in 0..3 {
+        assert_eq!(
+            query.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE)),
+            QueryOutcome::Consumed
+        );
+    }
+    assert_eq!(query.view().selected, 0);
+    let scrolled = render(&query);
+    assert!(scrolled.contains("Literal evidence line 18"));
+    insta::assert_snapshot!("result_review_scrolled_zh", scrolled);
+    assert_eq!(
+        super::choice_at(
+            Rect::new(0, 0, 96, 16),
+            query.view(),
+            ratatui::layout::Position::new(90, 13)
+        ),
+        Some(0)
+    );
+}
+
+#[test]
 fn english_punctuation_converts_typed_custom_answers_and_preserves_paste() {
     let mut query = Query::new(vec![QueryQuestion {
         required: true,

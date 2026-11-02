@@ -368,6 +368,7 @@ export interface ChatToolCallBinding {
 	readonly definitionDigest: string;
 	readonly sourceChain: readonly ChatToolSource[];
 	readonly activity?:
+	| { readonly type: 'confirmation'; readonly presentation: ToolConfirmationPresentation; }
 	| { readonly type: 'read' | 'search' | 'list' | 'edit'; readonly target: string; }
 	| { readonly type: 'run'; }
 	| { readonly type: 'fileRead'; readonly path: string; readonly offset: number; readonly limit: number; }
@@ -390,9 +391,21 @@ export interface ChatToolCallBinding {
 	};
 }
 
+export type ToolConfirmationPresentation =
+	| { readonly type: 'modifiedFiles'; readonly files: readonly { readonly path: string; readonly original?: string | null; readonly modified: string; }[]; }
+	| { readonly type: 'agentFeedbackReview'; readonly message: string; }
+	| { readonly type: 'extensionsInstall'; readonly extensions: readonly string[]; }
+	| { readonly type: 'sandboxPrerequisite'; readonly dependencies: readonly string[]; readonly remediations: readonly string[]; }
+	| { readonly type: 'authentication'; readonly provider: string; };
+
+export type ToolResultPresentation =
+	| { readonly type: 'sessionTarget'; readonly sessionId: string; readonly threadId: string; readonly label: string; }
+	| { readonly type: 'automationConfigured'; readonly automationId: string; readonly label: string; };
+
 export type ChatContentPart =
 	| {
 		readonly type: 'artifact'; readonly artifact: {
+			readonly presentation?: ToolResultPresentation | null;
 			readonly source: { readonly type: 'embeddedResource'; readonly uri: string; } | { readonly type: 'resourceLink'; readonly uri: string; } | { readonly type: 'mcpApp'; readonly uri: string; } | { readonly type: 'structuredResult'; } | { readonly type: 'viewMetadata'; };
 			readonly mimeType: string;
 			readonly data: { readonly type: 'text'; readonly text: string; } | { readonly type: 'bytes'; readonly bytes: Uint8Array; } | { readonly type: 'json'; readonly json: string; };
@@ -692,13 +705,25 @@ export interface PermissionRequest extends PermissionResponse {
 	readonly reason: string;
 }
 
+export interface ToolResultReviewRequest {
+	readonly toolCallId: string;
+	readonly toolName: string;
+	readonly review: {
+		readonly reason: string;
+		readonly content: readonly ChatContentPart[];
+		readonly isError: boolean;
+	};
+}
+
 export type AgentRequest =
 	| { readonly type: 'approval'; readonly request: ActionApprovalRequest; }
 	| { readonly type: 'permissions'; readonly request: PermissionRequest; }
+	| { readonly type: 'toolResultReview'; readonly request: ToolResultReviewRequest; }
 	| { readonly type: 'userInput'; readonly request: RequestUserInput; }
 	| { readonly type: 'dynamicTool'; readonly call: DynamicToolCall; };
 
 export type AgentResponse =
+	| { readonly type: 'toolResultReview'; readonly response: { readonly decision: 'share' | 'skip'; }; }
 	| { readonly type: 'approval'; readonly response: { readonly decision: ActionApprovalDecision; }; }
 	| { readonly type: 'permissions'; readonly response: PermissionResponse; }
 	| {
@@ -801,6 +826,7 @@ export type ThreadUpdate =
 		readonly type: 'itemDelta';
 		readonly itemId: string;
 		readonly delta:
+		| { readonly type: 'toolCallArguments'; readonly toolCallId: string; readonly name: string; readonly arguments: string; }
 		| { readonly type: 'agentMessage' | 'reasoning' | 'plan'; readonly text: string; }
 		| { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null; };
 	}

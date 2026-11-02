@@ -101,6 +101,11 @@ fn diagnostic_cancellation_retains_partial_output_and_survives_reopen() {
     let mut attempt = recorder.start_attempt(context(), &request());
     attempt.prepared_request(&request());
     attempt.output(&ModelStreamEvent::TextDelta("partial text".into()));
+    attempt.output(&ModelStreamEvent::ToolCallDelta {
+        id: "call".into(),
+        name: "read".into(),
+        arguments: "{\"path\":".into(),
+    });
     attempt.output(&ModelStreamEvent::ReasoningDelta(
         "partial reasoning".into(),
     ));

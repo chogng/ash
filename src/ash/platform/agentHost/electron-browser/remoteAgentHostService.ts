@@ -139,7 +139,7 @@ export class RemoteAgentHostService extends Disposable implements IRemoteAgentHo
 			if (hostResources.isDisposed) { throw new CancellationError(); }
 			const lease = hostResources.add(this.instantiation.createInstance(LocalAgentHostServiceClient, {
 				clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-				capabilities: { ...(this.options.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
+				capabilities: { ...(this.options.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput', 'toolResultReview'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
 			}));
 			scope.lease = lease;
 			hostResources.add(lease.client.onStateChange(state => {
