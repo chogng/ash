@@ -973,8 +973,9 @@ impl super::queue_operations::QueueRequestProcessorContext for AppServer {
         &self,
         input: &mut Vec<ash_protocol::UserInput>,
         mode: ash_protocol::CollaborationMode,
+        command_interpretation: ash_protocol::CommandInterpretation,
     ) -> Result<super::operations::TurnInstructionSelection, super::RpcError> {
         self.agent_processor()
-            .turn_instruction_selection(input, mode)
+            .turn_instruction_selection(input, mode, command_interpretation)
     }
 }

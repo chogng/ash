@@ -1704,3 +1704,53 @@ fn production_skill_metrics_reach_diagnostics_rpc_and_reviewed_feedback() {
     assert!(!content.contains("private"));
     assert!(!content.contains(root.path().to_str().unwrap()));
 }
+
+#[test]
+fn literal_queued_messages_never_enter_code_commands_after_reopen() {
+    for text in ["/init", "/develop add offline search", "/team status"] {
+        let root = tempfile::tempdir().unwrap();
+        let (server, _) = queued_server(root.path());
+        let mut connection = server.connection();
+        let (session, thread) = create(&server, &mut connection);
+        let response = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":4, "method":"queue/enqueue", "params": {
+                "commandId":"literal-queue", "sessionId":session, "threadId":thread,
+                "mode":"agent", "commandInterpretation":"literal", "approvalMode":"manual",
+                "input":[{"type":"text", "text":text}]
+            }}),
+        );
+        let accepted: queue::QueuedMessage =
+            serde_json::from_value(response["result"].clone()).expect(&response.to_string());
+        let store = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+        let message = store.get(&accepted.request.command_id).unwrap().unwrap();
+        assert_eq!(
+            message.request.command_interpretation,
+            ash_protocol::CommandInterpretation::Literal
+        );
+        assert_eq!(
+            message.request.input,
+            vec![ash_protocol::UserInput::Text { text: text.into() }]
+        );
+        let queue::Delivery::Started(turn_id) = server.deliver_queued_message(&message).unwrap()
+        else {
+            panic!("literal queue did not start")
+        };
+        super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
+        let snapshot = server
+            .threads()
+            .read_thread(&message.request.thread_id)
+            .unwrap();
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == turn_id)
+            .unwrap();
+        assert_eq!(turn.kind, ash_protocol::TurnKind::Coding);
+        assert_ne!(
+            turn.instructions.as_ref().unwrap().id(),
+            "instructions/init"
+        );
+    }
+}

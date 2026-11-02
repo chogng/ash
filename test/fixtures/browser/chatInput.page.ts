@@ -687,6 +687,7 @@ let workspaceChangesReads = 0;
 let releaseWorkspaceChanges: ((changes: ChatInputState['changes']) => void) | undefined;
 let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmission');
 let finishSubmission: ((error?: string) => void) | undefined;
+const cowork = ['cowork', 'project'].includes(new URLSearchParams(location.search).get('surface') ?? '');
 const delegate: ChatInputDelegate = {
 	send: async (_text, _mode, _skills, contexts) => {
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -702,7 +703,7 @@ const delegate: ChatInputDelegate = {
 			});
 		}
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
-	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, executeServerCommand: async () => { }, interrupt: async () => { },
+	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, ...(cowork ? {} : { executeServerCommand: async () => { } }), interrupt: async () => { },
 	openChanges: async () => { recordDestination({ changes: true }); },
 	readWorkspaceChanges: async () => { workspaceChangesReads++; return new Promise(resolve => { releaseWorkspaceChanges = resolve; }); },
 	selectModel: async model => {
@@ -720,7 +721,6 @@ const delegate: ChatInputDelegate = {
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
-const cowork = new URLSearchParams(location.search).get('surface') === 'cowork';
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
 resources.add(services.createInstance(ChatInputSessionLinkProvider));

@@ -83,7 +83,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
 		const completionProviders = [
-			createChatCommandCompletionProvider(options.slashCommands, options.hostCompletions),
+			...(options.slashCommands ? [createChatCommandCompletionProvider(options.slashCommands, options.hostCompletions)] : []),
 			...(options.hostCompletions ? [] : [createChatSkillCompletionProvider(options.skills)]),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
@@ -111,7 +111,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		}));
 		this._register(registerChatInputReferenceDecorationType(codeEditors));
 		this.referenceStyle = codeEditors.resolveDecorationOptions(dynamicVariableDecorationType, false);
-		this._register(new InputEditorCommandArgumentHint(this.editor, options.slashCommands));
+		if (options.slashCommands) { this._register(new InputEditorCommandArgumentHint(this.editor, options.slashCommands)); }
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(toDisposable(() => { for (const widget of this.referenceWidgets.values()) widget.dispose(); this.referenceWidgets.clear(); }));
 		this._register(this.editor.onDidChangeCursorSelection(() => this.updateReferenceSelection()));

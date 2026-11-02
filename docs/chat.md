@@ -20,7 +20,7 @@ VS Code 只读对照为 `../vscode/src/vs/workbench/contrib/chat`，首次参照
 
 ## 输入与附件
 
-`ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill 补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
+`ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill／上下文补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
 
 2026-11-02 已确认保留 Ash 的 `CHAT_INPUT_LANGUAGE_ID`、`createChatCommandCompletionProvider`、`createChatSkillCompletionProvider` 和 `createChatFileAttachments` 入口及职责。补全读取捕获的 Stanza snapshot，沿当前命令／Skill 目录生成替换；前导空白与提交端的 trim 规则一致，接受补全复用已有分隔空格。`SlashCommandCatalog` 发布同一份命令快照的变化，`editor/chatInputCommandArgumentHint.ts` 借用它投影参数提示；提示不进入文本、撤销历史或提交内容，键入参数和只读状态会隐藏提示，目录更新、撤销和恢复可重新计算它。提示使用输入占位文字的主题 token，并通过现有 ARIA 状态和输入帮助提供同一说明。
 
@@ -29,6 +29,8 @@ IDE 的 `chat.contribution.ts` 在现有会话链接 opener 之后注册 `editor
 Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，最大文本高度 314px，文本增长向上扩展。textarea 根据内容与容器宽度布局，ResizeObserver／调度器随输入释放。`ChatAttachmentModel` 是当前附件内容与身份的唯一 owner，并原子发布新增、更新、删除事件；`ChatDynamicVariableModel` 借用这些内容，只拥有正文位置和按文本模型版本保存的撤销快照。删除、撤销、重做与草稿恢复均同步回同一附件集合；来源拥有的实时上下文更新原身份，撤销不能复活已撤销的来源。输入框不展示当前编辑器文件推荐栏，切换文件或 SCM diff 不自动附加文件。添加上下文、粘贴、拖放和代码选区仍生成消息内引用。
 
 `attachments/chatAttachmentResolveService.ts` 拥有编辑器、未命名编辑器、资源、图片、符号与 SCM 历史项的 Chat 附件构造：文本优先取工作副本或版本快照，目录生成限定范围的文件清单，图片复用原有解码、缩放与内容哈希管线。“打开的编辑器”跳过没有文本快照和文件 provider 的页签；只读编辑器的显式内容代表其显示版本，优先于同 URI 的可编辑工作副本；可编辑输入继续读取未保存文本。读取失败仍由原草稿报告，取消后的结果不能附加。工作区和编辑器图片在加入草稿前检查当前模型能力。 粘贴、拖放和文件选择也通过同一图片解析服务；当原生文件缺少 MIME 或仅有通用二进制类型时，按扩展名识别 PNG、JPEG、GIF 和 WebP，并在读取前检查图片大小与模型能力。混合文件批次在全部准备完成并再次检查模型和取消状态后，交回原有正文引用入口接收。符号源版本校验由 Search 的 `common/search.ts` 共享领域操作承担；SCM 仍解析固定提交与比较父版本，Chat resolver 只构造捕获条目。`attachments/chatContextPickService.ts` 拥有公开 value／picker／pick 契约与窗口注册；`AttachContextAction` 拥有选择界面、查询取消、错误和原输入接收。内置来源及 Browser、Debug、SCM 注册方均使用该契约。共享附件领域数据保留在 `services/chat/common/chatContextService.ts`；Code 和 Sessions 通过 `chat.shared.contribution.ts` 装配窗口默认服务。
+
+共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
 
 添加上下文的已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查和选择均随原输入取消。
 

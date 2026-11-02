@@ -183,6 +183,7 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
 
 fn input(id: &str) -> QueueInput {
     QueueInput {
+        command_interpretation: protocol::CommandInterpretation::Product,
         mode: Default::default(),
         model: None,
         reasoning_effort: None,
@@ -392,4 +393,54 @@ fn queue_reopen_preserves_mode_and_model_choices_and_rejects_a_different_mode() 
         reopened.enqueue(&request),
         Err(QueueError::Conflict)
     ));
+}
+
+#[test]
+fn literal_messages_preserve_command_interpretation_after_edit_and_reopen() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let store = QueueStore::open(&path).unwrap();
+    let mut request = input("literal-message");
+    request.command_interpretation = protocol::CommandInterpretation::Literal;
+    request.input = vec![UserInput::Text {
+        text: "/init".into(),
+    }];
+    let accepted = store.enqueue(&request).unwrap();
+    let paused = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            accepted.revision,
+            &crate::QueueEdit::Pause,
+        )
+        .unwrap();
+    let edited = store
+        .edit(
+            &request.session_id,
+            &request.thread_id,
+            &request.command_id,
+            paused.revision,
+            &crate::QueueEdit::ReplaceText {
+                text: "/develop ordinary message".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        edited.request.command_interpretation,
+        protocol::CommandInterpretation::Literal
+    );
+    drop(store);
+    let store = QueueStore::open(&path).unwrap();
+    let saved = store.get(&request.command_id).unwrap().unwrap();
+    assert_eq!(
+        saved.request.command_interpretation,
+        protocol::CommandInterpretation::Literal
+    );
+    assert_eq!(
+        saved.request.input,
+        vec![UserInput::Text {
+            text: "/develop ordinary message".into()
+        }]
+    );
 }

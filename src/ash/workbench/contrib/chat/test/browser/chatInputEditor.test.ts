@@ -29,7 +29,7 @@ const { ChatInputEditor } = await import('../../browser/widget/input/chatInputEd
 await import('../../browser/chat.shared.contribution.js');
 const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
+const { BuiltinDynamicCompletions, createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
 const { DesktopSlashCommands, SlashCommandCatalog } = await import('../../common/slashCommands.js');
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import('../../../../../editor/common/core/position.js');
@@ -1513,5 +1513,195 @@ suite('Chat command hint browser behavior', () => {
 		assert.equal(await page.evaluate(() => window.ashChatInputIntegration.dropState().text), target);
 		await expect(message).toBeFocused();
 		await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+	});
+});
+
+
+function createContextComposer(resources: DisposableStore) {
+	const target = createSnapshotComposer(resources);
+	let fail = false;
+	let pending: Promise<void> | undefined;
+	let reads = 0;
+	const context = resources.add(new BuiltinDynamicCompletions(target.editor, {
+		getAttachments: () => target.references.getInputState(),
+		acquire: (prepare, signal) => target.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, target.lifecycle.signal]), attachments => attachments.map(attachment => target.references.addReference(attachment, false))),
+	}, target.services.get(ILanguageFeaturesService), {
+		fileSearch: async () => ({ results: [{ resource: URI.file('/workspace/中文 notes.ts') }], messages: [] }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[3], {
+		getWorkspace: () => ({ folders: [{ uri: URI.file('/workspace'), name: 'workspace' }] }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[4], {
+		groups: [{ inputs: [{ resource: URI.file('/workspace/open.ts'), initialText: 'Unsaved text' }] }],
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[5], {
+		hasProvider: () => true,
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[6], {
+		resolveResourceAttachContext: async (resource: import('../../../../../base/common/uri.js').URI) => {
+			reads++;
+			await pending;
+			if (fail) throw new Error('Read failed');
+			return { id: resource.toString(), name: 'source', kind: 'file', resource, resolve: async () => ({ name: 'source', content: 'Captured source' }) };
+		},
+		resolveEditorAttachContext: async () => ({ id: 'open', kind: 'file', name: 'open.ts', resolve: async () => ({ name: 'open.ts', content: 'Unsaved text' }) }),
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[7]));
+	const registry = target.services.get(ILanguageFeaturesService).completionProvider;
+	const metadata = registry.providerCatalog.providers.find(provider => provider.id.startsWith('ash.chat.context.'))!;
+	const provider = registry.getProvider(metadata.id)!;
+	const suggest = async (text: string, resource = target.editor.getModel().uri, offset = text.length) => {
+		target.editor.value = text;
+		return provider.provideCompletions({ requestId: 1, languageId: 'ash-chat-input', resource, position: target.editor.getModel().getPositionAt(offset), context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: target.editor.getModel().createVersionedSnapshot() }, new AbortController().signal);
+	};
+	const accept = async (item: import('../../../../../editor/common/languages.js').LanguageCompletionProviderItem) => {
+		const model = target.editor.getModel();
+		target.editor.codeEditor.executeEdits('test.completion', [{ range: item.range, text: item.insertText }]);
+		await provider.executeCompletionCommand!({ languageId: 'ash-chat-input', resource: model.uri, snapshot: model.createVersionedSnapshot(), command: item.command! }, new AbortController().signal);
+	};
+	return { ...target, context, provider, suggest, accept, setFailure: () => { fail = true; }, defer: (value: Promise<void>) => { pending = value; }, get reads() { return reads; } };
+}
+
+test('Context completion keeps @ and # separate from commands and Skills and scoped to its own input', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	for (const prefix of ['@', '#']) {
+		const result = await fixture.suggest(`Read ${prefix}notes`);
+		assert.equal(result?.items[0]?.label, '中文 notes.ts');
+		assert.deepEqual(result?.items[0]?.range, new Range(1, 6, 1, 12));
+	}
+	for (const text of ['mail@example', '/notes', '$notes']) assert.deepEqual((await fixture.suggest(text))?.items, []);
+	assert.equal(await fixture.suggest('@notes', URI.file('/another-input')), undefined);
+	assert.equal(fixture.reads, 0);
+	fixture.context.dispose();
+	assert.equal(await fixture.suggest('@notes'), undefined);
+});
+
+test('Context completion captures a reference without sending and restores it through undo and redo', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const item = (await fixture.suggest('Read @notes'))!.items[0]!;
+	await fixture.accept(item);
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts ');
+	assert.deepEqual(fixture.references.variables[0]?.reference, { start: 5, end: 16 });
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+	fixture.editor.getModel().undo();
+	assert.equal(fixture.editor.value, 'Read @notes');
+	assert.equal(fixture.references.variables.length, 0);
+	fixture.editor.getModel().redo();
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+});
+
+test('Context completion resolves an open editor snapshot and a directory through their existing owners', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	await fixture.accept((await fixture.suggest('@open'))!.items[0]!);
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Unsaved text');
+	const result = await fixture.suggest('@workspace');
+	assert.equal(result!.items.find(item => item.label === 'workspace')!.kind, 'folder');
+});
+
+test('Context completion leaves read failures unbound and cancels late reads after a draft switch', async () => {
+	using resources = new DisposableStore();
+	const failure = createContextComposer(resources);
+	failure.setFailure();
+	await assert.rejects(failure.accept((await failure.suggest('@notes'))!.items[0]!), /Read failed/);
+	assert.equal(failure.references.variables.length, 0);
+	failure.context.dispose();
+	const fixture = createContextComposer(resources);
+	const read = new DeferredPromise<void>();
+	fixture.defer(read.p);
+	const pending = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 1);
+	fixture.lifecycle.abort();
+	fixture.editor.value = 'Next draft';
+	await assert.rejects(pending, /cancelled/);
+	await read.complete();
+	assert.equal(fixture.references.variables.length, 0);
+	assert.equal(fixture.editor.value, 'Next draft');
+});
+
+suite('Chat context completion browser behavior', () => {
+	const browser = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const surface of ['code', 'cowork', 'project']) for (const prefix of ['@', '#']) test(`context suggestions accept without sending in ${locale} ${surface} ${prefix}`, async () => {
+		const { page } = browser;
+		await page.goto(`/chatInput.html?inlineCode=1&locale=${locale}&surface=${surface}`);
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		await message.pressSequentially(`${prefix}edited`);
+		const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+		assert.ok(help.help?.includes(locale === 'zh-CN' ? '在词首输入 @ 或 #' : 'Type @ or #'));
+		await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: 'edited.ts' })).toBeVisible();
+		await message.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('edited.ts ');
+		await expect(page.getByRole('status', { name: 'Submission' })).toBeEmpty();
+		await message.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(`${prefix}edited`);
+		await message.press('Escape');
+		await message.press('ControlOrMeta+Shift+z');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('edited.ts ');
+		await message.press('Enter');
+		await expect(page.getByRole('status', { name: 'Submission' })).toContainText('Unsaved editor text');
+	});
+});
+
+
+test('Context completion replaces its whole token and reuses the separator before following text', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const result = await fixture.suggest('Read @notes now', fixture.editor.getModel().uri, 'Read @not'.length);
+	await fixture.accept(result!.items[0]!);
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts now');
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+});
+
+
+test('Context completion follows edits outside a pending label and rejects a changed label', async () => {
+	using resources = new DisposableStore();
+	const fixture = createContextComposer(resources);
+	const read = new DeferredPromise<void>();
+	fixture.defer(read.p);
+	const pending = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 1);
+	fixture.editor.codeEditor.executeEdits('test.prefix', [{ range: new Range(1, 1, 1, 1), text: 'Read ' }]);
+	await read.complete();
+	await pending;
+	assert.equal(fixture.editor.value, 'Read 中文 notes.ts ');
+	assert.deepEqual(fixture.references.variables[0]?.reference, { start: 5, end: 16 });
+	assert.equal((await fixture.references.variables[0]!.resolve()).content, 'Captured source');
+	const changed = new DeferredPromise<void>();
+	fixture.defer(changed.p);
+	const rejected = fixture.accept((await fixture.suggest('@notes'))!.items[0]!);
+	await waitFor(() => fixture.reads === 2);
+	fixture.editor.codeEditor.executeEdits('test.label', [{ range: new Range(1, 1, 1, 2), text: 'X' }]);
+	await changed.complete();
+	await assert.rejects(rejected, /cancelled/);
+	assert.equal(fixture.references.variables.length, 0);
+});
+
+
+suite('Chat command scope browser behavior', () => {
+	const browser = useBrowserTests();
+	for (const surface of ['cowork', 'project']) for (const locale of ['en', 'zh-CN']) test(`${surface} has literal slash input while Skills and contexts remain enabled in ${locale}`, async () => {
+		const { page } = browser;
+		await page.goto(`/chatInput.html?inlineCode=1&surface=${surface}&locale=${locale}`);
+		await page.evaluate(() => window.ashChatInputIntegration.setSlashCommands([{ name: 'advisor', description: 'Consult', argumentMode: 'optional', argumentHint: '<question>' }]));
+		const message = page.getByRole('textbox', { name: 'Chat message', exact: true });
+		for (const text of ['/advisor Question', '/advisor off', '/compact', '/config', '/unknown']) {
+			await message.press('ControlOrMeta+a');
+			await message.pressSequentially(text);
+			await expect(page.locator('.stanza-editor-completion-option')).toHaveCount(0);
+			await expect(page.locator('.ash-chat-command-argument-hint')).toHaveCount(0);
+			const help = await page.evaluate(() => window.ashChatInputIntegration.contextAccessibility());
+			assert.ok(!help.help?.includes(locale === 'zh-CN' ? '斜杠命令接受参数时' : 'After a slash command that accepts arguments'));
+			const submissions = async () => (await page.evaluate(() => window.ashChatInputIntegration.historyState()) as { submissions: { text: string; }[]; }).submissions;
+			const before = (await submissions()).length;
+			await message.press('Enter');
+			await expect.poll(async () => (await submissions()).length).toBe(before + 1);
+			assert.equal((await submissions()).at(-1)?.text, text);
+		}
+		await page.evaluate(() => window.ashChatInputIntegration.setHistorySkill('sha256:retained-skill'));
+		await message.pressSequentially('$com');
+		await expect(page.locator('.stanza-editor-completion-option').filter({ hasText: '$commit' })).toBeVisible();
+		await message.press('Enter');
+		await message.press('Enter');
+		await expect.poll(async () => {
+			const state = await page.evaluate(() => window.ashChatInputIntegration.historyState()) as { submissions: { skills?: unknown; }[]; };
+			return state.submissions.at(-1)?.skills;
+		}).toEqual([{ id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:retained-skill' } }]);
 	});
 });

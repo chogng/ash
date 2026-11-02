@@ -409,12 +409,12 @@ for (const kind of ['Code', 'Cowork'] as const) {
 }
 
 for (const kind of ['Code', 'Cowork'] as const) {
-	for (const aba of [false, true]) {
+	if (kind === 'Code') for (const aba of [false, true]) {
 		test(`${kind} advisor lifetime cancels a delayed question on ${aba ? 'A-B-A' : 'A-B'}`, async () => {
 			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 			const pending = new DeferredPromise<AdvisorConfig | null>(); const started = new DeferredPromise<void>();
 			f.modelApi.readAdvisorDefault = () => { void started.complete(); return pending.p; };
-			const result = f.model.executeServerCommand('advisor', 'Private A question').then(() => undefined, error => error);
+			const result = (f.model as ChatWidgetModel).executeServerCommand('advisor', 'Private A question').then(() => undefined, error => error);
 			await started.p; await f.model.selectThread({ session: f.session, threadId: 'B' }); if (aba) await f.model.selectThread({ session: f.session, threadId: 'A' });
 			const state = f.model.state; const error = f.model.error;
 			await pending.complete({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 });
@@ -423,7 +423,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		test(`${kind} compact lifetime cancels a delayed subscription on ${aba ? 'A-B-A' : 'A-B'}`, async () => {
 			const pending = new DeferredPromise<ThreadSubscription>(); let first = true;
 			const f = fixture(kind, async threadId => { if (first) { first = false; return pending.p; } return { ...snapshot(threadId), updates: [] }; }); using resources = f.resources;
-			const result = f.model.executeServerCommand('compact', '').then(() => undefined, error => error);
+			const result = (f.model as ChatWidgetModel).executeServerCommand('compact', '').then(() => undefined, error => error);
 			await f.model.selectThread({ session: f.session, threadId: 'B' }); if (aba) await f.model.selectThread({ session: f.session, threadId: 'A' });
 			const state = f.model.state; const error = f.model.error;
 			await pending.complete({ ...snapshot('A'), updates: [] });
@@ -663,7 +663,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	}
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+for (const kind of ['Code'] as const) {
 	for (const argument of ['Private question', 'off']) {
 		test(`${kind} captured server command lifetime blocks ${argument === 'off' ? 'default mutation' : 'consultation'} after input cancellation`, async () => {
 			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
@@ -671,7 +671,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			f.modelApi.readAdvisorDefault = () => { void started.complete(); return answer.p; };
 			f.modelApi.setAdvisorDefault = async () => { mutations++; };
 			const signal = new AbortController();
-			const command = Reflect.apply(f.model.executeServerCommand, f.model, ['advisor', argument, signal.signal]).then(() => undefined, (error: unknown) => error);
+			const command = Reflect.apply((f.model as ChatWidgetModel).executeServerCommand, f.model, ['advisor', argument, signal.signal]).then(() => undefined, (error: unknown) => error);
 			await started.p; signal.abort();
 			await answer.complete({ model: { provider: 'provider', model: 'advisor' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 });
 			assert.ok(isCancellationError(await command)); assert.equal(f.consults.length, 0); assert.equal(mutations, 0);
@@ -842,7 +842,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-for (const kind of ['Code', 'Cowork'] as const) {
+for (const kind of ['Code'] as const) {
 	test(`${kind} advisor command preserves budgets across model changes and Off`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		const old: AdvisorConfig = { model: { provider: 'test', model: 'old' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: 'high' };
@@ -850,11 +850,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		f.modelApi.readAdvisorDefault = async () => saved;
 		f.modelApi.setAdvisorDefault = async ({ advisor }) => { saved = advisor; };
 		f.models.listAdvisorModels = async () => [{ model: { provider: 'test', model: 'next' }, displayName: 'Next', longContext: null, supportedReasoningEfforts: [{ effort: 'medium', description: 'Medium' }] }];
-		await f.model.executeServerCommand('advisor', 'test/next');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'test/next');
 		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
-		await f.model.executeServerCommand('advisor', 'off');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'off');
 		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: false, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
-		await f.model.executeServerCommand('advisor', 'clear');
+		await (f.model as ChatWidgetModel).executeServerCommand('advisor', 'clear');
 		assert.equal(saved, null);
 	});
 }
@@ -970,4 +970,21 @@ test('Cancelling a queue editor restores already admitted input after AI is disa
 	await f.chat.resumePendingRequest(target);
 	await assert.rejects(f.chat.startTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'New work', mode: 'agent' }), /AI features are disabled/);
 	assert.deepEqual(calls, [[target, { type: 'resume' }]]);
+});
+
+
+test('Cowork does not expose Code command execution and submits slash text literally for start and queue', async () => {
+	for (const route of ['start', 'queue'] as const) {
+		const f = fixture('Cowork', undefined, route === 'queue');
+		using resources = f.resources;
+		await f.model.initialize();
+		assert.equal('executeServerCommand' in f.model, false);
+		assert.deepEqual(f.model.inputState.slashCommands, []);
+		await f.model.send('/develop Keep this as a message', 'agent', undefined, undefined, route === 'queue' ? { queue: ChatRequestQueueKind.Queued } : undefined);
+		const request = route === 'start' ? f.starts[0]! : f.queues[0]!;
+		assert.equal(request.commandInterpretation, 'literal');
+		assert.deepEqual(request.input, [{ type: 'text', text: '/develop Keep this as a message' }]);
+		assert.equal(f.compacts.length, 0);
+		assert.equal(f.consults.length, 0);
+	}
 });

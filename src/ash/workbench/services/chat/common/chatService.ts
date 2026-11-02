@@ -1,3 +1,4 @@
+import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
@@ -144,6 +145,8 @@ export interface ChatSubmissionOptions {
 }
 
 export interface StartTurnOptions extends ChatSubmissionOptions {
+	/** Literal messages bypass product slash-command interpretation, including queued delivery. */
+	readonly commandInterpretation?: CommandInterpretation;
 	/** Supplied by the owning composer from its loaded Thread. */
 	readonly isNewSession?: boolean;
 	readonly sessionId: SessionId;

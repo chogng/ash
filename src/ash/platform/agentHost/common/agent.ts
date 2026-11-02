@@ -5,6 +5,8 @@ import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } 
 import type { ApprovalMode } from './approvalModes.js';
 import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
 
+export type CommandInterpretation = 'product' | 'literal';
+
 export type SessionMode = 'agent' | 'plan' | 'debug' | 'multitask' | 'ask';
 
 export type SessionId = string;
@@ -56,6 +58,7 @@ interface SessionOperations {
 		readonly threadId: string;
 		readonly expectedSequence: number;
 		readonly mode: SessionMode;
+		readonly commandInterpretation?: CommandInterpretation;
 		readonly approvalMode?: ApprovalMode | null;
 		readonly model?: ModelRef | null;
 		readonly reasoningEffort?: ModelReasoningEffort | null;
@@ -241,6 +244,7 @@ export type TurnInteractionResolveResult = TurnInterruptResult;
 export type AdvisorConfigureResult = TurnInterruptResult;
 
 export interface QueueEnqueueParams extends SessionMutationParams {
+	readonly commandInterpretation?: CommandInterpretation;
 	readonly threadId: string;
 	readonly mode: SessionMode;
 	readonly model?: ModelRef | null;

@@ -340,7 +340,11 @@ fn init_does_not_import_external_instructions_into_agent_input() {
 
     server
         .agent_processor()
-        .turn_instruction_selection(&mut input, ash_protocol::CollaborationMode::Agent)
+        .turn_instruction_selection(
+            &mut input,
+            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::CommandInterpretation::Product,
+        )
         .unwrap();
 
     assert!(!input.iter().any(|item| match item {
@@ -5537,4 +5541,53 @@ fn web_session_exact_watcher_observed_withdrawal_cannot_revive_after_forget() {
         assert_eq!(std::fs::read(&path).unwrap(), b"after restriction");
         server.close_web_workspace();
     }
+}
+
+#[test]
+fn literal_messages_bypass_all_product_command_selection() {
+    let server = server();
+    for mode in [
+        ash_protocol::CollaborationMode::Agent,
+        ash_protocol::CollaborationMode::Ask,
+    ] {
+        for text in [
+            "/init",
+            "/init workspace",
+            "/develop add offline search",
+            "/team status",
+            "/advisor Question",
+            "/compact",
+        ] {
+            let mut input = vec![UserInput::Text { text: text.into() }];
+            let original = input.clone();
+            let selection = server
+                .agent_processor()
+                .turn_instruction_selection(
+                    &mut input,
+                    mode,
+                    ash_protocol::CommandInterpretation::Literal,
+                )
+                .unwrap();
+            assert!(matches!(
+                selection,
+                crate::server::operations::TurnInstructionSelection::Agent
+            ));
+            assert_eq!(input, original);
+        }
+    }
+    let mut input = vec![UserInput::Text {
+        text: "/develop add offline search".into(),
+    }];
+    let selection = server
+        .agent_processor()
+        .turn_instruction_selection(
+            &mut input,
+            ash_protocol::CollaborationMode::Agent,
+            ash_protocol::CommandInterpretation::Product,
+        )
+        .unwrap();
+    assert!(matches!(
+        selection,
+        crate::server::operations::TurnInstructionSelection::Workflow(_)
+    ));
 }

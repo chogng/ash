@@ -55,3 +55,18 @@ pub enum UserInput {
         path: String,
     },
 }
+
+/// Whether product command syntax may be interpreted in an otherwise textual Turn input.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandInterpretation {
+    #[default]
+    Product,
+    Literal,
+}
+
+impl CommandInterpretation {
+    pub fn is_product(&self) -> bool {
+        matches!(self, Self::Product)
+    }
+}

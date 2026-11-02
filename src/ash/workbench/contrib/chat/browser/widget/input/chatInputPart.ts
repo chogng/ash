@@ -1,3 +1,4 @@
+import { BuiltinDynamicCompletions } from './editor/chatInputCompletions.js';
 import type { IWorkspacePickerDelegate } from '../../chat.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
 import { captureChatDraft } from '../../../../../services/chat/common/chatContextService.js';
@@ -67,7 +68,7 @@ import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPast
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../../services/chat/common/chatContextService.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
-import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from '../../../common/slashCommands.js';
+import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type SlashCommandInput } from '../../../common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
@@ -251,7 +252,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private modelPickerActionItem!: ModelPickerActionItem;
 	private modePickerActionItem: ModePickerActionItem | undefined;
 	private readonly pickerResponsiveLayout: ChatInputPickerResponsiveLayout;
-	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
+	private readonly slashCommands: SlashCommandCatalog | undefined;
 	private readonly skills = new SkillSelectorCatalog();
 	private state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'loading', canInterrupt: false, models: [], isAutomaticModel: false, slashCommands: [], skillSelectors: [], canSelectAgent: false };
 	private toolbarState: ChatInputToolbarState = { voiceAvailable: false, voiceActive: false, voiceConnected: false, mode: 'agent', canSubmit: false, hasInput: false, canInterrupt: false, inputKind: 'message', models: [], isAutomaticModel: false, canSelectAgent: false };
@@ -293,6 +294,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IVoiceModeOnboardingService private readonly voiceOnboarding: IVoiceModeOnboardingService,
 	) {
 		super();
+		// The existing conversation kind chooses a host; only Code supplies command execution.
+		this.slashCommands = delegate.executeServerCommand ? new SlashCommandCatalog(DesktopSlashCommands, []) : undefined;
 		this.screenshotContext = instantiationService.createInstance(ScreenshotContextValuePick);
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -360,6 +363,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		updateCursorAtTop();
 		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel));
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
+		if (this.input.codeEditor) {
+			this._register(instantiationService.createInstance(BuiltinDynamicCompletions, this.input, {
+				getAttachments: () => this.contexts,
+				acquire: (prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal: AbortSignal) => this.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, this.inputLifecycle.signal]), (attachments) => {
+					if (!this.visible) { throw new CancellationError(); }
+					if (!this.supportsImages() && attachments.some(attachment => attachment.kind === 'image')) { throw new Error(localize('chat.image.unsupported', 'The selected model does not support images')); }
+					for (const attachment of attachments) { this.pasteTarget.addInlineReference(attachment); }
+					for (const attachment of attachments) { announceStatus(localize('chat.context.added', 'Added {0}', attachment.name)); }
+					return this.contexts;
+				}).catch(error => {
+					if (!isCancellationError(error)) { this.notifications.error(error); }
+					throw error;
+				}),
+			}));
+		}
 		if (this.input.codeEditor && this.input.getModel) {
 			this._register(instantiationService.createInstance(ChatPasteProvidersFeature, this.input, () => this.inputLifecycle.signal, () => this.supportsImages()));
 			const completions = this._register(instantiationService.createInstance(AgentHostInputCompletions, this.input.getModel(), {
@@ -666,7 +684,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
 		if (this.input.codeEditor) notifyDictationSubmitted(this.input.codeEditor);
 		this.logDictationSample(true, draft.text);
-		void this.history.record(draft.text, parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands).kind === 'command' ? 'command' : 'agent').catch(error => {
+		void this.history.record(draft.text, this.parseInput(this.commandText(draft.text, draft.attachments)).kind === 'command' ? 'command' : 'agent').catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
 		});
 		// Preparation can finish after the user has started another input; never erase that text.
@@ -916,7 +934,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	async acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
 		if (this.isDisposed || !this.visible) { return; }
 		const queue = options?.queue;
-		const intent = parseSlashCommandInput(value ?? this.commandText(), this.slashCommands);
+		const intent = this.parseInput(value ?? this.commandText());
 		if (queue && intent.kind === 'command') {
 			throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
 		}
@@ -949,7 +967,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const draft = this.captureHistoryDraft();
 			const textRevision = this.textRevision;
 			const mode = this.mode;
-			const input = parseSlashCommandInput(this.commandText(draft.text, draft.attachments), this.slashCommands);
+			const input = this.parseInput(this.commandText(draft.text, draft.attachments));
 			// Speech and prepared context can change the parsed input after initial admission.
 			if (queue && input.kind === 'command') {
 				throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
@@ -968,7 +986,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				return;
 			}
 			if (input.kind === 'command' && input.binding.origin === 'server') {
-				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }, lifecycle));
+				await this.submit(draft, textRevision, lifecycle, () => this.delegate.executeServerCommand!({ name: input.command.name, argumentsText: input.argumentsText }, lifecycle));
 				return;
 			}
 			if (!this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
@@ -1031,7 +1049,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	/** Compose product help inside this provider so registry priority cannot hide it. */
 	protected getAccessibilityHelpContent(): string {
 		return [
-			getChatInputAccessibilityHelp(this.screenshotContext.accessibilityHelp, !!this.secondaryToolbarContainer),
+			getChatInputAccessibilityHelp(this.screenshotContext.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.slashCommands),
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 		].filter(Boolean).join('\n');
@@ -1106,7 +1124,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const restoreMode = draftMode !== undefined && draftMode !== state.mode;
 		if (restoreMode) state = { ...state, mode: draftMode };
 		if (this.serverSlashCommands !== state.slashCommands) {
-			this.slashCommands.setServerCommands(state.slashCommands);
+			this.slashCommands?.setServerCommands(state.slashCommands);
 			this.serverSlashCommands = state.slashCommands;
 		}
 		if (this.skillSelectors !== state.skillSelectors) {
@@ -1238,6 +1256,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return draft?.mode;
 	}
 
+	private parseInput(text: string): SlashCommandInput {
+		return this.slashCommands ? parseSlashCommandInput(text, this.slashCommands) : { kind: 'message', text };
+	}
+
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private commandText(text = this.input.value, contexts = this.contexts): string {
 		for (const context of [...contexts].reverse()) {
@@ -1251,7 +1273,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private renderToolbar(): void {
-		const input = parseSlashCommandInput(this.commandText(), this.slashCommands);
+		const input = this.parseInput(this.commandText());
 		const canSubmitIntent = input.kind === 'message' ? input.text.trim().length > 0 || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {

@@ -297,6 +297,7 @@ impl ExecConnection for ServerConnection {
                 command_id,
                 session_id,
                 request: SessionRequest::StartTurn {
+                    command_interpretation: None,
                     ide_window_id: None,
                     thread_id,
                     expected_sequence,

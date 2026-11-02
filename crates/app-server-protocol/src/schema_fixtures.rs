@@ -1291,3 +1291,24 @@ fn git_default_reference_is_optional_and_publication_carries_the_reviewed_head()
     incomplete.as_object_mut().unwrap().remove("expectedHead");
     assert!(serde_json::from_value::<GitCommandDto>(incomplete).is_err());
 }
+
+#[test]
+fn literal_command_interpretation_round_trips_without_changing_legacy_turn_requests() {
+    let legacy = serde_json::json!({"type":"startTurn", "threadId":"thread", "expectedSequence":0,
+        "mode":"agent", "input":[{"type":"text", "text":"/develop ordinary message"}]});
+    let request: SessionRequest = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), legacy);
+    let mut literal = legacy;
+    literal["commandInterpretation"] = serde_json::json!("literal");
+    let request: SessionRequest = serde_json::from_value(literal.clone()).unwrap();
+    assert!(matches!(
+        &request,
+        SessionRequest::StartTurn {
+            command_interpretation: Some(ash_protocol::CommandInterpretation::Literal),
+            ..
+        }
+    ));
+    assert_eq!(serde_json::to_value(request).unwrap(), literal);
+    literal["commandInterpretation"] = serde_json::json!("unknown");
+    assert!(serde_json::from_value::<SessionRequest>(literal).is_err());
+}

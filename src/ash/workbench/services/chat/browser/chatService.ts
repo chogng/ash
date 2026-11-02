@@ -305,7 +305,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
+		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
 		if (options.isNewSession && !this.isDisposed && epoch === this.connectionEpoch) {
 			const title = Array.from(options.text.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
 			if (title) {
@@ -338,7 +338,7 @@ export class ChatService extends Disposable implements IChatService {
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.assertAIEnabled();
 		this.requireSubmissionOwner(options);
-		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode }, options.signal);
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode }, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 

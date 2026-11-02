@@ -542,6 +542,7 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 				'session/request',
 				sessionRequest(params, {
 					type: 'startTurn',
+					commandInterpretation: params.commandInterpretation,
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,
 					mode: params.mode,

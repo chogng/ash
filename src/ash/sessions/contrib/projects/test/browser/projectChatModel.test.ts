@@ -215,6 +215,18 @@ class ProjectChatFixture extends Disposable {
 }
 
 suite('Project chat submission', () => {
+	for (const text of ['/advisor Question', '/advisor off', '/compact', '/config', '/init', '/develop Request', '/team Request', '/unknown']) {
+		test(`project sends ${text} as a literal first message with membership and navigation`, async () => {
+			using fixture = new ProjectChatFixture();
+			assert.equal('executeServerCommand' in fixture.model, false);
+			await fixture.model.send(text);
+			await fixture.revealed.p;
+			assert.deepEqual(fixture.calls, ['create', 'link:1', 'send', 'open:session/thread', 'sessions.open.chat']);
+			assert.equal(fixture.turns[0]!.text, text);
+			assert.equal(fixture.turns[0]!.commandInterpretation, 'literal');
+		});
+	}
+
 	test('empty input does not create a conversation or link a project', async () => {
 		using fixture = new ProjectChatFixture();
 		await fixture.model.send('   ');

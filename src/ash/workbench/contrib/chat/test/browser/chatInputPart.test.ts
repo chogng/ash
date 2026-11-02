@@ -178,7 +178,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	const part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.inputNotificationsForTest = partServices.get(IChatInputNotificationService);
 	part.render(state);
 	return part;

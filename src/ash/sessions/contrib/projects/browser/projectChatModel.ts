@@ -14,7 +14,7 @@ import { ISessionsService } from '../../../services/sessions/browser/sessionsSer
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 
-/** Adds project membership before any first Turn, including slash commands and voice tasks. */
+/** Adds project membership before any first Turn, including voice tasks. */
 export class ProjectChatModel extends CoworkWidgetModel {
 	public submitted = false;
 	private associatedSessionId: string | undefined;
@@ -68,8 +68,4 @@ export class ProjectChatModel extends CoworkWidgetModel {
 		this.reveal.schedule();
 	}
 
-	override async executeServerCommand(...args: Parameters<CoworkWidgetModel['executeServerCommand']>): Promise<void> {
-		if (args[0] === 'compact') await this.prepareConversation(args[2]);
-		await super.executeServerCommand(...args);
-	}
 }

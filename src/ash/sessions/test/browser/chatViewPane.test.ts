@@ -13,6 +13,7 @@ import { DraggedEditorIdentifier } from '../../../workbench/browser/parts/editor
 import { LocalSelectionTransfer } from '../../../platform/dnd/browser/dnd.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
+import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -168,6 +169,11 @@ function createInputServices(contextView: IContextViewService, chat: IChatServic
 	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+	services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
+		fileSearch: async () => ({ results: [], messages: [] }),
+		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
+	});
 	services.registerInstance(IHostService, new TestHostService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -6655,7 +6661,8 @@ for (const kind of ['Chat', 'Cowork']) {
 		assert.equal(model.inputState.inputBlocked, true);
 		await assert.rejects(model.prepareConversation(), /AI features are disabled/);
 		await assert.rejects(model.send('Synthetic draft'), /AI features are disabled/);
-		await assert.rejects(model.executeServerCommand('compact', ''), /AI features are disabled/);
+		if (model instanceof ChatWidgetModel) { await assert.rejects(model.executeServerCommand('compact', ''), /AI features are disabled/); }
+		else { assert.equal('executeServerCommand' in model, false); }
 		assert.equal(fake.createSessionRequests.length, 0);
 		assert.deepEqual(submissions, []);
 		await configuration.updateValue(ChatAIDisabledSettingId, false);

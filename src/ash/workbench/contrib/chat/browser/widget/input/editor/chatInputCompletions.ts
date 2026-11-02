@@ -1,4 +1,21 @@
-import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../../editor/common/languages.js';
+import { TrackedRangeStickiness } from '../../../../../../../editor/common/model.js';
+import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { canceled } from '../../../../../../../base/common/errors.js';
+import { CancellationTokenSource } from '../../../../../../../base/common/cancellation.js';
+import { createUuid } from '../../../../../../../base/common/uuid.js';
+import { basename, dirname, extUri } from '../../../../../../../base/common/resources.js';
+import { URI } from '../../../../../../../base/common/uri.js';
+import { localize } from '../../../../../../../nls.js';
+import { ILanguageFeaturesService } from '../../../../../../../editor/common/services/languageFeatures.js';
+import { IWorkspaceContextService } from '../../../../../../../platform/workspace/common/workspace.js';
+import { IFileService } from '../../../../../../../platform/files/common/files.js';
+import { ISearchService } from '../../../../../../services/search/common/search.js';
+import { QueryBuilder } from '../../../../../../services/search/common/queryBuilder.js';
+import { IEditorGroupsService } from '../../../../../../services/editor/common/editorGroupsService.js';
+import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
+import { IChatAttachmentResolveService } from '../../../attachments/chatAttachmentResolveService.js';
+import type { IChatInputEditor } from '../chatInputEditorRegistry.js';
+import { LanguageCompletionItemKind, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../../../editor/common/languages.js';
 import { Position } from '../../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../../editor/common/core/range.js';
 import { matchedCharacterIndices, type SlashCommandCatalog } from '../../../../common/slashCommands.js';
@@ -116,4 +133,140 @@ function activeSkillToken(line: string, cursorColumn: number): { readonly query:
 	}
 	const tokenEnd = cursorColumn + tokenSuffix.length;
 	return { query, startColumn, endColumn: tokenEnd + (/[ \t]/u.test(line[tokenEnd] ?? '') ? 1 : 0) };
+}
+
+
+/** Context suggestions bind accepted text to the originating composer's attachment owner. */
+export class BuiltinDynamicCompletions extends Disposable {
+	constructor(
+		input: IChatInputEditor,
+		host: {
+			getAttachments(): readonly ChatContextAttachment[];
+			acquire(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+		},
+		@ILanguageFeaturesService features: ILanguageFeaturesService,
+		@ISearchService search: ISearchService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@IEditorGroupsService groups: IEditorGroupsService,
+		@IFileService files: IFileService,
+		@IChatAttachmentResolveService resolver: IChatAttachmentResolveService,
+	) {
+		super();
+		const model = input.getModel?.();
+		if (!model) { return; }
+		const lifetime = new AbortController();
+		this._register(toDisposable(() => lifetime.abort()));
+		const id = `ash.chat.context.${createUuid()}`;
+		this._register(features.completionProvider.register({
+			id,
+			languageIds: [CHAT_INPUT_LANGUAGE_ID],
+			triggerCharacters: ['@', '#'],
+			provideCompletions: async (request, signal) => {
+				if (request.resource?.toString() !== model.uri.toString() || lifetime.signal.aborted) { return undefined; }
+				const text = request.snapshot.getText();
+				const line = text.split('\n')[request.position.lineNumber - 1] ?? '';
+				const prefix = line.slice(0, request.position.column - 1);
+				const token = /(?:^|\s)([@#])([^\s@#]*)$/u.exec(prefix);
+				if (!token) { return emptyCompletionResult(); }
+				const query = token[2]!;
+				const startColumn = prefix.length - query.length;
+				const suffix = line.slice(request.position.column - 1).match(/^[^\s]*/u)![0];
+				const endColumn = request.position.column + suffix.length;
+				const separatorLength = /[ \t]/u.test(line[endColumn - 1] ?? '') ? 1 : 0;
+				const range = new Range(request.position.lineNumber, startColumn, request.position.lineNumber, endColumn + separatorLength);
+				const start = text.split('\n').slice(0, request.position.lineNumber - 1).reduce((sum, line) => sum + line.length + 1, 0) + startColumn - 1;
+				const candidates: ContextCompletion[] = [];
+				const seen = new Set<string>();
+				const add = (candidate: ContextCompletion, matched = false): void => {
+					if (seen.has(candidate.key) || !matched && !candidate.name.toLowerCase().includes(query.toLowerCase()) && !candidate.resource?.path.toLowerCase().includes(query.toLowerCase())) { return; }
+					seen.add(candidate.key);
+					candidates.push(candidate);
+				};
+				for (const attachment of host.getAttachments()) {
+					if (attachment.kind !== 'toolSelection') { add({ key: `attachment:${attachment.id}`, name: attachment.name, attachmentId: attachment.id }); }
+				}
+				for (const editor of groups.groups.flatMap(group => group.inputs)) {
+					if (files.hasProvider(editor.resource) || editor.initialText !== undefined || editor.resource.scheme === 'untitled') { add({ key: editor.resource.toString(), name: basename(editor.resource), resource: editor.resource }); }
+				}
+				const folders = workspace.getWorkspace().folders;
+				for (const folder of folders) { add({ key: folder.uri.toString(), name: folder.name, resource: folder.uri, directory: true }); }
+				if (query && folders.length) {
+					const cancellation = new CancellationTokenSource();
+					const combined = AbortSignal.any([signal, lifetime.signal]);
+					const cancel = (): void => cancellation.cancel();
+					combined.addEventListener('abort', cancel, { once: true });
+					if (combined.aborted) { cancel(); }
+					try {
+						const found = await search.fileSearch(new QueryBuilder().file(folders.map(folder => folder.uri), { filePattern: query, sortByScore: true, maxResults: 50 }), cancellation.token);
+						for (const file of found.results) {
+							add({ key: file.resource.toString(), name: basename(file.resource), resource: file.resource }, true);
+							let parent = dirname(file.resource);
+							const folder = folders.find(folder => extUri.isEqualOrParent(parent, folder.uri));
+							while (folder && extUri.isEqualOrParent(parent, folder.uri)) {
+								add({ key: parent.toString(), name: basename(parent), resource: parent, directory: true });
+								if (extUri.isEqual(parent, folder.uri)) { break; }
+								parent = dirname(parent);
+							}
+						}
+					} finally {
+						combined.removeEventListener('abort', cancel);
+						cancellation.dispose();
+					}
+				}
+				if (signal.aborted || lifetime.signal.aborted) { throw canceled(); }
+				return {
+					items: candidates.slice(0, 50).map((candidate, index) => ({
+						id: candidate.key, label: candidate.name, kind: candidate.directory ? LanguageCompletionItemKind.Folder : LanguageCompletionItemKind.Reference,
+						detail: candidate.resource?.path, range, insertText: `${candidate.name} `,
+						filterText: `${token[1]}${query}`, preselect: index === 0, sortText: String(index).padStart(3, '0'),
+						command: { id: 'chat.attachContext', title: localize('chat.context.add', 'Add context'), arguments: [{ ...candidate, resource: candidate.resource?.toString(), start }] },
+					})),
+					isIncomplete: true,
+				};
+			},
+			executeCompletionCommand: async (request: LanguageCompletionProviderCommandRequest, signal: AbortSignal) => {
+				if (request.resource?.toString() !== model.uri.toString() || lifetime.signal.aborted) { throw canceled(); }
+				const candidate = request.command.arguments[0] as Omit<ContextCompletion, 'resource'> & { resource?: string; start: number; };
+				if (model.getVersionId() !== request.snapshot.version) { throw canceled(); }
+				// Track only the accepted label so typing elsewhere can continue during the read.
+				const [decoration] = model.deltaDecorations([], [{
+					range: Range.fromPositions(model.getPositionAt(candidate.start), model.getPositionAt(candidate.start + candidate.name.length)),
+					options: { description: 'chat-pending-context', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+				}]);
+				const current = (): Range => {
+					if (this.isDisposed || model.isDisposed() || signal.aborted) { throw canceled(); }
+					const range = model.getDecorationRange(decoration!);
+					if (!range || model.getValueInRange(range) !== candidate.name) { throw canceled(); }
+					return range;
+				};
+				try {
+					await host.acquire(async draftSignal => {
+						current();
+						const source = candidate.attachmentId ? host.getAttachments().find(attachment => attachment.id === candidate.attachmentId) : undefined;
+						const resource = candidate.resource ? URI.parse(candidate.resource) : undefined;
+						const editor = resource ? groups.groups.flatMap(group => group.inputs).find(editor => extUri.isEqual(editor.resource, resource)) : undefined;
+						let attachment = source;
+						if (!attachment && editor) {
+							attachment = await resolver.resolveEditorAttachContext(editor, draftSignal);
+						} else if (!attachment && resource) {
+							attachment = await resolver.resolveResourceAttachContext(resource, candidate.directory ?? false, draftSignal);
+						}
+						const range = current();
+						if (!attachment || draftSignal.aborted) { throw canceled(); }
+						return [{ ...attachment, name: candidate.name, reference: { start: model.getOffsetAt(range.getStartPosition()), end: model.getOffsetAt(range.getEndPosition()) } }];
+					}, AbortSignal.any([signal, lifetime.signal]));
+				} finally {
+					if (!model.isDisposed()) { model.deltaDecorations([decoration!], []); }
+				}
+			},
+		}));
+	}
+}
+
+interface ContextCompletion {
+	readonly key: string;
+	readonly name: string;
+	readonly resource?: URI;
+	readonly directory?: boolean;
+	readonly attachmentId?: string;
 }

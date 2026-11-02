@@ -10,6 +10,8 @@
 
 ## 快速理解
 
+Code 拥有产品 Slash Command。Cowork 与 Projects 不加载命令目录，不注册命令补全或参数提示，也不解析或执行这些命令；斜杠开头的文本按普通消息提交，并以 `commandInterpretation: literal` 避开服务端产品命令解释。该语义随排队请求保存，编辑与出队不重新启用命令。`$name` Skills 和 `@/#` 上下文补全独立保留。
+
 Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
 
 | 用户看到或产品要做的事         | 正确抽象                 | 谁决定内容                |

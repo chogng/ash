@@ -991,3 +991,15 @@ suite('Host input completion connection ownership', () => {
 		});
 	}
 });
+
+test('Turn adapters retain the owning composer literal command interpretation across RPC', async () => {
+	const requests: unknown[] = [];
+	const service = createAppServerAgentTurnService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return { type: 'turn', value: { turnId: 'turn', sequence: 1 } };
+		},
+	} as unknown as AppServerProtocolClient);
+	await service.start({ commandId: 'literal', sessionId: 'session', threadId: 'thread', expectedSequence: 0, mode: 'agent', commandInterpretation: 'literal', input: [{ type: 'text', text: '/init' }] });
+	assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ method: 'session/request', params: { commandId: 'literal', sessionId: 'session', request: { type: 'startTurn', commandInterpretation: 'literal', threadId: 'thread', expectedSequence: 0, mode: 'agent', input: [{ type: 'text', text: '/init' }] } } }]);
+});

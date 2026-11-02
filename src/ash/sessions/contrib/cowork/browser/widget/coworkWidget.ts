@@ -55,7 +55,6 @@ export interface ICoworkWidgetModel extends IDisposable {
 	readonly inputState: ChatInputState;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
 	refreshChanges(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -181,9 +180,6 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: (invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
-				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
 			interrupt: () => this.model.interrupt(),
 			openChanges: async revision => {
 				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }

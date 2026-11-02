@@ -2,6 +2,7 @@
 
 use protocol::ApprovalMode;
 use protocol::CommandId;
+use protocol::CommandInterpretation;
 use protocol::SessionId;
 use protocol::ThreadId;
 use protocol::ToolMode;
@@ -20,6 +21,8 @@ pub struct QueueInput {
     pub thread_id: ThreadId,
     /// Execution directory selected by the host when accepting the message.
     pub directory: String,
+    #[serde(default, skip_serializing_if = "CommandInterpretation::is_product")]
+    pub command_interpretation: CommandInterpretation,
     pub input: Vec<UserInput>,
     #[serde(default)]
     pub mode: protocol::CollaborationMode,

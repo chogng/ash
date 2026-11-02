@@ -12,6 +12,7 @@ use crate::protocol::turn::TurnStartResult;
 use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::CollaborationMode;
+use ash_protocol::CommandInterpretation;
 use ash_protocol::ReviewTarget;
 use ash_protocol::Session;
 use ash_protocol::SessionExecutionTarget;
@@ -241,6 +242,10 @@ pub enum SessionRequest {
         input: Vec<InputItem>,
     },
     StartTurn {
+        /// Literal messages do not enter Code's product-command interpretation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        command_interpretation: Option<CommandInterpretation>,
         /// Pins the editor used to capture this submission; a changed selection rejects admission.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]

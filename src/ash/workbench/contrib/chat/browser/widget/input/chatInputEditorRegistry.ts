@@ -13,7 +13,7 @@ export interface ChatInputEditorOptions {
 	readonly container: HTMLElement;
 	readonly placeholder: string;
 	readonly ariaLabel: string;
-	readonly slashCommands: SlashCommandCatalog;
+	readonly slashCommands?: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
 	/** Backend discovery is registered by the owning composer. */
 	readonly hostCompletions?: boolean;

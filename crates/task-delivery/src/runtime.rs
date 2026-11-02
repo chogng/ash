@@ -275,6 +275,7 @@ impl Runtime {
         self.services
             .queue
             .enqueue(&QueueInput {
+                command_interpretation: protocol::CommandInterpretation::Product,
                 command_id,
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
