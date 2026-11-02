@@ -229,6 +229,7 @@
     "@xterm/xterm": "6.1.0-beta.304",
     "axe-playwright": "2.1.0",
     "bun": "runtime:1.4.4",
+    "c8": "10.1.3",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",
     "electron": "^44.4.5",

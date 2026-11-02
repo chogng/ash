@@ -5,6 +5,8 @@
     "rootDir": ".",
     "types": ["node", "vite/client", "@webgpu/types", "electron"],
     "incremental": true,
+    "sourceMap": true,
+    "inlineSources": true,
     "tsBuildInfoFile": ".build/desktop/test.tsbuildinfo"
   },
   "include": [
