@@ -13,6 +13,9 @@ import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
+import type { IChatContentPart } from './chatContentParts.js';
+import type { IChatCodeBlockInfo } from '../../chat.js';
+import { createUuid } from '../../../../../../base/common/uuid.js';
 
 interface RenderedBlock {
 	node: ChildNode;
@@ -43,10 +46,11 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
-export class ChatMarkdownContentPart extends Disposable {
+export class ChatMarkdownContentPart extends Disposable implements IChatContentPart {
 	public readonly domNode: HTMLElement;
 	private readonly changedHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this.changedHeight.event;
+	public readonly codeblocksPartId = `ash-chat-markdown-${createUuid()}`;
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
@@ -97,13 +101,22 @@ export class ChatMarkdownContentPart extends Disposable {
 		return true;
 	}
 
-	public focusCodeBlock(reverse = false): void {
-		if (this.isDisposed || !this.visible) { return; }
-		const blocks = [...this.codeBlocks].sort(([left], [right]) => left - right).map(([, block]) => block);
-		if (!blocks.length) { return; }
-		const current = blocks.findIndex(block => block.hasFocus);
-		const index = current < 0 ? (reverse ? blocks.length - 1 : 0) : (current + (reverse ? blocks.length - 1 : 1)) % blocks.length;
-		blocks[index].focus();
+	public get codeblocks(): readonly IChatCodeBlockInfo[] {
+		if (this.isDisposed) { return []; }
+		return [...this.codeBlocks].sort(([left], [right]) => left - right).map(([index, part]) => ({
+			ownerMarkdownPartId: this.codeblocksPartId,
+			codeBlockIndex: index,
+			elementId: part.element.id,
+			uri: part.editor.getModel()?.uri,
+			languageId: part.editor.getModel()?.getLanguageId(),
+			focus: () => { if (!this.isDisposed && this.visible) { part.focus(); } },
+		}));
+	}
+
+	public hasSameContent(other: IChatListItem): boolean {
+		const markdown = this.pending?.markdown ?? this.markdown;
+		const incomplete = this.pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
+		return !!markdown && markdown.value === other.text && incomplete === other.transient;
 	}
 
 	public setVisible(visible: boolean): void {
@@ -332,6 +345,7 @@ export class ChatMarkdownContentPart extends Disposable {
 				let part = this.codeBlocks.get(index);
 				if (!part) {
 					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+					part.element.id = `${this.codeblocksPartId}-${index}`;
 					if (this.options.deferCodeBlockModels) {
 						this.deferredCodeBlocks.add(part);
 						this.hasDeferredCodeBlocks = true;

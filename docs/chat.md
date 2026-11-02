@@ -115,7 +115,9 @@ Markdown 沿 `ChatListWidget` → `ChatMarkdownContentPart` → `MarkdownElement
 
 持久图片／音频经已有来源授权取得 bytes。独立只读预览沿 `ChatAttachmentsContentPart` → response resource provider 的 exact bytes association → `IEditorService`／MediaPreview。来源更换即撤回旧 action；音频移交前暂停原行播放，不从任意 URL 抓取宿主文件。隐藏 retained Chat／Cowork 停止自身 Voice、暂停自身 HTMLAudioElement，保留草稿／快照／媒体字节，重显不自动播放；其他 Widget 的媒体不受影响。详见[媒体交付](media-delivery.md)。
 
-图片生成沿同一工具条目接入：`ChatToolInvocationPart` 识别原生 `imagegen`，或 MCP 来源明确声明的同名远程工具。`ChatImageGenerationProgressPart` 只展示等待状态；成功结果中的图片交给 `ChatGeneratedImageResultSubPart`，在可折叠工具详情之外显示。失败或轮次停止结束进度，不从轮次结束推断生成成功。恢复已完成历史直接显示图片，不重播生成动画。
+工具状态和输出分别由 `ChatToolProgressSubPart` 与 `ChatToolOutputSubPart` 拥有，并直接消费公共 `IChatToolInvocation` 只读快照。普通审批与命令审批分别由 `ToolConfirmationSubPart` 和 `ChatTerminalToolConfirmationSubPart` 呈现，共享 `AbstractToolConfirmationSubPart` 的能力范围和动作生命周期。命令确认保留后端沙箱拒绝证据、精确 argv、输出及退出状态；安全重试仍属执行前授权。输入 owner 保留请求身份和允许决策校验，按钮与快捷键采用同一提交门禁。完整目录对应、公开契约缺口及验证边界见[工具调用组件对应](chat-tool-invocation-alignment.md)。
+
+图片生成由列表识别原生 `imagegen`，或 MCP 来源明确声明的同名远程工具。列表拥有稳定的 `ChatImageGenerationBatchPart`，按存活的调用成员关联同一 Turn 内连续的图片批次，统一管理 `ChatImageGenerationProgressPart` 动画和 `ChatGeneratedImageResultSubPart` 画廊，在最后一个工具行的可折叠详情之外显示。追加调用或移除原行不会重新读取已有图片；重挂载后只恢复原画廊内部的焦点，不抢占外部控件。失败或轮次停止结束进度，不从轮次结束推断生成成功。恢复已完成历史直接显示图片，不重播生成动画。
 
 `ChatAttachmentsContentPart` 仍是图片读取、原始字节关联、只读预览、下载和地址释放的唯一 owner。生成图片自动读取，保留工具结果中的原始内容索引；只有解码成功才提供预览和下载，移除后迟到的读取不能恢复组件。`ChatImageReveal` 在图片就绪后接管原等待画布，`GlyphSurface` 拥有帧调度，`chatImageTextures.ts` 只提供临时采样与帧契约。动画结束、隐藏、释放、启用减少动态效果或切换高对比度都会移除临时效果并显示原图；图片像素和后端结果不受动画影响。
 
@@ -125,7 +127,7 @@ accepted userContext 的 exact body 默认折叠，作为 literal 只读文本�
 
 MCP 嵌入内容保留 annotations／`_meta` sidecar 的原位置，模型文本与 view-only metadata 隔离，并遵守硬预算。资源展开、原始 JSON／CRLF 复制、只读编辑器与外部链接使用现有文件／opener 边界；来源含精确 server／App／Session 身份，Profile 请求不伪造 Thread Session。
 
-MCP App 在隔离 Webview 中完成声明／握手，交付工具输入、结构结果和 `_meta`；本地交互状态不随 Thread 刷新重置。主题、尺寸、CSP 元数据、外部 opener、fullscreen、文件导出和诊断沿原宿主契约。frame-src／base-uri 等策略在真实 iframe 中执行，不能读取 Workbench DOM；未宣告能力返回标准错误。连接退休、来源替换和关闭释放原 App 并处理 teardown ACK。工具调用、读资源及消息/context 通过原 Core 授权路径；sampling、media context 和完整双向 App tools 仍有缺口，不宣告未实现 capability。
+`ChatMcpAppModel` 拥有协议、Webview 和异步请求，`ChatMcpAppSubPart` 拥有控制、viewport 与可见性 attachment。MCP App 在隔离 Webview 中完成声明／握手，交付工具输入、结构结果和 `_meta`；本地交互状态不随 Thread 刷新重置。主题、尺寸、CSP 元数据、外部 opener、fullscreen、文件导出和诊断沿原宿主契约。frame-src／base-uri 等策略在真实 iframe 中执行，不能读取 Workbench DOM；未宣告能力返回标准错误。连接退休、来源替换、关闭、隐藏列表或折叠工具详情释放原 App 并处理 teardown ACK。重显复用同一 artifact 已读取的 HTML，重新握手并保持外部焦点；断线撤回缓存。工具调用、读资源及消息/context 通过原 Core 授权路径；sampling、media context 和完整双向 App tools 仍有缺口，不宣告未实现 capability。
 
 ## Prompt、Skill 与 Hook
 

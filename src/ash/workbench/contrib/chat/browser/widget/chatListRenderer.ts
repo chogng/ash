@@ -19,7 +19,8 @@ import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/comm
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
-import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
@@ -104,7 +105,8 @@ export class ChatListItemRenderer extends Disposable {
 	/** The list replaces the row only when its existing content cannot consume the new item. */
 	public update(item: IChatListItem): 'unchanged' | 'updated' | 'replace' {
 		this.layoutTrace.trace('renderElement', () => `update type=${item.type} chars=${item.text.length} transient=${item.transient}`);
-		if (sameItem(this.item, item) && this.item.content === item.content && sameToolInvocation(this.item.toolInvocation, item.toolInvocation)) {
+		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
+		if (sameItem(this.item, item) && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
 			return 'unchanged';
 		}
@@ -117,7 +119,8 @@ export class ChatListItemRenderer extends Disposable {
 			this.hookPart.render(item.hookPart);
 			this.item = item;
 			this.updateState();
-		} else if (this.toolPart && item.toolInvocation && this.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
+		} else if (this.toolPart && item.toolInvocation && this.toolPart.toolCallId === item.toolInvocation.call.toolCallId
+			&& this.item.toolInvocation?.call.turnId === item.toolInvocation.call.turnId) {
 			this.toolPart.render(item.toolInvocation, item.attachmentSource);
 			this.item = item;
 			this.updateState();
@@ -130,7 +133,7 @@ export class ChatListItemRenderer extends Disposable {
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
 			this.updateState();
-		} else if (!sameItem(this.item, item)) {
+		} else if (this.toolPart || !sameItem(this.item, item)) {
 			return 'replace';
 		}
 		this.refreshContent();
@@ -545,13 +548,6 @@ export class ChatListItemRenderer extends Disposable {
 		this.attachments = attachments;
 		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(disposables);
 	}
-}
-
-function sameToolInvocation(left: IChatListItem['toolInvocation'], right: IChatListItem['toolInvocation']): boolean {
-	if (left === right) return true;
-	return !!left && !!right && left.call === right.call && left.result === right.result && left.stopped === right.stopped
-		&& left.waitingFor === right.waitingFor && left.executionStarted === right.executionStarted
-		&& left.output.length === right.output.length && left.output.every((output, index) => output === right.output[index]);
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {

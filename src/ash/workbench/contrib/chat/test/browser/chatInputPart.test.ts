@@ -1514,6 +1514,41 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
 });
 
+test('sandbox approval retains captured output and submits only offered decisions for the current request', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'sandbox', request: {
+				type: 'approval', request: {
+					reason: 'Review retry', capabilities: [], command: { program: 'curl', arguments: ['https://example.test'] },
+					sandboxDenial: {
+						reason: 'Network denied', replaySafety: 'safeToRetry', output: {
+							exitStatus: { type: 'code', code: 1 }, stdout: 'stdout', stderr: 'stderr', aggregatedOutput: 'stderr\n<img src=x>\nstdout',
+						},
+					},
+				},
+			},
+		},
+	};
+	part.render(state);
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	assert.equal(interaction.querySelector('pre[aria-label="Output from the blocked attempt"]')?.textContent, 'stderr\n<img src=x>\nstdout');
+	assert.equal(interaction.querySelector('img'), null);
+	assert.match(interaction.textContent!, /Exit code: 1/);
+	const retry = [...interaction.querySelectorAll('button')].find(button => button.textContent === 'Approve retry once')!;
+	retry.click();
+	assert.deepEqual(responses, [{ requestId: 'sandbox', response: { type: 'approval', response: { decision: 'approveOnce' } } }]);
+	part.render({ ...state, interaction: { requestId: 'successor', request: { type: 'approval', request: { reason: 'Decline only', capabilities: [], allowedDecisions: ['decline'] } } } });
+	retry.click();
+	await part.acceptActiveToolConfirmation();
+	assert.equal(responses.length, 1);
+	assert.deepEqual([...interaction.querySelectorAll('button')].map(button => button.textContent), ['Decline']);
+	await part.skipActiveToolConfirmation();
+	assert.deepEqual(responses[1], { requestId: 'successor', response: { type: 'approval', response: { decision: 'decline' } } });
+});
+
 test('peer-chat navigation isolates drafts and references while first-send materialization retains the live draft', async () => {
 	using part = inputPart(sharedNotifications);
 	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
@@ -3560,6 +3595,74 @@ suite('chatInput browser component', () => {
 			await page.keyboard.press('Enter');
 			await expect(menu).toHaveCount(0);
 		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`command approval explanation keeps the draft and retires with its original offer in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?locale=${locale}&sideChat=1&holdExplanation=1`);
+			await page.evaluate(() => window.ashChatInputIntegration.showSandboxApproval());
+			const draft = page.locator('.ash-chat-textarea-input');
+			await draft.fill('Keep this unsent draft');
+			const explain = page.getByRole('button', { name: locale === 'en' ? 'Explain command' : '解释命令', exact: true });
+			await explain.focus();
+			await explain.press('Enter');
+			await expect(explain).toBeDisabled();
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.commandExplanations().length)).toBe(1);
+			const first = (await page.evaluate(() => window.ashChatInputIntegration.commandExplanations()))[0];
+			expect(first.command).toBe(`/bin/curl ["https://example.test/${'x'.repeat(200)}"]`);
+			expect(first.resource).toContain('input-session');
+			expect(first.resource).toContain('input-thread');
+			await page.evaluate(() => window.ashChatInputIntegration.refresh());
+			await expect(explain).toBeDisabled();
+			await expect(draft).toHaveValue('Keep this unsent draft');
+			await expect(page.getByRole('status', { name: 'Decision' })).toBeEmpty();
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.commandExplanations()[0].aborted)).toBe(true);
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(true));
+			await expect(explain).toBeEnabled();
+			await explain.click();
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.commandExplanations().length)).toBe(2);
+			const retired = await explain.elementHandle();
+			await page.evaluate(() => window.ashChatInputIntegration.showQuestions());
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.commandExplanations()[1].aborted)).toBe(true);
+			await page.evaluate(button => button!.dispatchEvent(new MouseEvent('click', { bubbles: true })), retired);
+			expect(await page.evaluate(() => window.ashChatInputIntegration.commandExplanations().length)).toBe(2);
+			await expect(draft).toHaveValue('Keep this unsent draft');
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+			test(`sandbox approval preserves evidence and keyboard focus in ${locale} ${theme}`, async function () {
+				const { page } = browserTests;
+				await page.goto(`/chatInput.html?locale=${locale}&theme=${theme}`);
+				await page.evaluate(() => window.ashChatInputIntegration.showSandboxApproval());
+				const chinese = locale === 'zh-CN';
+				const risk = page.locator('.ash-tool-risk-badge');
+				const riskSummary = risk.locator('summary');
+				await expect(riskSummary).toHaveText(chinese ? '高风险' : 'High risk');
+				await riskSummary.focus();
+				await riskSummary.press('Space');
+				await expect(risk.locator('p')).toBeVisible();
+				await expect(risk.locator('p')).toHaveText('External publication <script>literal</script>');
+				await expect(risk.locator('script')).toHaveCount(0);
+				await page.evaluate(() => window.ashChatInputIntegration.refresh());
+				await expect(riskSummary).toBeFocused();
+				await expect(risk).toHaveAttribute('open', '');
+				await expect(page.getByLabel(chinese ? '被阻止的执行输出' : 'Output from the blocked attempt', { exact: true })).toHaveText('stderr\n<img src=x>\nstdout');
+				await expect(page.locator('.ash-chat-interaction img')).toHaveCount(0);
+				const retry = page.getByRole('button', { name: chinese ? '批准重试一次' : 'Approve retry once', exact: true });
+				await retry.focus();
+				await page.evaluate(() => window.ashChatInputIntegration.refresh());
+				await expect(retry).toBeFocused();
+				await retry.press('Space');
+				await expect(page.getByRole('status', { name: 'Decision' })).toHaveText('approveOnce');
+				await page.setViewportSize({ width: 320, height: 600 });
+				expect(await page.locator('.ash-chat-interaction').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+				await expect(retry).toHaveCSS('outline-style', 'solid');
+			});
+		}
 	}
 
 	for (const locale of ['en', 'zh-CN']) {

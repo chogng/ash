@@ -1,3 +1,4 @@
+import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
@@ -39,14 +40,7 @@ export interface IChatListItem {
 	readonly content?: readonly ChatContentPart[];
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
-	readonly toolInvocation?: {
-		readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
-		readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
-		readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];
-		readonly stopped: boolean;
-		readonly waitingFor?: NonNullable<Turn['pendingInteraction']>['kind'];
-		readonly executionStarted?: boolean;
-	};
+	readonly toolInvocation?: IChatToolInvocation;
 	readonly text: string;
 	/** Exact Core-accepted context body, independent of any current composer draft. */
 	readonly contextText?: string;

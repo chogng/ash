@@ -16,14 +16,16 @@ import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IChatTipService } from '../../browser/chatTipService.js';
 import { ChatInputTipPresenter } from '../../browser/widget/input/chatInputTipPresenter.js';
-import { ChatInputNoticeHost } from '../../browser/widget/input/notices/chatInputNoticeHost.js';
+import { ChatInputNoticeHost } from '../../browser/widget/input/chatInputNoticeHost.js';
 import { IChatTipService as ICoworkTipService } from '../../../../../sessions/contrib/cowork/browser/chatTipService.js';
 import { ChatInputTipPresenter as CoworkTipPresenter } from '../../../../../sessions/contrib/cowork/browser/widget/input/chatInputTipPresenter.js';
 import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
+import { MARKERS_OWNER_ID } from '../../common/promptSyntax/languageProviders/promptValidator.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { getWindows } from '../../../../../base/browser/window.js';
@@ -36,11 +38,12 @@ import { URI } from '../../../../../base/common/uri.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { createCodeEditorServices, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
+import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
@@ -51,6 +54,9 @@ import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/co
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
 
 const document = browserEnvironment.window.document;
 
@@ -314,32 +320,77 @@ test('streaming Markdown reuses static blocks and code editors, then releases re
 });
 
 
-test('Skill diagnostic contribution handles open, edits, language changes and disposal without removing other markers', async () => {
+test('Skill diagnostic contribution handles open, edits, language changes and disposal without removing other markers', () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
 	const models = services.get(IModelService);
 	const languages = services.get(ILanguageService);
 	resources.add(languages.registerLanguage({ id: 'markdown' }));
 	const markers = services.get(IMarkerService);
 	const uri = URI.file('/skills/review/SKILL.md');
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
+	assert.ok(model instanceof TextModel);
 	markers.changeOne('other', uri, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity: MarkerSeverity.Warning, message: 'existing' }]);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], sourceGroups: [] }) }));
 	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
-	assert.deepEqual(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).map(marker => marker.code), ['requiredField']);
-	model.setValue('---\nname: review\ndescription: Review changes\n---');
-	await new Promise(resolve => setTimeout(resolve, 150));
-	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
-	model.setValue('---\nname: review\n---');
-	model.setLanguage('plaintext');
-	await new Promise(resolve => setTimeout(resolve, 150));
-	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
-	model.setLanguage('markdown');
-	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 1);
-	contribution.dispose();
-	assert.equal(markers.read({ resource: uri, owner: PromptLanguageFeaturesProvider.ID }).length, 0);
+	assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+	using editor = createTestCodeEditor({ container: document.createElement('div'), instantiationService: services, model });
+	assert.deepEqual(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).map(marker => marker.code), ['requiredField']);
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		model.setValue('---\nname: review\ndescription: Review changes\n---');
+		mock.timers.tick(100);
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+		model.setValue('---\nname: review\n---');
+		model.setLanguage('plaintext');
+		mock.timers.tick(100);
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+		model.setLanguage('markdown');
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 1);
+		contribution.dispose();
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+	} finally {
+		mock.timers.reset();
+	}
 	assert.equal(markers.read({ resource: uri, owner: 'other' }).length, 1);
+});
+
+test('Skill diagnostics follow shared editor bindings and cancel validation after the last editor detaches', () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
+	const models = services.get(IModelService);
+	const languages = services.get(ILanguageService);
+	resources.add(languages.registerLanguage({ id: 'markdown' }));
+	const uri = URI.file('/skills/review/SKILL.md');
+	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
+	assert.ok(model instanceof TextModel);
+	const markers = services.get(IMarkerService);
+	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected tool read'); } }));
+	services.registerInstance(IPromptsService, { parseNew: async () => { throw new Error('Unexpected Skill read'); } } as unknown as IPromptsService);
+	using first = createTestCodeEditor({ container: document.createElement('div'), instantiationService: services, model });
+	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
+	using second = createTestCodeEditor({ container: document.createElement('div'), instantiationService: services, model });
+	assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 1);
+	first.setModel(null);
+	assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 1);
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		model.setValue('---\nname: other\n---');
+		second.dispose();
+		assert.equal(model.isDisposed(), false);
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+		mock.timers.tick(100);
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+		first.setModel(model);
+		assert.deepEqual(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).map(marker => marker.code), ['nameMismatch', 'requiredField']);
+		first.setModel(null);
+		assert.equal(markers.read({ resource: uri, owner: MARKERS_OWNER_ID }).length, 0);
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('streamed memory references retain their buttons, code editor and focus as new references arrive', () => {

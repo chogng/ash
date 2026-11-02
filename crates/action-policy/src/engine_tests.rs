@@ -299,14 +299,14 @@ fn high_risk_action_without_explicit_authorization_asks_the_user() {
     );
     let engine = ActionPolicyEngine::with_no_exec_rules(
         ActionPolicyRevision::new("policy-1"),
-        StaticClassifier(Ok(assessment)),
+        StaticClassifier(Ok(assessment.clone())),
         ReviewFailurePolicy::Block,
     );
 
-    assert!(matches!(
-        decide(&engine, &request).unwrap(),
-        ExecutionDecision::AskUser(_)
-    ));
+    let ExecutionDecision::AskUser(approval) = decide(&engine, &request).unwrap() else {
+        panic!("high risk without explicit authorization must ask the user");
+    };
+    assert_eq!(approval.assessment(), Some(&assessment));
 }
 
 #[test]

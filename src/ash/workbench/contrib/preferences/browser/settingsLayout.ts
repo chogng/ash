@@ -643,6 +643,7 @@ export const SettingsNavigation = [
 							'onboarding.enabled',
 							'output.smartScroll.enabled',
 							'chat.disableAIFeatures',
+							'chat.tools.autoExpandFailures',
 							'sessions.automations.notifyOnSuccess',
 							'task.allowAutomaticTasks',
 						],

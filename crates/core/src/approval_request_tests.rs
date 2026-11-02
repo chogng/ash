@@ -96,6 +96,57 @@ fn approval_request_keeps_ask_user_non_authoritative_and_builds_bound_payload() 
         ActionApprovalCapabilityKind::Network
     );
     assert_eq!(durable.capabilities[0].scope, "api.example.com");
+    assert_eq!(durable.risk_assessment, None);
+}
+
+#[test]
+fn durable_approval_retains_the_bound_advisory_risk_and_explanation() {
+    struct RiskClassifier;
+    impl ActionClassifier for RiskClassifier {
+        type Error = ClassifierError;
+
+        fn classify(
+            &self,
+            request: &ActionReviewRequest,
+            _: &CancellationToken,
+        ) -> Result<ClassifierAssessment, Self::Error> {
+            Ok(ClassifierAssessment::new(
+                AssessmentId::new("risk-assessment"),
+                request.action().digest().clone(),
+                request.action_policy_revision().clone(),
+                "test-prompt",
+                ClassifierRecommendation::Approve {
+                    capabilities: request.action().required_capabilities().clone(),
+                    risk: ash_protocol::RiskLevel::High,
+                    user_authorization: ash_protocol::UserAuthorization::Implicit,
+                    reason: "publishes externally".into(),
+                },
+            ))
+        }
+    }
+    let request = review_request();
+    let engine = ActionPolicyEngine::with_no_exec_rules(
+        ActionPolicyRevision::new("policy-1"),
+        RiskClassifier,
+        ash_action_policy::ReviewFailurePolicy::Block,
+    );
+    let ExecutionDecision::AskUser(approval) = engine
+        .decide(&request, &CancellationSource::new().token())
+        .unwrap()
+    else {
+        panic!("risk assessment cannot authorize this action");
+    };
+    let durable = durable_approval_request(&request, &approval).unwrap();
+    assert_eq!(
+        durable.risk_assessment,
+        Some(ash_protocol::ActionApprovalRiskAssessment {
+            assessment_id: "risk-assessment".into(),
+            risk_level: ash_protocol::RiskLevel::High,
+            reason: "publishes externally".into(),
+        })
+    );
+    assert_eq!(durable.action_digest, request.action().digest().as_str());
+    assert_eq!(durable.policy_revision, "policy-1");
 }
 
 #[test]

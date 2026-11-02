@@ -98,6 +98,28 @@ suite('Tool activity and input/output presentation', () => {
 		}
 	});
 
+	for (const replaced of ['call', 'turn', 'content'] as const) {
+		test(`a changed ${replaced} retires the old tool owner even when the row text is unchanged`, () => {
+			using resources = new DisposableStore();
+			const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+			using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
+			const item = toolItem();
+			widget.render([item]);
+			const old = widget.element.querySelector('[data-tool-call-id]')!;
+			const invocation = item.toolInvocation!;
+			widget.render([{
+				...item,
+				toolInvocation: replaced === 'content' ? undefined : {
+					...invocation, call: { ...invocation.call, ...(replaced === 'turn' ? { turnId: 'next-turn' } : { toolCallId: 'next-call' }) },
+				},
+			}]);
+			assert.equal(widget.element.contains(old), false);
+			const next = widget.element.querySelector('[data-tool-call-id]');
+			if (replaced === 'content') { assert.equal(next, null); }
+			else { assert.equal(next?.getAttribute('data-tool-call-id'), replaced === 'call' ? 'next-call' : invocation.call.toolCallId); }
+		});
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`tool status follows call evidence and preserves the focused disclosure in ${locale}`, () => {
 			if (locale === 'zh-CN') {
@@ -264,6 +286,11 @@ suite('Rendered tool input/output', () => {
 			await expect(summary).toHaveText('Run git "diff" · Running');
 			await expect(summary).toBeFocused();
 			await page.keyboard.press('Enter');
+			await expect(outer.getByText('Working directory: /workspace', { exact: true })).toBeVisible();
+			const copyCommand = outer.getByRole('button', { name: 'Copy command and arguments', exact: true });
+			await copyCommand.focus();
+			await copyCommand.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('git ["diff"]');
 			const stdout = outer.locator('[data-tool-section="stdout"]');
 			await stdout.locator('summary').focus();
 			await page.keyboard.press('Space');
@@ -313,6 +340,71 @@ suite('Rendered tool input/output', () => {
 			await retained?.dispose();
 		});
 	}
+
+	test('command output admission cancels fast completion and respects user disclosure choices', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const time = new Date('2026-11-02T00:00:00Z');
+		await page.clock.install({ time });
+		await page.clock.pauseAt(time);
+		const item = toolItem({ type: 'command', program: 'git', arguments: ['diff'], workingDirectory: '/workspace' });
+		const invocation = item.toolInvocation!;
+		const output: Extract<ThreadTranscriptEntry, { type: 'toolOutput'; }>[] = [{
+			type: 'toolOutput', entryId: 'out', turnId: 'turn', toolCallId: 'call', stream: 'stdout', text: 'changes',
+		}];
+		const running = { ...item, toolInvocation: { ...invocation, output, executionStarted: true } };
+		const completed = {
+			...running, toolInvocation: {
+				...running.toolInvocation, result: {
+					type: 'toolResult' as const, itemId: 'result', turnId: 'turn', toolCallId: 'call', text: 'done', isError: false,
+				}
+			}
+		};
+		const render = async (value: IChatListItem) => page.evaluate(value => window.ashChatTranscriptIntegration.renderItems([value]), value);
+		const reset = async () => page.evaluate(() => window.ashChatTranscriptIntegration.renderItems([]));
+		const outer = page.locator('.ash-chat-tool-invocation');
+		await render(running);
+		await outer.locator(':scope > summary').focus();
+		await page.clock.runFor(49);
+		await expect(outer).not.toHaveAttribute('open');
+		await page.clock.runFor(2);
+		await expect(outer).toHaveAttribute('open');
+		await expect(outer.locator(':scope > summary')).toBeFocused();
+		await render(completed);
+		await expect(outer).not.toHaveAttribute('open');
+		await reset();
+		await render(running);
+		await page.clock.runFor(20);
+		await render(completed);
+		await page.clock.runFor(600);
+		await expect(outer).not.toHaveAttribute('open');
+		await reset();
+		await render(running);
+		await page.clock.runFor(51);
+		await outer.locator('button').first().focus();
+		await render(completed);
+		await expect(outer).toHaveAttribute('open');
+		await reset();
+		await render(running);
+		await outer.locator(':scope > summary').evaluate(element => {
+			element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+			(element.parentElement as HTMLDetailsElement).open = false;
+		});
+		await page.clock.runFor(600);
+		await expect(outer).not.toHaveAttribute('open');
+		await reset();
+		await render({ ...running, toolInvocation: { ...running.toolInvocation, waitingFor: 'approval' } });
+		await page.clock.runFor(600);
+		await expect(outer).not.toHaveAttribute('open');
+		await reset();
+		const failed = { ...completed, toolInvocation: { ...completed.toolInvocation, result: { ...completed.toolInvocation.result, isError: true } } };
+		await render(failed);
+		await expect(outer).toHaveAttribute('open');
+		await reset();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setAutoExpandToolFailures(false));
+		await render(failed);
+		await expect(outer).not.toHaveAttribute('open');
+	});
 
 	test('image generation suspends its progress surface while waiting for approval', async () => {
 		const { page } = browserTests;

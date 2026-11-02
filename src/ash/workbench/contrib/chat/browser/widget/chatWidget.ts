@@ -51,7 +51,7 @@ import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import { ChatSideChatWidget } from '../chatSideChat.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
-import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';

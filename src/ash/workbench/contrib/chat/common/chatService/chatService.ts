@@ -2,6 +2,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { extUri } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { FileKind } from '../../../../../platform/files/common/files.js';
+import type { ThreadItem, ThreadTranscriptEntry, Turn } from '../../../../../platform/agentHost/common/agent.js';
 
 /** An inert resource tree carried by a response or structured tool-result snapshot. */
 export interface IChatResponseProgressFileTreeData {
@@ -55,4 +56,18 @@ export function reviveChatTreeData(json: string): IChatTreeData | undefined {
 		const treeData = read(value.treeData, 0);
 		return treeData ? { kind: 'treeData', treeData } : undefined;
 	} catch { return undefined; }
+}
+
+/**
+ * Read-only tool evidence projected from the canonical Thread transcript.
+ * A closed Turn without a result remains stopped, never successful. Only the interaction owner
+ * may answer an approval; this snapshot carries its kind for presentation, not reply authority.
+ */
+export interface IChatToolInvocation {
+	readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
+	readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
+	readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];
+	readonly stopped: boolean;
+	readonly waitingFor?: NonNullable<Turn['pendingInteraction']>['kind'];
+	readonly executionStarted?: boolean;
 }

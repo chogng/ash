@@ -625,6 +625,7 @@ declare global {
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
+			setAutoExpandToolFailures(value: boolean): Promise<void>;
 			setTypography(values: Readonly<Record<string, string | number | undefined>>): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
@@ -670,6 +671,7 @@ declare global {
 			showArtifacts(revise: boolean): void;
 			showLink(mode: 'read' | 'delay' | 'error'): void;
 			showApp(mode?: 'read' | 'delay' | 'error', allowCsp?: boolean, withMedia?: boolean): void;
+			setAppResourceMode(mode: 'read' | 'error'): void;
 			showReadAloudMessage(text: string, cowork?: boolean): Promise<void>;
 			finishReadAloud(failure?: boolean): void;
 			stopReadAloudCommand(): Promise<void>;
@@ -814,6 +816,7 @@ window.ashChatTranscriptIntegration = {
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),
+	setAutoExpandToolFailures: value => services.get(IConfigurationService).updateValue('chat.tools.autoExpandFailures', value),
 	setTypography: async values => {
 		for (const [key, value] of Object.entries(values)) await services.get(IConfigurationService).updateValue(key, value);
 	},
@@ -1106,6 +1109,7 @@ window.ashChatTranscriptIntegration = {
 	linkRequests: () => linkRequests,
 	finishLink: () => completeLink?.(),
 	closeConnection: () => connectionChanges.fire(),
+	setAppResourceMode: mode => { linkMode = mode; },
 	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
 	showChatApp: (voice = false, cowork = false, withMedia = false) => {
 		appChat?.dispose();

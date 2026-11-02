@@ -112,6 +112,7 @@ pub use interaction::ActionApprovalCommand;
 pub use interaction::ActionApprovalDecision;
 pub use interaction::ActionApprovalRequest;
 pub use interaction::ActionApprovalResponse;
+pub use interaction::ActionApprovalRiskAssessment;
 pub use interaction::AgentInteractionKind;
 pub use interaction::AgentRequest;
 pub use interaction::AgentRequestEnvelope;

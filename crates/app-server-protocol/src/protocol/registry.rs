@@ -2700,6 +2700,8 @@ use ash_protocol::ActionApprovalRequest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalResponse;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ActionApprovalRiskAssessment;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::AdvisorConfig;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::AdvisorSelection;
@@ -2980,6 +2982,8 @@ use ash_protocol::RequestUserInputResponse;
 use ash_protocol::RequestedDirectoryGrant;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReviewTarget;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::RiskLevel;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SandboxDenialOutput;
 #[cfg(any(test, feature = "export"))]
@@ -7207,6 +7211,8 @@ typescript_bindings! {
     ActionApprovalCommand,
     ActionApprovalDecision,
     ActionApprovalResponse,
+    ActionApprovalRiskAssessment,
+    RiskLevel,
     AgentInteractionKind,
     AgentRequest,
     AgentRequestEnvelope,

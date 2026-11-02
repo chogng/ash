@@ -1,3 +1,6 @@
+import { getImageGenerationBatch, isImageGenerationToolInvocation } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
+import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
+import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
 import { ChatListItemRenderer } from './chatListRenderer.js';
 import { cloneVisibleSelection, sanitizeChatClipboardFragment } from './chatClipboard.js';
 import { ChatLayoutTrace } from './chatLayoutTrace.js';
@@ -6,7 +9,7 @@ import { autorun } from '../../../../../base/common/observable.js';
 import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
 import { findLast } from '../../../../../base/common/arraysFind.js';
 import './media/chatListWidget.css';
-import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -19,7 +22,7 @@ import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { ChatEditorConfiguration } from '../../common/constants.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
-import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -50,6 +53,12 @@ interface ReadingAnchor {
 	readonly viewportTop: number;
 }
 
+type RenderedImageBatch = DisposableStore & {
+	readonly part: ChatImageGenerationBatchPart;
+	readonly turnId: string;
+	members: readonly string[];
+};
+
 interface ChatListViewState {
 	readonly visible: boolean;
 	readonly lastFocusedItemId?: string;
@@ -75,6 +84,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly transcript: HTMLDivElement;
 	private readonly layoutTrace: ChatLayoutTrace;
 	private readonly renderedItems = this._register(new DisposableMap<string, ChatListItemRenderer>());
+	private readonly imageBatches = this._register(new DisposableMap<string, RenderedImageBatch>());
 	private readonly classPrefix: string;
 	private readonly accessibilityProvider = new ChatAccessibilityProvider();
 	private readonly _onDidChangeContent = this._register(new Emitter<void>());
@@ -117,7 +127,14 @@ export class ChatListWidget extends DomWidget {
 		if (!item) { return; }
 		this.renderedItems.get(item.id)?.thinkingPart?.expandContent();
 		this.reveal(item);
-		this.renderedItems.get(item.id)?.markdownPart?.focusCodeBlock(reverse);
+		const row = this.renderedItems.get(item.id);
+		const part: IChatContentPart | undefined = row?.toolPart ?? row?.markdownPart;
+		const blocks = part?.codeblocks ?? [];
+		if (!blocks.length) { return; }
+		const document = this.element.ownerDocument;
+		const current = blocks.findIndex(block => document.getElementById(block.elementId)?.contains(document.activeElement));
+		const index = current < 0 ? (reverse ? blocks.length - 1 : 0) : (current + (reverse ? blocks.length - 1 : 1)) % blocks.length;
+		blocks[index].focus();
 	}
 
 	public getFocus(): IChatListItem | undefined {
@@ -296,6 +313,8 @@ export class ChatListWidget extends DomWidget {
 	private reconcile(items: readonly IChatListItem[]): void {
 		if (this.visible) this.captureFollowState();
 		const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
+		const active = this.element.ownerDocument.activeElement;
+		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
 		let changed = false;
 		const ids = new Set(items.map(item => item.id));
 		for (const [id, row] of this.renderedItems) {
@@ -344,6 +363,12 @@ export class ChatListWidget extends DomWidget {
 			if (row.element !== next) this.transcript.insertBefore(row.element, next);
 			next = row.element.nextSibling;
 		}
+		changed = this.renderImageBatches(items) || changed;
+		// Reparenting a retained gallery can blur its button. Restore only that button,
+		// and never replace focus deliberately moved elsewhere by a render listener.
+		if (imageFocus?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
+			imageFocus.focus({ preventScroll: true });
+		}
 		if (this.lastFocusedItemId && !ids.has(this.lastFocusedItemId)) { this.lastFocusedItemId = undefined; }
 		for (const id of this.contextExpansion.keys()) if (!ids.has(id)) this.contextExpansion.delete(id);
 		for (const id of this.advisorExpansion.keys()) if (!ids.has(id)) this.advisorExpansion.delete(id);
@@ -355,6 +380,44 @@ export class ChatListWidget extends DomWidget {
 			if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
 			this._onDidChangeContent.fire();
 		}
+	}
+
+	private renderImageBatches(items: readonly IChatListItem[]): boolean {
+		const used = new Set<string>();
+		let changed = false;
+		for (let index = 0; index < items.length; index++) {
+			const call = items[index].toolInvocation;
+			if (!call || !isImageGenerationToolInvocation(call)) { continue; }
+			const batch = getImageGenerationBatch(items, call.call.toolCallId, call.call.turnId);
+			index += batch.length - 1;
+			const members = new Set(batch.map(item => item.id));
+			// Match surviving members so extending history or removing a batch's first
+			// row does not create another media owner or read the same attachments again.
+			const retained = [...this.imageBatches].find(([key, entry]) => !used.has(key)
+				&& entry.turnId === call.call.turnId && entry.members.some(id => members.has(id)));
+			const key = retained?.[0] ?? batch[0].id;
+			let entry = retained?.[1];
+			if (!entry) {
+				const part = this.instantiationService.createInstance(ChatImageGenerationBatchPart, this.element.ownerDocument);
+				entry = this.imageBatches.set(key, Object.assign(new DisposableStore(), { part, turnId: call.call.turnId, members: [] as readonly string[] }));
+				entry.add(part);
+				entry.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
+				part.setVisible(this.visible);
+				changed = true;
+			}
+			used.add(key);
+			entry.members = [...members];
+			const host = this.renderedItems.get(batch.at(-1)!.id)?.toolPart?.domNode;
+			if (host && entry.part.domNode.parentElement !== host) {
+				host.append(entry.part.domNode);
+				changed = true;
+			}
+			entry.part.render(batch);
+		}
+		for (const key of this.imageBatches.keys()) {
+			if (!used.has(key)) { this.imageBatches.deleteAndDispose(key); changed = true; }
+		}
+		return changed;
 	}
 
 	setVisible(visible: boolean): void {
@@ -373,6 +436,7 @@ export class ChatListWidget extends DomWidget {
 			this.reconcile(items);
 		}
 		this.visible = visible;
+		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible); }
 		if (!visible) { this.findWidget.value?.hide(); }
 		for (const [, row] of this.renderedItems) {
 			row.setVisible(visible);

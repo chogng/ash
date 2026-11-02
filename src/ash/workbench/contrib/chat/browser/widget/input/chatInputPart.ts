@@ -1,3 +1,5 @@
+import { ToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatToolConfirmationSubPart.js';
+import { ChatTerminalToolConfirmationSubPart } from '../chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.js';
 import { BuiltinDynamicCompletions } from './editor/chatInputCompletions.js';
 import { InputEditorDecorations } from './editor/chatInputEditorContrib.js';
 import { IChatSlashCommandService } from '../../../common/participants/chatSlashCommands.js';
@@ -211,6 +213,7 @@ type HistorySearchItem = IQuickPickItem & ({ readonly kind: 'entry'; readonly en
 
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
 export class ChatInputPart extends Disposable implements IChatInputPart {
+	private toolConfirmation: ChatTerminalToolConfirmationSubPart | undefined;
 	readonly noticeHost = this._register(new ChatInputNoticeHost(() => { if (!this.isDisposed && this.visible) this.focus(); }));
 	private readonly notificationUri = URI.from({ scheme: 'ash-chat-input', path: `/${createUuid()}` });
 	private readonly notificationVisible = observableValue(this, true);
@@ -1173,12 +1176,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private resolveInteraction(interaction: NonNullable<ChatInputState['interaction']>, response: Parameters<ChatInputDelegate['resolveInteraction']>[0]): Promise<void> {
-		if (this.isDisposed || !this.visible || this.renderedInteraction !== interaction || this.state.interaction !== interaction) { return Promise.resolve(); }
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.state.phase === 'submitting'
+			|| this.renderedInteraction !== interaction || this.state.interaction !== interaction) {
+			return Promise.resolve();
+		}
+		if (response.type === 'approval') {
+			if (interaction.request.type !== 'approval') { return Promise.resolve(); }
+			const decisions = interaction.request.request.allowedDecisions ?? ['approveOnce', 'decline'];
+			if (!decisions.includes(response.response.decision)) { return Promise.resolve(); }
+		}
 		return this.delegate.resolveInteraction(response, interaction.requestId);
 	}
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
+		this.toolConfirmation?.setVisible(visible);
 		this.inputDecorations?.update();
 		this.changesPill.setVisible(visible);
 		this.updateOnboardingHosts();
@@ -1213,6 +1225,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			|| state.conversation?.sessionId !== this.state.conversation?.sessionId
 			|| state.conversation?.threadId !== this.state.conversation?.threadId) {
 			this.clearInputNotifications();
+			this.renderedInteraction = undefined;
 		}
 		const draftMode = this.selectDraft(state.draftIdentity);
 		const restoreMode = draftMode !== undefined && draftMode !== state.mode;
@@ -1819,6 +1832,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Streaming and catalog updates must not replace the approval button under keyboard focus.
 		if (interaction && interaction === this.renderedInteraction) return;
 		this.renderedInteraction = interaction;
+		this.toolConfirmation = undefined;
 		this.interactionListeners.clear();
 		this.interaction.replaceChildren();
 		if (!interaction) {
@@ -1831,62 +1845,23 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const resolve = (response: Parameters<ChatInputDelegate['resolveInteraction']>[0]): Promise<void> => this.resolveInteraction(interaction, response);
 		switch (request.type) {
 			case 'approval': {
-				const reason = h(this.element.ownerDocument, 'p');
-				reason.textContent = request.request.reason;
-				if (request.request.command) {
-					const command = h(this.element.ownerDocument, 'pre');
-					command.textContent = `${request.request.command.program} ${JSON.stringify(request.request.command.arguments)}`;
-					this.interaction.append(command);
+				const conversation = state.conversation;
+				const explanationContext = conversation ? {
+					resource: LocalChatSessionUri.forSession(conversation.sessionId, conversation.threadId),
+					isCurrent: () => !this.isDisposed && this.visible && !this.state.aiDisabled && this.state.phase !== 'submitting'
+						&& this.renderedInteraction === interaction && this.state.interaction === interaction
+						&& this.state.conversation?.sessionId === conversation.sessionId
+						&& this.state.conversation?.threadId === conversation.threadId,
+				} : undefined;
+				const confirmation = this.interactionListeners.add(request.request.command || request.request.sandboxDenial
+					? this.instantiationService.createInstance(ChatTerminalToolConfirmationSubPart, this.element.ownerDocument, resolve, explanationContext)
+					: new ToolConfirmationSubPart(this.element.ownerDocument, resolve));
+				confirmation.render(request.request);
+				if (confirmation instanceof ChatTerminalToolConfirmationSubPart) {
+					this.toolConfirmation = confirmation;
+					confirmation.setVisible(this.visible);
 				}
-				const capabilities = h(this.element.ownerDocument, 'ul');
-				capabilities.className = 'ash-chat-approval-capabilities';
-				capabilities.setAttribute('aria-label', localize('chat.approval.targets', 'Requested actions and targets'));
-				const labels = {
-					fileRead: localize('chat.approval.fileRead', 'Read file'),
-					fileWrite: localize('chat.approval.fileWrite', 'Write file'),
-					processSpawn: localize('chat.approval.processSpawn', 'Run command'),
-					network: localize('chat.approval.network', 'Access network'),
-					credentialUse: localize('chat.approval.credentialUse', 'Use credential'),
-					externalMutation: localize('chat.approval.externalMutation', 'Change external resource'),
-					systemConfiguration: localize('chat.approval.systemConfiguration', 'Change system settings'),
-					userInterface: localize('chat.approval.userInterface', 'Control user interface'),
-				};
-				for (const capability of request.request.capabilities) {
-					const item = h(this.element.ownerDocument, 'li');
-					const label = h(this.element.ownerDocument, 'span');
-					label.textContent = labels[capability.kind];
-					const scope = h(this.element.ownerDocument, 'code');
-					// The backend owns scope syntax: paths, commands and domains must remain exact.
-					scope.textContent = capability.scope;
-					item.append(label, this.element.ownerDocument.createTextNode(': '), scope);
-					capabilities.append(item);
-				}
-				const actions = h(this.element.ownerDocument, 'div');
-				actions.className = 'ash-chat-interaction-actions';
-				const decline = this.interactionButton(localize('chat.approval.decline', 'Decline'));
-				const approve = this.interactionButton(localize('chat.approval.approveOnce', 'Approve once'), true);
-				actions.append(decline, approve);
-				for (const choice of request.request.allowedDecisions ?? []) {
-					if (choice !== 'approveForSession' && choice !== 'approveAndSaveRule') continue;
-					const label = choice === 'approveForSession'
-						? localize('chat.approval.approveForSession', 'Approve same action this session')
-						: localize('chat.approval.saveRule', 'Save approval for this exact action');
-					const button = this.interactionButton(label);
-					actions.append(button);
-					this.interactionListeners.add(addDisposableListener(button, 'click', () => void resolve({
-						type: 'approval', response: { decision: choice },
-					}).catch(() => undefined)));
-				}
-
-				this.interaction.append(reason, capabilities, actions);
-				this.interactionListeners.add(addDisposableListener(decline, 'click', () => void resolve({
-					type: 'approval',
-					response: { decision: 'decline' },
-				}).catch(() => undefined)));
-				this.interactionListeners.add(addDisposableListener(approve, 'click', () => void resolve({
-					type: 'approval',
-					response: { decision: 'approveOnce' },
-				}).catch(() => undefined)));
+				this.interaction.append(confirmation.domNode);
 				break;
 			}
 			case 'permissions': {

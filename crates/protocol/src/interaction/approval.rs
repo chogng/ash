@@ -6,7 +6,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::RiskLevel;
 use crate::SandboxDenialOutput;
+
+/// Advisory assessment retained with the exact policy-bound approval, never an execution grant.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActionApprovalRiskAssessment {
+    #[schemars(length(min = 1))]
+    pub assessment_id: String,
+    pub risk_level: RiskLevel,
+    #[schemars(length(min = 1))]
+    pub reason: String,
+}
 
 /// Capability kind displayed and approved through a durable Agent interaction.
 #[derive(
@@ -63,6 +75,9 @@ pub struct ActionApprovalRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub sandbox_denial: Option<SandboxDenialOutput>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub risk_assessment: Option<ActionApprovalRiskAssessment>,
 }
 
 /// User decision for one exact action approval interaction.

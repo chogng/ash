@@ -20,6 +20,16 @@ export interface IChatAcceptInputOptions {
 	readonly sideChat?: boolean;
 }
 
+/** A rendered code block borrows its editor and current model from its content owner. */
+export interface IChatCodeBlockInfo {
+	readonly ownerMarkdownPartId: string;
+	readonly codeBlockIndex: number;
+	readonly elementId: string;
+	readonly uri: URI | undefined;
+	readonly languageId: string | undefined;
+	focus(): void;
+}
+
 /** The Welcome host owns the available targets and the current selection. */
 export interface IWorkspacePickerItem {
 	readonly uri: URI;

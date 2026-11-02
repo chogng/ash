@@ -19,6 +19,7 @@ pub use approval::ActionApprovalCommand;
 pub use approval::ActionApprovalDecision;
 pub use approval::ActionApprovalRequest;
 pub use approval::ActionApprovalResponse;
+pub use approval::ActionApprovalRiskAssessment;
 pub use dynamic_tool::DynamicToolCall;
 pub use dynamic_tool::DynamicToolOutput;
 pub use dynamic_tool::DynamicToolResponse;

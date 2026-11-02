@@ -235,6 +235,22 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Con
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.AutoExpandToolFailures,
+	defaultValue: true,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.tools.autoExpandFailuresInvalid', 'Expand failed command output must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.tools.autoExpandFailuresTitle', 'Expand failed command output'); },
+		get description() { return localize('chat.tools.autoExpandFailures', 'Automatically expand terminal tool failures to show their error details.'); },
+	},
+});
+
 configurationRegistry.registerConfiguration<'queue' | 'steer'>({
 	key: ChatConfiguration.RequestQueueingDefaultAction,
 	defaultValue: 'steer',

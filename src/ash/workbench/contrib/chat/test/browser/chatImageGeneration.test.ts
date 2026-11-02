@@ -1,3 +1,4 @@
+import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -7,6 +8,150 @@ suite('Chat image generation', () => {
 	async function pauseAnimationTimers(): Promise<void> {
 		await browserTests.page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 		await browserTests.page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
+	}
+
+	test('parallel results share one gallery and late siblings retain focused previews and original coordinates', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const items = await page.evaluateHandle(() => {
+			const image = {
+				type: 'imageAttachment' as const, detail: 'auto' as const,
+				attachment: { contentDigest: 'sha256:image', mediaType: 'png' as const, encodedBytes: 74, width: 2, height: 1 },
+			};
+			const items: IChatListItem[] = ['first', 'second'].map(id => ({
+				id, type: 'toolCall', text: '', transient: true,
+				attachmentSource: { sessionId: 'session', threadId: 'thread', itemId: `${id}-result`, kind: 'toolResult' },
+				toolInvocation: {
+					call: { type: 'toolCall', itemId: id, turnId: 'batch-turn', toolCallId: id, name: 'imagegen', argumentsJson: '{}' },
+					result: id === 'second' ? { type: 'toolResult', itemId: `${id}-result`, turnId: 'batch-turn', toolCallId: id, text: '', isError: false, content: [{ type: 'text', text: 'Before image' }, image] } : undefined,
+					output: [], stopped: false,
+				},
+			}));
+			window.ashChatTranscriptIntegration.renderItems(items);
+			return items;
+		});
+		try {
+			const gallery = page.locator('.ash-chat-generated-image-result');
+			await expect(gallery).toHaveCount(1);
+			await expect(gallery).toHaveAttribute('aria-label', 'Generated images (1)');
+			await expect(gallery.locator('img')).toBeVisible();
+			await expect(page.locator('.ash-chat-image-generation-placeholder')).toHaveCount(0);
+			const open = gallery.getByRole('button', { name: 'Open image', exact: true });
+			await open.focus();
+			const retained = await gallery.locator('img').elementHandle();
+			await page.evaluate(items => {
+				const invocation = items[0].toolInvocation!;
+				items[0] = { ...items[0], toolInvocation: { ...invocation, result: { ...items[1].toolInvocation!.result!, itemId: 'first-result', toolCallId: 'first' } } };
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, items);
+			await expect(gallery).toHaveAttribute('aria-label', 'Generated images (2)');
+			await expect(gallery.locator('img')).toHaveCount(2);
+			await expect(open.nth(1)).toBeFocused();
+			expect(await gallery.locator('img').nth(1).evaluate((image, original) => image === original, retained)).toBe(true);
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests)).toEqual([
+				{ sessionId: 'session', threadId: 'thread', itemId: 'second-result', contentIndex: 1 },
+				{ sessionId: 'session', threadId: 'thread', itemId: 'first-result', contentIndex: 1 },
+			]);
+			await retained?.dispose();
+			await page.evaluate(items => {
+				items[0] = { ...items[0], toolInvocation: { ...items[0].toolInvocation!, result: { ...items[0].toolInvocation!.result!, isError: true } } };
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, items);
+			await expect(gallery).toHaveAttribute('aria-label', 'Generated images (1)');
+			await expect(gallery.locator('img')).toHaveCount(1);
+			await expect(open).toBeFocused();
+		} finally {
+			await items.dispose();
+		}
+	});
+
+	test('appending image calls and removing the original owner retain the gallery and keyboard focus', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const items = await page.evaluateHandle(() => {
+			const image = { type: 'imageAttachment' as const, detail: 'auto' as const, attachment: { contentDigest: 'sha256:image', mediaType: 'png' as const, encodedBytes: 74, width: 2, height: 1 } };
+			const items: IChatListItem[] = [{
+				id: 'first', type: 'toolCall', text: '', transient: false,
+				attachmentSource: { sessionId: 'session', threadId: 'thread', itemId: 'first-result', kind: 'toolResult' },
+				toolInvocation: {
+					call: { type: 'toolCall', itemId: 'first', turnId: 'turn', toolCallId: 'first', name: 'imagegen', argumentsJson: '{}' },
+					result: { type: 'toolResult', itemId: 'first-result', turnId: 'turn', toolCallId: 'first', text: '', isError: false, content: [image] },
+					output: [], stopped: false,
+				},
+			}];
+			window.ashChatTranscriptIntegration.renderItems(items);
+			return items;
+		});
+		try {
+			const gallery = page.locator('.ash-chat-generated-image-result');
+			await expect(gallery.locator('img')).toBeVisible();
+			const original = await gallery.elementHandle();
+			const image = await gallery.locator('img').elementHandle();
+			const open = gallery.getByRole('button', { name: 'Open image', exact: true });
+			await open.focus();
+			await page.evaluate(items => {
+				const first = items[0].toolInvocation!;
+				items.push({ id: 'second', type: 'toolCall', text: '', transient: true, toolInvocation: { ...first, call: { ...first.call, itemId: 'second', toolCallId: 'second' }, result: undefined } });
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, items);
+			await expect(open).toBeFocused();
+			expect(await gallery.evaluate((node, original) => node === original, original)).toBe(true);
+			expect(await gallery.locator('img').evaluate((node, original) => node === original, image)).toBe(true);
+			await expect(page.locator('[data-tool-call-id="second"] .ash-chat-generated-image-result')).toHaveCount(1);
+			await page.evaluate(items => {
+				const first = items[0];
+				items[1] = { ...items[1], transient: false, attachmentSource: { ...first.attachmentSource!, itemId: 'second-result' }, toolInvocation: { ...items[1].toolInvocation!, result: { ...first.toolInvocation!.result!, itemId: 'second-result', toolCallId: 'second' } } };
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, items);
+			await expect(gallery.locator('img')).toHaveCount(2);
+			await open.nth(1).focus();
+			await page.evaluate(items => { items.shift(); window.ashChatTranscriptIntegration.renderItems(items); }, items);
+			await expect(open).toBeFocused();
+			expect(await gallery.evaluate((node, original) => node === original, original)).toBe(true);
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.mediaState().requests)).toHaveLength(2);
+			await page.evaluate(items => {
+				const item = items[0];
+				items[0] = { ...item, toolInvocation: { ...item.toolInvocation!, call: { ...item.toolInvocation!.call, turnId: 'next-turn' } } };
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, items);
+			await expect(gallery.locator('img')).toBeVisible();
+			expect(await gallery.evaluate((node, original) => node === original, original)).toBe(false);
+			await original?.dispose();
+			await image?.dispose();
+		} finally {
+			await items.dispose();
+		}
+	});
+
+	for (const boundary of ['message', 'tool', 'turn'] as const) {
+		test(`image galleries do not cross a ${boundary} boundary or merge reused call IDs`, async () => {
+			const { page } = browserTests;
+			await page.goto('/chatTranscript.html');
+			await page.evaluate(boundary => {
+				const canvas = document.createElement('canvas');
+				canvas.width = 2;
+				canvas.height = 1;
+				const image = { type: 'imageUrl' as const, detail: 'auto' as const, url: canvas.toDataURL() };
+				const items: IChatListItem[] = ['first', 'second'].map(id => ({
+					id, type: 'toolCall', text: '', transient: false,
+					toolInvocation: {
+						call: { type: 'toolCall', itemId: id, turnId: boundary === 'turn' ? id : 'turn', toolCallId: boundary === 'turn' ? 'reused-call' : id, name: 'imagegen', argumentsJson: '{}' },
+						result: { type: 'toolResult', itemId: `${id}-result`, turnId: boundary === 'turn' ? id : 'turn', toolCallId: boundary === 'turn' ? 'reused-call' : id, text: '', isError: false, content: [image] },
+						output: [], stopped: false,
+					},
+				}));
+				if (boundary === 'message') {
+					items.splice(1, 0, { id: 'message', type: 'agentMessage', text: 'Separate request', transient: false });
+				} else if (boundary === 'tool') {
+					const tool = items[0].toolInvocation!;
+					items.splice(1, 0, { id: 'other-tool', type: 'toolCall', text: '', transient: false, toolInvocation: { ...tool, call: { ...tool.call, name: 'other-tool', toolCallId: 'other-tool' }, result: undefined } });
+				}
+				window.ashChatTranscriptIntegration.renderItems(items);
+			}, boundary);
+			await expect(page.locator('.ash-chat-generated-image-result')).toHaveCount(2);
+			await expect(page.getByRole('region', { name: 'Generated images (1)', exact: true })).toHaveCount(2);
+			await expect(page.locator('.ash-chat-generated-image-result img')).toHaveCount(2);
+		});
 	}
 
 	test('live image generation hands its painted loading surface to a visible result without replacing tool focus', async () => {

@@ -645,9 +645,26 @@ export interface ActionApprovalCapability {
 
 export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveAndSaveRule' | 'decline';
 
+export interface ActionApprovalRiskAssessment {
+	readonly riskLevel: 'low' | 'medium' | 'high' | 'critical';
+	readonly reason: string;
+}
+
 export interface ActionApprovalRequest {
+	readonly riskAssessment?: ActionApprovalRiskAssessment | null;
 	readonly allowedDecisions?: readonly ActionApprovalDecision[];
 	readonly command?: { readonly program: string; readonly arguments: readonly string[]; } | null;
+	/** Captured sandbox enforcement evidence; an ordinary failed command is not a denial. */
+	readonly sandboxDenial?: {
+		readonly reason: string;
+		readonly replaySafety: 'safeToRetry' | 'mayHaveSideEffects';
+		readonly output: {
+			readonly exitStatus: { readonly type: 'code'; readonly code: number; } | { readonly type: 'terminated'; };
+			readonly stdout: string;
+			readonly stderr: string;
+			readonly aggregatedOutput: string;
+		};
+	} | null;
 	readonly reason: string;
 	readonly capabilities: readonly ActionApprovalCapability[];
 }

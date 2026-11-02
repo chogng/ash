@@ -417,6 +417,8 @@ export abstract class Workbench extends Disposable {
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
+		// The scope's services can persist state while disposing; borrowed storage must outlive them.
+		const storage = this._register(storageService);
 		const hostServices = this._register(new InstantiationService(hostPolicies));
 		const services = this._register(hostServices.createChild(windowServices));
 		this.logService = this._register(logger);
@@ -532,7 +534,6 @@ export abstract class Workbench extends Disposable {
 		this._register(services.get(ISessionsProvidersService).registerProvider(provider));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
-		const storage = this._register(storageService);
 		services.registerInstance(ISessionsManagementService, sessions);
 		services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));

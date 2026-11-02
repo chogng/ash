@@ -73,6 +73,36 @@ test('committed interaction history never grants delivery ownership', async () =
 	assert.deepEqual(offers, []);
 });
 
+test('sandbox approval preserves captured enforcement evidence without exposing authority fields', async () => {
+	const transport = new InteractionTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAgentThreadService(client);
+	const offers: AgentInteractionOffer[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	await client.connect();
+	const sandboxDenial = {
+		reason: 'Network access denied', replaySafety: 'safeToRetry',
+		output: { exitStatus: { type: 'code', code: 1 }, stdout: '<script>literal</script>', stderr: 'denied', aggregatedOutput: 'denied\n<script>literal</script>' },
+	};
+	transport.frame({
+		method: 'agent/request', params: {
+			...identity, interaction: {
+				...interaction, request: { type: 'approval', request: { ...interaction.request.request, sandboxDenial, riskAssessment: { assessmentId: 'assessment', riskLevel: 'high', reason: 'publishes externally' } } },
+			},
+		},
+	});
+	assert.equal(client.state, 'ready');
+	assert.equal(offers.length, 1);
+	assert.deepEqual(offers[0].interaction.request, {
+		type: 'approval', request: {
+			reason: 'Approve access', allowedDecisions: undefined, command: undefined, sandboxDenial,
+			riskAssessment: { riskLevel: 'high', reason: 'publishes externally' },
+			capabilities: [{ kind: 'network', scope: 'example.test' }],
+		},
+	});
+});
+
 test('tool execution start preserves the exact Turn and Call through the real decoder', async () => {
 	const transport = new InteractionTransport();
 	const client = new AppServerProtocolClient(transport);

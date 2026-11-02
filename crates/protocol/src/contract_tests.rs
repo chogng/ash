@@ -927,6 +927,7 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                     ActionApprovalDecision::ApproveOnce,
                     ActionApprovalDecision::Decline,
                 ],
+                risk_assessment: None,
                 sandbox_denial: Some(SandboxDenialOutput::safe_to_retry(
                     "network access denied",
                     ProcessExecutionOutput::from_captured_streams(
@@ -1008,6 +1009,7 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             crate::ActionApprovalDecision::ApproveOnce,
             crate::ActionApprovalDecision::Decline,
         ],
+        risk_assessment: None,
         sandbox_denial: None,
     };
 
@@ -1016,6 +1018,33 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             .unwrap()
             .get("sandboxDenial")
             .is_none()
+    );
+}
+
+#[test]
+fn approval_risk_assessment_is_optional_and_round_trips_with_its_provenance() {
+    let legacy = serde_json::json!({
+        "actionDigest": "a".repeat(64), "policyRevision": "policy-1",
+        "capabilities": [{"kind": "network", "scope": "example.test"}],
+        "reason": "review access"
+    });
+    let mut request: ActionApprovalRequest = serde_json::from_value(legacy).unwrap();
+    assert_eq!(request.risk_assessment, None);
+    request.risk_assessment = Some(crate::ActionApprovalRiskAssessment {
+        assessment_id: "review-1".into(),
+        risk_level: crate::RiskLevel::High,
+        reason: "publishes externally".into(),
+    });
+    let wire = serde_json::to_value(&request).unwrap();
+    assert_eq!(
+        wire["riskAssessment"],
+        serde_json::json!({
+            "assessmentId": "review-1", "riskLevel": "high", "reason": "publishes externally"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<ActionApprovalRequest>(wire).unwrap(),
+        request
     );
 }
 

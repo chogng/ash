@@ -159,6 +159,8 @@ declare global {
 		setVoiceAvailable(available: boolean): void;
 		openWorkspace(): Promise<unknown>;
 		showIntroduction(): void;
+		showSandboxApproval(): void;
+		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
 		setInputReadOnly(readOnly: boolean): void;
@@ -216,6 +218,7 @@ let historyEntries: MessageHistoryEntry[] = [
 ];
 const historyWrites: string[] = [];
 const queueEvents: unknown[] = [];
+const commandExplanations: { resource: string; command: string; signal: AbortSignal | undefined; }[] = [];
 const historySubmissions: { text: string; skills: unknown; }[] = [];
 const historyReads: MessageHistoryQuery[] = [];
 const historyWaits = new Map<string, () => void>();
@@ -273,7 +276,15 @@ resources.add(services.createInstance(ChatQueuePickerRendering));
 if (new URLSearchParams(location.search).has('sideChat')) {
 	resources.add(services.get(IChatSideChatService).registerProvider({
 		canAskInSideChat: () => true,
-		askInSideChat: async (_resource, query) => { queueEvents.push({ kind: 'sideChat', query }); },
+		askInSideChat: async (resource, query, selection, options) => {
+			queueEvents.push({ kind: 'sideChat', query });
+			if (selection) {
+				commandExplanations.push({ resource: resource.toString(), command: selection.text, signal: options?.signal });
+				if (new URLSearchParams(location.search).has('holdExplanation') && options?.signal) {
+					await new Promise<void>(resolve => options.signal!.addEventListener('abort', () => resolve(), { once: true }));
+				}
+			}
+		},
 		observeSideChatOrigin: () => constObservable(undefined),
 		revealSideChatSource: async () => { },
 	}));
@@ -1175,6 +1186,26 @@ window.ashChatInputIntegration = {
 	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
+	showSandboxApproval: () => {
+		state = {
+			...state, conversation: { sessionId: 'input-session', threadId: 'input-thread' }, interaction: {
+				requestId: 'sandbox', request: {
+					type: 'approval', request: {
+						reason: 'Review retry', capabilities: [{ kind: 'network', scope: 'example.test' }],
+						riskAssessment: { riskLevel: 'high', reason: 'External publication <script>literal</script>' },
+						command: { program: '/bin/curl', arguments: ['https://example.test/' + 'x'.repeat(200)] },
+						sandboxDenial: {
+							reason: 'Network denied', replaySafety: 'safeToRetry', output: {
+								exitStatus: { type: 'code', code: 1 }, stdout: 'stdout', stderr: 'stderr', aggregatedOutput: 'stderr\n<img src=x>\nstdout',
+							},
+						},
+					},
+				},
+			},
+		};
+		part.render(state);
+	},
+	commandExplanations: () => commandExplanations.map(request => ({ resource: request.resource, command: request.command, aborted: request.signal?.aborted === true })),
 	showQuestions: () => part.render({
 		...state, interaction: {
 			requestId: 'questions', request: {

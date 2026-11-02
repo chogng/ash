@@ -4265,6 +4265,7 @@ fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
                             scope: "example.test".into(),
                         }],
                         reason: "directory reopen regression".into(),
+                        risk_assessment: None,
                         sandbox_denial: None,
                         allowed_decisions: vec![
                             ash_protocol::ActionApprovalDecision::ApproveOnce,

@@ -259,6 +259,24 @@ test('removing a linked resource cancels its original operation and releases a l
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`MCP App loading errors remain in their view and a keyboard retry opens the original source in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		await page.evaluate(() => { window.ashChatTranscriptIntegration.showApp(); window.ashChatTranscriptIntegration.setAppResourceMode('error'); });
+		await page.locator('.ash-chat-tool-invocation > summary').click();
+		const app = page.locator('.ash-chat-mcp-app');
+		const open = app.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图', exact: true });
+		await open.focus();
+		await open.press('Enter');
+		await expect(app.getByRole('status')).toContainText('Resource origin retired');
+		await expect(open).toBeFocused();
+		await expect(app.locator('iframe')).toHaveCount(0);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setAppResourceMode('read'));
+		await open.press('Enter');
+		const title = locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App';
+		await expect(page.frameLocator(`iframe[title="${title}"]`).frameLocator('iframe').getByRole('button', { name: 'Increment', exact: true })).toBeVisible();
+		await expect(app.getByRole('status')).toBeHidden();
+	});
+
 	test(`declared MCP App negotiates in the existing isolated Webview and retains local interaction in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		const external: string[] = [];
@@ -324,6 +342,47 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
 		await expect(part).toHaveCount(0);
 		expect(errors).toEqual([]);
+	});
+}
+
+for (const hiding of ['transcript', 'disclosure'] as const) {
+	test(`MCP App ${hiding} hiding cancels pending calls and restores cached HTML without stealing focus`, async ({ page }) => {
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showApp('delay'));
+		const summary = page.locator('.ash-chat-tool-invocation > summary');
+		await summary.click();
+		await page.getByRole('button', { name: 'Open interactive view' }).click();
+		const frame = page.frameLocator('iframe[title="Interactive MCP App"]').frameLocator('iframe');
+		await expect(frame.locator('#input')).toContainText('"value":7');
+		await frame.getByRole('button', { name: 'Call tool', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().filter(request => request.method === 'tool/app/call').length)).toBe(1);
+		const initialReads = await page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().filter(request => request.method === 'tool/resource/open').length);
+		if (hiding === 'transcript') {
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(false));
+		} else {
+			await summary.click();
+		}
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appState().views)).toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().filter(request => request.method === 'tool/app/cancel').length)).toBe(1);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishLink());
+		if (hiding === 'transcript') {
+			await page.evaluate(() => {
+				const button = document.createElement('button');
+				button.id = 'outside-app-focus';
+				button.textContent = 'Outside App';
+				document.body.append(button);
+				button.focus();
+			});
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+		} else {
+			await summary.press('Enter');
+		}
+		await expect(frame.locator('#result')).toContainText('Report ready');
+		await expect(hiding === 'transcript' ? page.locator('#outside-app-focus') : summary).toBeFocused();
+		await expect(frame.locator('#called')).toHaveText('');
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.linkRequests().filter(request => request.method === 'tool/resource/open').length)).toBe(initialReads);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.remove());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appState().views)).toBe(0);
 	});
 }
 
@@ -644,20 +703,27 @@ for (const locale of ['en', 'zh-CN']) {
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`MCP App logs use the existing diagnostic sink without changing Chat in ${locale}`, async ({ page }) => {
-		// Keep the diagnostic rate-limit window fixed while the test crosses frame and protocol boundaries.
-		await page.clock.setFixedTime(new Date('2026-10-17T00:00:00Z'));
+		// The production limiter uses monotonic time, so control performance.now as well as Date.
+		await page.clock.install({ time: new Date('2026-10-17T00:00:00Z') });
 		await page.goto(`/chatTranscript.html?locale=${locale}`); await page.evaluate(() => window.ashChatTranscriptIntegration.showChatApp());
 		const chat = page.locator('#app-chat'); await chat.locator('.ash-chat-tool-invocation > summary').click(); await chat.getByRole('button', { name: locale === 'en' ? 'Open interactive view' : '打开交互式视图' }).click();
 		const frame = page.frameLocator('iframe[title="' + (locale === 'en' ? 'Interactive MCP App' : '交互式 MCP App') + '"]').frameLocator('iframe');
-		await expect(frame.locator('#capabilities')).toContainText('"logging":{}'); await frame.getByRole('button', { name: 'Send logs', exact: true }).click();
+		await expect(frame.locator('#capabilities')).toContainText('"logging":{}');
+		await page.clock.pauseAt(new Date('2026-10-17T00:01:00Z'));
+		await frame.getByRole('button', { name: 'Send logs', exact: true }).dispatchEvent('click');
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appLogs().filter(entry => entry.category === 'chat.mcpApp').length)).toBe(8);
 		const logs = await page.evaluate(() => window.ashChatTranscriptIntegration.appLogs().filter(entry => entry.category === 'chat.mcpApp'));
 		expect(logs.map(entry => entry.level)).toEqual(['debug', 'information', 'information', 'warning', 'error', 'error', 'error', 'error']);
 		for (const entry of logs) { expect(entry.message).not.toContain('\n'); expect(JSON.parse(entry.message)).toEqual({ source: { sessionId: 'app-session', threadId: 'app-thread', itemId: 'app-result', contentIndex: 2 }, logger: 'report', data: { value: 8, text: '<script>unsafe()</script>\nnext line' } }); }
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
-		await frame.getByRole('button', { name: 'Invalid log', exact: true }).click(); await frame.getByRole('button', { name: 'Large log', exact: true }).click();
-		await frame.getByRole('button', { name: 'Flood logs', exact: true }).click();
+		await frame.getByRole('button', { name: 'Invalid log', exact: true }).dispatchEvent('click');
+		await frame.getByRole('button', { name: 'Large log', exact: true }).dispatchEvent('click');
+		await frame.getByRole('button', { name: 'Flood logs', exact: true }).dispatchEvent('click');
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appLogs().filter(entry => entry.category === 'chat.mcpApp').length)).toBe(10);
+		await page.clock.runFor(1001);
+		await frame.getByRole('button', { name: 'Flood logs', exact: true }).dispatchEvent('click');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.appLogs().filter(entry => entry.category === 'chat.mcpApp').length)).toBe(20);
+		await page.clock.resume();
 		await chat.getByRole('button', { name: locale === 'en' ? 'Close interactive view' : '关闭交互式视图', exact: true }).click();
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
 	});

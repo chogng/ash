@@ -17,7 +17,7 @@ import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../..
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import './media/chat.css';
 import './media/chatListWidget.css';
-import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
