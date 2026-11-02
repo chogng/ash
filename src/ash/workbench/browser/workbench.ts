@@ -1383,7 +1383,7 @@ export class Workbench extends Disposable {
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		performance.mark('ash.workbench.restored');
-		this.logService.info('lifecycle', 'Workbench restored');
+		this.logService.trace('lifecycle', 'Workbench restored');
 	}
 
 	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {

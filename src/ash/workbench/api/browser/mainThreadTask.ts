@@ -91,7 +91,7 @@ export class MainThreadTask extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		if (operation.operation === 'fetchTasks') {
-			const catalog = await this.tasks.refresh();
+			const catalog = await this.tasks.getWorkspaceTasks();
 			throwIfCancelled(signal);
 			const tasks = catalog.filter(task => (operation.version === null || operation.version === (task.configuration?.version ?? '2.0.0')) && (operation.taskType === null || operation.taskType === this.definition(task).type));
 			return { result: 'tasks', sequence: this.sequence, tasks: tasks.map(task => extensionHostTaskSnapshot(task, this.workspace)), executions: this.tasks.activeRuns.map(run => this.executionSnapshot(run)) };

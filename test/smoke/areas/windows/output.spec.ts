@@ -19,10 +19,10 @@ for (const locale of ['en', 'zh-CN']) {
 			const page = workbench.page;
 			const labels = chinese ? {
 				window: '窗口', recording: '设置工作台记录级别', trace: '跟踪', info: '信息',
-				ready: '窗口日志已初始化。', follow: '暂停跟随输出', resume: '跟随新增输出',
+				ready: 'saved-window-output-token 中文', follow: '暂停跟随输出', resume: '跟随新增输出',
 			} : {
 				window: 'Window', recording: 'Set Workbench Recording Level', trace: 'Trace', info: 'Info',
-				ready: 'Window logging initialized.', follow: 'Pause Following Output', resume: 'Follow New Output',
+				ready: 'saved-window-output-token 中文', follow: 'Pause Following Output', resume: 'Follow New Output',
 			};
 			const { logs, windowId } = await (application as ElectronApplication).evaluate(({ app, BrowserWindow }) => ({ logs: app.getPath('logs'), windowId: BrowserWindow.getAllWindows()[0]!.id }));
 			const session = '20200101T000000000-00000000-0000-0000-0000-000000000000';
@@ -37,9 +37,22 @@ for (const locale of ['en', 'zh-CN']) {
 			const output = page.locator('[data-view-id="ash.output"]');
 			const visible = output.locator('.view-lines');
 			const filter = page.locator('.ash-output-title-actions, [data-view-id="ash.output"]').getByRole('searchbox');
+			const setLevel = async (level: string) => {
+				await page.locator('[data-action-id="ash.output.more"] button').click();
+				const submenu = page.getByRole('menuitem', { name: labels.recording, exact: true });
+				await submenu.focus();
+				await submenu.press('ArrowRight');
+				await page.getByRole('menuitemcheckbox', { name: level, exact: true }).click();
+			};
+			const current = (await readdir(logs)).filter(name => /^\d{8}T/.test(name) && name !== session).sort().at(-1)!;
+			const windowLog = join(logs, current, `window-${windowId}.log`);
+			expect(await readFile(windowLog, 'utf8')).not.toMatch(/Window logging initialized|窗口日志已初始化|Workbench restored|Renderer received window shutdown request|Renderer sending window shutdown completion|Discovered \d+ workspace task/);
+			// Exercise saved-log replay with an explicit record now that normal startup is quiet.
+			await appendFile(windowLog, JSON.stringify({ ...historicRecord, level: 'information', category: 'smoke', message: labels.ready }) + '\n');
+			await setLevel(labels.trace);
 			await filter.fill(labels.ready);
 			await expect(visible).toContainText(labels.ready);
-			await expect(visible).toContainText('[information] [logs]');
+			await expect(visible).toContainText('[information] [smoke]');
 			await filter.fill('');
 			const follow = page.locator('[data-action-id="ash.output.autoScroll"] button');
 			await expect(follow).toHaveAttribute('aria-pressed', 'true');
@@ -51,14 +64,6 @@ for (const locale of ['en', 'zh-CN']) {
 			await follow.hover();
 			await expect(page.getByRole('tooltip')).toContainText(labels.resume);
 			await follow.click();
-			const setLevel = async (level: string) => {
-				await page.locator('[data-action-id="ash.output.more"] button').click();
-				const submenu = page.getByRole('menuitem', { name: labels.recording, exact: true });
-				await submenu.focus();
-				await submenu.press('ArrowRight');
-				await page.getByRole('menuitemcheckbox', { name: level, exact: true }).click();
-			};
-			await setLevel(labels.trace);
 			await output.locator('.stanza-editor-input').focus();
 			await filter.fill('NativeEditContext');
 			await expect(visible).toContainText('NativeEditContext.focus');
@@ -68,8 +73,6 @@ for (const locale of ['en', 'zh-CN']) {
 			await page.keyboard.press('Alt+F1');
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /打开已保存的日志/u : /Open Saved Logs opens current or retained log files/u);
 			await page.keyboard.press('Escape');
-			const current = (await readdir(logs)).filter(name => /^\d{8}T/.test(name) && name !== session).sort().at(-1)!;
-			const windowLog = join(logs, current, `window-${windowId}.log`);
 			await expect.poll(() => readFile(windowLog, 'utf8')).toContain('NativeEditContext.focus');
 			await workbench.quickaccess.runCommand('workbench.action.output.clear');
 			await expect(visible).toHaveText('');

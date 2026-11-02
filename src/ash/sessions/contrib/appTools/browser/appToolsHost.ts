@@ -74,7 +74,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 	}
 	public async listTasks(directory: string, signal: AbortSignal): Promise<TaskCatalog> {
 		const dirId = this.taskFolder(directory);
-		await raceCancellationError(this.tasks.refresh(), signal);
+		await raceCancellationError(this.tasks.getWorkspaceTasks(), signal);
 		throwIfCancelled(signal);
 		this.taskFolder(directory);
 		const tasks = await Promise.all(this.tasks.tasks.filter(task => task.dirId === dirId).map(async task => {

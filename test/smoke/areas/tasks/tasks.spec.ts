@@ -36,14 +36,15 @@ test('task discovery does not execute commands and explicit run and rerun use th
 	await expect(workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText("Task 'Smoke build' succeeded (exit code 0).");
 });
 
-test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
+test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await workbench.quickaccess.select('Smoke watch');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_WATCH_READY');
 	await workbench.quickaccess.runCommand('workbench.action.tasks.terminate');
 	await expect(workbench.terminal.instances).toHaveCount(0);
-	await openTasksView(application, workbench);
-	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke watch — Canceled');
+	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+	await workbench.quickaccess.select('Tasks');
+	await expect(workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText("Task 'Smoke watch' canceled.");
 });
 
 test('command-only tasks own their shell process and retain output and exit without terminal input echo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {

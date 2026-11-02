@@ -9,7 +9,22 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { windowLogId } from '../../../log/common/logConstants.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
-import type { ILogFileReadResult, ILogFileCursor, ILogFileService } from '../../../../../platform/log/common/log.js';
+import type { ILogFileReadResult, ILogFileCursor, ILogFileService, LogEntry } from '../../../../../platform/log/common/log.js';
+
+test('window logging initialization is recorded only at trace level', async () => {
+	for (const level of ['information', 'trace'] as const) {
+		using resources = new DisposableStore();
+		const output = workbenchInstantiationService(resources).get(IOutputService);
+		const entries: LogEntry[] = [];
+		using logger = new LogService({ level, sinks: [{ log: entry => entries.push(entry) }] });
+		using service = new SystemOutputService(output, {
+			connectionGeneration: 0, getConnectionState: async () => 'stopped',
+			getSlashCommands: async () => [], onConnectionState: Event.None,
+		}, logger, { list: async () => [], read: async () => { throw new Error('No saved sources'); } });
+		await Promise.resolve();
+		assert.deepEqual(entries.map(entry => [entry.category, entry.level]), level === 'trace' ? [['logs', 'trace']] : []);
+	}
+});
 
 test('SystemOutputService projects App Server lifecycle', async () => {
 	const listeners = new Set<(state: AppServerConnectionState) => void>();

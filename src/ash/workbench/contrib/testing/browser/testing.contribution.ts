@@ -67,7 +67,7 @@ class TestingContribution extends Disposable implements IWorkbenchContribution {
 		// UI-only hosts have no backend file access for automatic workspace task detection.
 		if (await this.appServer.getConnectionState() !== 'ready' || this.isDisposed) { return; }
 		// Reuse task detection and its file watchers; Rust discovery can build test targets.
-		await this.tasks.refresh();
+		await this.tasks.getWorkspaceTasks();
 	}
 }
 

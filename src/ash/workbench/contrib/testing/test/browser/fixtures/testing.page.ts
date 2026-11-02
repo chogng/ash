@@ -63,7 +63,7 @@ const tasks: ITaskService = {
 	registerTaskProviders: () => Object.assign(toDisposable(() => { }), { replace: () => { } }),
 	rerun: async () => { throw new Error('Rerunning is outside this fixture'); },
 	runProvidedTask: async () => { throw new Error('Extension tasks are outside this fixture'); },
-	refresh: async () => tasks.tasks,
+	getWorkspaceTasks: async () => tasks.tasks, refresh: async () => tasks.tasks,
 	start: () => { throw new Error('Starting task runs is outside this fixture'); },
 	describe: async () => { throw new Error('Task descriptions are outside this fixture'); },
 	getRun: () => undefined,

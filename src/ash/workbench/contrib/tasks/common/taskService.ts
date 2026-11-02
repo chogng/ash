@@ -15,6 +15,9 @@ export interface ITaskService extends IDisposable {
 
 	registerTaskProvider(provider: TaskProvider): IDisposable;
 	registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration;
+	/** Reuses workspace configuration while querying dynamic task providers. */
+	getWorkspaceTasks(): Promise<readonly IWorkspaceTask[]>;
+	/** Invalidates cached configuration and starts a new discovery. */
 	refresh(): Promise<readonly IWorkspaceTask[]>;
 	/** Returns immediately while dependencies and execution are prepared by the same owner. */
 	start(task: IWorkspaceTask, signal: AbortSignal, expectedRevision: string): ITaskRun;

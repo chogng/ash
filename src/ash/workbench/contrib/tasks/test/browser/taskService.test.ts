@@ -45,6 +45,7 @@ import { type IFileSystemProvider, type IFileWriteOptions, type IFileChangeEvent
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { registerTestTerminalCreationServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
@@ -195,11 +196,15 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 	};
 	using terminals = new FakeTerminalService();
 	using outputResources = new DisposableStore();
-	const services = taskServices(outputResources, files, workspace, terminals);
+	const discoveryLogs: string[] = [];
+	const logger = outputResources.add(new LogService({ sinks: [{ log: entry => { if (entry.category === 'tasks.discovery') discoveryLogs.push(entry.message); } }] }));
+	const services = taskServices(outputResources, files, workspace, terminals).createChild(new ServiceCollection([ILogService, logger]), outputResources);
 	const output = services.get(IOutputService);
 	using service = services.createInstance(TaskService);
 	const tasks = await service.refresh();
 	assert.deepEqual(tasks.map(task => task.id), ['cargo:build', 'cargo:check', 'vscode:0:lint', 'cargo:test', 'pnpm:test', 'cargo:run']);
+	assert.deepEqual(discoveryLogs, [], 'normal task discovery is not recorded at the default level');
+	assert.ok(output.getChannel('tasks')!.entries.filter(entry => entry.category === 'discovery').every(entry => entry.severity === 'trace'));
 
 	const task = tasks.find(candidate => candidate.id === 'vscode:0:lint')!;
 	const run = await service.run(task);
@@ -218,7 +223,9 @@ test('TaskService discovers tasks, creates a shell execution, and tracks its exi
 	assert.match(output.getChannel('tasks')?.getText() ?? '', /Task 'Lint' failed \(exit code 2\)/);
 	assert.doesNotMatch(output.getChannel('tasks')?.getText() ?? '', /cargo lint/);
 
+	logger.setLevel('trace');
 	const secondRun = await service.run(task);
+	assert.ok(discoveryLogs.some(message => message === 'Discovered 6 workspace task(s).'));
 	await service.terminate(secondRun);
 	assert.equal(secondRun.status, 'canceled');
 });
@@ -2605,6 +2612,125 @@ suite('Task instance limits through the execution owners', () => {
 suite('Task instance policies through the execution owners', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('concurrent catalog queries share discovery without caching dynamic provider results', async () => {
+		using resources = new DisposableStore();
+		const { tasks } = executionServices(resources, {});
+		const entered = new DeferredPromise<void>();
+		const pending = new DeferredPromise<readonly TaskProviderTask[]>();
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'shared-discovery', provideTasks: () => {
+				calls++;
+				void entered.complete();
+				return pending.p;
+			},
+		}));
+		const first = tasks.getWorkspaceTasks();
+		await entered.p;
+		const concurrent = [tasks.getWorkspaceTasks(), tasks.getWorkspaceTasks(), tasks.getWorkspaceTasks()];
+		void pending.complete([]);
+		const catalog = await first;
+		assert.deepEqual(await Promise.all(concurrent), [catalog, catalog, catalog]);
+		assert.equal(calls, 1, 'concurrent requests do not restart provider discovery');
+		await tasks.getWorkspaceTasks();
+		assert.equal(calls, 2, 'later queries discover dynamic provider tasks again');
+		await tasks.refresh();
+		assert.equal(calls, 3, 'an explicit refresh reads again');
+		const run = await tasks.run(catalog[0]!);
+		assert.equal(calls, 4, 'execution reads current configuration');
+		await tasks.terminate(run);
+	});
+
+	test('catalog queries reuse configuration reads, including when dynamic provider results change', async () => {
+		using resources = new DisposableStore();
+		const { tasks, files } = executionServices(resources, {});
+		let reads = 0;
+		const readFile = files.readFile.bind(files);
+		files.readFile = async resource => { reads++; return readFile(resource); };
+		const catalog = await tasks.getWorkspaceTasks();
+		assert.equal(await tasks.getWorkspaceTasks(), catalog);
+		assert.equal(await tasks.getWorkspaceTasks(), catalog);
+		assert.equal(reads, 1, 'completed queries reuse configuration tasks');
+		await tasks.refresh();
+		assert.equal(reads, 2, 'explicit refresh reads configuration again');
+		const run = await tasks.run(catalog[0]!);
+		assert.equal(reads, 3, 'execution reads configuration again');
+		await tasks.terminate(run);
+		let label = 'First provider result';
+		resources.add(tasks.registerTaskProvider({
+			id: 'dynamic-query', provideTasks: () => [{ id: 'current', label, command: 'current', group: 'other' }],
+		}));
+		assert.ok((await tasks.getWorkspaceTasks()).some(task => task.label === label));
+		label = 'Updated provider result';
+		assert.ok((await tasks.getWorkspaceTasks()).some(task => task.label === label));
+		assert.equal(reads, 3, 'provider queries reuse unchanged configuration');
+	});
+
+	test('extension catalog changes activate a new provider after a provider-free catalog was cached', async () => {
+		using resources = new DisposableStore();
+		const { tasks, services } = executionServices(resources, {});
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['Policy']);
+		const extensions = services.get(IExtensionService);
+		let activations = 0;
+		using activation = extensions.registerActivationHandler(async () => {
+			activations++;
+			resources.add(tasks.registerTaskProvider({
+				id: 'installed-provider', provideTasks: () => [{ id: 'new', label: 'New extension task', command: 'new', group: 'other' }],
+			}));
+		});
+		await extensions.reload();
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['New extension task', 'Policy']);
+		assert.equal(activations, 1);
+	});
+
+	test('catalog queries follow file invalidation and replacement discovery', async () => {
+		using resources = new DisposableStore();
+		const changes = resources.add(new Emitter<IFileChangeEvent>());
+		const { tasks, files } = executionServices(resources, {}, changes.event);
+		const entered = new DeferredPromise<void>();
+		const pending = new DeferredPromise<readonly TaskProviderTask[]>();
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'invalidated-query', provideTasks: () => {
+				if (++calls === 2) {
+					void entered.complete();
+					return pending.p;
+				}
+				return [{ id: 'current', label: `Revision ${calls}`, command: 'current', group: 'other' }];
+			},
+		}));
+		await tasks.getWorkspaceTasks();
+		changes.fire({ resources: [URI.file('/policy/source.ts')] });
+		assert.equal(calls, 1, 'unrelated file events preserve the catalog');
+		files.readFile = async resource => ({ resource, bytes: new TextEncoder().encode(JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Updated configuration', command: 'updated' }] })), revision: '2' });
+		changes.fire({ resources: [URI.file('/policy/.vscode/tasks.json')] });
+		await entered.p;
+		const query = tasks.getWorkspaceTasks();
+		changes.fire({ resources: [URI.file('/policy/package.json')] });
+		assert.deepEqual((await query).map(task => task.label), ['Revision 3', 'Updated configuration']);
+		void pending.complete([]);
+		assert.equal(calls, 3);
+		assert.equal(await tasks.getWorkspaceTasks(), tasks.tasks);
+	});
+
+	test('a failed discovery can be retried and workspace switches discard the cached catalog', async () => {
+		using resources = new DisposableStore();
+		const { tasks, workspace } = executionServices(resources, {});
+		let calls = 0;
+		resources.add(tasks.registerTaskProvider({
+			id: 'retry-query', provideTasks: () => {
+				if (++calls === 1) throw new Error('Discovery unavailable');
+				return [];
+			},
+		}));
+		await assert.rejects(tasks.getWorkspaceTasks(), /Discovery unavailable/);
+		assert.deepEqual((await tasks.getWorkspaceTasks()).map(task => task.label), ['Policy']);
+		assert.equal(calls, 2);
+		workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+		assert.deepEqual(await tasks.getWorkspaceTasks(), []);
+		assert.equal(calls, 3);
+	});
+
 	test('refresh follows a replacement provider discovery and never returns the superseded catalog to its caller', async () => {
 		using resources = new DisposableStore();
 		const { tasks, peer } = executionServices(resources, {});
@@ -2654,7 +2780,8 @@ suite('Task instance policies through the execution owners', () => {
 		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 		const root = URI.file('/policy');
 		workspace.updateWorkspace({ id: 'policy', uri: root });
-		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges))));
+		const files = new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Policy', type: 'process', command: 'compiler', runOptions }] }) }, fileChanges);
+		services.registerInstance(IFileService, owner.add(createTestFileService(files)));
 		services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 		services.registerInstance(IPathService, testPathService(workspace));
 		services.registerInstance(ILogService, new NullLoggerService());
@@ -2688,7 +2815,7 @@ suite('Task instance policies through the execution owners', () => {
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
 		const tasks = owner.add(services.createInstance(TaskService));
-		return { services, workspace, tasks, terminals, dom, quickInput, peer };
+		return { services, workspace, tasks, terminals, dom, quickInput, peer, files };
 	}
 
 	async function pickerInput(owner: DisposableStore, dom: JSDOM): Promise<HTMLInputElement> {

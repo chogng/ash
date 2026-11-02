@@ -603,7 +603,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			} as IEditorService);
 			const catalog = [{ id: 'build', label: 'Build from terminal menu', command: 'build', source: 'vscode', group: 'build', dirId: 'workspace' }];
 			services.registerInstance(ITaskService, {
-				tasks: catalog, onDidChangeTasks: Event.None, refresh: async () => catalog,
+				tasks: catalog, onDidChangeTasks: Event.None, getWorkspaceTasks: async () => catalog, refresh: async () => catalog,
 				run: async (task: import('../../../src/ash/workbench/contrib/tasks/common/tasks.js').IWorkspaceTask) => { menuEffects.tasks.push(task.id); },
 			} as unknown as ITaskService);
 		}

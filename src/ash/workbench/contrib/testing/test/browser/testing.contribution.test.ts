@@ -31,7 +31,7 @@ test('Testing navigation follows capability in the production contribution and r
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IAppServerApi, appServer(() => 'ready'));
 	services.registerInstance(ITestingService, testing as ITestingService);
-	services.registerInstance(ITaskService, { refresh: async () => { refreshes++; return []; } } as unknown as ITaskService);
+	services.registerInstance(ITaskService, { getWorkspaceTasks: async () => { refreshes++; return []; } } as unknown as ITaskService);
 	using descriptors = new TestViewDescriptorService({ registry: ViewsRegistry }, contextKeys);
 	const model = descriptors.getViewContainerModel(WorkbenchViewContainerId.Testing);
 	assert.deepEqual(model.activeViewDescriptors, []);
@@ -69,7 +69,7 @@ test('Testing startup and workspace restoration do not read backend tasks in a d
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IAppServerApi, appServer(() => state));
 	services.registerInstance(ITestingService, { hasTestCapability: false, onDidChangeTestCapability: changes.event } as ITestingService);
-	services.registerInstance(ITaskService, { refresh: async () => { refreshes++; return []; } } as unknown as ITaskService);
+	services.registerInstance(ITaskService, { getWorkspaceTasks: async () => { refreshes++; return []; } } as unknown as ITaskService);
 	using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.testing']);
 	host.advance(WorkbenchPhase.AfterRestored);
 	await Promise.resolve();

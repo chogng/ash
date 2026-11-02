@@ -17,6 +17,27 @@ suite('Desktop log files', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const entry = (message: string): LogEntry => ({ timestampMillis: 123, category: 'test', level: LogLevel.Info, message, error: undefined });
 
+	test('a quiet window exposes an empty saved source and follows its first diagnostic', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-logs-'));
+		try {
+			using owner = new LoggerService({ logsHome: directory });
+			await owner.initialize();
+			const channel = new LoggerChannel(owner);
+			const files = await channel.call<readonly import('../../common/log.js').ILogFile[]>('window:7', 'list', undefined);
+			assert.equal(files.length, 1);
+			assert.equal(files[0]!.currentWindow, true);
+			const empty = await owner.readLogFile(files[0]!.id);
+			assert.equal(empty.text, '');
+			assert.equal(await readFile(join(owner.sessionPath, 'window-7.log'), 'utf8'), '');
+			await channel.call('window:7', 'log', entry('first diagnostic'));
+			const next = await owner.readLogFile(files[0]!.id, empty.cursor);
+			assert.equal(next.gap, false);
+			assert.equal(JSON.parse(next.text).message, 'first diagnostic');
+			assert.deepEqual(await owner.getLogFiles('window-7'), files);
+			await owner.close();
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	test('a stalled Main write bounds the renderer backlog and reports omitted diagnostics before flush', async () => {
 		const firstWrite = new DeferredPromise<void>();
 		const started = new DeferredPromise<void>();

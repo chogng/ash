@@ -63,6 +63,8 @@ export class LoggerService extends AbstractLoggerService<LogService> {
 	/** Enumerate retained files rather than maintaining a second history catalog. */
 	public async getLogFiles(windowSource: string): Promise<readonly ILogFile[]> {
 		this.assertNotDisposed();
+		// Quiet windows still need a persistent source for Output to follow later.
+		await this.writer.append(windowSource, '');
 		await this.writer.settled();
 		const current = this.sessionPath.slice(this.logsHome.length + 1);
 		const files: ILogFile[] = [];

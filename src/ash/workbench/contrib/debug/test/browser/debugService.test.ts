@@ -454,6 +454,7 @@ class FakeTaskService extends Disposable implements ITaskService {
 	readonly onDidChangeTaskRun = Event.None;
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
+	async getWorkspaceTasks() { return this.tasks; }
 	async refresh() { return this.tasks; }
 	async run(taskValue: IWorkspaceTask, _signal?: AbortSignal): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, runId: 'fixture-run', readOutput: (cursor: number) => ({ text: '', cursor, nextCursor: cursor, truncated: false, hasMore: false }), terminalId: 'task-terminal', status: 'succeeded' as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
 	async terminate(_run: ITaskRun) { }
