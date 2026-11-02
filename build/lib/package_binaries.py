@@ -16,6 +16,7 @@ from build.lib.cargo_cache import leased_cache
 from build.lib.cargo_inputs import cargo_environment
 from build.lib.targets import TargetSpec
 from build.lib.cargo_selection import cargo_command_packages
+from build.lib.development_build import DevelopmentBuildPlan
 from build.protocol.generate import generate_protocol
 
 
@@ -89,6 +90,7 @@ def build_binaries(
     host_build: bool = False,
     protocol_prepared: bool = False,
     on_rebuilt_binary: Callable[[str, Path], None] | None = None,
+    plan_directory: Path | None = None,
 ) -> Dict[str, Path]:
     """Notify rebuilt executables after each successful group, before the next.
 
@@ -118,7 +120,18 @@ def build_binaries(
     command = _build_command(
         repository_root, spec, missing, cargo, cargo_profile, host_build
     )
-    packages = cargo_command_packages(cargo, command[1:], repository_root)
+    plan = (
+        DevelopmentBuildPlan(repository_root, command, plan_directory)
+        if plan_directory
+        else None
+    )
+    packages = (
+        plan.packages
+        if plan and plan.packages is not None
+        else cargo_command_packages(cargo, command[1:], repository_root)
+    )
+    if plan:
+        plan.packages = packages
     if not protocol_prepared and "ash-app-server-protocol" in packages:
         generate_protocol(root=repository_root, cargo=cargo)
     environment = cargo_environment(spec, packages)
@@ -131,18 +144,27 @@ def build_binaries(
         [name] for name in missing if name in local_hosts
     ]
     for group in groups:
-        outputs.update(
-            _build_group(
-                repository_root,
-                spec,
-                group,
-                cargo,
-                cargo_profile,
-                host_build,
-                environment,
-                on_rebuilt_binary,
-            )
+        reused = plan.reuse(group) if plan else None
+        if reused is not None:
+            outputs.update(reused)
+            continue
+        messages = [] if plan else None
+        built = _build_group(
+            repository_root,
+            spec,
+            group,
+            cargo,
+            cargo_profile,
+            host_build,
+            environment,
+            on_rebuilt_binary,
+            messages,
         )
+        outputs.update(built)
+        if plan:
+            plan.record(group, built, messages)
+    if plan:
+        plan.save()
     return outputs
 
 
@@ -200,6 +222,7 @@ def _build_group(
     host_build: bool,
     environment: dict[str, str],
     on_rebuilt_binary: Callable[[str, Path], None] | None,
+    build_messages: list[dict] | None = None,
 ) -> dict[str, Path]:
     command = _build_command(
         repository_root, spec, missing, cargo, cargo_profile, host_build
@@ -222,6 +245,12 @@ def _build_group(
     artifacts = []
     for line in result.stdout.splitlines():
         message = parse_cargo_message(line)
+        if (
+            build_messages is not None
+            and message
+            and message.get("reason") in {"compiler-artifact", "build-script-executed"}
+        ):
+            build_messages.append(message)
         if (
             message
             and message.get("reason") == "compiler-artifact"

@@ -578,6 +578,21 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-11-02：Desktop 后端依赖查询与功能组复用
+
+Desktop 增量后端入口在 `.build/desktop/dev/app-server/build-plan.json` 保存成功的依赖查询和四个 Cargo 功能组的输入记录；发布与普通 CLI 构建不使用此缓存。清单、锁文件、Cargo 配置、环境、目标、profile 或工具链身份变化时重新查询。功能组复用会检查本地包文件集合和内容、Cargo dep-info、build.rs 声明的外部输入及产物身份；共享内容校验只在同一次请求内复用，运行 Cargo 后重新校验。源码增删、内容修改、产物缺失和未知输入状态会交给 Cargo；失败或中断不保留可复用记录。原有核心与三个音视频组的包集合、features 和编译参数保持不变，缓存校验与发布期间持有原有 Cargo 缓存租约。
+
+在 Windows x64、Rust/Cargo 1.99.1、`dev-small`、既有增量产物上，交替测量关闭上述复用的基线与候选各三次。测量调用实际 `build_development_server(protocol_prepared=True)`，仅把代次发布重定向到独立目录，包含外部输入准备、编译、内容校验和发布，不包含 watcher 防抖、Desktop 重连或 UI 就绪。
+
+| 场景                  | 基线中位数 | 候选中位数 | 判断           |
+| --------------------- | ---------: | ---------: | -------------- |
+| 无源码改动            |    7.06 秒 |    3.91 秒 | 缩短约 45%     |
+| 修改 Exec Server 源码 |   19.06 秒 |   19.80 秒 | 未证明稳定提速 |
+
+源码编辑将 `crates/exec-server/src/main.rs` 的失败退出码依次改为 2、3、4，两组使用相同编辑并在每次采样前恢复和预热；运行新代次的实际程序，确认退出码与编辑一致。候选避免了依赖查询和未受影响的三个音视频 Cargo 组，但内容校验与发布成本抵消了编辑样本中的收益，不能将无改动结果外推为日常编辑或完整 Desktop 提速。Exec Server 程序大小均为 13,421,568 字节。未测空编译缓存、RSS 或其他平台；首次建立记录及配置失效需要完整构建检查并额外采集输入，不计入预热结果。
+
+此前未包含内容摘要的原型、扩展源码诊断、混入包缓存锁等待或仅更新时间戳的系列均保留，但不合并到上述结果。原始样本、脚本与验证日志位于 `.build/build-health/dev-build-selection-20261102/`，最终数值取 `summary.json`（`optimized-paired.json` 中受包缓存锁等待影响的一对编辑样本，由 `supplement.json` 的干净配对样本替换）；测量用 Rust 源码已恢复原字节。相关 Python 定向回归通过；完整脚本与 Desktop 验证的结果及限制见该目录报告。
+
 #### 2026-11-01：Zig 与默认工具链的完整 Rust 开发后端对照
 
 在 Apple M2 Max（12 核、32 GiB）、macOS arm64、Rust 1.99.1、`dev-small`、12 个 Cargo jobs 下，比较默认 Apple Clang／系统链接器与 Zig 0.16.0。测量调用 Desktop 实际的 `development_binary_inputs` 和 `build_binaries`，覆盖全部 21 个 Rust 程序，保留核心、音频、LiveKit、识别器四组 features 隔离。锁定依赖预先获取，构建离线执行；协议、V8 和语音库等固定原生资源预先准备。范围不包含前端 TypeScript、Go LiveKit 源码、V8 源码编译、打包发布或窗口重连。

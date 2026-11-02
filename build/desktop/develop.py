@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from build.lib.package_binaries import build_binaries
 from build.lib.development_store import publish_generation
 from build.lib.development_store import frozen_binary
+from build.lib.file_lock import exclusive_lock
+from build.lib.cargo_cache import leased_cache
 from build.prepare import (
     PROFILE,
     current_package,
@@ -37,7 +39,16 @@ def build_development_server(
         build_live(root, protocol_prepared=protocol_prepared)
     package = current_package(development_root(root, spec.target, "host-provided-node"))
     directory = root / ".build/desktop/dev/app-server"
+    directory.mkdir(parents=True, exist_ok=True)
     with ExitStack() as frozen, ThreadPoolExecutor(max_workers=1) as startup:
+        if not select_prepared:
+            frozen.enter_context(
+                leased_cache(
+                    root,
+                    profile=PROFILE,
+                    target_triple=spec.target if spec.is_windows else None,
+                )
+            )
         preloads = []
         replacements = {}
 
@@ -50,20 +61,22 @@ def build_development_server(
                 # groups and publication still run. No backend/profile is opened.
                 preloads.append(startup.submit(_load_app_server, executable))
 
-        binaries = (
-            {}
-            if select_prepared
-            else build_binaries(
-                root,
-                spec,
-                development_binary_inputs(spec),
-                cargo="cargo",
-                cargo_profile=PROFILE,
-                host_build=True,
-                protocol_prepared=protocol_prepared,
-                on_rebuilt_binary=preload if spec.is_windows else None,
+        with exclusive_lock(directory / "build.lock", create=True):
+            binaries = (
+                {}
+                if select_prepared
+                else build_binaries(
+                    root,
+                    spec,
+                    development_binary_inputs(spec),
+                    cargo="cargo",
+                    cargo_profile=PROFILE,
+                    host_build=True,
+                    protocol_prepared=protocol_prepared,
+                    on_rebuilt_binary=preload if spec.is_windows else None,
+                    plan_directory=directory,
+                )
             )
-        )
         binaries.update(replacements)
         result = publish_generation(
             package, binaries, directory, publication=publication
