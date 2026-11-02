@@ -367,6 +367,7 @@ export class ActionBar extends Disposable implements IActionRunner {
 	protected handleNavigation(event: KeyboardEvent): void {
 		if (
 			event.defaultPrevented ||
+			event.isComposing ||
 			event.altKey ||
 			event.ctrlKey ||
 			event.metaKey ||
@@ -375,6 +376,9 @@ export class ActionBar extends Disposable implements IActionRunner {
 			return;
 		}
 		if (event.key === 'Escape') {
+			// A toolbar without a cancellation owner leaves Escape to its containing surface.
+			const activeElement = getActiveElement(this.domNode.ownerDocument);
+			if (!this.didCancel.hasListeners() || !activeElement || !this.containsFocus(activeElement)) return;
 			this.cancel();
 			event.preventDefault();
 			event.stopPropagation();

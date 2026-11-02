@@ -32,7 +32,7 @@ suite('Built-in image viewer', () => {
 		await details.getByRole('button', { name: 'Copy dimensions', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('150 × 150');
 		await details.getByRole('button', { name: 'Copy image information', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^File name: product.svg\nFormat: image\/svg\+xml\nDimensions: 150 × 150 pixels\nFile size: \d+ bytes$/u);
+		await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replaceAll('\r\n', '\n'))).toMatch(/^File name: product.svg\nFormat: image\/svg\+xml\nDimensions: 150 × 150 pixels\nFile size: \d+ bytes$/u);
 		await page.keyboard.press('Escape');
 		await expect(details).toHaveCount(0);
 		await expect(information).toBeFocused();

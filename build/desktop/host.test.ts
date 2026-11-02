@@ -50,8 +50,9 @@ test('macOS checksums record native helper bytes after signing', { skip: process
 	assert.equal(JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).checksums[helper], actual);
 });
 
+// Windows compiler ownership takes CIM snapshots on every rebuild and cleanup.
 for (const mode of ['build', 'watch'] as const) {
-	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: process.platform === 'win32' ? 60_000 : 30_000 }, async t => {
+	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: process.platform === 'win32' ? 120_000 : 30_000 }, async t => {
 		const temporary = await realpath(await mkdtemp(join(tmpdir(), 'ash-host-')));
 		const root = join(temporary, 'workspace', 'project', 'desktop');
 		await mkdir(root, { recursive: true });
@@ -75,6 +76,9 @@ for (const mode of ['build', 'watch'] as const) {
 		// Isolate compiler/watch behavior from Rust compilation; the native builder
 		// has its own generation-publication tests and real build validation.
 		await writeFile(join(root, 'build/python.ts'), 'export async function runPython() {}');
+		for (const name of ['host-logs', 'host-integrity']) {
+			await mkdir(join(root, 'crates', name), { recursive: true });
+		}
 		await mkdir(join(root, 'build/lib'), { recursive: true });
 		await copyFile(join(import.meta.dirname, '../lib/incrementalOutput.ts'), join(root, 'build/lib/incrementalOutput.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -113,7 +117,8 @@ for (const mode of ['build', 'watch'] as const) {
 		let ready = false;
 		const readyStates: boolean[] = [];
 		async function until(predicate: () => boolean): Promise<void> {
-			for (let attempt = 0; attempt < 200; attempt++) {
+			const deadline = Date.now() + (process.platform === 'win32' ? 20_000 : 10_000);
+			while (Date.now() < deadline) {
 				if (predicate()) return;
 				await delay(50);
 			}

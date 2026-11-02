@@ -1,4 +1,5 @@
 import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
+import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
 import { createDesktopEditorTestServices } from './desktopEditorTestServices.js';
 import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
@@ -55,21 +56,12 @@ test('Sessions titlebar initializes localized actions and closes the application
 	using resources = new DisposableStore();
 	using fileCommand = MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, { command: { id: 'test.sessions.titlebar', title: 'Test command' } });
 	using fileMenu = MenusRegistry.appendMenuItem(Menus.MenubarMainMenu, { title: 'File', submenu: Menus.MenubarFileMenu });
-	let onHide: (() => void) | undefined;
-	let closedMenus = 0;
 	const contextMenus: IContextMenuService = {
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu(delegate) {
-			onHide = () => delegate.onHide?.(false);
-			assert.deepEqual(delegate.getActions?.().map(action => action.label), ['File']);
-		},
-		hideContextMenu() {
-			closedMenus++;
-			onHide?.();
-			onHide = undefined;
-		},
+		showContextMenu() { assert.fail('The application menu is owned by MenuBar'); },
+		hideContextMenu() { },
 	};
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
@@ -102,7 +94,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	services.registerInstance(IMenuService, menus);
 	services.registerInstance(IContextMenuService, contextMenus);
 	services.registerInstance(IContextKeyService, contextKeys);
-	const titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
+	const titlebar = registerTestTitlebarServices(registerTestComponentServices(services)).createInstance(TitlebarPart, browser.window.document.body, 'application-menu');
 	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, id === 'titlebar' ? titlebar : resources.add(new TestPart(browser.window.document.body, id))]));
 	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
 	const hosts = resources.add(createDesktopEditorTestServices(editorServices, {}, browser.window.document));
@@ -110,6 +102,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
 	const menuButton = (): HTMLButtonElement => titlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button')!;
+	const openMenus = (): number => browser.window.document.querySelectorAll('.ash-context-view [role="menu"]').length;
 	const modeHost = titlebar.domNode.querySelector<HTMLElement>('.ash-sessions-workspace-mode')!;
 	const chatMode = modeHost.querySelector<HTMLButtonElement>('button')!;
 	try {
@@ -127,10 +120,10 @@ test('Sessions titlebar initializes localized actions and closes the application
 		menuButton().click();
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');
 		changed.fire();
-		assert.equal(closedMenus, 0, 'Unchanged session state must keep the application menu open');
+		assert.equal(openMenus(), 1, 'Unchanged session state must keep the application menu open');
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'true');
 		layout.hidePart('sidebar');
-		assert.equal(closedMenus, 1);
+		assert.equal(openMenus(), 0);
 		assert.equal(menuButton().getAttribute('aria-expanded'), 'false');
 		assert.equal(modeHost.hidden, true);
 		layout.showPart('sidebar');
@@ -143,11 +136,11 @@ test('Sessions titlebar initializes localized actions and closes the application
 		layout.showPart('sidebar');
 		menuButton().click();
 
-		assert.equal(closedMenus, 1);
+		assert.equal(openMenus(), 1);
 		assert.deepEqual([...titlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['应用程序菜单', '隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle terminal']);
 		assert.equal(titlebar.domNode.querySelector('[role="toolbar"]')?.getAttribute('aria-label'), '标题栏左侧操作');
 		titlebar.dispose();
-		assert.equal(closedMenus, 2);
+		assert.equal(openMenus(), 0);
 		using systemMenuTitlebar = registerTestComponentServices(services).createInstance(TitlebarPart, browser.window.document.body, 'actions-only');
 		assert.deepEqual([...systemMenuTitlebar.domNode.querySelectorAll('button')].map(button => button.getAttribute('aria-label')), ['隐藏侧栏', 'Back', 'Forward', 'Chat / Agents', 'Code', 'Toggle terminal']);
 		const sidebarToggle = systemMenuTitlebar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.sessions.toggleSidebar"] button')!;

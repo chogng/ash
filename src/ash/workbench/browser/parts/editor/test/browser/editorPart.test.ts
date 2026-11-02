@@ -136,7 +136,7 @@ import type { CommandId } from '../../../../../../platform/commands/common/comma
 import { type Context } from '../../../../../../platform/contextkey/common/contextkey.js';
 import { MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
-import { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
+import { GroupDirection, IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
 import {
 	ContextKeyService,
 	IContextKeyService,
@@ -7056,6 +7056,43 @@ test('editor service keeps real failures and explicitly requested cancellation f
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('layout listeners observe registered groups throughout grid structure changes and restoration', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	editor.layout(new Dimension(900, 600));
+	const errors: unknown[] = [];
+	const layouts: number[][] = [];
+	using listener = editor.onDidLayout(() => {
+		try {
+			assert.ok(editor.getSize(editor.activeGroup).width >= 0);
+			layouts.push(editor.groups.map(group => {
+				assert.equal(typeof editor.isGroupVisible(group.id), 'boolean');
+				assert.ok(editor.getSize(group).width >= 0);
+				return group.id;
+			}));
+			editor.setEditorContentVisible(true);
+		} catch (error) {
+			errors.push(error);
+		}
+	});
+	const first = editor.activeGroup;
+	const second = editor.addGroup(first.id, Direction.Right);
+	assert.deepEqual(errors, []);
+	const third = editor.addGroup(second.id, Direction.Down);
+	editor.moveGroup(first, third, GroupDirection.DOWN);
+	const saved = editor.saveWorkingSet('documents', [first.id]);
+	editor.restoreLayout(saved.layout!, new Map([[second.id, second.id], [third.id, third.id]]));
+	editor.activateGroup(second.id);
+	await editor.removeGroup(second);
+	await editor.applyWorkingSet(saved, { preserveGroups: [first.id], preserveFocus: true });
+	assert.deepEqual(errors, []);
+	assert.ok(layouts.length > 0);
+	assert.ok(layouts.every(groups => groups.length > 0));
+	assert.deepEqual(layouts.at(-1), editor.groups.map(group => group.id));
 });
 
 test('maximizing a group preserves hidden groups, saved layout and activation recovery', async () => {

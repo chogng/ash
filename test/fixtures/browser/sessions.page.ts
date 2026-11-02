@@ -59,6 +59,21 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('creator') || new URL(location.href).searchParams.has('catalog')) {
+	// Layout scenarios need a successful catalog, rather than transient errors
+	// from an intentionally disconnected host changing the notice lane's height.
+	const model = { provider: 'fixture', model: 'layout-model' };
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		accounts: { ...disconnectedApi.accounts, read: async () => ({ revision: '1', accounts: [] }) },
+		model: {
+			...disconnectedApi.model,
+			listModels: async () => ({ models: [{ model, displayName: 'Layout fixture', longContext: null }] }),
+			listProviders: async () => ({ providers: [] }),
+			readDefaults: async () => ({ revision: 1, model, reasoningEffort: null, commitMessageModel: null, commitMessageEnabled: false, codeReviewModel: null }),
+		},
+	} };
+}
 const projectChanges = new Emitter<void>();
 window.addEventListener('pagehide', () => projectChanges.dispose(), { once: true });
 if (new URL(location.href).searchParams.has('search') || new URL(location.href).searchParams.has('sidebarGroups')) {

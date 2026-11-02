@@ -4,11 +4,17 @@ import { suite, test } from 'mocha';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { ChatGPTAuthenticationError, type ChatGPTRequest, type IChatGPTTransport } from '../../common/chatGPTTransport.js';
-import { ChatGPTService } from '../../browser/chatGPTService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
+import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
+import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } from '../../common/chatGPTTransport.js';
+import { ChatGPTService, IChatGPTService } from '../../browser/chatGPTService.js';
+import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 
 function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string, onDidChangeAuthentication?: Event<void>) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
@@ -38,6 +44,37 @@ function response(path: string): Response {
 }
 suite('ChatGPT shared service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('closing the window scope cancels pending initialization without resolving disposed services or dispatching late requests', async () => {
+		const ready = new DeferredPromise<string>();
+		const entered = new DeferredPromise<void>();
+		const cancellations: string[] = [];
+		let requests = 0;
+		const channel: IChannel = {
+			listen: () => Event.None,
+			call: <T>(command: string, args?: unknown): Promise<T> => {
+				if (command === 'authenticationContext') { void entered.complete(); return ready.p as Promise<T>; }
+				if (command === 'cancel') { cancellations.push((args as string[])[0]!); return Promise.resolve(undefined as T); }
+				if (command === 'request') { requests++; }
+				throw new Error(`Unexpected ChatGPT IPC operation: ${command}`);
+			},
+		};
+		using services = new InstantiationService(new ServiceCollection(
+			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
+			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
+			[IStorageService, { get: () => undefined, store() { }, remove() { } } as unknown as IStorageService],
+			[IMainProcessService, { _serviceBrand: undefined, getChannel: () => channel, registerChannel() { } }],
+		));
+		const chat = services.get(IChatGPTService);
+		const pending = chat.reload();
+		await entered.p;
+		services.dispose();
+		await ready.error(new Error('IPC connection closed'));
+		await pending;
+		assert.equal(requests, 0);
+		assert.equal(cancellations.length, 4);
+		assert.equal(new Set(cancellations).size, 4);
+	});
+
 	test('account changes discard old history and file bindings, cancel a pending read and preserve local draft text', async () => {
 		using changes = new Emitter<void>();
 		const entered = new DeferredPromise<void>();

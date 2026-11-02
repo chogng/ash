@@ -50,7 +50,7 @@ function fixture() {
 	services.registerInstance(IAgentSessionService, {
 		async create(params: Parameters<IAgentSessionService['create']>[0]) {
 			creationCount++;
-			assert.deepEqual(params.executionTarget, { type: 'local', root: '/workspace/repository' });
+			assert.deepEqual(params.executionTarget, { type: 'local', root: URI.file('/workspace/repository').fsPath });
 			if (fail) throw new Error('Controlled review failure');
 			return {
 				session: { sessionId: 'review', title: params.title, status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'thread', title: 'Review', status: 'active' }] },

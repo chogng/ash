@@ -75,7 +75,7 @@ test('frontend Node tools and backend package builders have separate language ow
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py'), [], directory);
 	}
 	for (const [directory, entries] of [
-		['desktop', ['__init__.py', 'analyze.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py']],
+		['desktop', ['__init__.py', 'analyze.py', 'debug.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_debug.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py']],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
@@ -83,6 +83,8 @@ test('frontend Node tools and backend package builders have separate language ow
 	for (const directory of ['code', 'download', 'lib', 'darwin', 'win32', 'linux']) {
 		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.ts');
 		const sharedTooling = new Set([
+			join(import.meta.dirname, 'lib/generatedTypeScript.ts'),
+			join(import.meta.dirname, 'lib/test/layersChecker.test.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),

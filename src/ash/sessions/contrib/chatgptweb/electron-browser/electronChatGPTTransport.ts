@@ -42,5 +42,10 @@ export class ElectronChatGPTTransport extends Disposable implements IChatGPTTran
 		return this.channel.call('request', [id, request.body instanceof VSBuffer ? { ...request, body: { base64: encodeBase64(request.body) } } : request, context]);
 	}
 	read(id: string): Promise<VSBuffer | null> { return this.channel.call('read', [id]); }
-	cancel(id: string): Promise<void> { this.requests.delete(id); return this.channel.call('cancel', [id]); }
+	cancel(id: string): Promise<void> {
+		// Disposal already cancels every owned request. Late stream cleanup must not
+		// send a duplicate cancellation through a connection that may have closed.
+		if (!this.requests.delete(id) || this.isDisposed) { return Promise.resolve(); }
+		return this.channel.call('cancel', [id]);
+	}
 }

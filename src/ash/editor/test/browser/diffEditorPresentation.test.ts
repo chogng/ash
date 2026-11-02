@@ -1,5 +1,6 @@
 import { expect, type Locator } from '@playwright/test';
 import { suite, test, teardown } from 'mocha';
+import { sep } from 'node:path';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 
 suite('native multi-file review preview', () => {
@@ -390,10 +391,10 @@ suite('multi diff resource headers', () => {
 			const headers = host.locator('.stanza-multi-diff-editor-header');
 			const titles = headers.locator('.stanza-multi-diff-editor-title');
 			await expect(titles.first().locator('.ash-icon-label-text')).toHaveText(['chat.json']);
-			await expect(titles.first().locator('.ash-icon-label-description')).toHaveText(['extensions/language-pack-zh-cn/translations']);
+			await expect(titles.first().locator('.ash-icon-label-description')).toHaveText(['extensions/language-pack-zh-cn/translations'.split('/').join(sep)]);
 			await expect(titles.first().locator('.ash-multi-diff-resource.original')).toHaveCount(0);
 			await expect(titles.nth(1).locator('.ash-icon-label-text')).toHaveText(['second.ts', 'second.ts']);
-			await expect(titles.nth(1).locator('.ash-icon-label-description')).toHaveText(['src/renamed folder/包含空格的目录', 'src/previous folder/包含空格的目录']);
+			await expect(titles.nth(1).locator('.ash-icon-label-description')).toHaveText(['src/renamed folder/包含空格的目录', 'src/previous folder/包含空格的目录'].map(path => path.split('/').join(sep)));
 			await expect(titles.nth(1).locator('.ash-multi-diff-rename-status')).toHaveText('R');
 			await expect(titles.nth(1).locator('.original .ash-icon-label')).toHaveClass(/strikethrough/);
 			await expect(host.locator('.stanza-multi-diff-editor-labels')).toHaveCount(0);
@@ -412,7 +413,7 @@ suite('multi diff resource headers', () => {
 					}))).toBe(true);
 				}
 			}
-			await expect(titles.first().locator('.ash-icon-label')).toHaveAttribute('title', 'extensions/language-pack-zh-cn/translations/chat.json');
+			await expect(titles.first().locator('.ash-icon-label')).toHaveAttribute('title', 'extensions/language-pack-zh-cn/translations/chat.json'.split('/').join(sep));
 			const toggle = headers.first().getByRole('button').first();
 			await toggle.focus();
 			await page.keyboard.press('Enter');

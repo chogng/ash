@@ -1997,6 +1997,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(appearance.descriptor.label, '外观');
 		assert.equal(appearance.descriptor.description, '设置聊天消息、消息输入框和代码块的显示方式。');
 		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块']);
+		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.fontFamily', 'chat.fontSize', 'chat.upvoteAnimation']);
 		assert.deepEqual(
 			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
@@ -3429,7 +3430,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
 		['Appearance', 'Messages', 'Message input', 'Code blocks'],
 	);
-	for (const key of ['chat.fontFamily', 'chat.fontSize', 'chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
+	for (const key of ['chat.fontFamily', 'chat.fontSize', 'chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap', 'chat.upvoteAnimation']) {
 		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
 	}
 	await preferences.openSettings({ section: 'extensions' });

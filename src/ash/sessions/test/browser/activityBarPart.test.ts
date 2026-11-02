@@ -1,5 +1,6 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { registerTestTitlebarServices } from '../../../workbench/test/common/testTitlebarServices.js';
 import assert from 'node:assert/strict';
 import { setup, test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -161,7 +162,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		buttons[5]?.click();
 		await Promise.resolve();
 		assert.equal(accountAnchor, buttons[5]);
-		using titlebar = registerTestComponentServices(services).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
+		using titlebar = registerTestTitlebarServices(registerTestComponentServices(services)).createInstance(TitlebarPart, ownerDocument.body, 'application-menu');
 		const renderTitlebarAccount = (visible: boolean): void => titlebar.setActivityActions(visible ? [bar.accountAction] : [], (action, options) => bar.createAccountActionViewItem(action, options, 'titlebar'));
 		for (const position of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM]) {
 			bar.setLocation(position, ownerDocument.body);
@@ -388,7 +389,7 @@ test('workspace mode controls switch retained pages and follow their owner selec
 	using chatCommand = CommandsRegistry.register('sessions.open.chat', () => { opened.push('agents'); active.set('agents'); });
 	using control = services.createInstance(WindowModeControl, ownerDocument.body, active, { agents: 'sessions.open.chat', code: 'sessions.open.code' });
 	const buttons = [...ownerDocument.querySelectorAll<HTMLButtonElement>('.ash-window-mode-control .ash-segmented-control-option')];
-	assert.equal(buttons[0]!.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'chat');
+	assert.equal(buttons[0]!.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'chat-mode');
 	buttons[0]!.click();
 	assert.deepEqual(opened, ['agents']);
 	buttons[1]!.click();

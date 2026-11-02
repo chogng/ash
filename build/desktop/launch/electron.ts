@@ -11,7 +11,9 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		cwd: resolve(import.meta.dirname, '../../..'),
 		env: process.env,
 		stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-		detached: process.platform !== 'win32',
+		// Windows also needs the supervisor outside the launcher's kill-on-close job.
+		// Its IPC disconnect handler must survive a forcibly terminated launcher.
+		detached: true,
 		windowsHide: true,
 	});
 	const interrupt = (): void => { child.kill('SIGINT'); };

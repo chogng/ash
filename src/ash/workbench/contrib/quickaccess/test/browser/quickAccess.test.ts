@@ -4,6 +4,8 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('quickAccess browser component', () => {
 	const browserTests = useBrowserTests();
+	// Synthetic command labels use English collation independently of the host OS locale.
+	browserTests.use({ locale: 'en-US' });
 
 	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }, { locale: 'en', theme: 'hcLight' }]) {
 		test(`Quick Access file icons follow the active theme for history and search (${variant.locale}, ${variant.theme})`, async () => {

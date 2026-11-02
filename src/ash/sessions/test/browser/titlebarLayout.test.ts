@@ -22,7 +22,7 @@ suite('Sessions native titlebar layout', () => {
 					}),
 				).toBe(0);
 				await page.evaluate(() => window.ashSessionsTitlebarFixture.setSidebarWidth(window.ashSessionsTitlebarFixture.minimumSidebarWidth));
-				const navigation = (await page.locator('.ash-menubar.ash-sessions-titlebar-actions').boundingBox())!;
+				const navigation = (await page.locator('.ash-titlebar-left-actions.ash-sessions-titlebar-actions').boundingBox())!;
 				const mode = (await page.locator('.ash-sessions-workspace-mode').boundingBox())!;
 				expect(navigation.x).toBeGreaterThanOrEqual(leftInset);
 				expect(mode.x).toBeGreaterThanOrEqual(navigation.x + navigation.width);

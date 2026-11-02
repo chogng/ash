@@ -62,7 +62,7 @@ suite('sessions browser component', () => {
 		runtimeErrors.set(page, consoleErrors);
 		page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
 		page.on('pageerror', error => errors.push(error.message));
-		await page.goto('/sessions.html');
+		await page.goto('/sessions.html?catalog');
 		await expect.poll(async () => ({ ready: await page.locator('body').getAttribute('data-ready'), errors })).toEqual({ ready: 'true', errors: [] });
 	});
 
@@ -373,7 +373,7 @@ suite('sessions browser component', () => {
 		await expect(activityBar).toHaveCount(0);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
+		await page.getByRole('menuitemradio', { name: 'Top' }).click();
 		await expect(activityBar).toHaveCount(0);
 		const topHost = page.locator('.ash-sessions-activity-host.top');
 		await expect(topHost).toBeVisible();
@@ -387,33 +387,33 @@ suite('sessions browser component', () => {
 		await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /New/);
 		await topHost.locator('button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
+		await page.getByRole('menuitemradio', { name: 'Bottom' }).click();
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 		await expect(topHost).toBeHidden();
 		await expectActivityIconSize(activityNavigation, 18, true);
 		await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+		await page.getByRole('menuitemradio', { name: 'Default' }).click();
 		await expect(activityBar).toHaveCount(0);
 		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
+		await page.getByRole('menuitemradio', { name: 'Top' }).click();
 		await expect(topHost).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 18, true);
 		await topHost.locator('button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
+		await page.getByRole('menuitemradio', { name: 'Bottom' }).click();
 		const bottomHost = page.locator('.ash-sessions-activity-host.bottom');
 		await expect(bottomHost).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 18, true);
 		await titlebarAccounts.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
+		await page.getByRole('menuitemradio', { name: 'Default' }).click();
 		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
+		await page.getByRole('menuitemradio', { name: 'Hidden' }).click();
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeHidden();
 		await expect(activityBar).toHaveCount(0);
 	});
@@ -426,7 +426,8 @@ suite('sessions browser component', () => {
 		await expect(titlebar.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
 		const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true });
 		await expect(titlebarActions).toBeVisible();
-		const titlebarButtons = titlebarActions.getByRole('button');
+		await expect(titlebarActions.getByRole('menuitem', { name: 'Application menu', exact: true })).toBeVisible();
+		const titlebarButtons = titlebarActions.locator('button');
 		const expectedTitlebarActions = ['Application menu', 'Hide sidebar', 'Back', 'Forward'];
 		await expect(titlebarButtons).toHaveCount(expectedTitlebarActions.length);
 		await expect(titlebarActions).toHaveCSS('gap', '2px');
@@ -487,7 +488,7 @@ suite('sessions browser component', () => {
 
 	for (const locale of ['en', 'zh-CN']) test(`Workspace mode selection slides behind stationary icons (${locale})`, async function () {
 		const { page } = browserTests;
-		if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
+		if (locale === 'zh-CN') await page.goto('/sessions.html?catalog&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		const control = page.locator('.ash-window-mode-control');
@@ -758,7 +759,7 @@ suite('sessions browser component', () => {
 
 	for (const locale of ['en', 'zh-CN']) test(`Sessions icon roles stay independent of IDE defaults (${locale})`, async function () {
 		const { page, context, info: testInfo } = browserTests;
-		if (locale === 'zh-CN') await page.goto('/sessions.html?locale=zh-CN');
+		if (locale === 'zh-CN') await page.goto('/sessions.html?catalog&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon')).toHaveCount(1);
 		const primary = page.locator('[data-part="titlebar"] .ash-icon-label-icon > .ash-icon, .ash-window-mode-control .ash-segmented-control-option > .ash-icon, .ash-sessions-activity-item .ash-icon, :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon');
@@ -827,7 +828,7 @@ suite('sessions browser component', () => {
 	for (const locale of ['en', 'zh-CN']) test(`Sessions typography stays independent of IDE defaults (${locale})`, async function () {
 		const { page, context, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';
-		if (chinese) await page.goto('/sessions.html?locale=zh-CN');
+		if (chinese) await page.goto('/sessions.html?catalog&locale=zh-CN');
 		const sessionsWindow = page.locator('.ash-sessions-window');
 		const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor');
 		await expect(sessionsWindow).toHaveCSS('font-size', '14px');

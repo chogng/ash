@@ -255,8 +255,17 @@ await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 
 		assert.equal(Object.keys(configured).filter(key => configured[key] !== dependentEdit[key]).length, 2, 'shared compiler settings invalidate both bundles');
 		const accepted = await publication();
 		await writeFile(join(directory, 'shared.ts'), "export const external = 'private-host-module';");
-		await symlink(join(directory, 'shared.ts'), join(directory, 'extensions/git/browser/private-link.ts'));
-		for (const source of ["export { external as marker } from '../../../shared.ts';", "export { external as marker } from 'unlisted-host-package';", "import type { external } from '../../../shared.ts'; export const marker = 'typed-import';", "export type Private = import('../../../shared.ts').external; export const marker = 'typed-query';", "export { external as marker } from './private-link.ts';", "import type { external } from './private-link.ts'; export const marker = 'typed-symlink';"]) {
+		const linkedImport = process.platform === 'win32' ? './private-link/shared.ts' : './private-link.ts';
+		if (process.platform === 'win32') {
+			// Junctions preserve the realpath escape without requiring file-symlink privileges.
+			const privateModules = join(directory, 'private-modules');
+			await mkdir(privateModules);
+			await copyFile(join(directory, 'shared.ts'), join(privateModules, 'shared.ts'));
+			await symlink(privateModules, join(directory, 'extensions/git/browser/private-link'), 'junction');
+		} else {
+			await symlink(join(directory, 'shared.ts'), join(directory, 'extensions/git/browser/private-link.ts'));
+		}
+		for (const source of ["export { external as marker } from '../../../shared.ts';", "export { external as marker } from 'unlisted-host-package';", "import type { external } from '../../../shared.ts'; export const marker = 'typed-import';", "export type Private = import('../../../shared.ts').external; export const marker = 'typed-query';", `export { external as marker } from '${linkedImport}';`, `import type { external } from '${linkedImport}'; export const marker = 'typed-symlink';`]) {
 			await writeFile(join(directory, 'extensions/git/browser/helper.ts'), source);
 			const rejected = spawnSync(process.execPath, ['build/builtin/extensions.ts'], { cwd: directory, encoding: 'utf8', timeout: 30_000, env: { ...process.env, ASH_WEB_EXTENSION_PATHS: '' } });
 			assert.ifError(rejected.error);

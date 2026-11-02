@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import childProcess, { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { startWeb } from './web.ts';
@@ -31,7 +31,7 @@ for (const [succeeds, reuse] of [[true, false], [false, false], [true, true]]) {
 			} else {
 				assert.equal(command, join(packageRoot, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`));
 				assert.equal(options.env?.ASH_USE_DEVELOPMENT_SECRETSTORAGE, '1');
-				assert.equal(options.env?.ASH_HOME, join(process.cwd(), '.build/desktop/dev/web-profile'));
+				assert.equal(options.env?.ASH_HOME, resolve(import.meta.dirname, '../../.build/desktop/dev/web-profile'));
 				events.push('launch');
 				child.stdin = new PassThrough();
 				child.stdout = new PassThrough();

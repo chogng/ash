@@ -248,15 +248,16 @@ test('a generation waits for every window to finish initialization', async () =>
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events, 'initializing');
-	const started = new DeferredPromise<void>();
+	const restarted = new DeferredPromise<void>();
 	const start = window.supervisor.start;
-	window.supervisor.start = async () => { await start(); void started.complete(); };
+	window.supervisor.start = async () => { await start(); void restarted.complete(); };
 	const reloader = coordinator(resources, async () => { events.push('restart'); });
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await reloader.reloadNow();
 	assert.deepEqual(events, []);
+	using timeout = disposableTimeout(() => { void restarted.error(new Error('The ready window was not restarted')); }, 5_000);
 	window.setState('ready');
-	await started.p;
+	await restarted.p;
 	assert.deepEqual(events, ['stop:agents', 'restart', 'start:agents']);
 });
 

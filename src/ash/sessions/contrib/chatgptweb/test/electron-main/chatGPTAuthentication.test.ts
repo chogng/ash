@@ -83,6 +83,35 @@ suite('ChatGPT native authentication consumer', () => {
 		await assert.rejects(pending);
 		assert.equal(requests, 0);
 	});
+	test('disposal owns cancellation once and late fetch cleanup cannot use the closed IPC connection', async () => {
+		const ready = new DeferredPromise<string>();
+		const entered = new DeferredPromise<void>();
+		const cancellations: string[] = [];
+		let closed = false;
+		let callsAfterClose = 0;
+		using transport = new ElectronChatGPTTransport({
+			getChannel: () => ({
+				listen: () => Event.None,
+				call: async (command: string, args?: unknown) => {
+					if (closed) { callsAfterClose++; throw new Error('IPC connection closed'); }
+					if (command === 'authenticationContext') { void entered.complete(); return ready.p; }
+					assert.equal(command, 'cancel');
+					cancellations.push((args as string[])[0]!);
+					return null;
+				},
+			})
+		} as unknown as IMainProcessService);
+		const controller = new AbortController();
+		const pending = createChatGPTFetch(transport)('/service/backend-api/models', { signal: controller.signal });
+		await entered.p;
+		transport.dispose();
+		closed = true;
+		controller.abort();
+		await ready.complete(context);
+		await assert.rejects(pending);
+		assert.equal(cancellations.length, 1);
+		assert.equal(callsAfterClose, 0);
+	});
 	test('a native authorization and recovery stay private and release their request binding', async () => {
 		const fixture = owner();
 		using authentication = fixture.authentication;

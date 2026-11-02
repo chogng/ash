@@ -27,8 +27,9 @@ export function clearConnectedTabClipping(tab: HTMLElement | undefined, overflow
 export function updateConnectedTabClipping(bounds: IConnectedTabBounds, scrollLeft: number): void {
 	const visibleLeft = scrollLeft + bounds.viewportLeft;
 	const visibleRight = scrollLeft + bounds.viewportRight;
-	const leftClipped = bounds.fillLeft < visibleLeft;
-	const rightClipped = bounds.fillRight > visibleRight;
+	// CSSOM scroll extents round to whole pixels while tab rectangles retain fractions.
+	const leftClipped = Math.round(bounds.fillLeft) < Math.round(visibleLeft);
+	const rightClipped = Math.round(bounds.fillRight) > Math.round(visibleRight);
 	const hidden = bounds.fillRight <= visibleLeft || bounds.fillLeft >= visibleRight;
 	bounds.tab.classList.toggle('connected-tab-left-edge', bounds.fillLeft - bounds.shoulderExtent < visibleLeft);
 	bounds.tab.classList.toggle('connected-tab-right-edge', bounds.fillRight + bounds.shoulderExtent > visibleRight);

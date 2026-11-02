@@ -132,7 +132,8 @@ export class InlineChatAttachmentWidget extends Disposable {
 
 	get widthInEm(): number {
 		const font = this.editor.getOption(EditorOption.fontInfo);
-		return (this.attachmentWidget.element.getBoundingClientRect().width || this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize;
+		// Cursor positions use whole pixels; reserve the complete fractional-width surface.
+		return Math.ceil(this.attachmentWidget.element.getBoundingClientRect().width || this.attachment.name.length * font.typicalHalfwidthCharacterWidth + 28) / font.fontSize;
 	}
 
 	setSelected(selected: boolean): void {

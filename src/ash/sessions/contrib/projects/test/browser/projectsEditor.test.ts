@@ -285,8 +285,8 @@ suite('Projects toolbar', () => {
 					const outside = page.locator('#outside-sessions-menu');
 					try {
 						await expect(outside).toHaveCSS('border-radius', '8px');
-						await expect(outside.getByRole('menu')).toHaveCSS('padding', '4px');
-						await expect(outside.getByRole('menu')).toHaveCSS('min-width', '180px');
+						await expect(outside.getByRole('menu', { includeHidden: true })).toHaveCSS('padding', '4px');
+						await expect(outside.getByRole('menu', { includeHidden: true })).toHaveCSS('min-width', '180px');
 					} finally {
 						await outside.evaluate(element => element.remove());
 					}

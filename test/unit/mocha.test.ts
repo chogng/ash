@@ -16,12 +16,15 @@ const desktopDirectory = resolve(import.meta.dirname, '../..');
 // Keep synthetic fixtures independent of compiler output size and cleanup.
 const outputDirectory = mkdtempSync(join(desktopDirectory, '.build/desktop/runner-fixtures-'));
 const compiledDirectory = resolve(desktopDirectory, '.build/desktop/test');
+// Windows process startup and descendant cleanup share the subprocess deadline.
+const subprocessTimeout = process.platform === 'win32' ? 45_000 : 15_000;
 const copiedModules = new Set<string>();
 // The real theme preload still needs its emitted module closure in each snapshot.
 for (const module of [
 	'src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js',
 	'src/ash/platform/extensions/common/extensionApi.js',
 	'src/ash/base/common/buffer.js',
+	'src/ash/base/common/numbers.js',
 	'src/ash/workbench/services/extensions/browser/extensionColorThemeService.js',
 ]) copyBootstrapModule(resolve(compiledDirectory, module));
 
@@ -65,7 +68,7 @@ await runUnitTests(${JSON.stringify([first, 'test/unit/missing-required.test.js'
 
 function run(args: readonly string[], entrypoint = 'test/unit/run.ts', compiledOutput = outputDirectory, environment: NodeJS.ProcessEnv = {}): { status: number | null; output: string; } {
 	const result = spawnSync(process.execPath, [entrypoint, ...args], {
-		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env: { ...runnerEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: compiledOutput, ...environment },
+		cwd: desktopDirectory, encoding: 'utf8', timeout: subprocessTimeout, windowsHide: true, env: { ...runnerEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: compiledOutput, ...environment },
 	});
 	if (result.error) { throw result.error; }
 	return { status: result.status, output: result.stdout + result.stderr };
@@ -240,7 +243,7 @@ test('reuses bytecode ${index}', () => {
 	// This case checks the default run-owned cache rather than caller overrides.
 	const env: NodeJS.ProcessEnv = { ...runnerEnvironment };
 	for (const name of ['NODE_COMPILE_CACHE', 'NODE_DISABLE_COMPILE_CACHE', 'NODE_V8_COVERAGE']) delete env[name];
-	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: 15_000 });
+	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--workers', '1', ...fixtures.flatMap(path => ['--run', path])], { cwd: desktopDirectory, env, encoding: 'utf8', timeout: subprocessTimeout });
 	assert.equal(result.status, 0, result.stdout + result.stderr);
 	assert.match(result.stdout, /2 tests executed across 2 files; 0 failed files/);
 	assert.equal(existsSync(JSON.parse(readFileSync(marker, 'utf8')).cache), false);
@@ -262,7 +265,7 @@ test('loads through the synchronous hooks', async () => {
  assert.equal(inlineStyles, '.invalid-javascript { color: red; }');
 });
 `);
-	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\\\', '/')]);
+	const result = run(['--run', relative(outputDirectory, path).replaceAll('\\', '/')]);
 	assert.equal(result.status, 0, result.output);
 	assert.match(result.output, /1 tests executed across 1 files; 0 failed files/);
 });
@@ -303,7 +306,7 @@ test('deliberately fails with coverage', () => { throw new Error('coverage failu
 	assert.ok(numbers.functions.covered > 0 && numbers.functions.covered < numbers.functions.total);
 	assert.ok(Object.keys(summary).some(path => path !== 'total' && summary[path].lines.covered === 0));
 	assert.ok(Object.keys(summary).every(path => !path.includes('test-run-') && !path.includes('/test/')));
-	assert.match(readFileSync(join(report, 'lcov.info'), 'utf8'), /SF:src\/ash\/base\/common\/numbers.ts/u);
+	assert.match(readFileSync(join(report, 'lcov.info'), 'utf8').replaceAll('\\', '/'), /SF:src\/ash\/base\/common\/numbers.ts/u);
 	const metadata = JSON.parse(readFileSync(join(report, 'run.json'), 'utf8'));
 	assert.equal(metadata.status, 'failed');
 	assert.equal(metadata.reportStatus, 'complete');
@@ -311,14 +314,13 @@ test('deliberately fails with coverage', () => { throw new Error('coverage failu
 	assert.equal(metadata.failed.length, 1);
 });
 
-test('coverage merges Node and Chromium source counts across navigation and page close', { timeout: 30_000 }, async t => {
+test('coverage merges Node and Chromium source counts across navigation and page close', { timeout: subprocessTimeout * 2 }, async t => {
 	const coverage = new UnitCoverage({ coverage: true, coveragePath: join(directory, 'browser-coverage'), coverageFormats: ['json-summary'] });
 	const assets = join(coverage.directory, 'browser');
 	mkdirSync(assets);
 	const module = 'src/ash/base/common/numbers.js';
-	copyBootstrapModule(resolve(compiledDirectory, module));
-	copyFileSync(resolve(compiledDirectory, module), join(assets, 'numbers.js'));
-	const map = JSON.parse(readFileSync(resolve(compiledDirectory, module + '.map'), 'utf8'));
+	copyFileSync(resolve(outputDirectory, module), join(assets, 'numbers.js'));
+	const map = JSON.parse(readFileSync(resolve(outputDirectory, module + '.map'), 'utf8'));
 	map.sources = [relative(assets, resolve(desktopDirectory, 'src/ash/base/common/numbers.ts')).replaceAll('\\', '/')];
 	writeFileSync(join(assets, 'numbers.js.map'), JSON.stringify(map));
 	normalizeCoverageSourceMaps(assets);
@@ -342,7 +344,7 @@ suite('source coverage',()=>{const browser=useBrowserTests();test('Node and brow
  const extra=await browser.context.newPage();await extra.goto('/');await extra.waitForFunction(()=>window.answer===4);
 });});`);
 	const result = await promisify(execFile)(process.execPath, ['node_modules/mocha/bin/mocha.js', '--ui', 'tdd', fixture], {
-		cwd: desktopDirectory, timeout: 15_000,
+		cwd: desktopDirectory, timeout: subprocessTimeout,
 		env: { ...runnerEnvironment, ...coverage.environment, ASH_UNIT_COVERAGE_ASSETS: assets, ASH_BROWSER_UNIT_BASE_URL: `http://127.0.0.1:${address.port}`, ASH_BROWSER_UNIT_RESULTS: join(directory, 'browser-results') },
 	});
 	assert.match(result.stdout, /1 passing/u);
@@ -409,7 +411,7 @@ test('a selection containing only skipped tests fails the run', () => {
 	assert.match(result.output, /No unit tests executed/);
 });
 
-test('a running suite retains its modules after the shared compiler output is cleaned', { timeout: 20_000 }, async t => {
+test('a running suite retains its modules after the shared compiler output is cleaned', { timeout: process.platform === 'win32' ? 90_000 : 20_000 }, async t => {
 	const ready = join(directory, 'snapshot-ready');
 	const release = join(directory, 'snapshot-release');
 	const waiting = join(directory, 'snapshot.test.js');

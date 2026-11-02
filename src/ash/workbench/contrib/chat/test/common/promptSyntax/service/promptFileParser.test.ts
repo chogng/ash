@@ -89,7 +89,7 @@ test('Pinned package references remain inside the original package, including ne
 	assert.equal(body.resolveFilePath('../assets/text.txt#section')?.toString(), uri.with({ path: '/review/assets/text.txt', fragment: 'section' }).toString());
 	for (const path of ['../../escape.md', '/review/assets/text.txt', 'file:///host/secrets', 'private://skill/other/SKILL.md', 'https://example.com', '~/secret', 'a\\b', 'a\0b', 'a\nb']) assert.equal(body.resolveFilePath(path), undefined, path);
 	const local = new PromptFileParser().parse(URI.file('/work/review/SKILL.md'), 'Local').body!;
-	assert.equal(local.resolveFilePath('../shared.md')?.fsPath, '/work/shared.md');
+	assert.equal(local.resolveFilePath('../shared.md')?.fsPath, URI.file('/work/shared.md').fsPath);
 });
 
 test('YAML key ranges preserve quoted colons and missing scalars independently from empty text', () => {
