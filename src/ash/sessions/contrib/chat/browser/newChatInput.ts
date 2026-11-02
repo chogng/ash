@@ -2,7 +2,6 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -18,12 +17,9 @@ import { IChatInputNotificationService } from '../../../../workbench/contrib/cha
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
-import { NewChatContextAttachments } from './newChatContextAttachments.js';
 import { PermissionPickerActionItem } from '../../../../workbench/contrib/chat/browser/widget/input/permissionPickerActionItem.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
-import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -33,7 +29,6 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 
 /** Applies Sessions editor, attachment and draft policy to the shared input. */
 export class NewChatInputWidget extends ChatInputPart {
-	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly permissionPicker: PermissionPickerActionItem;
 
 	constructor(
@@ -65,18 +60,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),
-		}, [{
-			id: 'ash.chat.input.attach',
-			get label() { return localize('chat.attach.files', 'Attach files'); },
-			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
-			icon: Lxicon.add,
-			enabled: true,
-			run: () => this.contextAttachments.showPicker(),
-		}], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding);
-		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
-		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
-		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
+		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding);
 		const footer = this.inputFooter!;
 		const owner = this;
 		const permissionHost = h(container.ownerDocument, 'div');

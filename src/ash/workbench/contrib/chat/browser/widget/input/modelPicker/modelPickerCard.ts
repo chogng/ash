@@ -1,10 +1,10 @@
-import { addDisposableListener, h } from '../../../../../../../../base/browser/dom.js';
-import { DisposableStore, toDisposable } from '../../../../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../../../../nls.js';
-import { DomWidget } from '../../../../../../../../platform/domWidget/browser/domWidget.js';
-import { IOpenerService } from '../../../../../../../../platform/opener/common/opener.js';
-import { IconLabel } from '../../../../../../../../base/browser/ui/iconlabel/iconlabel.js';
-import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../../services/chat/common/modelCatalog.js';
+import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
+import { DisposableStore, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { localize } from '../../../../../../../nls.js';
+import { DomWidget } from '../../../../../../../platform/domWidget/browser/domWidget.js';
+import { IOpenerService } from '../../../../../../../platform/opener/common/opener.js';
+import { IconLabel } from '../../../../../../../base/browser/ui/iconlabel/iconlabel.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { getModelConfigValueLabel, modelPickerEffortOptions, modelPickerAccelerationOptions } from './modelPickerModelConfig.js';
 import { getMaxContextLabel, renderModelDescription } from './modelPickerDetails.js';
 

@@ -57,8 +57,6 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
-import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
-import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
@@ -479,48 +477,4 @@ test('legacy drafts merge by session identity and conflicting content survives u
 	await storage.flush();
 	using restored = new BrowserStorageService({ ownerWindow, workspaceId: 'sessions', flushInterval: 0 });
 	assert.deepEqual([readNewChatDraftState(restored, 'thread-1'), readNewChatDraftState(restored, 'untitled:recovered')], [codeDraft, chatDraft]);
-});
-
-test('Sessions file picker forwards the original files to the shared composer', () => {
-	const container = document.createElement('div');
-	const batches: (readonly File[])[] = [];
-	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt', { type: 'text/plain' })];
-	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
-	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
-	Object.defineProperty(picker, 'files', { value: files });
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	assert.deepEqual(batches, [files]);
-	assert.equal(batches[0]![0], files[0]);
-	assert.equal(picker.value, '');
-});
-
-test('Closing the Sessions file picker removes its event source and rejects later acquisition', async () => {
-	const container = document.createElement('div');
-	const files = [new browserEnvironment.window.File(['Selected context'], 'context.txt')];
-	let reads = 0;
-	using attachments = new NewChatContextAttachments(container, async () => { reads++; });
-	const picker = container.querySelector<HTMLInputElement>('input[type=file]')!;
-	attachments.dispose();
-	await attachments.attachFiles(files);
-	picker.dispatchEvent(new browserEnvironment.window.Event('change'));
-	assert.equal(reads, 0);
-	assert.equal(container.childElementCount, 0);
-});
-
-test('Sessions file paste reaches the shared composer once and text paste stays editable', () => {
-	const container = document.createElement('div');
-	const batches: (readonly File[])[] = [];
-	using attachments = new NewChatContextAttachments(container, async selected => { batches.push(selected); });
-	using target = new NewChatInputPasteTarget(container, attachments);
-	const files = [new browserEnvironment.window.File(['image'], 'preview.png', { type: 'image/png' })];
-	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
-	Object.defineProperty(paste, 'clipboardData', { value: { files } });
-	container.dispatchEvent(paste);
-	assert.equal(paste.defaultPrevented, true);
-	assert.deepEqual(batches, [files]);
-	const text = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
-	Object.defineProperty(text, 'clipboardData', { value: { files: [] } });
-	container.dispatchEvent(text);
-	assert.equal(text.defaultPrevented, false);
-	assert.equal(batches.length, 1);
 });

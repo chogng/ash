@@ -6,7 +6,7 @@ import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { IActionListOptions } from '../../../../../platform/actionWidget/browser/actionList.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ChatInputPickerActionViewItem } from '../widget/input/pickers/chatInputPickerActionItem.js';
+import { ChatInputPickerActionViewItem } from '../widget/input/chatInputPickerActionItem.js';
 
 /** Options and selection belong to the originating composer's provider. */
 export interface IChatSessionPickerDelegate {

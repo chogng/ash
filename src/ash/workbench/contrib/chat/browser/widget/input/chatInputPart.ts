@@ -66,7 +66,7 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } fro
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
-import { ChatInputPickerResponsiveLayout } from './pickers/chatInputPickerResponsiveLayout.js';
+import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import { ChatInputNoticeHost } from './notices/chatInputNoticeHost.js';
 import { IChatInputNoticeHubService } from './notices/chatInputNoticeHub.js';
 import { getChatInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
@@ -74,10 +74,10 @@ import { ChatInputNotificationWidget } from './notices/chatInputNotificationWidg
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotificationService } from './notices/chatInputNotificationService.js';
 import { registerChatInputOnboardingHosts } from './notices/chatInputOnboardingHosts.js';
 import { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voiceModeOnboarding.js';
-import { ModelPickerActionItem } from './pickers/modelPicker/modelPickerActionItem.js';
+import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
 import { PermissionPickerActionItem } from './permissionPickerActionItem.js';
-import { ModePickerActionItem, type ChatInputMode } from './pickers/modePickerActionItem.js';
+import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 
 type ChatInputToolbarPresentation = 'mode' | 'model' | 'mic' | 'voice' | 'send' | 'interrupt';
@@ -121,8 +121,6 @@ export interface ChatInputPartOptions {
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
 	readonly renderSecondaryToolbar?: boolean;
-	/** Sessions hosts bind their own paste/drop events while sharing preparation and pending state. */
-	readonly fileEvents?: 'input' | 'host';
 	/** Sessions composers already own persisted drafts; the regular input retains them in memory. */
 	readonly draftStorage?: 'input' | 'host';
 }
@@ -483,15 +481,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.renderToolbar();
 			this.inputChanges.fire();
 		}));
-		if (options.fileEvents !== 'host') {
-			this._register(addDisposableListener(this.inputContainer, 'paste', event => {
-				const files = [...(event.clipboardData?.files ?? [])];
-				if (files.length === 0) return;
-				stopEvent(event);
-				void this.attachFiles(files);
-			}, true));
-			this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages())).addOverlay(this.inputContainer, this.inputContainer);
-		}
+		this._register(addDisposableListener(this.inputContainer, 'paste', event => {
+			const files = [...(event.clipboardData?.files ?? [])];
+			if (files.length === 0) return;
+			stopEvent(event);
+			void this.attachFiles(files);
+		}, true));
+		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages())).addOverlay(this.inputContainer, this.inputContainer);
 		this.renderToolbarActions();
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));

@@ -16,7 +16,7 @@ import { IActionWidgetService } from '../../../../../../platform/actionWidget/br
 import type { IActionWidgetDropdownActionProvider } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { defaultButtonStyles, defaultKeybindingLabelStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
-import { trackChatInputPickerFocus } from './pickers/chatInputPickerActionItem.js';
+import { trackChatInputPickerFocus } from './chatInputPickerActionItem.js';
 import './media/chatInputPicker.css';
 
 /** Shared permission presentation; the composer owns the selected mode and confirmation policy. */

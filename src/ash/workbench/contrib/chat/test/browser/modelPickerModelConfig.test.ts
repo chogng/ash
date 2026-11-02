@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { modelPickerEffortOptions, modelPickerAccelerationOptions, getModelConfigSummary } from '../../browser/widget/input/pickers/modelPicker/modelPickerModelConfig.js';
+import { modelPickerEffortOptions, modelPickerAccelerationOptions, getModelConfigSummary } from '../../browser/widget/input/modelPicker/modelPickerModelConfig.js';
 
 const entry: ModelCatalogEntry = {
 	model: { provider: 'example', model: 'thinking' }, displayName: 'Thinking', longContext: null,

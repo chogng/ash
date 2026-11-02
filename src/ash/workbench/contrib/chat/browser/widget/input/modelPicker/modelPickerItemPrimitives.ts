@@ -1,7 +1,7 @@
-import { localize } from '../../../../../../../../nls.js';
-import { ActionListItemKind, type IActionListItem } from '../../../../../../../../platform/actionWidget/browser/actionList.js';
-import type { ModelRef } from '../../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../../services/chat/common/modelCatalog.js';
+import { localize } from '../../../../../../../nls.js';
+import { ActionListItemKind, type IActionListItem } from '../../../../../../../platform/actionWidget/browser/actionList.js';
+import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
+import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import { modelPickerEffortLabel } from './modelPickerModelConfig.js';
 import { getModelBadge } from './modelPickerBadges.js';
 

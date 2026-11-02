@@ -23,7 +23,7 @@ import { getHoverDelegate } from '../../../../../base/browser/ui/hover/hoverDele
 import type { IAction } from '../../../../../base/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
-import { getModelConfigValueLabel } from '../widget/input/pickers/modelPicker/modelPickerModelConfig.js';
+import { getModelConfigValueLabel } from '../widget/input/modelPicker/modelPickerModelConfig.js';
 import {
 	ChatModelsViewModel, getManageModelsProviderLabel, isStatusEntry, SEARCH_SUGGESTIONS,
 	type ILanguageModel, type ILanguageModelEntry, type IStatusEntry,

@@ -1,4 +1,4 @@
-import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 
 // The model picker has no compact icon, so keep part of its name visible before collapsing the mode label.
 const minimumReadableModelWidth = 48;

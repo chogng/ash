@@ -27,7 +27,7 @@ export interface ModelPickerPresentation {
 	};
 }
 
-/** Sessions' compact model control. Owns transient UI; selections belong to its host. */
+/** ChatGPT's model and thinking-preset control. Owns transient UI; selections belong to its host. */
 export class ModelPickerWidget extends Disposable {
 	private readonly button: HTMLButtonElement;
 	private readonly label: HTMLElement;

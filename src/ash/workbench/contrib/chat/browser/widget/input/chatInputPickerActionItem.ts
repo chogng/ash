@@ -1,11 +1,11 @@
-import '../media/chatInputPicker.css';
-import { addDisposableListener, getWindow, h } from '../../../../../../../base/browser/dom.js';
-import type { IAction } from '../../../../../../../base/common/actions.js';
-import { DisposableStore, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { AnchorPosition } from '../../../../../../../base/browser/ui/contextview/contextview.js';
-import type { IActionWidgetDropdownOptions } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
-import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
-import { ActionWidgetDropdownActionViewItem } from '../../../../../../../platform/actions/browser/actionWidgetDropdownActionViewItem.js';
+import './media/chatInputPicker.css';
+import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
+import type { IAction } from '../../../../../../base/common/actions.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { AnchorPosition } from '../../../../../../base/browser/ui/contextview/contextview.js';
+import type { IActionWidgetDropdownOptions } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { ActionWidgetDropdownActionViewItem } from '../../../../../../platform/actions/browser/actionWidgetDropdownActionViewItem.js';
 
 /** Creates the input picker's two triggers; the caller owns activation and disposal. */
 export function renderChatInputPickerSplit(container: HTMLElement, primaryButton: HTMLElement = h(container.ownerDocument, 'a'), secondaryButton: HTMLElement = h(container.ownerDocument, 'a')): { primaryButton: HTMLElement; secondaryButton: HTMLElement; } {

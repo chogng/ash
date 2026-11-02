@@ -4,7 +4,6 @@ import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
 import '../../../common/theme.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -21,9 +20,6 @@ import { IChatInputNotificationService } from '../../../../workbench/contrib/cha
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
-import { NewChatContextAttachments } from '../../chat/browser/newChatContextAttachments.js';
-import { NewChatInputPasteTarget } from '../../chat/browser/newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from './widget/input/chatInputTipPresenter.js';
 import { getCoworkChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
@@ -39,7 +35,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 	private submittedMessage = false;
 	private displayedThreadId: string | undefined;
 	private displayedDraftId: string;
-	private readonly contextAttachments: NewChatContextAttachments;
 	private readonly tips: ChatInputTipPresenter;
 	private draftVisible = false;
 	private restoringDraft = false;
@@ -90,22 +85,11 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
-		}, [{
-			id: 'ash.chat.input.attach',
-			get label() { return localize('chat.attach.files', 'Attach files'); },
-			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
-			icon: Lxicon.add,
-			enabled: true,
-			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding);
+		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
 		this.element.classList.toggle('embedded-composer', presentation === 'embedded');
-		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
-		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
-		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
 		this.element.append(tipContainer);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import type { ModelProviderCredentialStatus } from '../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { buildModelPickerDestinations } from '../../browser/widget/input/pickers/modelPicker/modelPickerTabs.js';
+import { buildModelPickerDestinations } from '../../browser/widget/input/modelPicker/modelPickerTabs.js';
 
 function entry(provider: string, model: string): ModelCatalogEntry {
 	return { model: { provider, model }, displayName: model, longContext: null };

@@ -1,6 +1,6 @@
-import { localize } from '../../../../../../../../nls.js';
-import type { ModelProviderCredentialStatus } from '../../../../../../../services/chat/common/chatService.js';
-import type { ModelCatalogEntry } from '../../../../../../../services/chat/common/modelCatalog.js';
+import { localize } from '../../../../../../../nls.js';
+import type { ModelProviderCredentialStatus } from '../../../../../../services/chat/common/chatService.js';
+import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 
 export interface IModelPickerProviderPlaceholder {
 	readonly vendor: string;

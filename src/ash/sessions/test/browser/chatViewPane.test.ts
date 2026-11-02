@@ -1408,6 +1408,11 @@ test('Sessions composer waits for file paste before sending and clears only the 
 		assert.equal(text, 'source.txt ');
 		for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 	});
+	const container = fixture.input.inputContainerElement;
+	const textPaste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
+	Object.defineProperty(textPaste, 'clipboardData', { value: { files: [] } });
+	container.dispatchEvent(textPaste);
+	assert.equal(textPaste.defaultPrevented, false);
 	const paste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(paste, 'clipboardData', { value: { files: [new browserEnvironment.window.File(['selected contents'], 'source.txt', { type: 'text/plain' })] } });
 	fixture.input.element.querySelector('.ash-chat-input-container')!.dispatchEvent(paste);

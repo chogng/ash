@@ -20,7 +20,7 @@ import { IPreferencesService } from '../../../../services/preferences/common/pre
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { ChatModelsWidget } from '../../browser/chatManagement/chatModelsWidget.js';
-import { createManageModelsAction } from '../../browser/widget/input/pickers/modelPicker/modelPickerItems.js';
+import { createManageModelsAction } from '../../browser/widget/input/modelPicker/modelPickerItems.js';
 import { MANAGE_CHAT_COMMAND_ID } from '../../common/constants.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
 import '../../browser/chatManagement/chatManagement.contribution.js';

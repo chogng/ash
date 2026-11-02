@@ -3280,13 +3280,11 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	let composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').first();
 	let editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep this draft');
-	await composer
-		.locator('input[type="file"]')
-		.setInputFiles({
-			name: 'context.ts',
-			mimeType: 'text/plain',
-			buffer: Buffer.from('export const code = true;'),
-		});
+	await composer.getByRole('button', { name: 'Add context', exact: true }).click();
+	const upload = page.waitForEvent('filechooser');
+	await page.getByRole('dialog', { name: 'Search attachments', exact: true }).getByRole('combobox').fill('Attach files');
+	await page.keyboard.press('Enter');
+	await (await upload).setFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const code = true;') });
 	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('context.ts');
 	const originalInput = await editor.input.elementHandle();
 	const identity = await page

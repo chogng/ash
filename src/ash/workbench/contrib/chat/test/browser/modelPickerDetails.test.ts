@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
-import { renderModelDescription } from '../../browser/widget/input/pickers/modelPicker/modelPickerDetails.js';
+import { renderModelDescription } from '../../browser/widget/input/modelPicker/modelPickerDetails.js';
 
 test('Model descriptions render markup safely, open documentation through the host and release their handlers', () => {
 	const environment = new JSDOM('<body><div></div></body>');
