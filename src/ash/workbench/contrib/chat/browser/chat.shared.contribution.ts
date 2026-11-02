@@ -40,9 +40,6 @@ import { IChatContextPickService, ChatContextPickService } from './attachments/c
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
 import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
 import { IChatPasteTargetService } from './chat.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { agentsWindowGraphicConfiguration, ChatConfiguration, ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
@@ -81,6 +78,8 @@ import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { ChatSetupContribution } from './chatSetup/chatSetupContributions.js';
+import { ChatEntitlementService, IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
@@ -200,18 +199,9 @@ registerWorkbenchContribution('workbench.contrib.chatCopyText', WorkbenchPhase.B
 	);
 });
 
-registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase.BlockStartup, accessor => {
-	const configuration = accessor.get(IConfigurationService);
-	const enabled = ChatContextKeys.enabled.bindTo(accessor.get(IContextKeyService));
-	const resources = new DisposableStore();
-	const update = (): void => enabled.set(configuration.getValue<boolean>(ChatAIDisabledSettingId) !== true);
-	update();
-	resources.add(configuration.onDidChangeConfiguration(event => {
-		if (event.affectsConfiguration(ChatAIDisabledSettingId)) update();
-	}));
-	resources.add(toDisposable(() => enabled.reset()));
-	return resources;
-});
+registerSingleton(IChatEntitlementService, ChatEntitlementService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatSetupContribution.ID, WorkbenchPhase.BlockStartup,
+	accessor => accessor.get(IInstantiationService).createInstance(ChatSetupContribution));
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);

@@ -1,3 +1,4 @@
+import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
@@ -250,7 +251,8 @@ const prompts = resources.add(new PromptsService({
 	},
 }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 services.registerInstance(IPromptsService, prompts);
-const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution', 'workbench.contrib.chatEnablement']));
+if (!services.has(IChatEntitlementService)) services.registerSingleton(IChatEntitlementService, () => services.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IChatEntitlementService)![1]));
+const promptContributions = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['chat.promptLanguageFeatures', 'chatResponseResourceWorkbenchContribution', 'workbench.contrib.chatSetup']));
 promptContributions.advance(WorkbenchPhase.BlockStartup);
 const chatViews = resources.add(services.createInstance(ViewDescriptorService, {}));
 resources.add(services.get(IConfigurationService).onDidChangeConfiguration(event => {

@@ -31,6 +31,8 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IChatInputNoticeHubService } from '../widget/input/notices/chatInputNoticeHub.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 
+export const CHAT_SETUP_ACTION_ID = 'workbench.action.chat.triggerSetup';
+
 export function registerChatActions(): void {
 	registerAction2(class FocusNoticeAction extends Action2 {
 		constructor() {

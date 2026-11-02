@@ -1,3 +1,4 @@
+import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
@@ -2214,7 +2215,8 @@ test('ViewsService resolves, opens, and focuses contributed views', async () => 
 	services.registerInstance(IViewDescriptorService, descriptors);
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
-	using enablement = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
+	services.registerSingleton(IChatEntitlementService, () => services.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IChatEntitlementService)![1]));
+	using enablement = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatSetup']);
 	enablement.advance(WorkbenchPhase.BlockStartup);
 	services.registerInstance(IPaneCompositePartService, {
 		getProgressIndicator: () => undefined,
@@ -6678,7 +6680,8 @@ test('Chat configuration contribution hides the registered Code view and command
 	services.registerInstance(IContextKeyService, contexts);
 	using descriptors = new TestViewDescriptorService({}, contexts);
 	const view = descriptors.getViewContainerModel(CHAT_VIEW_CONTAINER_ID);
-	const host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
+	services.registerSingleton(IChatEntitlementService, () => services.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IChatEntitlementService)![1]));
+	const host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatSetup']);
 	try {
 		host.advance(WorkbenchPhase.BlockStartup);
 		assert.equal(contexts.getValue(ChatContextKeys.enabled.key), true);

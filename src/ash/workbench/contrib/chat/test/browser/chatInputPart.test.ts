@@ -1890,6 +1890,14 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.toggleNoticeFocus());
 			await expect(input).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Unsent notification draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError(undefined));
+			await page.evaluate(() => window.ashChatInputIntegration.setCatalogError('Configure the model connection'));
+			const setup = notification.getByRole('button', { name: locale === 'en' ? 'Set Up Chat' : '设置 Chat', exact: true });
+			await setup.focus();
+			await setup.press('Enter');
+			await expect(page.getByLabel('Opened sources')).toHaveText('[{"command":"workbench.action.chat.triggerSetup"}]');
+			await expect(notification).toBeHidden();
+			expect(await page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Unsent notification draft');
 		});
 	}
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {

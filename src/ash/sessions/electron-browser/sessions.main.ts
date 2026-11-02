@@ -231,7 +231,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
-					'workbench.contrib.chatEnablement',
+					'workbench.contrib.chatSetup',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',

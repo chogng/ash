@@ -303,7 +303,7 @@ const workbench = resources.add(
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
-			...(chatPreview ? ['workbench.contrib.chatEnablement', 'workbench.contrib.chatInputEditor'] : []),
+			...(chatPreview ? ['workbench.contrib.chatSetup', 'workbench.contrib.chatInputEditor'] : []),
 			...(scmPreview ? ['workbench.contrib.scmRepositories'] : []),
 			'workbench.contrib.layoutActionsContext',
 			'workbench.contrib.modernUI',

@@ -1,6 +1,8 @@
 import { RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ChatEntitlementContextKeys } from '../../../../services/chat/common/chatEntitlementService.js';
 
 export namespace ChatContextKeys {
+	export const Setup = ChatEntitlementContextKeys.Setup;
 	export const inputHasText = new RawContextKey<boolean>('chatInputHasText', false);
 	export const requestInProgress = new RawContextKey<boolean>('chatRequestInProgress', false);
 	export const inputBlocked = new RawContextKey<boolean>('chatInputBlocked', false);

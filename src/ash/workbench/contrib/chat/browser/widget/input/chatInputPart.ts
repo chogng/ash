@@ -107,6 +107,7 @@ import { SubmenuItemAction } from '../../../../../../platform/actions/common/act
 import { ChatSubmitAction, type IChatExecuteActionContext } from '../../actions/chatExecuteActions.js';
 import { ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../actions/chatQueueActions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
+import { CHAT_SETUP_ACTION_ID } from '../../actions/chatActions.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 
@@ -1609,7 +1610,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.inputNotifications.setNotification({
 				id: this.notificationId('catalog'), inputUri: this.notificationUri,
 				severity: ChatInputNotificationSeverity.Warning, message: this.state.modelsError,
-				actions: [{ kind: ChatInputNotificationActionKind.OpenModelPicker, label: localize('chat.notice.chooseModel', 'Choose a model') }],
+				actions: [
+					{ kind: ChatInputNotificationActionKind.OpenModelPicker, label: localize('chat.notice.chooseModel', 'Choose a model') },
+					{ kind: ChatInputNotificationActionKind.Command, commandId: CHAT_SETUP_ACTION_ID, label: localize('chat.setup.action', 'Set Up Chat') },
+				],
 				dismissible: true, autoDismissOnMessage: true,
 			}, { inPlace: true });
 		} else {

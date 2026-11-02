@@ -1,5 +1,12 @@
 {
   "ash": {
+    "chat.setup.title": "聊天：设置 Chat",
+    "chat.setup.action": "设置 Chat",
+    "chat.setup.placeholder": "选择 Chat 的设置方式",
+    "chat.setup.models": "配置模型连接",
+    "chat.setup.models.description": "添加 API 密钥、配置本地端点或选择模型。",
+    "chat.setup.accounts": "管理账号",
+    "chat.setup.accounts.description": "登录支持的订阅或重新连接账号。",
     "chat.agentHover.help": "选中自定义 Agent 后，将焦点移到模式选择器并运行“显示或聚焦悬停提示”，即可阅读其描述。消息开头的 @名称与选中的 Agent 匹配时，也可阅读相同描述。使用无障碍视图命令可将相同信息作为纯文本阅读。按 Escape 关闭提示并将焦点返回来源控件。打开提示不会更换 Agent 或发送草稿。",
     "chat.thinking.active": "正在思考…",
     "chat.thinking.complete": "推理已完成",

@@ -131,6 +131,8 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 `chat.disableAIFeatures` 是 TypeScript UI 的 WINDOW scope boolean 偏好，默认 false，唯一资源是 profile `settings.json`。配置 → `ChatContextKeys.enabled`／model input state → `ChatService` → adapter 共用一条链。禁用阻止 start、queue、steer、Advisor、compaction 和提交说明生成，异步权限读取后再次检查；关闭本窗口活动或待连接 Voice。历史、草稿、停止与已存在 Turn 交互仍归原 owner，重新启用恢复草稿，不改 Rust 权限或停止共享 App Server。底层 Workspace／Folder 支持见 [Configuration](preferences-and-settings.md#configuration-的存储与配置层)，不沿用旧对齐记录中的未迁移状态。
 
+`services/chat/common/chatEntitlementService.ts` 只从该配置投影 `sentiment.hidden`，不保存账号或模型就绪状态。共享的 `browser/chatSetup/chatSetupContributions.ts` 在 Code、Agents 和主题预览中统一更新 `ChatContextKeys.Setup.hidden`／`enabled`；命令面板和模型目录错误提示通过 `workbench.action.chat.triggerSetup` 进入现有模型连接或账号管理。取消、禁用 AI 或关闭窗口释放设置选择器，保留草稿。上游 Copilot 扩展安装、套餐、Microsoft 探测和增长会话没有对应的 Ash 生产调用链，不加入这条配置流程。
+
 共享后端同时服务 Agent、手动终端和扩展。`aiAgentEnv.ts`／宿主环境构建器过滤继承的 `AI_AGENT`（含大小写变体），不更改父环境；Rust `ProcessExecutor` 只为 Core 工具、Hook 和认证 Agent ProcessStart 的最终子环境设置 `AI_AGENT=ash`。手动终端默认不继承标记，显式 env 可以覆盖。该值仅作进程归因，不代表授权、身份认证、账号或模型，不另加配置或协议字段。
 
 邀请沿成功的 `ChatService.onDidSubmitRequest` → sender 绑定可信 IPC → Main `AgentsWindowInvitationState` → focused conversation 的现有通知列表。只有后端接受的本窗口请求登记使用；Main 的 Application／Machine storage 仅保存首次使用计数与冷却，不读领域 RPC 或建立会话目录。单窗口等待 30 秒，并行活动等待 15 秒，全局只有一个 claim，真正可见后才记曝光。
