@@ -10,8 +10,8 @@ import { DevelopmentAppServerReloader } from '../../electron-main/developmentApp
 import { readDevelopmentAppServerGeneration } from '../../node/developmentAppServerGeneration.js';
 import type { IDevelopmentAppServerRuntime } from '../../electron-main/developmentAppServerRuntime.js';
 import { NullLoggerService } from '../../../log/common/log.js';
-import { LoggerService } from '../../../log/node/loggerService.js';
-import { readFile } from 'node:fs/promises';
+import { LogService } from '../../../log/common/logServiceImpl.js';
+import type { LogEntry } from '../../../log/common/log.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
 import { DeferredPromise, disposableTimeout } from '../../../../base/common/async.js';
@@ -25,12 +25,12 @@ test('development reloader creation requires the registered log service', () => 
 });
 
 for (const scenario of ['completed', 'failed', 'invalid', 'superseded'] as const) {
-	test(`development ${scenario} restart persists its cause and version transition`, async () => {
+	test(`development ${scenario} restart records its cause and version transition`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-reload-log-'));
 		try {
 			using resources = new DisposableStore();
-			using logs = new LoggerService({ logsHome: join(directory, 'logs') });
-			await logs.initialize();
+			const entries: LogEntry[] = [];
+			using logs = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 			const buildId = '11111111-1111-4111-8111-111111111111';
 			const runtime = join(directory, 'generations', 'b'.repeat(64));
 			const publication = {
@@ -45,12 +45,12 @@ for (const scenario of ['completed', 'failed', 'invalid', 'superseded'] as const
 				readGeneration: async () => runtime,
 				acquireGeneration: async () => Object.assign(toDisposable(() => { }), { runtime, assertActive() { } }),
 				restartDaemon: async () => { if (scenario === 'failed') { throw new Error('injected restart failure'); } },
-			}, logs.createLogger('main')));
+			}, logs));
 			resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 			if (scenario === 'failed') { await assert.rejects(reloader.reloadNow(), /injected restart failure/); }
 			else { await reloader.reloadNow(); }
 			await logs.flush();
-			const entries = (await readFile(join(logs.sessionPath, 'main.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+
 			const restart = entries.filter(entry => entry.message.startsWith('Development runtime restart'));
 			assert.equal(restart.length, 2);
 			const [started, result] = restart.map(entry => JSON.parse(entry.message.slice(entry.message.indexOf('{'), entry.message.lastIndexOf('}') + 1)));
@@ -71,7 +71,7 @@ for (const scenario of ['completed', 'failed', 'invalid', 'superseded'] as const
 			assert.equal(restart[1].level, scenario === 'failed' ? 'error' : 'information');
 			if (scenario === 'failed') {
 				assert.equal(result.phase, 'restarting-daemon');
-				assert.match(restart[1].error, /injected restart failure/);
+				assert.match(String(restart[1].error), /injected restart failure/);
 			}
 		} finally { await rm(directory, { recursive: true, force: true }); }
 	});
@@ -248,12 +248,15 @@ test('a generation waits for every window to finish initialization', async () =>
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events, 'initializing');
+	const started = new DeferredPromise<void>();
+	const start = window.supervisor.start;
+	window.supervisor.start = async () => { await start(); void started.complete(); };
 	const reloader = coordinator(resources, async () => { events.push('restart'); });
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await reloader.reloadNow();
 	assert.deepEqual(events, []);
 	window.setState('ready');
-	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));
+	await started.p;
 	assert.deepEqual(events, ['stop:agents', 'restart', 'start:agents']);
 });
 

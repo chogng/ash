@@ -150,7 +150,9 @@ import { StorageScope, StorageTarget } from '../../platform/storage/common/stora
 import { AgentsWindowInvitationState, EDITOR_AGENT_HOST_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_TOTAL_SESSIONS_STORAGE_KEY, AGENTS_WINDOW_LAST_SESSION_CREATED_STORAGE_KEY, AGENTS_WINDOW_INVITATION_IMPRESSION_STORAGE_KEY, type IAgentHostEditorState } from '../../platform/chat/common/agentsWindowInvitation.js';
 import { AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, validateAgentHostEditorState } from '../../platform/native/common/nativeHost.js';
 import { StorageDatabaseChannel } from '../../platform/storage/electron-main/storageIpc.js';
-import { LoggerService } from '../../platform/log/node/loggerService.js';
+import { LoggerService } from '../../platform/log/electron-main/loggerService.js';
+import { spawn } from 'node:child_process';
+import { hostLogExecutable } from '../../../../.build/desktop/hostLogs.js';
 import { LoggerChannel } from '../../platform/log/electron-main/logIpc.js';
 import { disposableTimeout } from '../../base/common/async.js';
 import { WorkspaceOpenTargetKind } from '../../platform/environment/common/argv.js';
@@ -352,6 +354,7 @@ export class AshApplication extends Disposable {
 	private invitationPersistence: Promise<void> = Promise.resolve();
 	private readonly loggerService = this._register(new LoggerService({
 		logsHome: app.getPath('logs'),
+		start: () => spawn(fileURLToPath(new URL(`../../../../${hostLogExecutable}`, import.meta.url)), [], { stdio: 'pipe', windowsHide: true }),
 		appServerLog: async () => {
 			if (this.appServerStartupMode === 'disabled') return undefined;
 			const connection = createAppServerDaemonLauncher({

@@ -1,0 +1,36 @@
+[package]
+name = "ash-host-logs"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "ash-host-logs"
+path = "src/main.rs"
+
+[features]
+json-schema = ["dep:schemars"]
+export = ["json-schema", "dep:ts-rs"]
+
+[dependencies]
+process-hardening = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sysinfo = { workspace = true }
+schemars = { workspace = true, optional = true }
+ts-rs = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

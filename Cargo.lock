@@ -544,6 +544,7 @@ dependencies = [
  "ash-feedback-contract",
  "ash-file-access",
  "ash-guardian-environment",
+ "ash-host-logs",
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
@@ -2076,6 +2077,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "ash-host-logs"
+version = "0.1.0"
+dependencies = [
+ "ash-process-hardening",
+ "chrono",
+ "libc",
+ "rand 0.9.5",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "ts-rs",
 ]
 
 [[package]]

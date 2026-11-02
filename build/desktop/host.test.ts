@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { writeApplicationChecksums } from './host.ts';
+import { copyHostOutput, writeApplicationChecksums } from './host.ts';
 import { createHash } from 'node:crypto';
 
 test('packaging publishes final desktop assets without hashing metadata or user files', async t => {
@@ -51,6 +51,9 @@ for (const mode of ['build', 'watch'] as const) {
 			await copyFile(join(import.meta.dirname, file), join(root, 'build/desktop', file));
 		}
 		await copyFile(join(import.meta.dirname, '../processes.ts'), join(root, 'build/processes.ts'));
+		// Isolate compiler/watch behavior from Rust compilation; the native builder
+		// has its own generation-publication tests and real build validation.
+		await writeFile(join(root, 'build/python.ts'), 'export async function runPython() {}');
 		await mkdir(join(root, 'build/lib'), { recursive: true });
 		await copyFile(join(import.meta.dirname, '../lib/incrementalOutput.ts'), join(root, 'build/lib/incrementalOutput.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
@@ -77,6 +80,7 @@ for (const mode of ['build', 'watch'] as const) {
 		const initial = spawnSync(process.execPath, [compiler, '--build', 'tsconfig.main.json', 'tsconfig.preload.json', '--pretty', 'false'], {
 			cwd: desktop, encoding: 'utf8', windowsHide: true, timeout: 10_000,
 		});
+
 		assert.equal(initial.error, undefined);
 		assert.equal(initial.status, 0, initial.stdout + initial.stderr);
 		await Promise.all(['main', 'preload'].map(project => rm(join(output, project), { recursive: true })));
@@ -173,3 +177,20 @@ for (const mode of ['build', 'watch'] as const) {
 		}
 	});
 }
+
+test('packaging selects the current Rust logging executable and excludes old running generations', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-host-log-package-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const source = join(root, 'main');
+	await mkdir(join(source, '.build/desktop'), { recursive: true });
+	await writeFile(join(source, 'package.json'), '{"type":"module"}');
+	await writeFile(join(source, '.build/desktop/hostLogs.js'), 'export const hostLogExecutable = "host-logs/current/ash-host-logs.exe";');
+	for (const generation of ['old', 'current']) {
+		await mkdir(join(source, 'host-logs', generation), { recursive: true });
+		await writeFile(join(source, 'host-logs', generation, 'ash-host-logs.exe'), generation);
+	}
+	const destination = join(root, 'package');
+	await copyHostOutput(source, destination);
+	assert.equal(await readFile(join(destination, 'host-logs/current/ash-host-logs.exe'), 'utf8'), 'current');
+	await assert.rejects(stat(join(destination, 'host-logs/old')), { code: 'ENOENT' });
+});

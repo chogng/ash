@@ -1,6 +1,6 @@
 import { watchAppServer } from './appServer.ts';
 import { resolve, join } from 'node:path';
-import { LogFileWriter } from '../../src/ash/platform/log/node/logFileWriter.ts';
+import { LogFileWriter } from '../logFileWriter.ts';
 
 const args = process.argv.slice(2);
 if (args.some(arg => arg !== '--skip-initial')) throw new Error('Usage: watch-app-server.ts [--skip-initial]');

@@ -29,10 +29,12 @@
 
 ## 1. 目标
 
+下述 Electron 分工描述当前宿主。产品退出 Node、Rust 宿主和前端渲染演进的目标与未完成阶段见 [Rust 运行时 roadmap](../TODO.md#roadmap--rust-运行时与-node-退场)，不能把当前 Electron 依赖视为最终边界。
+
 `ash` 是 Ash 的 Electron 富客户端，负责窗口、浏览器、系统能力和 UI，不拥有
 Session、Thread、Turn、ThreadItem、审批策略或持久化状态机。
 
-Desktop 只能通过版本化 App Server API 使用 crates：
+Desktop 的业务能力通过版本化 App Server API 使用 crates；启动级宿主日志使用下述独立 Rust 模块，不能成为绕过领域 API 的入口：
 
 ```text
 Renderer
@@ -749,7 +751,7 @@ execute(method: string, params?: unknown): Promise<unknown>
 | ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 配置              | `IConfigurationService`（`configuration.ts`） | `IFileService` 的 Disk／IndexedDB provider 与通用文件 IPC                                                               | Workbench 创建窗口级 service                                                                                                                                                   |
 | 生命周期          | `ILifecycleService`                           | Web 使用 `BrowserLifecycleService`；Electron Renderer 使用 `ElectronLifecycleService`，Main 使用 `LifecycleMainService` | Workbench 注册 backup、storage 等 joiner；Desktop 与 Agents 的入口加入日志 flush                                                                                               |
-| 日志              | `ILogService` / `ILogSink`                    | Console、System Output 与 Desktop 文件 sinks；Main `LoggerService` 拥有文件                                             | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供                                                                                                                  |
+| 日志              | `ILogService` / `ILogSink`                    | Console、System Output 与 Desktop 文件 sinks；Rust `host-logs` 拥有文件，Main `LoggerService` 适配管道                  | composition root 选择运行时 logger；窗口身份由已认证 IPC 提供                                                                                                                  |
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService`        | Browser、Electron Main adapters                                                                                         | Connector host 注入适配器                                                                                                                                                      |
 | 编辑器打开        | `IEditorService`                              | `BrowserEditorService`                                                                                                  | Workbench 把具体 `EditorPart` 封装在 service 后面                                                                                                                              |
 | 窗口宿主操作      | `IWorkbenchHostService`                       | `WorkbenchWindow`                                                                                                       | Workbench 注册当前窗口实现                                                                                                                                                     |
@@ -985,13 +987,18 @@ Workspace。IPC 订阅保护仍在使用的 scope；真实目录、Agents、Appl
 状态不参与这项清理。App Server 的业务数据继续由 Rust 拥有。
 
 Desktop 结构化日志经 `platform/log/common/logIpc.ts` 与
-`platform/log/electron-main/logIpc.ts` 到达 `platform/log/node/loggerService.ts`。
+`platform/log/electron-main/logIpc.ts` 到达 `platform/log/electron-main/loggerService.ts`。
+Electron adapter 仅传递有界、顺序的私有管道帧；`crates/host-logs` 拥有文件写入、轮转、清理和读取，独立 `ash-host-logs` executable 随 Desktop host 构建和打包。不依赖 App Server 业务连接，不启动业务服务，也不链接 Node 原生绑定。
 每次启动在 Electron logs 目录创建独立会话目录，保存 `main.log` 与 `window-<id>.log`；
 记录时间、级别、类别、消息、错误栈、来源和写入进程 PID。Main 的连接阶段日志包含窗口 ID、
 连接 generation、前后状态及阶段耗时；`ready` 仍由 Renderer 完成协议初始化后的原有确认产生。
 窗口关闭等待日志 flush，进程退出等待文件队列结束。每个来源保留三份不超过 5 MiB 的日志，
 超出单条限制的记录报告错误；后台维护保留当前会话和最新九个旧会话，只删除日志 owner
 识别的会话目录，并在删除前确认目标位于 logs 目录内。
+
+日志 helper 是 Electron 过渡期的宿主基础设施，初始化早于业务窗口。Rust 产品宿主接管后直接复用 Rust 模块，移除 helper 进程适配。helper 故障拒绝未完成请求并报告到宿主控制台，不重放未知结果的写入，也不切回 Node 文件实现。已有 JSONL 和历史会话文件继续可读，后端原始日志保持其 daemon owner。
+
+开发构建日志属于 `build/` 工具，不由产品 `src/` 提供 writer；开发工具链的运行时迁移与默认产品退出 Node 分开验收。
 
 具体 Layout 内的私有 `WorkbenchLayoutStateModel` 负责把 domain state 映射为存储 key：
 Sidebar、Auxiliary Bar 和 Panel 的尺寸使用 Profile/Machine，显隐使用

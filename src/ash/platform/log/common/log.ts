@@ -27,6 +27,14 @@ export interface ILogSink {
 	log(entry: LogEntry): void;
 }
 
+/** Host-local persistence behind the authenticated Window logger channel. */
+export interface ILogFileHost {
+	log(source: string, entry: LogEntry): Promise<void>;
+	flush(): Promise<void>;
+	getLogFiles(windowSource: string): Promise<readonly ILogFile[]>;
+	readLogFile(id: string, cursor?: ILogFileCursor): Promise<ILogFileReadResult>;
+}
+
 /** Structured application logging independent of a console or UI sink. */
 export interface ILogService {
 	trace(categoryOrMessage: string, messageOrArgument?: unknown, ...arguments_: unknown[]): void;

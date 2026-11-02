@@ -8,8 +8,7 @@ interface LogFileWriterOptions {
 	readonly retainedSessions?: number;
 }
 
-/** Shared Node-only persistence for Desktop and development tools. No product
- * service dependencies or transformed TypeScript are needed by build scripts. */
+/** Build-tool log retention. Product runtime logs are owned by ash-host-logs. */
 export class LogFileWriter {
 	public readonly sessionPath: string;
 	private readonly fileSizes = new Map<string, number>();
