@@ -121,6 +121,12 @@ export interface AgentSessionActivity {
 	readonly summary?: string | null;
 }
 
+/** Invalidates a Session's catalog entry and, when needed, its execution tree. */
+export interface AgentSessionChange {
+	readonly sessionId: SessionId;
+	readonly agentTreeChanged: boolean;
+}
+
 export interface AgentSession {
 	readonly sessionId: string;
 	readonly title: string;

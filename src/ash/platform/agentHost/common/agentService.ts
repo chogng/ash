@@ -31,6 +31,8 @@ export interface IAgentCanvasOpenRequest {
 }
 
 export interface IAgentSessionService {
+	readonly onDidChangeSession: Event<Agent.AgentSessionChange>;
+	readonly onDidDeleteSession: Event<Agent.SessionId>;
 	/** Collects process logs from the runtime owning this Session, using connection-owned resources. */
 	collectDebugLogs(params: Agent.SessionReadParams, signal?: AbortSignal): Promise<{
 		readonly files: readonly {

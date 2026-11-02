@@ -63,6 +63,8 @@ import type { SessionMutationParams } from '../common/agent.js';
 
 export function createDisconnectedAgentSessionService(unavailable: UnavailableOperation): IAgentSessionService {
 	return {
+		onDidChangeSession: Event.None,
+		onDidDeleteSession: Event.None,
 		collectDebugLogs: () => unavailable('session.collectDebugLogs'),
 		create: () => unavailable('session.create'),
 		listAgents: () => unavailable('session.listAgents'),
@@ -134,6 +136,19 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }): IAgentSessionService {
 	return {
+		onDidChangeSession: Event.any((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'session/changed') {
+				listener.call(thisArgs, {
+					sessionId: event.params.sessionId,
+					agentTreeChanged: event.params.agentTreeChanged,
+				});
+			}
+		})),
+		onDidDeleteSession: Event.any((listener, thisArgs) => connection.onNotification(event => {
+			if (event.method === 'session/deleted') {
+				listener.call(thisArgs, event.params.sessionId);
+			}
+		})),
 		async collectDebugLogs(params, signal) {
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;

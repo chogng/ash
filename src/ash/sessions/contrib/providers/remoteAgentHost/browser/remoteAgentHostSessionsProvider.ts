@@ -2,7 +2,7 @@ import { agentHostConnectionAddress, type IAgentHostConnectionInfo } from '../..
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { DisposableMap, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { IFileSystemDirectory } from '../../../../../platform/files/common/fileApi.js';
@@ -30,14 +30,13 @@ export class RemoteAgentHostSessionsProvider extends AppServerSessionsProvider {
 		@IAgentSessionService sessionApi: IAgentSessionService,
 		@IAgentModelsService modelApi: IAgentModelsService,
 		@IAgentTurnService turnApi: IAgentTurnService,
-		@IServerEventApi events: IServerEventApi,
 		@IRendererHostService private readonly hostApi: IRendererHost,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IDevContainerAgentHostService containers: IDevContainerAgentHostService,
 		@IAgentHostFileSystemService private readonly files: IAgentHostFileSystemService,
 		@ISessionsManagementService private readonly management: ISessionsManagementService,
 	) {
-		super(remoteHost, appServer, sessionApi, modelApi, turnApi, events, hostApi, instantiation, containers);
+		super(remoteHost, appServer, sessionApi, modelApi, turnApi, hostApi, instantiation, containers);
 		this._register(management.onDidChange(() => this.synchronizeDirectories()));
 		this.synchronizeDirectories();
 	}

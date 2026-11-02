@@ -22,7 +22,7 @@ import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystem
 import { installEditorTestGlobals } from '../../../editor/test/browser/editorTestGlobals.js';
 import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
-import { createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentSessionService, createAppServerAgentThreadService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerAgentModelsService } from '../../../platform/agentHost/browser/appServerAgentModels.js';
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
@@ -2700,6 +2700,7 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, api.model); }
 	services.registerInstance(IRendererHostService, api);
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, api.appServer); }
+	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, api.session); }
 	if (omitted !== IAgentThreadService) { services.registerInstance(IAgentThreadService, api.thread); }
 	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, api.turn); }
 	if (omitted !== ITurnChangesApi) { services.registerInstance(ITurnChangesApi, api.turnChanges); }
@@ -2708,7 +2709,7 @@ function registerChatBackend(services: InstantiationService, api: IRendererHost,
 	if (omitted !== IAgentExecutionSettingsService) { services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } }); }
 }
 
-for (const dependency of [IAgentModelsService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService, IConfigurationService]) {
+for (const dependency of [IAgentModelsService, IAgentSessionService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService, IConfigurationService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -3824,6 +3825,12 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly emitReady: () => void;
 } {
 	const listeners = new Set<(notification: ServerNotification) => void>();
+	const sessionEvents = createAppServerAgentSessionService({
+		onNotification(listener: (notification: ServerNotification) => void) {
+			listeners.add(listener);
+			return toDisposable(() => { listeners.delete(listener); });
+		},
+	} as AppServerProtocolClient);
 	const connectionListeners = new Set<(state: 'ready') => void>();
 	let connectionGeneration = 1;
 	let modelDefaults = { revision: 1, model: null as ModelRef | null, reasoningEffort: null as import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
@@ -3867,6 +3874,8 @@ function fakeApi(options: FakeOptions = {}): {
 				return { agents: (options.agents ?? []).map(agent => ({ name: agent.name, description: agent.description, source: { type: 'directory' as const, id: agent.sourceId } })) };
 			},
 			list: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
+			onDidChangeSession: sessionEvents.onDidChangeSession,
+			onDidDeleteSession: sessionEvents.onDidDeleteSession,
 			subscribeCatalog: async () => ({ sessions: (options.sessions ?? []).map(sessionDto) }),
 			unsubscribeCatalog: async () => undefined,
 			readCatalog: async ({ sessionId }: { sessionId: string; }) => ({ session: sessionDto(currentSession(sessionId)) }),

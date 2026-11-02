@@ -1,11 +1,35 @@
 import type { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
-import type { SessionResult } from '../../../platform/agentHost/common/agent.js';
+import type { AgentSessionChange, SessionResult } from '../../../platform/agentHost/common/agent.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from './sessionProviderScopeService.js';
 import { mapAgentSession, mapAgentExecutionNode, mapAgentThreadRead } from '../../services/sessions/common/sessionIdentity.js';
 
-/** Shared session commands borrow the same raw backend ports as the owning Sessions provider. */
-export class SessionsAgentSessionService implements IAgentSessionService {
-	constructor(@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService) { }
+/** Shared Session commands and notifications use each provider's backend scope. */
+export class SessionsAgentSessionService extends Disposable implements IAgentSessionService {
+	private readonly listeners = this._register(new DisposableStore());
+	private readonly changed = this._register(new Emitter<AgentSessionChange>());
+	public readonly onDidChangeSession = this.changed.event;
+	private readonly deleted = this._register(new Emitter<string>());
+	public readonly onDidDeleteSession = this.deleted.event;
+
+	constructor(@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService) {
+		super();
+		this._register(scopes.onDidChangeScopes(() => this.bind()));
+		this.bind();
+	}
+
+	private bind(): void {
+		this.listeners.clear();
+		for (const scope of this.scopes.getScopes()) {
+			const sessions = scope.services.host.session;
+			this.listeners.add(sessions.onDidChangeSession(event => {
+				this.changed.fire({ sessionId: scope.identity(event.sessionId), agentTreeChanged: event.agentTreeChanged });
+			}));
+			this.listeners.add(sessions.onDidDeleteSession(sessionId => this.deleted.fire(scope.identity(sessionId))));
+		}
+	}
+
 	private async run<T>(sessionId: string | undefined, operation: (scope: ISessionProviderScope) => Promise<T>): Promise<T> {
 		const scope = this.scopes.getScope(sessionId); scope.assertCurrent();
 		const result = await operation(scope); scope.assertCurrent(); return result;

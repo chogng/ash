@@ -14,7 +14,7 @@ import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetMode
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import type { ISessionProviderScope, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
-import { createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import type { AgentInteractionOffer, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
 import type { AdvisorConfig, IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
@@ -70,7 +70,8 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const changeApi = { list: async () => ({ changeSets: [] }), summary: async () => ({ sequence: 1, revision: 'initial', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }) } as unknown as ITurnChangesApi;
 	const events = { subscribe: () => ({ dispose() { } }) } as IServerEventApi;
 	const configuration = resources.add(new TestConfigurationService());
-	const chat = resources.add(new ChatService(modelApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
+	const sessionApi = createDisconnectedAgentSessionService(async operation => { throw new Error(`Unexpected ${operation}`); });
+	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;

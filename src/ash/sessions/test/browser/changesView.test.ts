@@ -33,7 +33,7 @@ import type { TurnChangesReadResult } from '../../../../../.build/protocol/types
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
-import { IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -105,6 +105,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		let pendingRead: DeferredPromise<{ path: string; binary: boolean; truncated: boolean; before: string; after: string; }> | undefined;
 		services.registerInstance(IAgentModelsService, host.model);
 		services.registerInstance(IAgentExecutionSettingsService, host.executionSettings);
+		services.registerInstance(IAgentSessionService, host.session);
 		services.registerInstance(IAgentThreadService, host.thread);
 		services.registerInstance(IAgentTurnService, host.turn);
 		services.registerInstance(IAppServerSkillApi, host.skills);

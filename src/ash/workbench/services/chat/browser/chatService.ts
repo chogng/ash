@@ -10,7 +10,7 @@ import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentThreadService, IAgentTurnService } from '../../../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../../platform/turnChanges/common/turnChangesApi.js';
 import type { QueuedMessage, QueueMessageTarget, ModelRef, SessionId, ThreadId } from '../common/chatService.js';
@@ -55,6 +55,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	constructor(
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
+		@IAgentSessionService sessionApi: IAgentSessionService,
 		@IAgentThreadService private readonly threadApi: IAgentThreadService,
 		@IAgentTurnService private readonly turnApi: IAgentTurnService,
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
@@ -64,6 +65,7 @@ export class ChatService extends Disposable implements IChatService {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
+		this._register(sessionApi.onDidChangeSession(event => this._onDidChangeSession.fire(event)));
 		this._register(threadApi.onDidOfferInteraction(offer => this.acceptInteractionOffer(offer)));
 		this._register(threadApi.onDidUpdateThread(event => {
 			this.retireCommittedInteraction(event);
@@ -71,7 +73,6 @@ export class ChatService extends Disposable implements IChatService {
 		}));
 		this._register(threadApi.onDidUpdateThreadTranscript(event => this._onDidUpdateThreadTranscript.fire(event)));
 		const events = eventApi.subscribe((event) => {
-			if (event.method === 'session/changed') this._onDidChangeSession.fire({ ...event.params });
 			if (event.method === 'queue/changed') this._onDidChangeQueue.fire();
 			if (event.method === 'thread/goal/updated') this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
 			if (event.method === 'thread/goal/cleared') this._onDidUpdateGoal.fire({ threadId: event.params.threadId });

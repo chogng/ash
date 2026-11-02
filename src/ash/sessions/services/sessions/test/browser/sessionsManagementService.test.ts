@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as BackendSession } from '../../../../../../../.build/protocol/typescript/index.js';
-import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { createAppServerAgentSessionService } from '../../../../../platform/agentHost/browser/appServerAgentService.js';
+import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
@@ -229,11 +232,34 @@ test('the App Server provider requires the window connection service when create
 	assert.throws(() => services.createInstance(AppServerSessionsProvider, fake.host), /AppServerApi/);
 });
 
-for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IServerEventApi, IDevContainerAgentHostService]) {
+for (const dependency of [IAppServerApi, IAgentSessionService, IAgentModelsService, IAgentTurnService, IDevContainerAgentHostService]) {
 	test(`the Session provider rejects missing ${dependency.description} at creation`, () => {
 		assert.throws(() => createProvider(sessionHost([]), dependency), { message: `Unknown service: ${dependency.description}` });
 	});
 }
+
+test('Session invalidations stay on their provider and release every notification listener on disposal', () => {
+	const first = sessionHost([]);
+	const second = sessionHost([]);
+	using provider = createProvider(first);
+	using otherProvider = createProvider(second);
+	const changes: { sessionId: string; detailChanged: boolean; }[] = [];
+	const otherChanges: { sessionId: string; detailChanged: boolean; }[] = [];
+	using changed = provider.onDidChangeSession(event => changes.push(event));
+	using otherChanged = otherProvider.onDidChangeSession(event => otherChanges.push(event));
+	assert.equal(first.notificationListenerCount, 2);
+	first.emit({ method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: true } });
+	first.emit({ method: 'session/deleted', params: { sessionId: 'same' } });
+	assert.deepEqual(changes, [{ sessionId: 'same', detailChanged: true }, { sessionId: 'same', detailChanged: false }]);
+	assert.deepEqual(otherChanges, []);
+	provider.dispose();
+	assert.equal(first.notificationListenerCount, 0);
+	assert.equal(first.connectionListeners.size, 0);
+	first.emit({ method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: false } });
+	assert.equal(changes.length, 2);
+	otherProvider.dispose();
+	assert.equal(second.notificationListenerCount, 0);
+});
 
 for (const reconnect of [false, true]) {
 	test(`disposing during catalog subscription only releases its own connection (reconnect: ${reconnect})`, async () => {
@@ -674,7 +700,6 @@ function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown,
 	if (omitted !== IAgentSessionService) { services.registerInstance(IAgentSessionService, fake.host.session); }
 	if (omitted !== IAgentModelsService) { services.registerInstance(IAgentModelsService, fake.host.model); }
 	if (omitted !== IAgentTurnService) { services.registerInstance(IAgentTurnService, fake.host.turn); }
-	if (omitted !== IServerEventApi) { services.registerInstance(IServerEventApi, fake.host.events); }
 	if (omitted !== IDevContainerAgentHostService) {
 		services.registerInstance(IDevContainerAgentHostService, containers ?? {
 			_serviceBrand: undefined,
@@ -1134,6 +1159,12 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		onConnectionState: listener => { connectionListeners.add(listener); return { dispose: () => { connectionListeners.delete(listener); } }; },
 	};
 	const listeners = new Set<(event: ServerNotification) => void>();
+	const sessionEvents = createAppServerAgentSessionService({
+		onNotification(listener: (event: ServerNotification) => void) {
+			listeners.add(listener);
+			return toDisposable(() => { listeners.delete(listener); });
+		},
+	} as AppServerProtocolClient);
 	const sessions = [...initial];
 	const agentTree = { roots: tree ? [tree] : [] };
 	const archiveRequests: Parameters<IAgentSessionService['archive']>[0][] = [];
@@ -1144,6 +1175,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	let listCount = 0;
 	let readCatalogCount = 0;
 	const api: IAgentSessionService = {
+		onDidChangeSession: sessionEvents.onDidChangeSession,
+		onDidDeleteSession: sessionEvents.onDidDeleteSession,
 		async collectDebugLogs() { throw new Error('Session management does not collect debug logs'); },
 		async rename({ sessionId, title }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); sessions[index] = { ...sessions[index]!, title }; return { session: sessions[index]!, agentTree }; },
 		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
@@ -1197,23 +1230,18 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		},
 		async resolveInteraction() { throw new Error('Not used'); },
 	};
-	const events: IServerEventApi = {
-		subscribe(listener) {
-			listeners.add(listener);
-			return { dispose: () => listeners.delete(listener) };
-		},
-	};
 	return {
 		appServer,
 		connectionListeners,
 		get catalogSubscribed() { return catalogSubscribed; },
+		get notificationListenerCount() { return listeners.size; },
 		setConnectionState(state: AppServerConnectionState): void {
 			connectionState = state;
 			if (state === 'ready') { connectionGeneration++; }
 			if (state !== 'ready') catalogSubscribed = false;
 			for (const listener of connectionListeners) listener(state);
 		},
-		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null }, turn, events, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
+		host: { session: api, model: { ...createDisconnectedRendererApi().model, readModel: async (): Promise<ModelRef | null> => null }, turn, workspace, selectWorkspace: async (_folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]): Promise<SessionExecutionTarget | undefined> => undefined },
 		sessions,
 		archiveRequests,
 		restoreRequests,

@@ -623,7 +623,7 @@ export abstract class Workbench extends Disposable {
 		const routedChat = this._register(services.createInstance(SessionsChatService));
 		services.registerInstance(IChatService, routedChat);
 		services.registerInstance(IAgentThreadService, this._register(services.createInstance(SessionsAgentThreadService)));
-		services.registerInstance(IAgentSessionService, services.createInstance(SessionsAgentSessionService));
+		services.registerInstance(IAgentSessionService, this._register(services.createInstance(SessionsAgentSessionService)));
 		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(SessionsLanguageModelsService)));
 		services.registerInstance(IPromptsService, this._register(services.createInstance(SessionsPromptsService)));

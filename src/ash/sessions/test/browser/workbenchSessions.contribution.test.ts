@@ -18,8 +18,9 @@ import { IAgentSessionService, IAgentTurnService } from '../../../platform/agent
 import { IAgentModelsService } from '../../../platform/agentHost/common/agentModels.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
@@ -97,11 +98,12 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	const api = {
 		...createDisconnectedRendererApi(),
 		session: {
+			...createDisconnectedRendererApi().session,
+			onDidChangeSession: () => { subscriptions++; return toDisposable(() => { }); },
 			async subscribeCatalog() { catalogLoads++; return { sessions: [] }; },
 			async unsubscribeCatalog() { },
 		},
 		model: { async readModel() { return null; } },
-		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
 	using providers = new SessionsProvidersService();
@@ -110,7 +112,6 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);
 	services.registerInstance(IAgentTurnService, api.turn);
-	services.registerInstance(IServerEventApi, api.events);
 	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: Event.None });
 	using workspace = new TestWorkspaceService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);

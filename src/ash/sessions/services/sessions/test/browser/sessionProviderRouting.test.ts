@@ -2,6 +2,7 @@ import { createTestLanguageModelToolsService } from '../../../../../workbench/co
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
 import { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentSessionChange } from '../../../../../platform/agentHost/common/agent.js';
 import { AppServerChatDebugService } from '../../../../../workbench/contrib/chat/browser/chatDebug/appServerChatDebugService.js';
 import { diagnosticPayload } from '../../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { SessionsAgentSessionService } from '../../../../browser/agentHost/sessionsAgentSessionService.js';
@@ -267,6 +268,48 @@ test('long provider conversation links preserve short backend coordinates and ca
 });
 
 
+test('Session events qualify each provider identity and retire subscriptions with the provider or service', () => {
+	using context = fixture();
+	using primaryChanges = new Emitter<AgentSessionChange>();
+	using remoteChanges = new Emitter<AgentSessionChange>();
+	using primaryDeletions = new Emitter<string>();
+	using remoteDeletions = new Emitter<string>();
+	Object.assign(context.primaryHost.session, { onDidChangeSession: primaryChanges.event, onDidDeleteSession: primaryDeletions.event });
+	Object.assign(context.remoteHost.session, { onDidChangeSession: remoteChanges.event, onDidDeleteSession: remoteDeletions.event });
+	using sessions = new SessionsAgentSessionService(context.scopes);
+	const changes: AgentSessionChange[] = [];
+	const deletions: string[] = [];
+	using changed = sessions.onDidChangeSession(event => changes.push(event));
+	using deleted = sessions.onDidDeleteSession(sessionId => deletions.push(sessionId));
+	primaryChanges.fire({ sessionId: 'same', agentTreeChanged: false });
+	remoteChanges.fire({ sessionId: 'same', agentTreeChanged: true });
+	primaryDeletions.fire('same');
+	remoteDeletions.fire('same');
+	assert.deepEqual(changes, [
+		{ sessionId: 'same', agentTreeChanged: false },
+		{ sessionId: context.sessionId, agentTreeChanged: true },
+	]);
+	assert.deepEqual(deletions, ['same', context.sessionId]);
+	context.registration.dispose();
+	assert.equal(remoteChanges.hasListeners(), false);
+	assert.equal(remoteDeletions.hasListeners(), false);
+	remoteChanges.fire({ sessionId: 'same', agentTreeChanged: true });
+	remoteDeletions.fire('same');
+	using replacement = context.registry.registerProvider({ ...context.remote } as ISessionsProvider);
+	remoteChanges.fire({ sessionId: 'same', agentTreeChanged: false });
+	assert.deepEqual(changes, [
+		{ sessionId: 'same', agentTreeChanged: false },
+		{ sessionId: context.sessionId, agentTreeChanged: true },
+		{ sessionId: context.sessionId, agentTreeChanged: false },
+	]);
+	assert.deepEqual(deletions, ['same', context.sessionId]);
+	sessions.dispose();
+	assert.equal(primaryChanges.hasListeners(), false);
+	assert.equal(primaryDeletions.hasListeners(), false);
+	assert.equal(remoteChanges.hasListeners(), false);
+	assert.equal(remoteDeletions.hasListeners(), false);
+});
+
 test('shared peer-chat creation and process-log export use the remote Session owner', async () => {
 	using context = fixture();
 	const calls: unknown[] = [];
@@ -277,7 +320,7 @@ test('shared peer-chat creation and process-log export use the remote Session ow
 		},
 		collectDebugLogs: async (params: unknown, signal: AbortSignal) => { calls.push({ params, signal }); return { files: [], omittedFiles: 0 }; },
 	});
-	const sessions = new SessionsAgentSessionService(context.scopes);
+	using sessions = new SessionsAgentSessionService(context.scopes);
 	const result = await sessions.createThread({ sessionId: context.sessionId, commandId: 'create', title: 'Peer' });
 	assert.equal(result.session.sessionId, context.sessionId);
 	assert.equal(result.threadId, sessionIdentity('remote', 'new-thread', 'primary'));
@@ -293,7 +336,7 @@ test('Agent definition settings query the selected provider and retire its late 
 	const pending = new DeferredPromise<typeof catalog>();
 	let late = false;
 	context.remoteHost.session.readRoleCatalog = async () => late ? pending.p : catalog;
-	const sessions = new SessionsAgentSessionService(context.scopes);
+	using sessions = new SessionsAgentSessionService(context.scopes);
 	assert.deepEqual(await sessions.readRoleCatalog(), catalog);
 	late = true;
 	const read = sessions.readRoleCatalog();
@@ -324,7 +367,8 @@ test('the real trace reader projects remote identity and round-trips backend pag
 		readTracePayload: async (params: unknown) => { calls.push(params); return { payload }; },
 		readTraceGraph: async () => ({ graph: { nodes: { opaque: { id: 'opaque', kind: 'thread', label: 'Thread', threadId: 'thread', turnId: null, eventKey: 'thread:event-1' } }, edges: [{ from: 'opaque', to: 'opaque', kind: 'self' }], warnings: [] } }),
 	});
-	using debug = new AppServerChatDebugService(context.scopes.getScope(context.sessionId).thread, new SessionsAgentSessionService(context.scopes));
+	using sessions = new SessionsAgentSessionService(context.scopes);
+	using debug = new AppServerChatDebugService(context.scopes.getScope(context.sessionId).thread, sessions);
 	const first = await debug.readTrace(context.sessionId, {});
 	assert.equal(first.trace.sessionId, context.sessionId);
 	assert.equal(first.trace.threads[0]!.threadId, context.threadId);

@@ -7,7 +7,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { canceled } from '../../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
-import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
@@ -64,7 +64,6 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IAgentSessionService private readonly sessionApi: IAgentSessionService,
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@IAgentTurnService private readonly turnApi: IAgentTurnService,
-		@IServerEventApi events: IServerEventApi,
 		@IRendererHostService private readonly rendererHost: IRendererHost,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IDevContainerAgentHostService private readonly containers: IDevContainerAgentHostService,
@@ -91,11 +90,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			if (state === 'ready') this._onDidChangeCatalog.fire();
 		});
 		this._register(toDisposable(() => connection.dispose()));
-		const subscription = events.subscribe(event => {
-			if (event.method === 'session/changed') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
-			if (event.method === 'session/deleted') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
-		});
-		this._register(toDisposable(() => subscription.dispose()));
+		this._register(sessionApi.onDidChangeSession(event => {
+			this._onDidChangeSession.fire({ sessionId: event.sessionId, detailChanged: event.agentTreeChanged });
+		}));
+		this._register(sessionApi.onDidDeleteSession(sessionId => {
+			this._onDidChangeSession.fire({ sessionId, detailChanged: false });
+		}));
 		this._register(toDisposable(() => {
 			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), 'Failed to unsubscribe Session catalog'); }
 			for (const sessionId of this.subscribed) {

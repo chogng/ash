@@ -7,8 +7,10 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { CancellationError } from '../../../../base/common/errors.js';
 import { AppServerGitHubService } from '../../../github/browser/appServerGitHubService.js';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerConnectionRecovery, AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
+import { createAppServerAgentSessionService } from '../../browser/appServerAgentService.js';
+import type { AgentSessionChange } from '../../common/agent.js';
 import type { LogEntry } from '../../../log/common/log.js';
 import { LogService } from '../../../log/common/logServiceImpl.js';
 import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
@@ -68,6 +70,48 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('Session domain events stay on their connection across reconnects and listener disposal', async () => {
+	const transport = new ProtocolTransport();
+	const otherTransport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	const otherClient = new AppServerProtocolClient(otherTransport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	cleanup.add(toDisposable(() => otherClient.dispose()));
+	const sessions = createAppServerAgentSessionService(client);
+	const otherSessions = createAppServerAgentSessionService(otherClient);
+	const receiver = { changed: [] as AgentSessionChange[], deleted: [] as string[] };
+	const otherChanges: AgentSessionChange[] = [];
+	using subscriptions = new DisposableStore();
+	sessions.onDidChangeSession(function (this: typeof receiver, event) { this.changed.push(event); }, receiver, subscriptions);
+	sessions.onDidDeleteSession(function (this: typeof receiver, sessionId) { this.deleted.push(sessionId); }, receiver, subscriptions);
+	cleanup.add(otherSessions.onDidChangeSession(event => otherChanges.push(event)));
+	await Promise.all([client.connect(), otherClient.connect()]);
+	const changed = { method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: true } };
+	const deleted = { method: 'session/deleted', params: { sessionId: 'same' } };
+	transport.frame(changed);
+	transport.frame(deleted);
+	transport.frame({ method: 'queue/changed', params: {} });
+	assert.deepEqual(receiver, { changed: [{ sessionId: 'same', agentTreeChanged: true }], deleted: ['same'] });
+	assert.deepEqual(otherChanges, []);
+	otherTransport.frame({ method: 'session/changed', params: { sessionId: 'same', agentTreeChanged: false } });
+	assert.deepEqual(otherChanges, [{ sessionId: 'same', agentTreeChanged: false }]);
+	client.disconnect();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.equal(receiver.changed.length, 1);
+	assert.equal(receiver.deleted.length, 1);
+	await client.connect();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.deepEqual(receiver, { changed: [changed.params, changed.params], deleted: ['same', 'same'] });
+	subscriptions.dispose();
+	transport.frame(changed);
+	transport.frame(deleted);
+	assert.equal(receiver.changed.length, 2);
+	assert.equal(receiver.deleted.length, 2);
+});
 
 test('extension results wake through decoded completion notifications and stop waiting on disconnect', async () => {
 	for (const outcome of ['complete', 'disconnect'] as const) {
