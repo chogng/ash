@@ -242,6 +242,25 @@ test('reuses bytecode ${index}', () => {
 	assert.equal(existsSync(JSON.parse(readFileSync(marker, 'utf8')).cache), false);
 });
 
+test('coverage reporting can retain the compiled snapshot for source-map remapping', () => {
+	const env: NodeJS.ProcessEnv = { ...runnerEnvironment, ASH_UNIT_TEST_PRESERVE_OUTPUT: '1' };
+	delete env.NODE_V8_COVERAGE;
+	const result = spawnSync(process.execPath, ['test/unit/run.ts', '--run', second], {
+		cwd: desktopDirectory, encoding: 'utf8', timeout: 15_000, windowsHide: true, env,
+	});
+	if (result.error) throw result.error;
+	assert.equal(result.status, 0, result.stdout + result.stderr);
+	const match = /^Preserved unit test output: (.+)$/mu.exec(result.stdout);
+	assert.ok(match, result.stdout + result.stderr);
+	const snapshot = match[1];
+	assert.ok(snapshot.startsWith(join(desktopDirectory, '.build/desktop/test-run-')));
+	try {
+		assert.equal(existsSync(join(snapshot, second)), true);
+	} finally {
+		rmSync(snapshot, { recursive: true, force: true });
+	}
+});
+
 test('the preload resolves editor aliases and ignores static and dynamic CSS imports', () => {
 	const path = join(directory, 'loader.test.js');
 	writeFileSync(join(directory, 'ignored.css'), '.invalid-javascript { color: red; }');
