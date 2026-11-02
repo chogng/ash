@@ -168,6 +168,7 @@ import { EditorPaneMatch, EditorPane } from '../../../../../../workbench/browser
 import type { IEditorPaneWithViewState } from '../../../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { EditorPaneRegistry, EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../../editor.js';
 import { ImagePreviewEditorInput } from '../../../../../contrib/mediaPreview/browser/imagePreviewEditorInput.js';
+import { ChatEditorInput } from '../../../../../contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { MediaPlayerEditorInput } from '../../../../../contrib/mediaPreview/browser/mediaPlayerEditorInput.js';
 import '../../../../../contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import { ActiveEditorContext } from '../../../../../../workbench/common/contextkeys.js';
@@ -4217,6 +4218,42 @@ test('singleton canvases reveal their original group and cannot create an empty 
 		assert.equal(editor.activeGroup, original);
 		assert.deepEqual(other.inputs, []);
 		assert.deepEqual(original.inputs, [canvas]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+for (const anotherWindow of [false, true]) test(`a materialized Chat input reveals its original pane from another ${anotherWindow ? 'window' : 'group'}`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(
+			descriptor(ChatEditorInput.EditorID, '', () => new TestEditorPane(ChatEditorInput.EditorID)),
+		);
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'chat-identity', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		using draft = new ChatEditorInput('untitled:draft', 'Draft');
+		const pane = await parts.openEditor(draft, { pinned: true });
+		const original = main.activeGroup;
+		const closeHandler = draft.closeHandler = { showConfirm: () => false, confirm: async () => ConfirmResult.DONT_SAVE };
+		draft.updateSession('session:created', 'Created');
+		const other = anotherWindow
+			? (await parts.createAuxiliaryEditorPart()).activeGroup
+			: main.addGroup(original.id, Direction.Right);
+		if (!anotherWindow) main.activateGroup(other.id);
+		using historyInput = new ChatEditorInput('session:created', 'Created');
+		assert.equal(await parts.openEditor(historyInput, { pinned: true }), pane);
+		assert.equal(parts.activePart, main);
+		assert.equal(main.activeGroup, original);
+		assert.deepEqual(original.inputs, [draft]);
+		assert.deepEqual(other.inputs, []);
+		assert.equal(draft.closeHandler, closeHandler);
+		draft.updateSession('session:created', 'Renamed live chat');
+		assert.equal(original.domNode.querySelector('[role=tab]')?.getAttribute('aria-label'), 'Renamed live chat');
 	} finally {
 		dom.window.close();
 	}

@@ -154,8 +154,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		this.sessionsReady = restoring;
 	}
 
-	protected override async restoreEditorPane(id: string): Promise<void> {
+	protected override async restoreEditorPane(id: string, signal: AbortSignal): Promise<void> {
 		await this.sessionsReady;
+		signal.throwIfAborted();
 		this.syncSessions(id);
 	}
 

@@ -110,7 +110,8 @@ export class EditorGroupModel {
 		const existing = this.editors[this.indexOf(input)];
 		const replaced = this.getEditorToReplace(input, options);
 		const editor: EditorEntry = {
-			input,
+			// A matching live input carries its pane's references and close handler.
+			input: existing?.input instanceof EditorInput ? existing.input : input,
 			instanceId: existing?.instanceId ?? options.instanceId ?? nextEditorInstanceId(),
 			preview: options.pinned === false && !existing?.sticky,
 			sticky: existing?.sticky ?? false,
@@ -148,7 +149,7 @@ export class EditorGroupModel {
 
 	public updateEditor(input: IResourceEditorInput, options: IEditorOpenOptions): void {
 		const editor = this.requireEditor(input);
-		editor.input = input;
+		if (!(editor.input instanceof EditorInput)) editor.input = input;
 		if (options.pinned === true) {
 			editor.preview = false;
 		}

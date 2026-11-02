@@ -36,6 +36,7 @@ import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor
 import { isEditorPaneWithViewState } from './editorWithViewState.js';
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from './editorDropData.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
 import type { IEditorPaneDescriptor, IEditorPaneRegistry } from '../../editor.js';
 import type { IEditorTabDragAndDrop, EditorTabDropPosition } from './editorTabDragAndDrop.js';
 import './media/editorgroupview.css';
@@ -593,6 +594,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 		if (existing?.paneInstance.pane.id === descriptor.id && !options.forceReload) {
+			if (existing.input instanceof EditorInput) input = existing.input;
 			const wasPreview = existing.preview;
 			const previousIndex = this.model.indexOf(input);
 			this.model.updateEditor(input, { ...options, pinned: options.pinned ?? (options.index !== undefined) });

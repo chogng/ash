@@ -2,6 +2,7 @@ import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
+import { EditorInput } from '../../../common/editor/editorInput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -581,6 +582,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private isSameEditor(left: IResourceEditorInput, right: IResourceEditorInput): boolean {
+		if (left instanceof EditorInput) return left.matches(right, this.uriIdentity.extUri);
+		if (right instanceof EditorInput) return right.matches(left, this.uriIdentity.extUri);
 		return left.editorId === right.editorId && this.uriIdentity.extUri.isEqual(left.resource, right.resource);
 	}
 

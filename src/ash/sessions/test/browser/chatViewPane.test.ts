@@ -156,6 +156,9 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
+import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
+import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 
 const unavailableAuxiliaryWindows = { open: async () => { throw new Error('Unexpected auxiliary window'); } } as unknown as IAuxiliaryWindowService;
 const inputResources = new DisposableStore();
@@ -170,7 +173,9 @@ function createInputServices(
 	contextMenus?: IContextMenuService,
 	commandScope?: InstantiationService,
 ): InstantiationService {
-	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
+	const editorServices = createCodeEditorServices(inputResources);
+	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
+	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
@@ -205,6 +210,7 @@ function createInputServices(
 	services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	registerTestDictationOnboarding(services);
 	// Command actions validate membership against the registry that owns this composer.
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
@@ -5467,6 +5473,65 @@ test('a new conversation in a List mode editor preserves the original draft', as
 	assert.equal(input.value, 'Retain this source draft');
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.stopRequests.length, 0);
+});
+
+for (const retire of ['clear', 'dispose', 'supersede', 'abort'] as const) test(`Chat editor cannot mount a late conversation after ${retire}`, async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const { pane, dom, inputServices, input, fake } = fixture;
+	const host = dom.window.document.createElement('div');
+	dom.window.document.body.append(host);
+	const pendingView = new DeferredPromise<typeof pane>();
+	let opens = 0;
+	using editorServices = inputServices.createChild();
+	editorServices.registerInstance(IViewsService, {
+		openView: () => ++opens === 1 ? pendingView.p : Promise.resolve(pane),
+	} as unknown as IViewsService);
+	const editor = resources.add(editorServices.createInstance(ChatEditor));
+	editor.create(host);
+	const controller = new AbortController();
+	const first = resources.add(new ChatEditorInput('session:session-1', 'Original'));
+	const opening = editor.setInput(first, controller.signal);
+	const rejected = assert.rejects(opening);
+	if (retire === 'clear') editor.clearInput();
+	else if (retire === 'dispose') editor.dispose();
+	else if (retire === 'abort') controller.abort();
+	else {
+		const replacement = resources.add(pane.createNewChatEditorInput());
+		await editor.setInput(replacement, new AbortController().signal);
+		editor.setVisible(true);
+	}
+	await pendingView.complete(pane);
+	await rejected;
+	assert.equal(host.contains(input), false);
+	assert.equal(pane.element.contains(input), true);
+	assert.equal(first.closeHandler, undefined);
+	assert.equal(fake.turnStartRequests.length, 0);
+});
+
+test('Chat editor cancellation during catalog restoration leaves the original composer in its view', async () => {
+	const initialization = new DeferredPromise<void>();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, undefined, initialization.p);
+	using resources = fixture.resources;
+	const { pane, sessions, dom, inputServices, input, fake } = fixture;
+	const host = dom.window.document.createElement('div');
+	dom.window.document.body.append(host);
+	using editor = inputServices.createInstance(ChatEditor);
+	editor.create(host);
+	const unopened = sessions.createUntitledSession('Unopened conversation', undefined, undefined, false);
+	const draft = resources.add(new ChatEditorInput(`untitled:${unopened.untitledSessionId}`));
+	const opening = editor.setInput(draft, new AbortController().signal);
+	const rejected = assert.rejects(opening);
+	// The view is available, but its catalog still owns the pending restoration.
+	await nextTask();
+	editor.clearInput();
+	await initialization.complete();
+	await rejected;
+	assert.equal(host.contains(input), false);
+	assert.equal(pane.element.contains(input), true);
+	assert.equal(pane.element.querySelector(`[data-untitled-session-id="${unopened.untitledSessionId}"]`), null);
+	assert.equal(draft.closeHandler, undefined);
+	assert.equal(fake.turnStartRequests.length, 0);
 });
 
 test('an independent draft editor keeps its widget when the first submission materializes its Session', async () => {

@@ -284,7 +284,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	/** Invalidates pending work even when navigation returns to the same retained composer. */
 	protected abstract get selectionRevision(): number;
 	/** Restores a requested conversation through the product owner before an editor borrows it. */
-	protected abstract restoreEditorPane(id: string): Promise<void>;
+	protected abstract restoreEditorPane(id: string, signal: AbortSignal): Promise<void>;
 
 	private getDraggedSession(): DraggedEditorIdentifier | undefined {
 		const dragged = this.editorTransfer.getData(DraggedEditorIdentifier.prototype)?.[0];
@@ -332,9 +332,10 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	}
 
 	/** Borrows the original widget; selection, draft storage and execution remain with the product adapter. */
-	public async attachSessionEditor(input: ChatEditorInput, parent: HTMLElement): Promise<IDisposable & { readonly widget: ChatWidget<TModel>; setVisible(visible: boolean): void; }> {
+	public async attachSessionEditor(input: ChatEditorInput, parent: HTMLElement, signal: AbortSignal): Promise<IDisposable & { readonly widget: ChatWidget<TModel>; setVisible(visible: boolean): void; }> {
 		if (input.paneId === undefined) throw new TypeError('A session editor requires a conversation');
-		await this.restoreEditorPane(input.paneId);
+		await this.restoreEditorPane(input.paneId, signal);
+		signal.throwIfAborted();
 		if (this.isDisposed) throw new Error('Chat view is disposed');
 		const entry = this.renderedPanes.find(entry => entry.id === input.paneId);
 		if (!entry || entry.detached) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
