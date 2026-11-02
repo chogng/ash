@@ -254,6 +254,7 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 }
 
 export interface QueuedMessage {
+	readonly steerTurnId?: string;
 	readonly sessionId: string;
 	readonly threadId: string;
 	/** The durable enqueue command is also the message's stable identity. */
@@ -276,6 +277,7 @@ export interface QueueMessageTarget extends QueueListParams {
 export type QueueMessageEdit =
 	| { readonly type: 'pause' | 'resume'; }
 	| { readonly type: 'replaceText'; readonly text: string; }
+	| { readonly type: 'replaceTextWithDelivery'; readonly text: string; readonly delivery: { readonly type: 'queued' | 'immediate'; } | { readonly type: 'steering'; readonly turnId: string; }; }
 	| { readonly type: 'send'; };
 
 export interface QueueListParams extends SessionReadParams {
@@ -560,6 +562,11 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| {
+		readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number;
+		readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number;
+		readonly selection?: string | null;
+	}
 	| {
 		readonly type: 'message';
 		readonly parentThreadId: ThreadId;

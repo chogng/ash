@@ -3167,6 +3167,8 @@ use features::FeatureState;
 #[cfg(any(test, feature = "export"))]
 use feedback_contract::PreparedFeedback;
 #[cfg(any(test, feature = "export"))]
+use queue::QueueDelivery;
+#[cfg(any(test, feature = "export"))]
 use queue::QueueInput;
 #[cfg(any(test, feature = "export"))]
 use queue::QueueMove;
@@ -7350,6 +7352,7 @@ typescript_bindings! {
     SearchSource,
     QueueEditParams,
     QueueEditAction,
+    QueueDelivery,
     QueueMove,
     QueueEnqueueParams,
     QueueListParams,

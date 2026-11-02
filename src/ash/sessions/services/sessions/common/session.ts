@@ -74,6 +74,7 @@ export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../wo
 
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
+	| { readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number; readonly selection?: string | null; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| { readonly type: 'rewind'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string; }
 	| { readonly type: 'agentSpawn'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; };

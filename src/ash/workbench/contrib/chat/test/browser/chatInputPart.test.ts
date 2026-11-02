@@ -1,3 +1,11 @@
+import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
+import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { IChatWidgetService, type IChatWidget } from '../../browser/chat.js';
+import { ChatQueuePickerRendering } from '../../browser/widget/input/chatQueuePickerActionItem.js';
+import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
 import { ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { readFileSync } from 'node:fs';
@@ -101,6 +109,7 @@ suiteTeardown(() => sharedNotifications.dispose());
 class ObservableInputPart extends ChatInputPart {
 	readonly onDidChangeInputForTest = this.onDidChangeInput;
 	inputNotificationsForTest!: IChatInputNotificationService;
+	clientCommandsForTest!: IChatSlashCommandService;
 }
 
 function inputPart(notifications: TestNotificationService, dictation?: TestDictationCapture, mode: ChatInputState['mode'] = 'agent', delegate: Partial<ChatInputDelegate> = {}, sharedServices?: InstantiationService, localTranscription?: ILocalTranscriptionModelService & ILocalTranscriptionService, telemetry?: ITelemetryService, layout?: 'compact'): ObservableInputPart {
@@ -137,7 +146,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	if (!partServices.has(IMessageHistoryService)) partServices.registerInstance(IMessageHistoryService, undefined);
 	if (!partServices.has(IQuickInputService)) partServices.registerSingleton(IQuickInputService, () => new TestQuickInputService({ container: document.body }));
 	partServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	partServices.registerInstance(ICommandService, { executeCommand: async () => undefined } as unknown as ICommandService);
+	partServices.registerInstance(ICommandService, { executeCommand: async (id: string, context?: unknown) => { const handler = CommandsRegistry.getCommand(id); if (handler) return handler(partServices, context); } } as ICommandService);
 	partServices.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
 	partServices.registerInstance(INotificationService, notifications);
@@ -178,8 +187,19 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
+	let part!: ObservableInputPart;
+	if (!partServices.has(IChatSlashCommandService)) partServices.registerSingleton(IChatSlashCommandService, () => new ChatSlashCommandService());
+	if (!partServices.has(IChatSideChatService)) partServices.registerSingleton(IChatSideChatService, () => new ChatSideChatService());
+	const widget = { sessionId: 'input-test-session', threadId: 'input-test-thread', get input() { return part; }, visible: true, onDidHide: AshEvent.None, onDidChangeViewModel: AshEvent.None, acceptInput: ((text, options) => part.acceptInput(text, options)) satisfies IChatWidget['acceptInput'] } as unknown as IChatWidget;
+	partServices.registerInstance(IChatWidgetService, { lastFocusedWidget: widget, getAllWidgets: () => [widget] } as unknown as IChatWidgetService);
+	if (!partServices.has(IActionViewItemService)) {
+		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+		partServices.registerSingleton(IActionViewItemService, () => partServices.createInstance(descriptor) as IActionViewItemService);
+	}
+	if (!partServices.get(IActionViewItemService).lookUp(MenuId.ChatExecute, MenuId.ChatExecuteQueue)) inputResources.add(partServices.createInstance(ChatQueuePickerRendering));
+	part = partServices.createInstance(ObservableInputPart, container, { executeServerCommand: async () => { throw new Error('Unexpected server command in Code input fixture'); }, ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { layout, modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.inputNotificationsForTest = partServices.get(IChatInputNotificationService);
+	part.clientCommandsForTest = partServices.get(IChatSlashCommandService);
 	part.render(state);
 	return part;
 }
@@ -1612,7 +1632,7 @@ suite('chatInput browser component', () => {
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Host input completions attach a captured file, undo and send in ${locale}`, async () => {
 			const { page } = browserTests;
-			await page.goto(`/chatInput.html?inlineCode&locale=${locale}`);
+			await page.goto(`/chatInput.html?hostInputCompletions&inlineCode&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 			await input.focus();
@@ -1645,7 +1665,7 @@ suite('chatInput browser component', () => {
 
 	test('Host input completions capture a directory manifest and dismiss with Escape', async () => {
 		const { page } = browserTests;
-		await page.goto('/chatInput.html?inlineCode');
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 		await input.pressSequentially('#folder:src');
@@ -1663,7 +1683,7 @@ suite('chatInput browser component', () => {
 
 	test('Host input completions make Send wait for the captured resource', async () => {
 		const { page } = browserTests;
-		await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 		await input.pressSequentially('@drop-pending');
@@ -1680,7 +1700,7 @@ suite('chatInput browser component', () => {
 	for (const retirement of ['edit', 'cursor', 'draft'] as const) {
 		test(`Host input completions cannot replace a ${retirement} changed draft`, async () => {
 			const { page } = browserTests;
-			await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+			await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 			await input.pressSequentially('#drop-pending');
@@ -1707,7 +1727,7 @@ suite('chatInput browser component', () => {
 
 	test('Host input completions leave the typed query intact when capture fails', async () => {
 		const { page } = browserTests;
-		await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+		await page.goto('/chatInput.html?hostInputCompletions&inlineCode&dropSources&completionSources');
 		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
 		await input.pressSequentially('#drop-missing');
 		await expect(page.getByRole('option').filter({ hasText: '#drop-missing.ts' })).toBeVisible();
@@ -4617,6 +4637,53 @@ for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]
 	});
 }
 
+test('Stop and Send waits for interruption and restores draft and attachments on failure', async () => {
+	const started = new DeferredPromise<void>();
+	const stopped = new DeferredPromise<void>();
+	const calls: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		interrupt: async () => { calls.push('interrupt'); started.complete(); await stopped.p; },
+		send: async (text, _mode, _skills, contexts) => {
+			calls.push(text);
+			assert.equal(contexts?.[0]?.id, 'note');
+			throw new Error('Synthetic send failure');
+		},
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Captured stop draft');
+	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+	const captured = await part.captureDraft();
+	const pending = assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), /Synthetic send failure/);
+	await started.p;
+	assert.deepEqual(calls, ['interrupt']);
+	stopped.complete();
+	await pending;
+	assert.deepEqual(calls, ['interrupt', captured!.draft.text]);
+	const restored = await part.captureDraft();
+	assert.equal(restored?.draft.text, captured!.draft.text);
+	assert.equal(restored?.draft.contexts?.[0]?.id, 'note');
+});
+
+test('Stop and Send cannot submit into a successor conversation after interruption', async () => {
+	const started = new DeferredPromise<void>();
+	const stopped = new DeferredPromise<void>();
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		interrupt: async () => { started.complete(); await stopped.p; },
+		send: async () => { sends++; },
+	});
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Old conversation');
+	const pending = assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), error => isCancellationError(error));
+	await started.p;
+	part.invalidatePendingInput();
+	edit(part, 'Successor draft');
+	stopped.complete();
+	await pending;
+	assert.equal(sends, 0);
+	assert.equal((await part.captureDraft())?.draft.text, 'Successor draft');
+});
+
 test('Explicit queue intent cannot execute a slash command or change a hidden draft', async () => {
 	let commands = 0;
 	using part = inputPart(sharedNotifications, undefined, 'agent', { executeCommand: async () => { commands++; } });
@@ -4686,4 +4753,25 @@ test('Confirmation focus toggles through the owning input without answering or c
 	assert.equal(part.focusConfirmation(), true); assert.equal(document.activeElement, part.element.querySelector('textarea'));
 	assert.equal(answered, false); assert.equal(part.element.querySelector('textarea')!.value, 'Keep this draft');
 	part.setVisible(false); assert.equal(part.focusConfirmation(), false);
+});
+
+
+test('/btw composer captures the untrimmed question and shifts frozen reference offsets while preserving a failed draft', async () => {
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, '/btw Question');
+	part.addContext({ id: 'note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+	const captured = (await part.captureDraft())!.draft;
+	using handler = part.clientCommandsForTest.registerSlashCommand({ command: 'btw', detail: 'Side question', executeDuringRequest: true }, async (prompt, resource, options) => {
+		assert.equal(resource.path, '/input-test-session/input-test-thread');
+		assert.equal(prompt, captured.text.slice(5));
+		const reference = captured.contexts![0].reference!;
+		assert.deepEqual(options?.attachedContext?.[0]?.reference, { start: reference.start - 5, end: reference.end - 5 });
+		assert.equal((await options!.attachedContext![0]!.resolve()).content, 'Captured context');
+		throw new Error('Synthetic side chat failure');
+	});
+	await assert.rejects(part.acceptInput(), /Synthetic side chat failure/);
+	assert.equal(sends, 0);
+	assert.deepEqual((await part.captureDraft())!.draft, captured);
 });

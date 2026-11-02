@@ -1,3 +1,4 @@
+import { IAgentHostInputCompletionService } from '../../../../../../../platform/agentHost/common/agentService.js';
 import { TrackedRangeStickiness } from '../../../../../../../editor/common/model.js';
 import { Disposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { canceled } from '../../../../../../../base/common/errors.js';
@@ -39,7 +40,7 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 			const prefix = line.slice(commandStart, request.position.column - 1);
 			if (!prefix.startsWith('/') || /\s/.test(prefix)) return emptyCompletionResult();
 			const query = prefix.slice(1);
-			const matches = catalog.matching(query).filter(command => !localOnly || catalog.binding(command.name)?.origin === 'local');
+			const matches = catalog.matching(query).filter(command => !localOnly || catalog.binding(command.name)?.origin === 'local' || catalog.binding(command.name)?.origin === 'client');
 			// Weak name and description matches need an explicit choice before Enter can accept them.
 			const selectFirst = !query || (matches[0]?.name.startsWith(query.toLowerCase()) ?? false);
 			const commandEnd = commandStart + line.slice(commandStart).search(/\s|$/);
@@ -142,6 +143,7 @@ export class BuiltinDynamicCompletions extends Disposable {
 		input: IChatInputEditor,
 		host: {
 			getAttachments(): readonly ChatContextAttachment[];
+			getSessionId(): string | undefined;
 			acquire(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 		},
 		@ILanguageFeaturesService features: ILanguageFeaturesService,
@@ -150,6 +152,7 @@ export class BuiltinDynamicCompletions extends Disposable {
 		@IEditorGroupsService groups: IEditorGroupsService,
 		@IFileService files: IFileService,
 		@IChatAttachmentResolveService resolver: IChatAttachmentResolveService,
+		@IAgentHostInputCompletionService hostCompletions: IAgentHostInputCompletionService,
 	) {
 		super();
 		const model = input.getModel?.();
@@ -168,6 +171,8 @@ export class BuiltinDynamicCompletions extends Disposable {
 				const prefix = line.slice(0, request.position.column - 1);
 				const token = /(?:^|\s)([@#])([^\s@#]*)$/u.exec(prefix);
 				if (!token) { return emptyCompletionResult(); }
+				// The connected host owns resource capture and stale-draft admission when advertised.
+				if (hostCompletions.getTriggerCharacters(host.getSessionId()).includes(token[1]!)) return emptyCompletionResult();
 				const query = token[2]!;
 				const startColumn = prefix.length - query.length;
 				const suffix = line.slice(request.position.column - 1).match(/^[^\s]*/u)![0];

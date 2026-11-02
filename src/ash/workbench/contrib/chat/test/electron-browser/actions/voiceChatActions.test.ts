@@ -146,6 +146,7 @@ suite('Desktop built-in Voice Mode command', () => {
 			focus: () => { },
 			reveal: () => { },
 			focusResponseItem: () => { },
+			startEditing: () => { throw new Error('Unexpected queue editor'); },
 			startVoiceConversation: async () => { starts++; },
 		};
 		const registration = owner.add(widgets.register(widget));

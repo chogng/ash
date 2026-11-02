@@ -1,3 +1,5 @@
+import { ChatQueueEditor } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ChatSideChatWidget } from '../../../../../workbench/contrib/chat/browser/chatSideChat.js';
 import { IVoiceModeOnboardingService } from '../../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -16,7 +18,7 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/c
 import './media/chat.css';
 import './media/chatListWidget.css';
 import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -44,6 +46,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface ICoworkWidgetModel extends IDisposable {
+	readonly thread?: import('../../../../../workbench/services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
@@ -78,6 +81,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	public readonly input: IChatInputPart;
+	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	private readonly goalElement: HTMLDivElement;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
@@ -94,7 +98,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		editorService: IEditorService | undefined,
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: (container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IChatWidgetService widgets: IChatWidgetService,
@@ -197,6 +201,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		};
 		this.input = this._register(createInputPart(this.element, inputDelegate));
 		this._register(widgets.register(this));
+		this._register(instantiationService.createInstance(ChatSideChatWidget, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -294,7 +299,15 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
-		return this.input.acceptInput(value, options);
+		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
+	}
+
+	public async startEditing(requestId: string): Promise<void> {
+		if (this.queueEditor.value || !this.visible) return;
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		this.queueEditor.value = editor;
+		try { await editor.show(); }
+		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
 
 	startVoiceConversation(): Promise<void> {

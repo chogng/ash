@@ -1,3 +1,11 @@
+import { constObservable } from '../../../src/ash/base/common/observable.js';
+import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
+import { IChatSlashCommandService, ChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { IChatSideChatService, ChatSideChatService } from '../../../src/ash/workbench/contrib/chat/common/chatSideChatService.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
+import { ChatQueuePickerRendering } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatQueuePickerActionItem.js';
+import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
@@ -141,6 +149,7 @@ declare global {
 	interface Window { ashChatInputIntegration: {
 		showIntroduction(): void;
 		triggerInputSuggestions(): Promise<unknown>;
+		hostCompletionRequests(): readonly { text: string; offset: number; }[];
 		setCatalogError(message: string | undefined): void;
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
@@ -151,6 +160,9 @@ declare global {
 		finishSubmission(error?: string): void;
 		replaceDraftOnClear(): void;
 		recoveryState(): { pending: boolean; drafts: NonNullable<Parameters<ChatInputPart['restoreDraft']>[0]>[]; };
+		setRunning(running: boolean): void;
+		setQueueDefault(value: 'queue' | 'steer'): Promise<void>;
+		queueState(): unknown;
 		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
@@ -188,6 +200,7 @@ let historyEntries: MessageHistoryEntry[] = [
 	{ id: '1', text: 'first input', kind: 'agent', submittedAtMs: 1 },
 ];
 const historyWrites: string[] = [];
+const queueEvents: unknown[] = [];
 const historySubmissions: { text: string; skills: unknown; }[] = [];
 const historyReads: MessageHistoryQuery[] = [];
 const historyWaits = new Map<string, () => void>();
@@ -222,9 +235,37 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
+contextKeys.createKey('chatIsEnabled', true);
+const composerHidden = resources.add(new Emitter<void>());
+const composerChanged = resources.add(new Emitter<void>());
+let composerVisible = true;
+const composerWidget = {
+	domNode: document.querySelector('main')!, get input() { return part; }, get visible() { return composerVisible; }, sessionId: 'input-session', threadId: 'input-thread',
+	onDidHide: composerHidden.event, onDidChangeViewModel: composerChanged.event,
+	acceptInput: ((text, options) => part.acceptInput(text, options)) satisfies IChatWidget['acceptInput'],
+} as unknown as IChatWidget;
+services.registerInstance(IChatWidgetService, { get lastFocusedWidget() { return composerWidget; }, getAllWidgets: () => [composerWidget] } as unknown as IChatWidgetService);
+if (!services.has(IActionViewItemService)) {
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+	services.registerSingleton(IActionViewItemService, () => services.createInstance(descriptor) as IActionViewItemService);
+}
+services.registerSingleton(IChatSlashCommandService, () => new ChatSlashCommandService());
+services.registerSingleton(IChatSideChatService, () => new ChatSideChatService());
+resources.add(services.createInstance(ChatQueuePickerRendering));
+if (new URLSearchParams(location.search).has('sideChat')) {
+	resources.add(services.get(IChatSideChatService).registerProvider({
+		canAskInSideChat: () => true,
+		askInSideChat: async (_resource, query) => { queueEvents.push({ kind: 'sideChat', query }); },
+		observeSideChatOrigin: () => constObservable(undefined),
+		revealSideChatSource: async () => { },
+	}));
+	resources.add(services.createInstance(BtwSlashCommandContribution));
+}
+
+
 services.registerSingleton(IMenuService, () => services.createInstance(MenuService));
 const footerStatusVisible = contextKeys.createKey<boolean>('test.chat.status.visible', false);
 const footerStatus = new URLSearchParams(location.search).has('footerStatus')
@@ -630,9 +671,13 @@ services.registerInstance(IFileService, {
 services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 // Deterministic host boundary for composer admission tests. Catalog/search semantics
 // are exercised through the real Rust request in the Desktop smoke suite.
+const hostInputCompletions = new URLSearchParams(location.search).has('hostInputCompletions');
+const hostCompletionRequests: { text: string; offset: number; }[] = [];
 services.registerInstance(IAgentHostInputCompletionService, {
-	onDidChangeConnection: Event.None, getTriggerCharacters: () => ['@', '#'],
+	onDidChangeConnection: Event.None, getTriggerCharacters: () => hostInputCompletions ? ['@', '#'] : [],
 	complete: async (request, signal) => {
+		if (!hostInputCompletions) return [];
+		hostCompletionRequests.push({ text: request.text, offset: request.offset });
 		const token = /(?:^|\s)([@#])([^\s]*)$/u.exec(request.text.slice(0, request.offset));
 		if (!token) return [];
 		const query = token[2]!.replace(/^(file|folder):/u, '');
@@ -689,7 +734,8 @@ let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmissio
 let finishSubmission: ((error?: string) => void) | undefined;
 const cowork = ['cowork', 'project'].includes(new URLSearchParams(location.search).get('surface') ?? '');
 const delegate: ChatInputDelegate = {
-	send: async (_text, _mode, _skills, contexts) => {
+	send: async (_text, _mode, _skills, contexts, _signal, queue) => {
+		queueEvents.push({ kind: 'send', text: _text, queue });
 		historySubmissions.push({ text: _text, skills: _skills });
 		submission.textContent = JSON.stringify(await Promise.all((contexts ?? []).map(context => context.resolve())));
 		if (holdNextSubmission) {
@@ -703,7 +749,7 @@ const delegate: ChatInputDelegate = {
 			});
 		}
 		if (new URLSearchParams(location.search).has('sendFailure')) { throw new Error('Send failed'); }
-	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, ...(cowork ? {} : { executeServerCommand: async () => { } }), interrupt: async () => { },
+	}, executeCommand: async invocation => { recordDestination({ command: invocation.commandId }); }, ...(cowork ? {} : { executeServerCommand: async () => { } }), interrupt: async () => { queueEvents.push({ kind: 'interrupt' }); },
 	openChanges: async () => { recordDestination({ changes: true }); },
 	readWorkspaceChanges: async () => { workspaceChangesReads++; return new Promise(resolve => { releaseWorkspaceChanges = resolve; }); },
 	selectModel: async model => {
@@ -731,10 +777,11 @@ if (inlineCode || new URLSearchParams(location.search).has('screenshotFixture'))
 	resources.add(registerChatContextActions(services.get(IImageEditorService), services.get(ICommandService)));
 }
 let inlineEditor: ChatInputEditor | undefined;
-const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, options) } : ChatInputEditors;
+const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;
 const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
 
-const part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+let part!: ChatInputPart;
+part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
@@ -905,6 +952,7 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
 	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
+	hostCompletionRequests: () => [...hostCompletionRequests],
 	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
 	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
 	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),
@@ -939,7 +987,7 @@ window.ashChatInputIntegration = {
 	releaseWorkspaceChanges: changes => releaseWorkspaceChanges?.(changes),
 	workspaceChangesReads: () => workspaceChangesReads,
 	setChangesError: changesError => { state = { ...state, changes: undefined, changesError }; part.render(state); },
-	setVisible: visible => part.setVisible(visible),
+	setVisible: visible => { composerVisible = visible; if (!visible) composerHidden.fire(); part.setVisible(visible); },
 	inputAccessibility: () => {
 		for (const entry of AccessibleViewRegistry.getImplementations()) {
 			if (entry.type !== AccessibleViewType.Help || !entry.name.startsWith('chatAttachments-')) continue;
@@ -968,6 +1016,9 @@ window.ashChatInputIntegration = {
 	setFooterStatus: visible => footerStatusVisible.set(visible),
 	removeFooterStatus: () => footerStatus?.dispose(),
 	historyState: () => ({ writes: historyWrites, submissions: historySubmissions, reads: historyReads }),
+	setRunning: running => { state = { ...state, canInterrupt: running, interaction: undefined }; part.render(state); },
+	setQueueDefault: value => services.get(IConfigurationService).updateValue('chat.requestQueuing.defaultAction', value),
+	queueState: () => queueEvents,
 	dropState: () => ({ text: part.inputEditor!.getModel()!.getValue(), pending: part.attachmentModel.hasPendingContext, reads: [...dropReads] }),
 	setDropSourceText: text => { dropSourceText = text; },
 	replaceDropDraft: () => {
@@ -976,6 +1027,7 @@ window.ashChatInputIntegration = {
 		state = { ...state, draftIdentity: { id: 'drop-after', generation: 2 } };
 		part.render(state);
 		part.appendToDraft('Replacement draft');
+		composerChanged.fire();
 	},
 	releaseDropRead: () => { const release = finishDropRead; finishDropRead = undefined; release?.(); },
 	holdNextHistoryRead: () => { holdHistoryRead = true; },

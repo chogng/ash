@@ -37,6 +37,7 @@ pub use checkpoint::CheckpointCapture;
 pub use checkpoint::MessageCheckpointSource;
 pub use checkpoint::WorkspaceRestoration;
 pub use commands::CreateBranchRequest;
+pub use commands::CreateSideChatRequest;
 pub use commands::ForkThreadRequest;
 pub use commands::InterruptTurnRequest;
 pub use commands::MoveThreadHistoryRequest;

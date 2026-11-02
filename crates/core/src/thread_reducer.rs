@@ -637,7 +637,10 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     && !(snapshot.thread_id.as_str() == snapshot.session_id.as_str()
                         && matches!(&snapshot.origin, ash_protocol::ThreadOrigin::Fork {
                             parent_thread_id, parent_sequence
-                        } if parent_thread_id == &source.thread_id && *parent_sequence == source.sequence)))
+                        } if parent_thread_id == &source.thread_id && *parent_sequence == source.sequence)
+                        || matches!(&snapshot.origin, ash_protocol::ThreadOrigin::SideChat {
+                            context_thread_id, context_sequence, ..
+                        } if context_thread_id == &source.thread_id && *context_sequence == source.sequence)))
             {
                 return Err(CoreError::Journal(
                     "resolved history prefix has an invalid source".into(),
@@ -2570,6 +2573,28 @@ fn validate_steered_items(
     item_ids: &[ItemId],
     marker_sequence: u64,
 ) -> Result<(), CoreError> {
+    // Tool selection remains in the retry receipt but has no transcript Item.
+    // On replay it must still agree with the active Turn's immutable profile.
+    let profile = find_turn(snapshot, turn_id)?.tool_profile.as_ref();
+    let mut selections = input.iter().filter_map(|input| match input {
+        ash_protocol::UserInput::ToolSelection { disabled, allowed } => Some((disabled, allowed)),
+        _ => None,
+    });
+    if let Some((disabled, allowed)) = selections.next() {
+        if selections.next().is_some()
+            || profile.is_none_or(|profile| {
+                profile.disabled_tools != *disabled || profile.allowed_tools != *allowed
+            })
+        {
+            return Err(CoreError::Journal(
+                "steering cannot change the frozen tool selection".into(),
+            ));
+        }
+    }
+    let input = input
+        .iter()
+        .filter(|input| !matches!(input, ash_protocol::UserInput::ToolSelection { .. }))
+        .collect::<Vec<_>>();
     if input.is_empty() || input.len() != item_ids.len() {
         return Err(CoreError::Journal(
             "Turn steering must bind every non-empty input to one durable Item".into(),
@@ -2579,7 +2604,7 @@ fn validate_steered_items(
         .checked_sub(item_ids.len() as u64)
         .ok_or_else(|| CoreError::Journal("Turn steering Item sequence underflow".into()))?;
     let mut unique = BTreeSet::new();
-    for (index, (input, item_id)) in input.iter().zip(item_ids).enumerate() {
+    for (index, (input, item_id)) in input.into_iter().zip(item_ids).enumerate() {
         if !unique.insert(item_id) {
             return Err(CoreError::Journal(
                 "Turn steering Item IDs must be unique".into(),
@@ -2604,6 +2629,17 @@ fn validate_steered_items(
                     text: item_text, ..
                 },
             ) => input_text == item_text,
+            (
+                ash_protocol::UserInput::Context {
+                    name: input_name,
+                    content: input_content,
+                },
+                ThreadItem::UserContext {
+                    name: item_name,
+                    content: item_content,
+                    ..
+                },
+            ) => input_name == item_name && input_content == item_content,
             (
                 ash_protocol::UserInput::AudioAttachment { attachment: input },
                 ThreadItem::UserAudioAttachment {

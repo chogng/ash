@@ -28,6 +28,8 @@ export class SessionsAgentThreadService extends Disposable implements IAgentThre
 			this.listeners.add(scope.thread.onDidUpdateThreadTranscript(event => this.onDidUpdateThreadTranscriptEmitter.fire(event)));
 		}
 	}
+	createSideChat(...args: Parameters<IAgentThreadService['createSideChat']>): ReturnType<IAgentThreadService['createSideChat']> { return this.scopes.getScope(args[0].sessionId).thread.createSideChat(...args); }
+	canCreateSideChat(sessionId: string): boolean { return this.scopes.getScope(sessionId).thread.canCreateSideChat(sessionId); }
 	fork(...args: Parameters<IAgentThreadService['fork']>): ReturnType<IAgentThreadService['fork']> { return this.scopes.getScope(args[0].sessionId).thread.fork(...args); }
 	rewrite(...args: Parameters<IAgentThreadService['rewrite']>): ReturnType<IAgentThreadService['rewrite']> { return this.scopes.getScope(args[0].sessionId).thread.rewrite(...args); }
 	rename(...args: Parameters<IAgentThreadService['rename']>): ReturnType<IAgentThreadService['rename']> { return this.scopes.getScope(args[0].sessionId).thread.rename(...args); }

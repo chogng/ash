@@ -198,6 +198,9 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'chat.queuePickerRendering',
+					'workbench.contrib.btwSlashCommand',
+					'workbench.contrib.chatSideChat',
 					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',

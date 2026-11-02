@@ -80,6 +80,10 @@ pub enum QueueEditAction {
     ReplaceText {
         text: String,
     },
+    ReplaceTextWithDelivery {
+        text: String,
+        delivery: queue::QueueDelivery,
+    },
     Replace {
         input: Vec<InputItem>,
     },

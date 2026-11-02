@@ -9,7 +9,7 @@ import { approvalModeDefinition } from '../../../../../platform/agentHost/common
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -46,7 +46,9 @@ import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath 
 import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ChatQueueEditor } from './input/chatInputPart.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
+import { ChatSideChatWidget } from '../chatSideChat.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
@@ -56,6 +58,7 @@ import { IChatWidgetService, type IChatWidget, type IChatFindController, type IC
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
+	readonly thread?: import('../../../../services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
@@ -95,6 +98,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
+	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	public readonly input: IChatInputPart;
 	private readonly goalElement: HTMLDivElement;
 	private readonly olderHistoryElement: HTMLDivElement;
@@ -122,7 +126,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		imageResourceLoader: ((resource: URI) => Promise<Blob>) | undefined,
 		createInputPart: ((container: HTMLElement, delegate: ChatInputDelegate) => IChatInputPart) | undefined,
 		private readonly viewOptions: IChatWidgetViewOptions | undefined,
-		@IInstantiationService instantiationService: IInstantiationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IDialogService dialogs: IDialogService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IChatWidgetService widgets: IChatWidgetService,
@@ -298,6 +302,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
 		this._register(widgets.register(this));
+		this._register(scopedInstantiation.createInstance(ChatSideChatWidget, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -420,7 +425,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
-		return this.input.acceptInput(value, options);
+		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
+	}
+
+	public async startEditing(requestId: string): Promise<void> {
+		if (this.queueEditor.value || !this.visible) return;
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		this.queueEditor.value = editor;
+		try { await editor.show(); }
+		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
 
 	private async runVoice(operation: () => Promise<void>): Promise<void> {

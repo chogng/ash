@@ -1,3 +1,8 @@
+import { BtwSlashCommandContribution } from './btwSlashCommand.js';
+import { ChatSideChatProvider } from './chatSideChat.js';
+import { IChatSideChatService, ChatSideChatService } from '../common/chatSideChatService.js';
+import { IChatSlashCommandService, ChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
+import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
@@ -112,7 +117,12 @@ registerChatExportActions();
 registerChatCopyActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();
+registerSingleton(IChatSideChatService, ChatSideChatService, InstantiationType.Delayed);
+registerSingleton(IChatSlashCommandService, ChatSlashCommandService, InstantiationType.Delayed);
+registerWorkbenchContribution(BtwSlashCommandContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(BtwSlashCommandContribution));
+registerWorkbenchContribution(ChatSideChatProvider.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSideChatProvider));
 registerChatQueueActions();
+registerWorkbenchContribution(ChatQueuePickerRendering.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatQueuePickerRendering));
 registerChatAccessibilityActions();
 AccessibleViewRegistry.register(new ChatFindAccessibilityHelp());
 
@@ -202,6 +212,28 @@ registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
+
+configurationRegistry.registerConfiguration<'queue' | 'steer'>({
+	key: ChatConfiguration.RequestQueueingDefaultAction,
+	defaultValue: 'steer',
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: ['queue', 'steer'] },
+	parse(value: unknown): 'queue' | 'steer' {
+		if (value === 'queue' || value === 'steer') return value;
+		throw new TypeError(localize('chat.queuePicker.invalidDefault', 'Choose queue or steer for follow-up messages.'));
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('chat.queuePicker.defaultTitle', 'Follow-up message action'); },
+		get description() { return localize('chat.queuePicker.defaultDescription', 'Choose what Enter and the send button do while a task is running. Hold Alt to use the other action.'); },
+		get options() {
+			return [
+				{ value: 'queue' as const, label: localize('chat.queuePicker.queue', 'Add to Queue') },
+				{ value: 'steer' as const, label: localize('chat.queuePicker.steer', 'Steer with Message') },
+			];
+		},
+	},
+});
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,

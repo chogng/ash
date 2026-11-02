@@ -1524,6 +1524,7 @@ function createContextComposer(resources: DisposableStore) {
 	let reads = 0;
 	const context = resources.add(new BuiltinDynamicCompletions(target.editor, {
 		getAttachments: () => target.references.getInputState(),
+		getSessionId: () => undefined,
 		acquire: (prepare, signal) => target.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, target.lifecycle.signal]), attachments => attachments.map(attachment => target.references.addReference(attachment, false))),
 	}, target.services.get(ILanguageFeaturesService), {
 		fileSearch: async () => ({ results: [{ resource: URI.file('/workspace/中文 notes.ts') }], messages: [] }),
@@ -1541,7 +1542,7 @@ function createContextComposer(resources: DisposableStore) {
 			return { id: resource.toString(), name: 'source', kind: 'file', resource, resolve: async () => ({ name: 'source', content: 'Captured source' }) };
 		},
 		resolveEditorAttachContext: async () => ({ id: 'open', kind: 'file', name: 'open.ts', resolve: async () => ({ name: 'open.ts', content: 'Unsaved text' }) }),
-	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[7]));
+	} as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[7], { getTriggerCharacters: () => [] } as unknown as ConstructorParameters<typeof BuiltinDynamicCompletions>[8]));
 	const registry = target.services.get(ILanguageFeaturesService).completionProvider;
 	const metadata = registry.providerCatalog.providers.find(provider => provider.id.startsWith('ash.chat.context.'))!;
 	const provider = registry.getProvider(metadata.id)!;

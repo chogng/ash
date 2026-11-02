@@ -1,3 +1,7 @@
+import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -52,6 +56,10 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IChatInputNoticeHubService noticeHub: IChatInputNoticeHubService,
 		@IChatInputNotificationService inputNotifications: IChatInputNotificationService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
+		@IActionViewItemService presentations: IActionViewItemService,
+		@IChatWidgetService chatWidgets: IChatWidgetService,
+		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
 		@ICommandService commands: ICommandService,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
@@ -61,7 +69,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),
-		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding);
+		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
 		const footer = this.inputFooter!;
 		const owner = this;
 		const permissionHost = h(container.ownerDocument, 'div');

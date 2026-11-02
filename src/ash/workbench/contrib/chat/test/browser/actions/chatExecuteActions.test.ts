@@ -24,11 +24,12 @@ suite('Chat execution commands', () => {
 		services.registerInstance(IChatWidgetService, { lastFocusedWidget: second, getAllWidgets: () => [first, second] } as unknown as IChatWidgetService);
 		await services.invokeFunction(CommandsRegistry.getCommand(ChatSubmitAction.ID)!);
 		await services.invokeFunction(CommandsRegistry.getCommand(ChatSubmitAction.ID)!, { widget: first, inputValue: 'Explicit message', acceptInputOptions: { queue: ChatRequestQueueKind.Queued } });
+		await services.invokeFunction(CommandsRegistry.getCommand(ChatSubmitAction.ID)!, { widget: first, acceptInputOptions: { cancelCurrentRequest: true } });
 		await services.invokeFunction(CommandsRegistry.getCommand(CancelAction.ID)!, { widget: first });
-		assert.deepEqual(calls, [['second', undefined, undefined], ['first', 'Explicit message', { queue: 'queued' }], 'stop-first']);
+		assert.deepEqual(calls, [['second', undefined, undefined], ['first', 'Explicit message', { queue: 'queued' }], ['first', undefined, { cancelCurrentRequest: true }], 'stop-first']);
 		Object.assign(first, { visible: false });
 		await services.invokeFunction(CommandsRegistry.getCommand(ChatSubmitAction.ID)!, { widget: first });
-		assert.equal(calls.length, 3);
+		assert.equal(calls.length, 4);
 	});
 
 	test('command input validates external options and cannot dispatch to a fabricated widget', async () => {
@@ -36,7 +37,7 @@ suite('Chat execution commands', () => {
 		const widget = { visible: true, acceptInput: async () => { throw new Error('Unexpected send'); } } as unknown as IChatWidget;
 		services.registerInstance(IChatWidgetService, { lastFocusedWidget: undefined, getAllWidgets: () => [] } as unknown as IChatWidgetService);
 		const submit = CommandsRegistry.getCommand(ChatSubmitAction.ID)!;
-		for (const value of [null, 'text', { inputValue: 12 }, { acceptInputOptions: { queue: 'unknown' } }, { acceptInputOptions: { preserveInput: true } }, { widget }]) {
+		for (const value of [null, 'text', { inputValue: 12 }, { acceptInputOptions: { queue: 'unknown' } }, { acceptInputOptions: { preserveInput: true } }, { acceptInputOptions: { cancelCurrentRequest: 'true' } }, { acceptInputOptions: { cancelCurrentRequest: true, queue: ChatRequestQueueKind.Queued } }, { widget }]) {
 			await assert.rejects(async () => { await services.invokeFunction(submit, value); }, /execution context is invalid/);
 		}
 		await services.invokeFunction(submit);

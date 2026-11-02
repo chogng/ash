@@ -3788,3 +3788,65 @@ fn thread_names_are_retry_safe_and_manual_names_win_after_recovery() {
             .is_err()
     );
 }
+
+#[test]
+fn steering_preserves_frozen_context_and_tool_selection_through_replay() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "steering frozen inputs");
+    let mut start = start_request("steering-frozen-turn");
+    let mut profile = crate::tool_profile::snapshot_tool_profile(&[]).unwrap();
+    profile.allowed_tools = Some(vec![]);
+    start.tool_profile = Some(profile);
+    let turn = threads.start_turn(&thread, start).unwrap().turn_id;
+    let command = CommandId::new("steer-frozen-inputs").unwrap();
+    let request = || SteerTurnRequest {
+        command_id: command.clone(),
+        expected_sequence: SequenceExpectation::Any,
+        turn_id: turn.clone(),
+        input: vec![
+            UserInput::Text {
+                text: "Edited queued text".into(),
+            },
+            UserInput::Context {
+                name: "frozen".into(),
+                content: "Captured original bytes".into(),
+            },
+            UserInput::ToolSelection {
+                disabled: vec![],
+                allowed: Some(vec![]),
+            },
+        ],
+    };
+    let first = threads.steer_turn(&thread, request()).unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| item.client_id() == Some(&command))
+            .count(),
+        2
+    );
+    assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::UserContext { name, content, .. } if name == "frozen" && content == "Captured original bytes")));
+    let recovered = ThreadController::with_store(store);
+    recovered.recover_thread(&thread).unwrap();
+    let replay = recovered.steer_turn(&thread, request()).unwrap();
+    assert_eq!(replay.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(replay.sequence, first.sequence);
+    assert_eq!(
+        recovered.read_thread(&thread).unwrap().items,
+        snapshot.items
+    );
+    let mut changed = request();
+    changed.command_id = CommandId::new("different-frozen-tools").unwrap();
+    changed.input[2] = UserInput::ToolSelection {
+        disabled: vec![],
+        allowed: None,
+    };
+    assert!(recovered.steer_turn(&thread, changed).is_err());
+    assert_eq!(
+        recovered.read_thread(&thread).unwrap().items,
+        snapshot.items
+    );
+}

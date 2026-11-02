@@ -35,6 +35,9 @@ impl ThreadBinding {
             | ThreadOrigin::Message {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::SideChat {
+                parent_thread_id, ..
+            }
             | ThreadOrigin::Rewind {
                 parent_thread_id, ..
             }

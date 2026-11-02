@@ -64,6 +64,10 @@ export interface IAgentSessionService {
 }
 
 export interface IAgentThreadService {
+	canCreateSideChat(sessionId: string): boolean;
+	createSideChat(params: Agent.SessionMutationParams & {
+		readonly threadId: string; readonly sourceTurnId: string; readonly title: string; readonly selection?: string;
+	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	fork(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly title: string;

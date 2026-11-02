@@ -16,6 +16,8 @@ import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;
+	readonly cancelCurrentRequest?: boolean;
+	readonly sideChat?: boolean;
 }
 
 /** The Welcome host owns the available targets and the current selection. */
@@ -42,6 +44,7 @@ export interface IChatWidgetViewOptions {
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;
@@ -53,6 +56,8 @@ export interface IChatWidget {
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
+	/** Edits a queued request without replacing the unsent composer draft. */
+	startEditing(requestId: string): void | Promise<void>;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;

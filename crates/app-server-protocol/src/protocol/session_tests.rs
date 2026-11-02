@@ -112,3 +112,32 @@ fn session_create_accepts_an_unscoped_target_but_no_implicit_current_variant() {
         .is_err()
     );
 }
+
+#[test]
+fn side_chat_and_queue_delivery_contracts_preserve_explicit_source_and_intent() {
+    let request = json!({
+        "type": "createSideChat", "parentThreadId": "source", "sourceTurnId": "turn",
+        "title": "Side question", "selection": "captured selection"
+    });
+    let decoded: super::SessionRequest = serde_json::from_value(request.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), request);
+    let origin = json!({
+        "type": "sideChat", "parentThreadId": "visible-source", "parentSequence": 12,
+        "sourceTurnId": "turn", "contextThreadId": "retained-ancestor", "contextSequence": 7,
+        "selection": "captured selection"
+    });
+    let decoded: ash_protocol::ThreadOrigin = serde_json::from_value(origin.clone()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), origin);
+    for delivery in [
+        json!({"type":"queued"}),
+        json!({"type":"immediate"}),
+        json!({"type":"steering", "turnId":"turn"}),
+    ] {
+        let edit = json!({"type":"replaceTextWithDelivery", "text":"edited question", "delivery":delivery});
+        let decoded: crate::protocol::queue::QueueEditAction =
+            serde_json::from_value(edit.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), edit);
+    }
+    assert!(serde_json::from_value::<crate::protocol::queue::QueueEditAction>(json!({"type":"replaceTextWithDelivery", "text":"edited", "delivery":{"type":"steering"}})).is_err());
+    assert!(serde_json::from_value::<crate::protocol::queue::QueueEditAction>(json!({"type":"replaceTextWithDelivery", "text":"edited", "delivery":{"type":"unknown"}})).is_err());
+}

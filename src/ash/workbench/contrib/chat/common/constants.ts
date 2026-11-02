@@ -10,6 +10,7 @@ export enum ChatConfiguration {
 	ChatViewSessionsOrientation = 'chat.viewSessions.orientation',
 	FontFamily = 'chat.fontFamily',
 	FontSize = 'chat.fontSize',
+	RequestQueueingDefaultAction = 'chat.requestQueuing.defaultAction',
 }
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';

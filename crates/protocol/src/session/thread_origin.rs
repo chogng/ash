@@ -29,6 +29,19 @@ pub enum ThreadOrigin {
         #[ts(type = "number")]
         parent_sequence: u64,
     },
+    /// A user side question, with a visible source and an immutable inherited context.
+    SideChat {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+        source_turn_id: TurnId,
+        context_thread_id: ThreadId,
+        #[ts(type = "number")]
+        context_sequence: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        selection: Option<String>,
+    },
     Rewind {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,

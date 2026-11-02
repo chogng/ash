@@ -1,3 +1,4 @@
+import type { IChatSlashCommandData } from './participants/chatSlashCommands.js';
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
 import { localize } from '../../../../nls.js';
 import { observableValue } from '../../../../base/common/observable.js';
@@ -10,7 +11,8 @@ const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
 	| { readonly origin: 'local'; readonly actionId: string; }
-	| { readonly origin: 'server'; };
+	| { readonly origin: 'server'; }
+	| { readonly origin: 'client'; readonly executeDuringRequest: boolean; };
 
 export type SlashCommandInput =
 	| { readonly kind: 'message'; readonly text: string; }
@@ -31,6 +33,7 @@ interface CatalogEntry {
 /** Owns the current validated Slash Commands snapshot shared by parsing and completion. */
 export class SlashCommandCatalog {
 	private readonly local: readonly LocalSlashCommandRegistration[];
+	private client: readonly IChatSlashCommandData[] = [];
 	private server: readonly SlashCommandDefinition[] = Object.freeze([]);
 	private entriesByName: ReadonlyMap<string, CatalogEntry> = new Map();
 	private readonly commandSnapshot = observableValue<readonly SlashCommandDefinition[]>(this, Object.freeze([]));
@@ -51,6 +54,11 @@ export class SlashCommandCatalog {
 		this.rebuild();
 	}
 
+	setClientCommands(commands: readonly IChatSlashCommandData[]): void {
+		this.client = commands;
+		this.rebuild();
+	}
+
 	private rebuild(): void {
 		const entriesByName = new Map<string, CatalogEntry>();
 		const commands: SlashCommandDefinition[] = [];
@@ -68,6 +76,7 @@ export class SlashCommandCatalog {
 			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
 			append(local.definition, Object.freeze({ origin: 'local', actionId: local.actionId }));
 		}
+		for (const command of this.client) append({ name: command.command, description: command.detail, argumentMode: 'optional' }, Object.freeze({ origin: 'client', executeDuringRequest: command.executeDuringRequest === true }));
 		for (const command of this.server) append(command, Object.freeze({ origin: 'server' }));
 		this.entriesByName = entriesByName;
 		this.commandSnapshot.set(Object.freeze(commands));

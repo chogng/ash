@@ -362,8 +362,13 @@ export class ChatService extends Disposable implements IChatService {
 		return this.turnApi.editQueued(target, { type: 'resume' });
 	}
 
-	async editPendingRequest(target: QueueMessageTarget, text: string) {
+	async editPendingRequest(target: QueueMessageTarget, text: string, queue?: import('../common/chatService.js').ChatRequestQueueKind) {
 		this.assertAIEnabled();
+		if (queue) {
+			const thread = await this.readThread(target.sessionId, target.threadId, { type: 'latest', turnLimit: 1 });
+			const active = thread.thread.turns.find(turn => ['created', 'running', 'waitingForApproval', 'waitingForUserInput', 'waitingForCapability', 'cancelling'].includes(turn.status));
+			return this.turnApi.editQueued(target, { type: 'replaceTextWithDelivery', text, delivery: queue === 'steering' && active ? { type: 'steering', turnId: active.turnId } : { type: 'queued' } });
+		}
 		return this.turnApi.editQueued(target, { type: 'replaceText', text });
 	}
 
@@ -371,7 +376,7 @@ export class ChatService extends Disposable implements IChatService {
 		return this.turnApi.cancelQueued(target);
 	}
 
-	async sendPendingRequestImmediately(target: QueueMessageTarget): Promise<void> {
+	async sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void> {
 		this.assertAIEnabled();
 		const generation = this.connectionEpoch;
 		const { thread } = await this.readThread(target.sessionId, target.threadId);
@@ -380,7 +385,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.assertAIEnabled();
 		// Keep identity, frozen input and FIFO ownership in Core. Promotion precedes
 		// interruption so another queued message cannot claim the newly idle thread.
-		await this.turnApi.editQueued(target, { type: 'send' });
+		await this.turnApi.editQueued(target, text === undefined ? { type: 'send' } : { type: 'replaceTextWithDelivery', text, delivery: { type: 'immediate' } });
 		if (!active) return;
 		if (this.isDisposed || generation !== this.connectionEpoch) throw canceled();
 		try {

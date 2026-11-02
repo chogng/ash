@@ -317,10 +317,10 @@ export interface IChatService {
 	getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
 	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
-	editPendingRequest(target: QueueMessageTarget, text: string): Promise<QueuedMessage>;
+	editPendingRequest(target: QueueMessageTarget, text: string, queue?: ChatRequestQueueKind): Promise<QueuedMessage>;
 	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	/** Promote the durable message before interrupting the captured active task. */
-	sendPendingRequestImmediately(target: QueueMessageTarget): Promise<void>;
+	sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void>;
 	compactContext(options: CompactContextOptions): Promise<void>;
 	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
 	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;

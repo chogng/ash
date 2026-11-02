@@ -520,3 +520,16 @@
 		font-size: var(--ash-fontSize-label1);
 	}
 }
+
+.ash-chat-side-chat-origin {
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+}
+
+.ash-chat-side-chat-origin[hidden] {
+	display: none;
+}
+
+.ash-chat-side-chat-origin .ash-button {
+	max-width: 100%;
+}

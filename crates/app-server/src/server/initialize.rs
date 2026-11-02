@@ -175,6 +175,12 @@ impl AppServer {
             contracts: Default::default(),
         };
         capabilities.advertise_contracts();
+        if capabilities.threads {
+            capabilities.contracts.insert(
+                "sideChats".into(),
+                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
+            );
+        }
         if self.plugins_manager.is_some() {
             capabilities.contracts.insert(
                 "extensionUpdates".into(),

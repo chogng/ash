@@ -665,6 +665,37 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 self.context
                     .fork_session_request(mutation, parent_thread_id, title)?,
             )),
+            SessionRequest::CreateSideChat {
+                parent_thread_id,
+                source_turn_id,
+                title,
+                selection,
+            } => {
+                self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
+                let branch = self
+                    .context
+                    .agent_runtime()
+                    .create_side_chat(core_api::CreateSideChatRequest {
+                        command_id: mutation.command_id,
+                        source_thread_id: parent_thread_id,
+                        source_turn_id,
+                        title,
+                        selection,
+                    })
+                    .map_err(core_error)?;
+                self.updates.subscribe_session_thread(
+                    connection.connection_id,
+                    mutation.session_id.clone(),
+                    branch.thread_id.clone(),
+                    0,
+                );
+                self.notify_thread_updates(&branch.thread_id, 0)?;
+                self.updates.publish_session_changed(&mutation.session_id);
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&mutation.session_id)?,
+                    thread_id: branch.thread_id,
+                }))
+            }
             SessionRequest::ForkThread {
                 parent_thread_id,
                 title,

@@ -87,6 +87,8 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 
 export function createDisconnectedAgentThreadService(unavailable: UnavailableOperation): IAgentThreadService {
 	return {
+		canCreateSideChat: () => false,
+		createSideChat: () => unavailable('thread.createSideChat'),
 		fork: () => unavailable('thread.fork'),
 		rewrite: () => unavailable('thread.rewrite'),
 		rename: () => unavailable('thread.rename'),
@@ -324,6 +326,15 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
+		canCreateSideChat: () => connection.capabilities?.contracts.sideChats?.version === 1,
+		createSideChat: async params => {
+			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'createSideChat', parentThreadId: params.threadId, sourceTurnId: params.sourceTurnId,
+				title: params.title, ...(params.selection ? { selection: params.selection } : {}),
+			})));
+			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
+			return { sessionId: result.session.sessionId, threadId: result.threadId };
+		},
 		fork: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
 				type: params.target === 'session' ? 'forkSession' : 'forkThread', parentThreadId: params.threadId, title: params.title,
@@ -511,6 +522,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 /** Normalize the persisted queue snapshot once at the protocol boundary. */
 function queuedMessage(value: QueuedMessageDto): QueuedMessage {
 	return {
+		...(value.request.steerTurn ? { steerTurnId: value.request.steerTurn } : {}),
 		sessionId: value.request.sessionId, threadId: value.request.threadId, commandId: value.request.commandId,
 		revision: value.revision, status: value.status, mode: value.request.mode,
 		text: value.request.input.flatMap(item => item.type === 'text' ? [item.text] : []).join(''),

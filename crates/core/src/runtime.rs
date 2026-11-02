@@ -31,6 +31,7 @@ use core_api::ContextInspection;
 use core_api::ContextInspectionRequest;
 use core_api::CoreError;
 use core_api::CreateBranchRequest;
+use core_api::CreateSideChatRequest;
 use core_api::ForkThreadRequest;
 use core_api::InteractionLifecycle;
 use core_api::InterruptTurnRequest;
@@ -812,6 +813,11 @@ impl AgentRuntime for Runtime<'_> {
     fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError> {
         self.threads
             .fork_thread(self.binder, request)
+            .map(Into::into)
+    }
+    fn create_side_chat(&self, request: CreateSideChatRequest) -> Result<ThreadView, CoreError> {
+        self.threads
+            .create_side_chat(self.binder, request)
             .map(Into::into)
     }
     fn fork_session(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError> {

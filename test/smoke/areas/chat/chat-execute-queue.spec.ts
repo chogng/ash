@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
@@ -30,7 +30,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			response.once('close', () => streams.delete(response));
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			response.write(`data: ${JSON.stringify({ id: 'execution', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content: controlledReply }, finish_reason: null }] })}\n\n`);
-			if (releaseInitial && !queued) finish(response);
+			if (body.includes('side-question-fixture') || releaseInitial && !queued) finish(response);
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
@@ -65,6 +65,8 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Execution queue conversation' }).click();
 				if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
 			} else {
+				const closeWelcome = page.getByRole('button', { name: 'Close Agent Sessions Welcome', exact: true });
+				if (await closeWelcome.isVisible()) await closeWelcome.click();
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				await page.locator('[data-action-id="workbench.action.chat.showHistory"] button').click();
 				await page.getByRole('option').filter({ hasText: 'Execution queue conversation' }).click();
@@ -138,6 +140,41 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await page.keyboard.press('ControlOrMeta+Alt+PageUp');
 			await expect(codeInputs.nth(1)).toBeFocused();
 
+			// Both public entries create an independent persisted branch while the source stream stays active.
+			for (const entry of ['menu', 'slash'] as const) {
+				await expect(chat).toHaveClass(/has-conversation/);
+				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
+				await draft.focus();
+				await page.keyboard.insertText(`${entry === 'slash' ? '/btw ' : ''}side-question-fixture ${entry}`);
+				if (entry === 'menu') {
+					await composer.getByRole('button', { name: 'More Send Options' }).click();
+					await page.getByRole('menuitem', { name: 'Ask in Side Chat', exact: true }).click();
+				} else {
+					await expect(composer.locator('.view-lines')).toContainText('/btw side-question-fixture slash');
+					if (!agents) await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+					await page.keyboard.press('Escape');
+					await draft.press('Enter');
+				}
+				try { await expect(chat).not.toHaveAttribute('data-thread-id', threadId); }
+				catch (error) {
+					await testInfo.attach(`side-${entry}-admission.json`, { body: JSON.stringify({ thread: await read(), session: await client.request(methods['session/read'], { sessionId }), calls }), contentType: 'application/json' });
+					throw error;
+				}
+				const sideThreadId = (await chat.getAttribute('data-thread-id'))!;
+				const side = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId: sideThreadId })).thread;
+				await expect.poll(async () => (await side()).turns.at(-1)?.status).toBe('completed');
+				const child = await side();
+				expect(child.origin).toMatchObject({ type: 'sideChat', parentThreadId: threadId, sourceTurnId: initialTurn.turnId });
+				expect(child.turns.at(-1)?.items.filter(item => item.type === 'userMessage').map(item => item.text)).toEqual([`side-question-fixture ${entry}`]);
+				expect((await read()).turns.map(turn => ({ id: turn.turnId, status: turn.status }))).toEqual([{ id: initialTurn.turnId, status: 'running' }]);
+				expect((await read()).turns[0].items.filter(item => item.type === 'userMessage').map(item => item.text)).toEqual(['execution-active-fixture']);
+				await expect(chat.locator('.ash-chat-side-chat-origin')).toBeVisible();
+				await page.screenshot({ path: testInfo.outputPath(`side-chat-${entry}.png`) });
+				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
+				await expect(chat).toHaveAttribute('data-thread-id', threadId);
+				await expect(composer.locator('.view-lines')).not.toContainText('side-question-fixture');
+			}
+
 			await send('execution-queued-fixture', 'workbench.action.chat.queueMessage');
 			try {
 				await expect.poll(async () => (await queued()).filter(message => message.status === 'pending').length).toBe(1);
@@ -176,10 +213,10 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			});
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('running');
 			const managedTurn = (await read()).turns.at(-1)!;
-			for (const [commandId, text] of [['managed-edit', 'queue-edit-fixture\noriginal'], ['managed-remove', 'queue-remove-fixture'], ['managed-now', 'execution-queued-fixture immediate']] as const) {
+			for (const [commandId, text] of [['managed-edit', 'queue-edit-fixture\noriginal'], ['managed-remove', 'queue-remove-fixture'], ['managed-now', 'execution-queued-fixture immediate'], ['managed-steer-edit', 'queue-switch-fixture']] as const) {
 				await client.request(methods['queue/enqueue'], {
 					sessionId, threadId, commandId, mode: initialTurn.mode, approvalMode: 'manual', model,
-					input: [{ type: 'text', text }, { type: 'context', name: 'Frozen queue context', content: 'Original captured bytes' }, { type: 'toolSelection', disabled: [] }],
+					input: [{ type: 'text', text }, { type: 'context', name: 'Frozen queue context', content: 'Original captured bytes' }, ...(commandId === 'managed-steer-edit' ? [] : [{ type: 'toolSelection' as const, disabled: [] }])],
 				});
 			}
 			const findQueued = async (id: string) => (await queued()).find(message => message.request.commandId === id)!;
@@ -207,13 +244,30 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await choose('workbench.action.chat.editPendingRequest', 'queue-edit-fixture');
 			await expect(edit).toBeVisible();
 			await edit.fill('execution-queued-fixture edited\nsecond line');
-			await edit.press('ControlOrMeta+Enter');
+			await edit.press('Enter');
 			await expect(edit).toBeHidden();
 			const edited = await findQueued('managed-edit');
 			expect(edited.revision).toBeGreaterThan(frozen.revision);
 			expect(edited.request.input.filter(item => item.type === 'text')).toEqual([{ type: 'text', text: 'execution-queued-fixture edited\nsecond line' }]);
 			expect(edited.request.input.filter(item => item.type !== 'text')).toEqual(frozen.request.input.filter(item => item.type !== 'text'));
 			await expect(client.request(methods['queue/cancel'], { sessionId, threadId, commandId: 'managed-edit', expectedRevision: frozen.revision })).rejects.toMatchObject({ code: -32122 });
+			// The queued editor overrides the global steer default; Alt+Enter explicitly changes delivery.
+			await choose('workbench.action.chat.editPendingRequest', 'queue-switch-fixture');
+			await expect(edit).toBeVisible();
+			await edit.fill('execution-switched-fixture');
+			await edit.press('Alt+Enter');
+			await expect(edit).toBeHidden();
+			try {
+				await expect.poll(async () => { const message = await findQueued('managed-steer-edit'); return message.status === 'rejected' ? `rejected: ${message.error}` : message.status; }).toBe('started');
+			} catch (error) {
+				const path = testInfo.outputPath('queue-steering.json');
+				await writeFile(path, JSON.stringify({ message: await findQueued('managed-steer-edit'), thread: await read() }));
+				await testInfo.attach('queue-steering.json', { path, contentType: 'application/json' });
+				throw error;
+			}
+			expect((await findQueued('managed-steer-edit')).request.steerTurn).toBe(managedTurn.turnId);
+			expect((await findQueued('managed-steer-edit')).request.input.filter(item => item.type !== 'text')).toEqual([{ type: 'context', name: 'Frozen queue context', content: 'Original captured bytes' }]);
+			await expect.poll(async () => (await read()).turns.find(turn => turn.turnId === managedTurn.turnId)?.items.filter(item => item.type === 'userMessage').map(item => item.text)).toContain('execution-switched-fixture');
 			await choose('workbench.action.chat.removePendingRequest', 'queue-remove-fixture');
 			await expect.poll(async () => (await findQueued('managed-remove')).status).toBe('cancelled');
 			await expect(composer.locator('.view-lines')).toContainText('Keep this unsent execution draft');

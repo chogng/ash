@@ -35,6 +35,88 @@ fn fixture() -> (Arc<InMemoryThreadStore>, ThreadController, ThreadSnapshot) {
 }
 
 #[test]
+fn side_chat_pins_running_context_without_transferring_or_interrupting_execution() {
+    let (store, threads, root) = fixture();
+    let active = turn(&threads, &root.thread_id, "side-source-running");
+    let before = threads.read_thread(&root.thread_id).unwrap();
+    let request = || core_api::CreateSideChatRequest {
+        command_id: CommandId::new("side-running").unwrap(),
+        source_thread_id: root.thread_id.clone(),
+        source_turn_id: active.clone(),
+        title: "Independent question".into(),
+        selection: Some("immutable selected text".into()),
+    };
+    let branch = threads
+        .create_side_chat(&NoThreadWorktreeBinder, request())
+        .unwrap();
+    assert_eq!(threads.read_thread(&root.thread_id).unwrap(), before);
+    assert_eq!(branch.session_id, root.session_id);
+    assert_eq!(branch.agent_id, before.agent_id);
+    assert!(
+        branch
+            .turns
+            .iter()
+            .all(|turn| !matches!(turn.status, TurnStatus::Running | TurnStatus::Created))
+    );
+    assert!(
+        matches!(&branch.origin, ash_protocol::ThreadOrigin::SideChat { parent_thread_id, source_turn_id, selection, .. }
+        if parent_thread_id == &root.thread_id && source_turn_id == &active && selection.as_deref() == Some("immutable selected text"))
+    );
+    assert_eq!(
+        threads
+            .create_side_chat(&NoThreadWorktreeBinder, request())
+            .unwrap(),
+        branch
+    );
+    let restarted = ThreadController::with_store(store);
+    assert_eq!(restarted.read_thread(&branch.thread_id).unwrap(), branch);
+    turn(&restarted, &branch.thread_id, "independent-side-question");
+    assert_eq!(restarted.read_thread(&root.thread_id).unwrap(), before);
+}
+
+#[test]
+fn side_chat_branches_at_an_earlier_turn_including_retained_cross_session_history() {
+    let (_store, threads, root) = fixture();
+    let first = turn(&threads, &root.thread_id, "side-history-first");
+    threads
+        .complete_turn(&root.thread_id, &first, "first answer".into())
+        .unwrap();
+    let second = turn(&threads, &root.thread_id, "side-history-second");
+    threads
+        .complete_turn(&root.thread_id, &second, "later answer".into())
+        .unwrap();
+    let copied = threads
+        .fork_session(
+            &NoThreadWorktreeBinder,
+            crate::ForkThreadRequest {
+                command_id: CommandId::new("side-history-session").unwrap(),
+                source_thread_id: root.thread_id.clone(),
+                title: "Copied conversation".into(),
+            },
+        )
+        .unwrap();
+    let branch = threads
+        .create_side_chat(
+            &NoThreadWorktreeBinder,
+            core_api::CreateSideChatRequest {
+                command_id: CommandId::new("side-history-question").unwrap(),
+                source_thread_id: copied.thread_id.clone(),
+                source_turn_id: first.clone(),
+                title: "Earlier turn question".into(),
+                selection: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(branch.session_id, copied.session_id);
+    assert!(branch.turns.iter().any(|turn| turn.turn_id == first));
+    assert!(!branch.turns.iter().any(|turn| turn.turn_id == second));
+    assert!(
+        matches!(&branch.origin, ash_protocol::ThreadOrigin::SideChat { parent_thread_id, context_thread_id, .. }
+        if parent_thread_id == &copied.thread_id && context_thread_id == &root.thread_id)
+    );
+}
+
+#[test]
 fn history_cursor_undo_redo_survives_restart_and_new_requests_clear_redo() {
     let (store, threads, root) = fixture();
     for input in ["first", "second"] {

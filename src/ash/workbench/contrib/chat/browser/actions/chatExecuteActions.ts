@@ -18,7 +18,7 @@ export interface IChatExecuteActionContext {
 	readonly acceptInputOptions?: IChatAcceptInputOptions;
 }
 
-function readExecuteContext(value: unknown): IChatExecuteActionContext {
+export function readExecuteContext(value: unknown): IChatExecuteActionContext {
 	if (value === undefined) { return {}; }
 	const invalid = localize('chat.execute.invalid', 'The chat execution context is invalid.');
 	if (!value || typeof value !== 'object' || Array.isArray(value)) { throw new TypeError(invalid); }
@@ -27,8 +27,12 @@ function readExecuteContext(value: unknown): IChatExecuteActionContext {
 	if (context.inputValue !== undefined && typeof context.inputValue !== 'string') { throw new TypeError(invalid); }
 	const options = context.acceptInputOptions;
 	if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options)
-		|| Object.keys(options).some(key => key !== 'queue')
-		|| options.queue !== undefined && options.queue !== ChatRequestQueueKind.Queued && options.queue !== ChatRequestQueueKind.Steering)) {
+		|| Object.keys(options).some(key => key !== 'queue' && key !== 'cancelCurrentRequest' && key !== 'sideChat')
+		|| options.queue !== undefined && options.queue !== ChatRequestQueueKind.Queued && options.queue !== ChatRequestQueueKind.Steering
+		|| options.cancelCurrentRequest !== undefined && typeof options.cancelCurrentRequest !== 'boolean'
+		|| options.cancelCurrentRequest === true && options.queue !== undefined
+		|| options.sideChat !== undefined && typeof options.sideChat !== 'boolean'
+		|| options.sideChat === true && (options.queue !== undefined || options.cancelCurrentRequest === true))) {
 		throw new TypeError(invalid);
 	}
 	return context;

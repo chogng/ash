@@ -150,7 +150,8 @@ impl QueueStore {
                 }
                 status = "pending";
             }
-            crate::QueueEdit::ReplaceText { text } => {
+            crate::QueueEdit::ReplaceText { text }
+            | crate::QueueEdit::ReplaceTextWithDelivery { text, .. } => {
                 if message.status != QueueStatus::Paused || text.trim().is_empty() {
                     return Err(QueueError::Invalid(
                         "pause the message before editing nonempty text".into(),
@@ -173,7 +174,13 @@ impl QueueStore {
                         .input
                         .push(protocol::UserInput::Text { text: text.clone() });
                 }
-                message.request.steer_turn = None;
+                if let crate::QueueEdit::ReplaceTextWithDelivery { delivery, .. } = edit {
+                    message.request.steer_turn = match delivery {
+                        crate::QueueDelivery::Queued => None,
+                        crate::QueueDelivery::Immediate => None,
+                        crate::QueueDelivery::Steering { turn_id } => Some(turn_id.clone()),
+                    };
+                }
                 status = "pending";
             }
             crate::QueueEdit::Replace { input } => {
@@ -189,20 +196,6 @@ impl QueueStore {
             crate::QueueEdit::Send { turn_id } => {
                 message.request.steer_turn = turn_id.clone();
                 status = "pending";
-                let first: i64 = transaction.query_row(
-                    "SELECT min(sort_key) FROM queued_messages WHERE thread_id=?1",
-                    [thread.as_str()],
-                    |row| row.get(0),
-                )?;
-                transaction.execute(
-                    "UPDATE queued_messages SET sort_key=?2 WHERE id=?1",
-                    params![
-                        id.as_str(),
-                        first.checked_sub(1).ok_or_else(|| QueueError::Storage(
-                            "queue ordering exhausted".into()
-                        ))?
-                    ],
-                )?;
             }
             crate::QueueEdit::Move { direction } => {
                 let position: i64 = transaction.query_row(
@@ -234,6 +227,30 @@ impl QueueStore {
                     )?;
                 }
             }
+        }
+        // Steering targets the active Turn, so an older queued Turn must not block it.
+        // Move it with its frozen text and delivery target in the same transaction.
+        if matches!(
+            edit,
+            crate::QueueEdit::Send { .. }
+                | crate::QueueEdit::ReplaceTextWithDelivery {
+                    delivery: crate::QueueDelivery::Immediate
+                        | crate::QueueDelivery::Steering { .. },
+                    ..
+                }
+        ) {
+            let first: i64 = transaction.query_row(
+                "SELECT min(sort_key) FROM queued_messages WHERE thread_id=?1",
+                [thread.as_str()],
+                |row| row.get(0),
+            )?;
+            let position = first
+                .checked_sub(1)
+                .ok_or_else(|| QueueError::Storage("queue ordering exhausted".into()))?;
+            transaction.execute(
+                "UPDATE queued_messages SET sort_key=?2 WHERE id=?1",
+                params![id.as_str(), position],
+            )?;
         }
         let encoded = serde_json::to_string(&message.request)?;
         if encoded.len() > 1024 * 1024 {

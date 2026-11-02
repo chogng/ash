@@ -490,6 +490,9 @@ pub fn validate_binding_source(
         ash_protocol::ThreadOrigin::Fork {
             parent_sequence, ..
         }
+        | ash_protocol::ThreadOrigin::SideChat {
+            parent_sequence, ..
+        }
         | ash_protocol::ThreadOrigin::Message {
             parent_sequence, ..
         }

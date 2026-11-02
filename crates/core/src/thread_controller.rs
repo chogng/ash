@@ -21,6 +21,7 @@ use crate::ThreadWorktreeBinder;
 use crate::ThreadWorktreeBindingRequest;
 use crate::WriterLease;
 use ash_utils_string::take_bytes_at_char_boundary;
+use core_api::CreateSideChatRequest;
 
 use crate::thread_reducer::validate_agent_request;
 use ash_attachments::Attachments;
@@ -843,6 +844,95 @@ impl ThreadController {
         request: ForkThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
         self.fork_into(binder, request, ForkDestination::CurrentSession)
+    }
+
+    /// Pins context at the selected Turn; importing history never transfers active execution.
+    /// Pins history through the selected Turn in a new Thread while execution stays in the source.
+    pub fn create_side_chat(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: CreateSideChatRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        validate_thread_title(&request.command_id, &request.title)?;
+        if request
+            .selection
+            .as_ref()
+            .is_some_and(|text| text.trim().is_empty() || text.len() > 65_536)
+        {
+            return Err(CoreError::InvalidInput(
+                "side chat selection must contain at most 65536 bytes of non-empty text".into(),
+            ));
+        }
+        let thread_id = command_thread_id("side-chat", &request.command_id)?;
+        if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
+            if matches!(&binding.origin, ThreadOrigin::SideChat { parent_thread_id, source_turn_id, selection, .. }
+                if parent_thread_id == &request.source_thread_id && source_turn_id == &request.source_turn_id && selection == &request.selection)
+            {
+                let snapshot = self.read_thread(&thread_id)?;
+                if snapshot.title == request.title {
+                    return Ok(snapshot);
+                }
+            }
+            return Err(CoreError::CommandConflict);
+        }
+        let source = self.read_thread(&request.source_thread_id)?;
+        if !source
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == request.source_turn_id)
+        {
+            return Err(CoreError::NotFound(request.source_turn_id.to_string()));
+        }
+        // Inherited turns retain the ancestor that owns their immutable history.
+        let owner = source
+            .message_checkpoints
+            .values()
+            .find(|point| point.turn_id == request.source_turn_id)
+            .map(|point| point.source_thread_id.clone())
+            .unwrap_or_else(|| source.thread_id.clone());
+        let events = self.source_history(&source, &owner)?;
+        let start = events.iter().position(|event| matches!(&event.event, ThreadEvent::TurnAccepted { turn_id, .. } if turn_id == &request.source_turn_id))
+            .ok_or_else(|| CoreError::NotFound(request.source_turn_id.to_string()))?;
+        let end = events
+            .iter()
+            .enumerate()
+            .skip(start + 1)
+            .find(|(_, event)| matches!(&event.event, ThreadEvent::TurnAccepted { .. }))
+            .map_or(events.len(), |(index, _)| index);
+        let prefix = ash_history::HistoryPrefix {
+            events: events.into_iter().take(end).collect(),
+        };
+        let reference = prefix.reference().map_err(CoreError::Journal)?;
+        let origin = ThreadOrigin::SideChat {
+            parent_thread_id: source.thread_id.clone(),
+            parent_sequence: source.sequence,
+            source_turn_id: request.source_turn_id,
+            context_thread_id: reference.source_thread_id.clone(),
+            context_sequence: reference.source_sequence,
+            selection: request.selection,
+        };
+        binder.provision(&ThreadWorktreeBindingRequest {
+            session_id: source.session_id.clone(),
+            thread_id: thread_id.clone(),
+            branch_name: None,
+            origin: origin.clone(),
+        })?;
+        self.create_thread_with_history(
+            CreateThreadRequest {
+                agent_id: source.agent_id.clone(),
+                origin,
+                agent: source.agent_configuration().cloned(),
+                session_id: source.session_id,
+                thread_id: thread_id.clone(),
+                title: request.title,
+                execution_target: source.execution_target,
+            },
+            vec![ThreadEvent::HistoryPrefixBound {
+                thread_id,
+                prefix: reference,
+            }],
+            vec![prefix],
+        )
     }
 
     /// Copies the current history into the root Thread of an independent Session.
