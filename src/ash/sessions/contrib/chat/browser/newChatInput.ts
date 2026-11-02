@@ -20,11 +20,11 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widget/chatDragAndDrop.js';
 import { NewChatContextAttachments } from './newChatContextAttachments.js';
-import { NewChatPermissionPicker } from './newChatPermissionPicker.js';
-import { approvalModeDefinition } from '../../../../platform/agentHost/common/approvalModes.js';
+import { PermissionPickerActionItem } from '../../../../workbench/contrib/chat/browser/widget/input/permissionPickerActionItem.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { NewChatInputPasteTarget } from './newChatInputPasteTarget.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
+import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
@@ -34,8 +34,7 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 /** Applies Sessions editor, attachment and draft policy to the shared input. */
 export class NewChatInputWidget extends ChatInputPart {
 	private readonly contextAttachments: NewChatContextAttachments;
-	private readonly permissionButton: HTMLButtonElement;
-	private readonly permissionPicker: NewChatPermissionPicker;
+	private readonly permissionPicker: PermissionPickerActionItem;
 
 	constructor(
 		container: HTMLElement,
@@ -57,6 +56,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IChatInputNoticeHubService noticeHub: IChatInputNoticeHubService,
 		@IChatInputNotificationService inputNotifications: IChatInputNotificationService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@ICommandService commands: ICommandService,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
@@ -78,14 +78,34 @@ export class NewChatInputWidget extends ChatInputPart {
 		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const footer = this.inputFooter!;
-		this.permissionButton = h(container.ownerDocument, 'button', { className: 'ash-button ash-button-small ash-button-quiet' });
-		this.permissionButton.type = 'button';
-		this.permissionButton.setAttribute('aria-haspopup', 'menu');
-		this.permissionButton.setAttribute('aria-expanded', 'false');
-		footer.prepend(this.permissionButton);
+		const owner = this;
+		const permissionHost = h(container.ownerDocument, 'div');
+		permissionHost.className = 'ash-sessions-permission-picker';
+		footer.prepend(permissionHost);
 		this.createContextUsageToolbar(footer, contextMenus);
-		this.permissionPicker = this._register(instantiationService.createInstance(NewChatPermissionPicker, this.permissionButton, this.model));
-		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
+		this.permissionPicker = this._register(instantiationService.createInstance(PermissionPickerActionItem, {
+			id: 'sessions.chat.permissions',
+			get label() {
+				const definition = approvalModeDefinition(owner.model.inputState.approvalMode);
+				return localize(definition.label.key, definition.label.text);
+			},
+			get tooltip() {
+				const definition = approvalModeDefinition(owner.model.inputState.approvalMode);
+				return localize('sessions.chat.permission.label', 'Permissions: {0}', localize(definition.label.key, definition.label.text));
+			},
+			get enabled() { return !owner.model.inputState.aiDisabled && owner.model.inputState.phase !== 'submitting'; },
+			run: () => this.permissionPicker.show(),
+		}, model.onDidChange, {
+			getActions: () => approvalModeDefinitions.map(definition => ({
+				id: definition.id,
+				label: localize(definition.label.key, definition.label.text),
+				tooltip: localize(definition.description.key, definition.description.text),
+				enabled: true,
+				checked: definition.id === model.inputState.approvalMode,
+				run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
+			})),
+		}));
+		this.permissionPicker.render(permissionHost);
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
@@ -96,8 +116,10 @@ export class NewChatInputWidget extends ChatInputPart {
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
-		this._register(model.onDidChange(() => this.updatePermission()));
-		this.updatePermission();
+	}
+
+	protected override getAccessibilityHelpContent(): string {
+		return super.getAccessibilityHelpContent() + '\n' + getSessionsChatAccessibilityHelp();
 	}
 
 	/** Composition slots owned by this input; the Sessions widget places surrounding surfaces. */
@@ -119,15 +141,6 @@ export class NewChatInputWidget extends ChatInputPart {
 
 	public override openPermissionPicker(): void {
 		if (!this.isDisposed && this.visible && !this.model.inputState.aiDisabled) this.permissionPicker.show();
-	}
-
-	private updatePermission(): void {
-		const permission = this.model.inputState.approvalMode;
-		const definition = approvalModeDefinition(permission);
-		const label = localize(definition.label.key, definition.label.text);
-		this.permissionButton.textContent = label;
-		this.permissionButton.setAttribute('aria-label', localize('sessions.chat.permission.label', 'Permissions: {0}', label));
-		this.permissionButton.disabled = this.model.inputState.phase === 'submitting';
 	}
 
 }

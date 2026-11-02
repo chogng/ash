@@ -67,7 +67,9 @@ which specializes the shared `ChatWidget` and owns its `NewChatInputWidget`,
 session toolbar, Tip above the input and footer workspace picker. The view and
 input survive draft materialization; the existing model remains the only owner
 of the Session identity and first-send operation. `NewChatInputWidget` retains
-editor, attachment, permission and draft policy without constructing its parent.
+editor, attachment and draft policy without constructing its parent. Its permission
+slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
+the shared permission menu, keyboard interaction and popup lifetime.
 
 Shared notices, introductions and tips live under
 `workbench/contrib/chat/browser/widget/input/notices/`.

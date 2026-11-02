@@ -42,7 +42,6 @@ import { CoworkModelPreferences } from '../../contrib/cowork/common/languageMode
 import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
 import { ILanguageModelsConfigurationService as ICoworkModelPreferences } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import { LanguageModelsConfigurationService as CoworkModelPreferencesService } from '../../contrib/cowork/browser/languageModelsConfigurationService.js';
-import { SessionsChatAccessibilityHelp } from '../../contrib/chat/browser/sessionsChatAccessibilityHelp.js';
 import { initializeTestLocalization } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../nls.js';
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -1078,9 +1077,26 @@ class SessionsInputForTest extends NewChatInputWidget {
 	}
 }
 
+/** Exercise the same priority and context selection as the accessible view service. */
+function focusedChatHelp(services: ServicesAccessor) {
+	const contextKeys = services.get(IContextKeyService);
+	for (const implementation of [...AccessibleViewRegistry.getImplementations()]
+		.filter(candidate => candidate.type === AccessibleViewType.Help && contextKeys.contextMatchesRules(candidate.when, document.activeElement as HTMLElement))
+		.sort((left, right) => right.priority - left.priority)) {
+		const provider = implementation.getProvider(services);
+		if (provider) { return provider; }
+	}
+	throw new Error('No accessibility help for the focused composer');
+}
+
 async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () => { }, stored?: string, interrupt: ChatInputDelegate['interrupt'] = async () => { }) {
 	const resources = new DisposableStore();
 	try {
+		// jsdom has no canvas measurement; real editor geometry is covered in the browser fixture.
+		const canvas = browserEnvironment.window.HTMLCanvasElement.prototype;
+		const getContext = canvas.getContext;
+		canvas.getContext = () => null;
+		resources.add(toDisposable(() => { canvas.getContext = getContext; }));
 		const fake = fakeApi({ sessions: [] });
 		const sessions = resources.add(new SessionsManagementService(fake.api));
 		await sessions.initialize();
@@ -1207,7 +1223,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.ok(footer.lastElementChild!.contains(ring));
 		assert.equal(ring.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
 		fixture.input.focus();
-		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider()!;
+		using help = focusedChatHelp(fixture.services);
 		assert.match(help.provideContent(), locale === 'en' ? /Dictation inserts editable text without sending it/u : /不会自动发送/u);
 		const editor = form.querySelector('.stanza-editor-input')!;
 		editor.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }));
@@ -1328,7 +1344,7 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		using fixture = await sessionsInputFixture(undefined, '{unfinished');
 		assert.match(fixture.notices.model.getNotifications()[0]!.message, /^无法恢复聊天草稿：/u);
 		fixture.input.focus();
-		const help = new SessionsChatAccessibilityHelp(fixture.input.element, () => fixture.input.focus()).getProvider();
+		using help = focusedChatHelp(fixture.services);
 		assert.ok(help);
 		const content = help.provideContent();
 		assert.match(content, /已完成的附件仍保留在草稿中/u);
@@ -3596,29 +3612,63 @@ for (const kind of ['tool', 'shell', 'contextCompaction', 'advisor'] as const) {
 }
 
 test('Chat mode accessibility help explains switch_mode in Chinese and restores input focus', async () => {
-	const { SessionsChatAccessibilityHelp } = await import('../../contrib/chat/browser/sessionsChatAccessibilityHelp.js');
-	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
-	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
-	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	const container = document.createElement('div');
-	const input = document.createElement('textarea');
-	container.append(input);
-	document.body.append(container);
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	initializeTestLocalization('zh-CN');
 	try {
-		input.focus();
-		const help = new SessionsChatAccessibilityHelp(container, () => input.focus());
-		const provider = help.getProvider()!;
+		using fixture = await sessionsInputFixture();
+		fixture.input.focus();
+		const focused = document.activeElement;
+		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), /退出到 Agent、Debug 或 Multitask 需要你的选择，并保留权限模式/);
 		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
 		assert.match(provider.provideContent(), /菜单打开时按 1、2、3 选择/);
-		input.blur();
+		assert.equal(provider.provideContent().match(/聊天：配置工具/g)?.length, 1);
+		(focused as HTMLElement).blur();
 		provider.dispose();
-		assert.equal(document.activeElement, input);
-	} finally {
-		container.remove();
-		resetNlsResolver();
-	}
+		assert.equal(document.activeElement, focused);
+	} finally { resetNlsResolver(); }
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help stays local and restores its trigger (${locale})`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		using fixture = await sessionsInputFixture();
+		fixture.input.appendToDraft('Keep this draft');
+		const registrations = AccessibleViewRegistry.getImplementations().length;
+		fixture.input.openPermissionPicker();
+		await nextTask();
+		const menu = document.querySelector<HTMLElement>('.ash-chat-permission-menu')!;
+		assert.ok(menu);
+		const selected = document.activeElement;
+		const provider = focusedChatHelp(fixture.services);
+		assert.match(provider.provideContent(), locale === 'en' ? /^Permissions/ : /^权限/);
+		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace/);
+		provider.dispose();
+		assert.equal(document.activeElement, selected);
+		const closingProvider = focusedChatHelp(fixture.services);
+		fixture.services.get(IActionWidgetService).hide();
+		closingProvider.dispose();
+		assert.equal(document.activeElement, fixture.input.element.querySelector('.ash-chat-input-permission-picker'));
+		assert.equal(AccessibleViewRegistry.getImplementations().length, registrations);
+		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this draft');
+	} finally { resetNlsResolver(); }
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Cowork accessibility help composes shared commands once (${locale})`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		using fixture = await sessionsInputFixture();
+		fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
+		using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
+		input.render(fixture.model.inputState);
+		input.focus();
+		const focused = document.activeElement;
+		const provider = focusedChatHelp(fixture.services);
+		assert.match(provider.provideContent(), locale === 'en' ? /Cowork input/ : /Cowork 输入/);
+		assert.doesNotMatch(provider.provideContent(), /New worktree asks|新建 worktree/);
+		assert.equal(provider.provideContent().match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)?.length, 1);
+		provider.dispose();
+		assert.equal(document.activeElement, focused);
+	} finally { resetNlsResolver(); }
 });
 
 test('ChatWidgetModel follows switch_mode while preserving a different next-message mode', async () => {

@@ -25,8 +25,7 @@ import { ChatDragAndDrop } from '../../../../workbench/contrib/chat/browser/widg
 import { NewChatContextAttachments } from '../../chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../chat/browser/newChatInputPasteTarget.js';
 import { ChatInputTipPresenter } from './widget/input/chatInputTipPresenter.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { SessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
+import { getCoworkChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import type { IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -117,7 +116,6 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				&& !this.model.inputState.interaction,
 			focusInput: () => this.focus(),
 		}, this.noticeHost));
-		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
@@ -169,6 +167,10 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			this.updateConversation();
 		}));
 		this.updateConversation();
+	}
+
+	protected override getAccessibilityHelpContent(): string {
+		return super.getAccessibilityHelpContent() + '\n' + getCoworkChatAccessibilityHelp();
 	}
 
 	public override setVisible(visible: boolean): void {

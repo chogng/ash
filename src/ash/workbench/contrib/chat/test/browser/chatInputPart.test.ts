@@ -2886,6 +2886,20 @@ suite('chatInput browser component', () => {
 				await page.keyboard.press('Enter');
 				const picker = page.locator('.ash-action-widget');
 				await expect(picker).toBeVisible();
+				await expect(picker.getByRole('menuitemradio')).toHaveCount(3);
+				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
+				for (const label of await picker.locator('.ash-button-label').all()) {
+					await expect(label).toHaveCSS('font-weight', '600');
+				}
+				await expect(picker.locator('.ash-action-widget-summary')).toHaveCount(3);
+				await page.keyboard.press('End');
+				await expect(picker.getByRole('menuitemradio').nth(2)).toBeFocused();
+				await page.keyboard.press('ArrowDown');
+				await expect(picker.getByRole('menuitemradio').nth(0)).toBeFocused();
+				await page.keyboard.press('Escape');
+				await expect(picker).toBeHidden();
+				await permissions.press('ArrowDown');
+				await expect(picker).toBeVisible();
 				await expect(picker.locator('input')).toHaveCount(0);
 				await expect(page.getByRole('combobox', { name: locale === 'en' ? 'Permissions' : '权限' })).toHaveCount(0);
 				await expect(permissions).toHaveAttribute('aria-expanded', 'true');
@@ -2901,7 +2915,7 @@ suite('chatInput browser component', () => {
 				await expect(permissions).toBeFocused();
 				await expect(permissions).toHaveAttribute('aria-expanded', 'false');
 				await permissions.click();
-				await picker.getByRole('menuitemradio', { name: locale === 'en' ? 'Auto' : '自动', exact: true }).click();
+				await page.keyboard.press('1');
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toBeVisible();
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toHaveText(locale === 'en' ? 'Auto' : '自动');
 				await expect(picker).toBeHidden();
