@@ -182,6 +182,9 @@ pub fn ensure_protocol_compatible(
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerCapabilities {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub input_completions: Option<super::input_completions::InputCompletionsCapability>,
     pub agent_interactions: bool,
     pub document_collaboration: bool,
     pub sessions: bool,

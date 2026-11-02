@@ -87,6 +87,14 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: FileFuzzyParams = decode(params)?;
+        result(&self.file_fuzzy_query(params, cancellation)?)
+    }
+
+    pub(super) fn file_fuzzy_query(
+        &self,
+        params: FileFuzzyParams,
+        cancellation: &CancellationToken,
+    ) -> Result<FileFuzzyResult, RpcError> {
         if params.query.len() > 1024
             || params.query.contains('\0')
             || !(1..=5000).contains(&params.max_results)
@@ -202,7 +210,7 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
                 },
             )
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))??;
-        result(&FileFuzzyResult {
+        Ok(FileFuzzyResult {
             matches: found
                 .matches
                 .into_iter()

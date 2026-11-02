@@ -1,3 +1,5 @@
+import { Event } from '../../../../../base/common/event.js';
+import type { IAgentHostInputCompletionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { raceCancellationError } from '../../../../../base/common/async.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { canceled } from '../../../../../base/common/errors.js';
@@ -11,14 +13,51 @@ import { buildAgentHostSessionWorkspace } from '../../../../common/agentHostSess
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 
-/** Search captures the folder's exact host, independent of later navigation and equal backend IDs. */
-export class SessionsSearchService implements IFileSearchService, IContentSearchService {
+/** Host discovery captures the exact provider, independent of later navigation and equal backend IDs. */
+export class SessionsSearchService implements IFileSearchService, IContentSearchService, IAgentHostInputCompletionService {
 	constructor(
 		private readonly defaultProviderId: string,
 		private readonly primaryWorkspace: () => IWorkspace,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
 	) { }
+	readonly onDidChangeConnection: Event<void> = Event.any<void>((listener, thisArgs) => {
+		const notify = () => listener.call(thisArgs);
+		const lifetime = new DisposableStore();
+		const hosts = lifetime.add(new DisposableStore());
+		const selected = () => { try { return this.scopes.getScope(); } catch { return undefined; } };
+		let active = selected();
+		const bind = () => {
+			hosts.clear();
+			for (const scope of this.scopes.getScopes()) hosts.add(scope.services.host.completions.onDidChangeConnection(notify));
+		};
+		bind();
+		lifetime.add(this.scopes.onDidChange(() => {
+			const current = selected();
+			// Transcript updates do not change the completion connection or dismiss suggestions.
+			if (current !== active) { active = current; notify(); }
+		}));
+		lifetime.add(this.scopes.onDidChangeScopes(() => { active = selected(); bind(); notify(); }));
+		return lifetime;
+	});
+	getTriggerCharacters(sessionId?: string): readonly string[] {
+		try { return this.scopes.getScope(sessionId).services.host.completions.getTriggerCharacters(); } catch { return []; }
+	}
+	complete(...[request, signal]: Parameters<IAgentHostInputCompletionService['complete']>): ReturnType<IAgentHostInputCompletionService['complete']> {
+		const scope = this.scopes.getScope(request.sessionId);
+		return this.run(scope, signal, async signal => {
+			const directories = await Promise.all(request.directories.map(async directory => {
+				const routed = this.route(directory);
+				if (routed.scope !== scope) throw canceled();
+				return this.resolveDirectory(routed, signal);
+			}));
+			return scope.services.host.completions.complete({
+				...request, directories,
+				...(request.sessionId === undefined ? {} : { sessionId: scope.backendIdentity(request.sessionId) }),
+				...(request.threadId === undefined ? {} : { threadId: scope.backendIdentity(request.threadId) }),
+			}, signal);
+		});
+	}
 	private route(directory: FileSearchDirectory): { scope: ISessionProviderScope; directory: FileSearchDirectory; resolve?: boolean; } {
 		let target = directory.target;
 		if (target.type === 'workspace' && target.dirId.startsWith('session:')) {

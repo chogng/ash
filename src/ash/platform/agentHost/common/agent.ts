@@ -1,3 +1,4 @@
+import type { FileSearchDirectory } from '../../search/common/fileSearch.js';
 import type { SkillReference } from './appServerApi.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
@@ -997,4 +998,24 @@ export interface AgentWireLogPage {
 	readonly cursor: number;
 	readonly hasMore: boolean;
 	readonly droppedFrames: number;
+}
+
+/** Input coordinates are UTF-16 offsets, matching text models across product hosts. */
+export interface AgentHostInputCompletionRequest {
+	readonly text: string;
+	readonly offset: number;
+	readonly sessionId?: string;
+	readonly threadId?: string;
+	readonly directories: readonly FileSearchDirectory[];
+}
+
+export interface AgentHostInputCompletionItem {
+	readonly label: string;
+	readonly insertText: string;
+	readonly start: number;
+	readonly end: number;
+	readonly detail?: string;
+	readonly preselect: boolean;
+	readonly value: { readonly kind: 'command'; } | { readonly kind: 'skill'; readonly skill: SkillReference; }
+	| { readonly kind: 'resource'; readonly resource: URI; readonly isDirectory: boolean; };
 }

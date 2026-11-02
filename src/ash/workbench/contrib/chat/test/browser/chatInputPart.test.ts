@@ -1609,6 +1609,114 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Host input completions attach a captured file, undo and send in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&locale=${locale}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.focus();
+			const help = await page.evaluate(() => window.ashChatInputIntegration.inputAccessibility());
+			assert.match(help!, locale === 'zh-CN' ? /输入 @ 或 #/u : /Type @ or #/u);
+			await input.pressSequentially('Review #bri please');
+			await input.press('Home');
+			for (let index = 0; index < 'Review #bri'.length; index++) {
+				await input.press('ArrowRight');
+			}
+			await page.evaluate(() => window.ashChatInputIntegration.triggerInputSuggestions());
+			const suggestion = page.getByRole('option').filter({ has: page.locator('.stanza-editor-completion-label', { hasText: '#brief.txt' }) });
+			await expect(suggestion).toBeVisible();
+			await expect(input).toHaveAttribute('aria-activedescendant', await suggestion.getAttribute('id') ?? 'missing');
+			await input.press('Tab');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review brief.txt please');
+			await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('Review #bri please');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+			await input.press('ControlOrMeta+Shift+z');
+			await expect(page.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
+			await input.press('End');
+			await input.press('Enter');
+			await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'brief.txt', content: 'Workspace file content' }]));
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+		});
+	}
+
+	test('Host input completions capture a directory manifest and dismiss with Escape', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('#folder:src');
+		await expect(page.getByRole('option').filter({ hasText: '#src/' })).toBeVisible();
+		await input.press('Escape');
+		await expect(page.getByRole('option')).toHaveCount(0);
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashChatInputIntegration.triggerInputSuggestions());
+		await expect(page.getByRole('option').filter({ hasText: '#src/' })).toBeVisible();
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('src ');
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'src', content: 'Directory: file:///workspace/src\nFiles:\nnested.txt' }]));
+	});
+
+	test('Host input completions make Send wait for the captured resource', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('@drop-pending');
+		await expect(page.getByRole('option').filter({ hasText: '@drop-pending.ts' })).toBeVisible();
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+		await input.press('Enter');
+		await expect(page.getByLabel('Submission', { exact: true })).toBeEmpty();
+		await page.evaluate(() => window.ashChatInputIntegration.releaseDropRead());
+		await expect(page.getByLabel('Submission', { exact: true })).toHaveText(JSON.stringify([{ name: 'drop-pending.ts', content: 'first captured line\nsecond captured line\nthird captured line' }]));
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+	});
+
+	for (const retirement of ['edit', 'cursor', 'draft'] as const) {
+		test(`Host input completions cannot replace a ${retirement} changed draft`, async () => {
+			const { page } = browserTests;
+			await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+			await input.pressSequentially('#drop-pending');
+			await expect(page.getByRole('option').filter({ hasText: '#drop-pending.ts' })).toBeVisible();
+			await input.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(true);
+			if (retirement === 'edit') {
+				await input.pressSequentially(' changed');
+			}
+			if (retirement === 'cursor') {
+				await input.press('Home');
+				await input.press('End');
+			}
+			if (retirement === 'draft') {
+				await page.evaluate(() => window.ashChatInputIntegration.replaceDropDraft());
+			}
+			const text = await page.evaluate(() => window.ashChatInputIntegration.dropState().text);
+			await page.evaluate(() => window.ashChatInputIntegration.releaseDropRead());
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().pending)).toBe(false);
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe(text);
+			await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+		});
+	}
+
+	test('Host input completions leave the typed query intact when capture fails', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&dropSources&completionSources');
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.pressSequentially('#drop-missing');
+		await expect(page.getByRole('option').filter({ hasText: '#drop-missing.ts' })).toBeVisible();
+		await input.press('Enter');
+		await expect(page.getByLabel('Context error', { exact: true })).toContainText('Missing dropped source');
+		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('#drop-missing');
+		await expect(page.locator('.ash-chat-code-reference')).toHaveCount(0);
+	});
+
 	test('Working logo reuses its cached atlas and replaces it for DPI and size changes', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?inlineCode');

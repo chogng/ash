@@ -33,6 +33,7 @@ pub mod goal;
 pub mod host_resource;
 pub mod ide;
 pub mod initialize;
+pub mod input_completions;
 pub mod instructions;
 pub mod issue_reporter;
 pub mod issues;

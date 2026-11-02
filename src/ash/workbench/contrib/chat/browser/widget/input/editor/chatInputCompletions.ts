@@ -7,7 +7,7 @@ import type { SkillSelectorCatalog } from '../../../../common/skillSelectors.js'
 export const CHAT_INPUT_LANGUAGE_ID = 'ash-chat-input';
 
 /** Adapts the Chat slash-command catalog to Stanza's completion contract. */
-export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog): LanguageCompletionProvider {
+export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog, localOnly = false): LanguageCompletionProvider {
 	return Object.freeze({
 		id: 'ash.chat.commands',
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),
@@ -22,7 +22,7 @@ export function createChatCommandCompletionProvider(catalog: SlashCommandCatalog
 			const prefix = line.slice(commandStart, request.position.column - 1);
 			if (!prefix.startsWith('/') || /\s/.test(prefix)) return emptyCompletionResult();
 			const query = prefix.slice(1);
-			const matches = catalog.matching(query);
+			const matches = catalog.matching(query).filter(command => !localOnly || catalog.binding(command.name)?.origin === 'local');
 			// Weak name and description matches need an explicit choice before Enter can accept them.
 			const selectFirst = !query || (matches[0]?.name.startsWith(query.toLowerCase()) ?? false);
 			const commandEnd = commandStart + line.slice(commandStart).search(/\s|$/);

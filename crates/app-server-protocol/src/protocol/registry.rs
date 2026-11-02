@@ -1761,6 +1761,10 @@ use crate::protocol::extension_packages::ExtensionsUpstreamReferenceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsUpstreamRegistryDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::input_completions::InputCompletionsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::input_completions::InputCompletionsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::issue_reporter::IssueReporterCancelResult;
@@ -5633,6 +5637,17 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    InputCompletions => "chat/input/completions" {
+        params: InputCompletionsParams,
+        response: InputCompletionsResult,
+        serialization: None,
+        cancellation: "operationId",
+    },
+    InputCompletionsCancel => "chat/input/completions/cancel" {
+        params: FileGlobCancelParams,
+        response: (),
+        serialization: None,
+    },
     FileGlobCancel => "file/search/glob/cancel" {
         params: FileGlobCancelParams,
         response: (),
@@ -6975,6 +6990,11 @@ typescript_bindings! {
     ProtocolVersion,
     CapabilityContract,
     ServerCapabilities,
+    crate::protocol::input_completions::InputCompletionsCapability,
+    crate::protocol::input_completions::InputCompletionsParams,
+    crate::protocol::input_completions::InputCompletionsResult,
+    crate::protocol::input_completions::InputCompletionValue,
+    crate::protocol::input_completions::InputCompletionItem,
     InitializeParams,
     InitializeResult,
     DirGrantDto,

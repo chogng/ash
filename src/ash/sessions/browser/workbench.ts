@@ -96,7 +96,7 @@ import { IExtensionRecommendationsService } from '../../workbench/services/exten
 import { ExtensionRecommendationsService } from '../../workbench/contrib/extensions/browser/extensionRecommendationsService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
-import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCountContext } from '../../workbench/common/contextkeys.js';
@@ -614,7 +614,10 @@ export abstract class Workbench extends Disposable {
 		if (options.api.hasAppServer) {
 			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 			services.registerInstance(IFileSearchService, search);
+			services.registerInstance(IAgentHostInputCompletionService, search);
 			services.registerInstance(IContentSearchService, search);
+		} else {
+			services.registerInstance(IAgentHostInputCompletionService, options.api.completions);
 		}
 		const routedChat = this._register(services.createInstance(SessionsChatService));
 		services.registerInstance(IChatService, routedChat);

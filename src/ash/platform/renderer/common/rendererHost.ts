@@ -147,6 +147,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly remoteConnections?: IRemoteConnectionApi;
 	/** Additional backend scopes are available only in hosts with a multi-host window owner. */
 	readonly agentHosts?: IRendererAgentHostService;
+	readonly completions: import('../../agentHost/common/agentService.js').IAgentHostInputCompletionService;
 	readonly session: IAgentSessionService;
 	readonly teams: ITeamApi;
 	readonly model: IAgentModelsService;

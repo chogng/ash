@@ -1,3 +1,5 @@
+import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
@@ -138,6 +140,7 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 declare global {
 	interface Window { ashChatInputIntegration: {
 		showIntroduction(): void;
+		triggerInputSuggestions(): Promise<unknown>;
 		setCatalogError(message: string | undefined): void;
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
@@ -602,6 +605,10 @@ services.registerInstance(IFileService, {
 		return resource.path === '/workspace' ? [
 			{ resource: URI.file('/workspace/src'), name: 'src', kind: FileKind.Directory },
 			{ resource: URI.file('/workspace/brief.txt'), name: 'brief.txt', kind: FileKind.File },
+			...(new URLSearchParams(location.search).has('completionSources') ? [
+				{ resource: URI.file('/workspace/drop-pending.ts'), name: 'drop-pending.ts', kind: FileKind.File },
+				{ resource: URI.file('/workspace/drop-missing.ts'), name: 'drop-missing.ts', kind: FileKind.File },
+			] : []),
 			...(dropSources ? [{ resource: URI.file('/workspace/drop-folder'), name: 'drop-folder', kind: FileKind.Directory }] : []),
 			...(new URLSearchParams(location.search).has('workspaceImage') ? [{ resource: URI.file('/workspace/picture.PNG'), name: 'picture.PNG', kind: FileKind.File }] : []),
 		] : [{ resource: URI.file('/workspace/src/nested.txt'), name: 'nested.txt', kind: FileKind.File }];
@@ -621,6 +628,30 @@ services.registerInstance(IFileService, {
 	},
 } as unknown as IFileService);
 services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
+// Deterministic host boundary for composer admission tests. Catalog/search semantics
+// are exercised through the real Rust request in the Desktop smoke suite.
+services.registerInstance(IAgentHostInputCompletionService, {
+	onDidChangeConnection: Event.None, getTriggerCharacters: () => ['@', '#'],
+	complete: async (request, signal) => {
+		const token = /(?:^|\s)([@#])([^\s]*)$/u.exec(request.text.slice(0, request.offset));
+		if (!token) return [];
+		const query = token[2]!.replace(/^(file|folder):/u, '');
+		const start = request.offset - token[2]!.length - 1;
+		const end = request.offset + request.text.slice(request.offset).search(/\s|$/u);
+		const items: AgentHostInputCompletionItem[] = [];
+		for (const directory of request.directories) {
+			const add = (resource: URI, path: string, isDirectory: boolean) => items.push({ label: `${token[1]}${path}${isDirectory ? '/' : ''}`, insertText: `${token[1]}${path} `, start, end, preselect: items.length === 0, value: { kind: 'resource', resource, isDirectory } });
+			if (!token[2]!.startsWith('folder:')) {
+				const result = await services.get(IFileSearchService).fuzzy(directory, { query, maxResults: 50 }, signal);
+				for (const file of result.matches) add(file.resource, file.path, false);
+			}
+			for (const entry of await services.get(IFileService).readDirectory(directory.resource)) {
+				if (entry.kind === FileKind.Directory && entry.name.startsWith(query)) add(entry.resource, entry.name, true);
+			}
+		}
+		return items;
+	},
+});
 // Attachment Quick Access uses the same file-query owner as Search. This fixture
 // has no shared file models or content query scenario.
 services.registerInstance(IContentSearchService, { search: async () => { throw new Error('Chat context fixture does not run content searches'); } });
@@ -873,6 +904,7 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
 	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
 	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
 	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),

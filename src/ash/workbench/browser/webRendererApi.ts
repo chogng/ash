@@ -33,7 +33,7 @@ import { createAppServerExtensionApi } from '../../platform/extensions/browser/e
 import { createAppServerSyntaxApi } from '../../platform/syntax/browser/syntaxApi.js';
 import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
 import { createAppServerContentSearchApi, createAppServerContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
-import { createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
+import { createAppServerAgentHostInputCompletionService, createAppServerAgentSessionService, createAppServerAgentThreadService, createAppServerAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createAppServerAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
 import { AppServerTerminalProcessService } from '../../platform/terminal/browser/appServerTerminalProcessService.js';
 import { createAppServerDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
@@ -120,6 +120,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
 			approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
 			accounts: createAppServerAccountApi(connection, connectorHostServices),
+			completions: createAppServerAgentHostInputCompletionService(connection),
 			session: createAppServerAgentSessionService(connection, remoteHost),
 			teams: createAppServerTeamApi(connection),
 			model: createAppServerAgentModelsService(connection),

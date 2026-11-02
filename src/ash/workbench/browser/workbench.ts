@@ -44,7 +44,7 @@ import { IModelService } from '../../editor/common/services/model.js';
 import { ModelService } from '../../editor/common/services/modelService.js';
 import { IAssetService } from '../../platform/assets/common/assetService.js';
 import { INetworkDiagnosticsService } from '../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
-import { IAgentThreadService, IAgentTurnService, IAgentSessionService } from '../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentThreadService, IAgentTurnService, IAgentSessionService } from '../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
@@ -901,6 +901,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchLayoutService, layoutService);
 		services.registerInstance(IAgentModelsService, api.model);
 		services.registerInstance(ISecretStorageStatusService, api.secretStorage);
+		services.registerInstance(IAgentHostInputCompletionService, api.completions);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerInstance(IAgentThreadService, api.thread);
 		services.registerInstance(IAgentTurnService, api.turn);

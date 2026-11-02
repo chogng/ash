@@ -15,7 +15,7 @@ import { createDisconnectedSyntaxApi } from '../../platform/syntax/browser/synta
 import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 import { unavailableOperation, WebAppServerUnavailableError } from '../../platform/renderer/browser/disconnectedHost.js';
 import { createDisconnectedContentSearchApi, createDisconnectedContentSearchConfigurationApi } from '../../platform/search/browser/searchApi.js';
-import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
+import { createDisconnectedAgentHostInputCompletionService, createDisconnectedAgentSessionService, createDisconnectedAgentThreadService, createDisconnectedAgentTurnService } from '../../platform/agentHost/browser/appServerAgentService.js';
 import { createDisconnectedAgentModelsService } from '../../platform/agentHost/browser/appServerAgentModels.js';
 import { DisconnectedTerminalProcessService } from '../../platform/terminal/browser/disconnectedTerminalProcessService.js';
 import { createDisconnectedDocumentCollaborationApi } from '../../platform/collab/browser/documentCollaborationApi.js';
@@ -46,6 +46,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		hasAppServer: false,
 		appServer,
 		accounts: createDisconnectedAccountApi(unavailableOperation),
+		completions: createDisconnectedAgentHostInputCompletionService(),
 		session: createDisconnectedAgentSessionService(unavailableOperation),
 		teams: createDisconnectedTeamApi(unavailableOperation),
 		model: createDisconnectedAgentModelsService(unavailableOperation),

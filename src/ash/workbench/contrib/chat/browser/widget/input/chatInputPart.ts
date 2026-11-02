@@ -14,6 +14,7 @@ import { MenuItemAction } from '../../../../../../platform/actions/common/action
 import { ScreenshotContextValuePick } from '../../actions/chatContext.js';
 import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { ChatPasteProvidersFeature, createChatFileAttachments } from './editor/chatPasteProviders.js';
+import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { ChatChangesPill } from './chatChangesPill.js';
@@ -340,6 +341,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			ariaLabel: 'Chat message',
 			slashCommands: this.slashCommands,
 			skills: this.skills,
+			hostCompletions: true,
 		}));
 		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
 		this._register(this.input.onDidChange(updateCursorAtTop));
@@ -355,6 +357,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
 		if (this.input.codeEditor && this.input.getModel) {
 			this._register(instantiationService.createInstance(ChatPasteProvidersFeature, this.input, () => this.inputLifecycle.signal, () => this.supportsImages()));
+			const completions = this._register(instantiationService.createInstance(AgentHostInputCompletions, this.input.getModel(), {
+				currentLifecycle: () => this.inputLifecycle.signal,
+				getContext: () => this.state.conversation ?? {},
+				acceptSkill: skill => {
+					const captured = this.draftSkills?.references.filter(reference => reference.id.name !== skill.id.name) ?? [];
+					this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, [...captured, skill]) };
+				},
+				isEnabled: () => this.visible && !this.state.aiDisabled,
+				acceptResource: (resource, isDirectory, replacement, signal) => this.acceptResourceCompletion(resource, isDirectory, replacement, signal),
+			} satisfies AgentHostInputCompletionHost));
+			completions.register();
 		}
 		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
 			ariaLabel: localize('chat.input.actions', 'Chat input actions'),
@@ -468,7 +481,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			void this.acceptInput().catch(() => undefined);
 		}));
 		this._register(this.input.onDidChange(() => {
-			if (!this.applyingHistory) this.draftSkills = undefined;
+			if (!this.applyingHistory && this.draftSkills) this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, this.draftSkills.references) };
 			this.textRevision++;
 			this.draftRevision++;
 			if (!this.applyingHistory) { this.history.reset(); this.historyInputRevision++; }
@@ -735,6 +748,45 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.acceptingContext = false;
 			}
 		});
+	}
+
+	private async acceptResourceCompletion(resource: URI, isDirectory: boolean, replacement: { readonly start: number; readonly end: number; }, signal: AbortSignal): Promise<void> {
+		const model = this.input.getModel!();
+		const version = model.getVersionId();
+		const selection = this.input.getSelection();
+		const preparation = new AbortController();
+		using edits = this.input.onDidChange(() => preparation.abort());
+		using cursor = this.input.codeEditor?.onDidChangeCursorSelection(() => preparation.abort());
+		const lifetime = AbortSignal.any([signal, preparation.signal]);
+		try {
+			await this.attachmentModel.acquireContext(
+				async draftSignal => [await this.attachmentResolver.resolveResourceAttachContext(resource, isDirectory, draftSignal)],
+				lifetime,
+				(attachments, acquisitionSignal) => {
+					const current = this.input.getSelection();
+					if (!this.visible || this.state.aiDisabled || model.getVersionId() !== version || current.anchor !== selection.anchor || current.active !== selection.active) {
+						throw new CancellationError();
+					}
+					if (!this.supportsImages() && attachments.some(attachment => attachment.kind === 'image')) {
+						throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
+					}
+					this.acceptingContext = true;
+					try {
+						// Stop observing before the accepted reference moves its own cursor.
+						edits.dispose();
+						cursor?.dispose();
+						this.input.setSelection({ anchor: replacement.start, active: replacement.end });
+						return this.pasteTarget.addAttachments(attachments, acquisitionSignal);
+					} finally {
+						this.acceptingContext = false;
+					}
+				},
+			);
+		} catch (error) {
+			if (!this.isDisposed && !signal.aborted && !isCancellationError(error)) {
+				this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			}
+		}
 	}
 
 	async captureScreenshot(capture?: ChatImageCapture): Promise<void> {

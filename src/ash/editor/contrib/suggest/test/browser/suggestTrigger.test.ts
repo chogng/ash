@@ -5,6 +5,7 @@ import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { SuggestModel } from '../../browser/suggestModel.js';
 import { LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
@@ -86,6 +87,32 @@ test('An auto-closed trigger character requests from the caret inside its pair',
 	assert.equal(requests.length, 1);
 	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (5) + 1)), 0);
 	assert.equal(requests[0]!.snapshot.getText(), 'call()');
+});
+
+test('Typing while a trigger request is pending requests the current token', async () => {
+	const requests: LanguageCompletionProviderRequest[] = [];
+	const pending = new DeferredPromise<LanguageCompletionProviderResult>();
+	using fixture = createFixture({
+		id: 'delayed',
+		languageIds: ['typescript'],
+		triggerCharacters: ['.'],
+		provideCompletions: request => {
+			requests.push(request);
+			return requests.length === 1 ? pending.p : completionResult(request, 'method', true);
+		},
+	}, 'obj');
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, '.'));
+	await waitFor(() => requests.length === 1);
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, 'm'));
+	try {
+		await waitFor(() => requests.length === 2 && fixture.session.state !== undefined);
+		assert.deepEqual(requests.map(request => request.snapshot.getText()), ['obj.', 'obj.m']);
+		assert.equal(requests[1]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
+		assert.equal(fixture.session.state!.modelVersion, fixture.model.getVersionId());
+	} finally {
+		await pending.complete(completionResult(requests[0]!, 'stale', true));
+	}
+	assert.equal(fixture.session.state!.selectedItem!.label, 'method');
 });
 
 test('Typing after an incomplete result retriggers all providers at the new version', async () => {

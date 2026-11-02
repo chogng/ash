@@ -8,11 +8,11 @@ import type { QueuedMessage, AgentInput, SessionCreateParams } from '../common/a
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
-import type { IAgentVoiceService } from '../common/agentService.js';
+import type { IAgentHostInputCompletionService, IAgentVoiceService } from '../common/agentService.js';
 import type { AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, AgentVoiceTaskRequest, AgentVoiceConnectionChoice } from '../common/agent.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
-import { canceled } from '../../../base/common/errors.js';
+import { CancellationError, canceled } from '../../../base/common/errors.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
 import { Event } from '../../../base/common/event.js';
@@ -1171,4 +1171,59 @@ async function withHostResourceInput<T>(connection: AppServerProtocolClient, sna
 	}
 	if (signal) { throwIfCancelled(signal); }
 	return await operation(converted);
+}
+
+export function createDisconnectedAgentHostInputCompletionService(): IAgentHostInputCompletionService {
+	return { onDidChangeConnection: Event.None, getTriggerCharacters: () => [], complete: async () => [] };
+}
+
+export function createAppServerAgentHostInputCompletionService(connection: AppServerProtocolClient): IAgentHostInputCompletionService {
+	return {
+		onDidChangeConnection: Event.any<void>((listener, thisArgs) => connection.onStateChange(() => listener.call(thisArgs))),
+		getTriggerCharacters: () => connection.capabilities?.inputCompletions?.version === 1 ? connection.capabilities.inputCompletions.triggerCharacters : [],
+		complete: async (request, signal) => {
+			if (signal.aborted || connection.state !== 'ready') throw new CancellationError();
+			if (connection.capabilities?.inputCompletions?.version !== 1) return [];
+			const generation = connection.generation;
+			let retired = false;
+			using state = connection.onStateChange(value => { if (value !== 'ready') retired = true; });
+			const current = () => !retired && connection.state === 'ready' && connection.generation === generation;
+			const operationId = createUuid();
+			const result = appServerRequest(connection, 'chat/input/completions', {
+				operationId, text: request.text, offset: request.offset, directories: request.directories.map(directory => directory.target),
+				...(request.sessionId === undefined ? {} : { sessionId: request.sessionId }),
+				...(request.threadId === undefined ? {} : { threadId: request.threadId }),
+			});
+			let cancellation: Promise<unknown> | undefined;
+			const cancel = () => {
+				// Keep the original request until terminal acknowledgement. Never cancel on a replacement connection.
+				if (current()) cancellation ??= appServerRequest(connection, 'chat/input/completions/cancel', { operationId });
+				void cancellation?.catch(() => undefined);
+			};
+			signal.addEventListener('abort', cancel, { once: true });
+			if (signal.aborted) cancel();
+			try {
+				const response = await result;
+				if (signal.aborted || !current()) throw new CancellationError();
+				return response.items.map(item => {
+					if (!Number.isSafeInteger(item.start) || !Number.isSafeInteger(item.end) || item.start < 0 || item.start > item.end || item.end > request.text.length) throw new TypeError('Invalid input completion range');
+					const value = item.value;
+					if (value.kind === 'skill') {
+						if (value.skill.version.type !== 'pinnedDigest') throw new TypeError('Input completion must pin its skill version');
+						return { ...item, detail: item.detail ?? undefined, value: { kind: 'skill' as const, skill: { ...value.skill, version: value.skill.version } } };
+					}
+					if (value.kind === 'command') return { ...item, detail: item.detail ?? undefined, value };
+					const directory = request.directories[value.directory];
+					if (!directory || !value.path || value.path.startsWith('/') || value.path.includes('\\') || value.path.split('/').some(part => part === '..' || part === '.')) throw new TypeError('Invalid input completion resource');
+					return { ...item, detail: item.detail ?? undefined, value: { kind: 'resource' as const, resource: URI.joinPath(directory.resource, value.path), isDirectory: value.isDirectory } };
+				});
+			} catch (error) {
+				if (signal.aborted || !current() || error instanceof AppServerRemoteError && error.errorName === 'RequestCancelled') throw new CancellationError();
+				throw error;
+			} finally {
+				signal.removeEventListener('abort', cancel);
+				await cancellation?.catch(() => undefined);
+			}
+		},
+	};
 }

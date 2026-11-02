@@ -139,6 +139,9 @@ impl AppServer {
             .map(|catalog| catalog.is_available())
             .unwrap_or(false);
         let mut capabilities = ServerCapabilities {
+            input_completions: Some(super::input_completions_processor::capability(
+                self.skills.is_some(),
+            )),
             agent_interactions: true,
             document_collaboration: true,
             sessions: true,

@@ -177,3 +177,11 @@ export interface IAgentBrowserHostScope {
 	toFrontendIdentity(backendId: string): string;
 	toBackendIdentity(frontendId: string): string | undefined;
 }
+
+/** Host-owned discovery; the input editor owns presentation, edits and context admission. */
+export interface IAgentHostInputCompletionService {
+	readonly onDidChangeConnection: Event<void>;
+	getTriggerCharacters(sessionId?: string): readonly string[];
+	complete(request: Agent.AgentHostInputCompletionRequest, signal: AbortSignal): Promise<readonly Agent.AgentHostInputCompletionItem[]>;
+}
+export const IAgentHostInputCompletionService = createServiceIdentifier<IAgentHostInputCompletionService>('agentHostInputCompletionService');
