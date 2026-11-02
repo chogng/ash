@@ -3,11 +3,11 @@ import type { IRectangle } from '../../window/common/window.js';
 
 /** Window-scoped platform operations shared by the desktop host adapters. */
 export interface ICommonNativeHostService {
-	/** Captures PNG bytes. Rectangle coordinates use renderer CSS pixels. */
+	/** Captures this host's window as PNG, independent of desktop focus. Rectangle coordinates use renderer CSS pixels. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
 }
 
-/** Raw desktop frames, captured before the workbench opens any selection windows. */
+/** Raw desktop frames, captured before the image-view host opens any selection windows. */
 export interface DesktopScreenshot {
 	readonly displayId: number;
 	readonly bounds: IRectangle;

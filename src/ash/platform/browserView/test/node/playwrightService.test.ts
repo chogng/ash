@@ -17,7 +17,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 suite('Playwright session lifetime', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('a live page observation includes computed and focused author styles and retirement keeps the page open', async () => {
+	test('observations and screenshots retain the requested page while another page is active, and retirement keeps it open', async () => {
 		const profileRoot = resolve('.build/desktop');
 		const profile = mkdtempSync(join(profileRoot, 'browser-observe-'));
 		let context: BrowserContext | undefined;
@@ -26,6 +26,10 @@ suite('Playwright session lifetime', () => {
 			const page = context.pages()[0]!;
 			await page.goto('data:text/html,' + encodeURIComponent('<style>:root{--accent:rgb(1,2,3)}input{color:var(--accent);margin:3px 4px}</style><input style="padding:2px" value="Inspect me">'));
 			await page.locator('input').focus();
+			const otherPage = await context.newPage();
+			await otherPage.goto('data:text/html,' + encodeURIComponent('<title>Other window</title><body style="background:rgb(255,0,255)">Do not capture this window</body>'));
+			await otherPage.bringToFront();
+			const expectedScreenshot = await page.screenshot({ type: 'png' });
 			const [port, endpoint] = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').trim().split('\n');
 			const socket = new WebSocket(`ws://127.0.0.1:${port}${endpoint}`);
 			await new Promise<void>((done, fail) => { socket.addEventListener('open', () => done(), { once: true }); socket.addEventListener('error', fail, { once: true }); });
@@ -36,7 +40,7 @@ suite('Playwright session lifetime', () => {
 				const message = JSON.parse(String(event.data));
 				// The Main group normally adds the view's domain identity to Chromium target metadata.
 				for (const target of [message.result?.targetInfo, message.params?.targetInfo, ...(message.result?.targetInfos ?? [])]) {
-					if (target) { target.browserViewId = 'observed-page'; }
+					if (target) { target.browserViewId = target.url === page.url() ? 'observed-page' : 'other-page'; }
 				}
 				messages.fire(message);
 			};
@@ -56,7 +60,11 @@ suite('Playwright session lifetime', () => {
 			});
 			using playwright = services.createInstance(PlaywrightService);
 			try {
-				const observation = await playwright.getObservation('inspect', 'thread', 'observed-page', { includeAccessibilityTree: false, includeDomSnapshot: true, includeScreenshot: false });
+				const observation = await playwright.getObservation('inspect', 'thread', 'observed-page', { includeAccessibilityTree: false, includeDomSnapshot: true, includeScreenshot: true });
+				assert.equal(observation.targetId, 'observed-page');
+				assert.equal(observation.url, page.url());
+				assert.deepEqual(Buffer.from(observation.screenshot!.dataBase64, 'base64'), expectedScreenshot);
+				assert.notDeepEqual(Buffer.from(observation.screenshot!.dataBase64, 'base64'), await otherPage.screenshot({ type: 'png' }));
 				assert.ok(isolatedWorlds.length > 0);
 				const snapshot = JSON.parse(observation.domSnapshot!);
 				assert.ok(snapshot.documents[0].layout.styles.some((styles: unknown[]) => styles.length > 0));

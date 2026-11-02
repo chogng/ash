@@ -16,31 +16,31 @@ export class NativeImageEditorService extends ImageEditorService {
 	private readonly desktopCaptureLifetime = this._register(new MutableDisposable());
 	public async capture(signal: AbortSignal, options?: ImageEditorOptions): Promise<VSBuffer | undefined> {
 		if (signal.aborted || this.isDisposed) return undefined;
-		const resolved = await this.resolve(options?.code ? 'selection' : 'screen', signal, options?.editorId);
-		signal = resolved.signal;
-		const id = createUuid();
-		const root = document.querySelector('.ash-workbench');
-		const colorScheme = root?.getAttribute('data-color-scheme');
-		const request: ImageViewRequest = {
-			id, title: resolved.displayName, html: resolved.view.html,
-			source: options?.code ? 'content' : 'screen',
-			input: {
-				defaultAction: options?.defaultAction ?? 'attach',
-				...(options?.code ? { code: options.code } : {}),
-				...(resolved.view.state !== undefined ? { state: resolved.view.state } : {}),
-				theme: readImageEditorTheme(document),
-				colorScheme: colorScheme === 'light' || colorScheme === 'hcDark' || colorScheme === 'hcLight' ? colorScheme : 'dark',
-			} as unknown as Readonly<Record<string, JsonValue>>,
-		};
-		const cancellation = addDisposableListener(signal, 'abort', () => {
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
-		});
-		const lifetime = toDisposable(() => {
-			cancellation.dispose();
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
-		});
+		// Own cancellation before provider resolution so a late older request cannot replace a newer one.
+		const controller = new AbortController();
+		const lifetime = toDisposable(() => controller.abort());
 		this.desktopCaptureLifetime.value = lifetime;
 		try {
+			const resolved = await this.resolve(options?.code ? 'selection' : 'screen', AbortSignal.any([signal, controller.signal]), options?.editorId);
+			signal = resolved.signal;
+			if (signal.aborted) return undefined;
+			const id = createUuid();
+			const root = document.querySelector('.ash-workbench');
+			const colorScheme = root?.getAttribute('data-color-scheme');
+			const request: ImageViewRequest = {
+				id, title: resolved.displayName, html: resolved.view.html,
+				source: options?.code ? 'content' : 'screen',
+				input: {
+					defaultAction: options?.defaultAction ?? 'attach',
+					...(options?.code ? { code: options.code } : {}),
+					...(resolved.view.state !== undefined ? { state: resolved.view.state } : {}),
+					theme: readImageEditorTheme(document),
+					colorScheme: colorScheme === 'light' || colorScheme === 'hcDark' || colorScheme === 'hcLight' ? colorScheme : 'dark',
+				} as unknown as Readonly<Record<string, JsonValue>>,
+			};
+			using cancellation = addDisposableListener(signal, 'abort', () => {
+				void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
+			}, { once: true });
 			const result = await invoke<unknown>(IMAGE_VIEW_OPEN_CHANNEL, request);
 			if (signal.aborted || this.isDisposed || result === undefined) return undefined;
 			return VSBuffer.wrap(new Uint8Array(validateImageViewImage(result)));
