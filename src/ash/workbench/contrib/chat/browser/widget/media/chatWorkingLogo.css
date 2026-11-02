@@ -1,0 +1,50 @@
+.ash-chat-working-logo {
+	position: relative;
+	display: inline-flex;
+	overflow: hidden;
+	width: var(--ash-lxiconFontSize-compact);
+	height: var(--ash-lxiconFontSize-compact);
+	margin-inline-end: var(--ash-spacing-size40);
+	vertical-align: text-bottom;
+	color: inherit;
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+.ash-chat-working-logo[hidden] {
+	display: none;
+}
+
+.ash-chat-working-logo > .ash-icon {
+	width: 100%;
+	height: 100%;
+	font-size: inherit;
+}
+
+.ash-chat-working-logo.working .ash-icon-font-layer {
+	animation: ash-titlebar-mark-bloom var(--ash-mark-duration)
+		var(--ash-mark-easing) var(--ash-mark-delay) both;
+}
+
+.ash-chat-working-logo.atlas > .ash-icon {
+	visibility: hidden;
+}
+
+.ash-chat-working-logo-atlas {
+	position: absolute;
+	top: 0;
+	left: 0;
+	background: currentColor;
+	mask-size: 100% 100%;
+	mask-repeat: no-repeat;
+}
+
+.ash-chat-working-logo-sampler {
+	position: fixed;
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.ash-chat-working-logo-sampler > span {
+	position: absolute;
+	inset: 0;
+}

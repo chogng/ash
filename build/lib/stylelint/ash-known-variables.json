@@ -386,6 +386,8 @@
 		"--ash-list-style-tree-inactive-indent-guides-stroke",
 		"--ash-list-style-tree-indent-guides-stroke",
 		"--ash-mark-delay",
+		"--ash-mark-duration",
+		"--ash-mark-easing",
 		"--ash-mark-twist",
 		"--ash-mark-x",
 		"--ash-mark-y",

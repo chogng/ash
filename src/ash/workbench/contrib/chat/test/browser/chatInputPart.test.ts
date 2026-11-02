@@ -184,6 +184,34 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	return part;
 }
 
+test('Chat working logo follows the current input state without replacing the status text or mark', () => {
+	using part = inputPart(sharedNotifications);
+	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+	const logo = part.element.querySelector<HTMLElement>('.ash-chat-working-logo')!;
+	const status = logo.parentElement!;
+	assert.equal(logo.getAttribute('aria-hidden'), 'true');
+	assert.equal(logo.hidden, true);
+	part.render({ ...ready, phase: 'submitting' });
+	assert.equal(logo.hidden, false);
+	assert.equal(status.textContent, 'Working…');
+	part.render({ ...ready, canInterrupt: true, queuedMessages: 2 });
+	assert.equal(logo.hidden, false);
+	assert.equal(status.textContent, '2 messages queued');
+	part.setVisible(false);
+	assert.equal(logo.hidden, true);
+	part.setVisible(true);
+	assert.equal(logo.hidden, false);
+	for (const state of [ready, { ...ready, canInterrupt: true, inputBlocked: true }, { ...ready, canInterrupt: true, aiDisabled: true }, { ...ready, canInterrupt: true, error: 'Disconnected' }]) {
+		part.render(state);
+		assert.equal(logo.hidden, true);
+		assert.equal(part.element.querySelector('.ash-chat-working-logo'), logo);
+	}
+	part.render(ready);
+	assert.equal(status.hidden, true);
+	part.dispose();
+	assert.equal(logo.isConnected, false);
+});
+
 test('Chat mode picker loads Agents before opening the shared action widget and dispatches its selection', async () => {
 	using resources = new DisposableStore();
 	const agent: ChatAgent = { name: 'Reviewer', description: 'Review changes', sourceId: 'workspace' };
@@ -1581,6 +1609,125 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Working logo reuses its cached atlas and replaces it for DPI and size changes', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+		const logo = page.locator('.ash-chat-working-logo');
+		const sheet = logo.locator('.ash-chat-working-logo-atlas');
+		await expect(logo).toHaveClass(/atlas/);
+		const mask = () => sheet.evaluate(element => getComputedStyle(element).maskImage);
+		const original = await mask();
+		const bounds = await logo.boundingBox();
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.setFooterPhase('ready');
+			window.ashChatInputIntegration.setFooterPhase('submitting');
+		});
+		await expect(logo).toHaveClass(/atlas/);
+		expect(await mask()).toBe(original);
+		const cdp = await browserTests.context.newCDPSession(page);
+		try {
+			await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 2, mobile: false });
+			await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBe(2);
+			await expect.poll(mask).not.toBe(original);
+			const highDpi = await mask();
+			const resized = await logo.boundingBox();
+			expect(resized!.width).toBe(bounds!.width);
+			expect(resized!.height).toBe(bounds!.height);
+			await logo.evaluate(element => { element.style.width = element.style.height = '16px'; });
+			await expect.poll(mask).not.toBe(highDpi);
+			await logo.evaluate(element => { element.style.width = element.style.height = ''; });
+			await expect.poll(mask).toBe(highDpi);
+		} finally { await cdp.detach(); }
+	});
+	test('Working logo keeps font playback after atlas failure and retries on the next activation', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode');
+		await page.evaluate(() => {
+			const toBlob = HTMLCanvasElement.prototype.toBlob;
+			HTMLCanvasElement.prototype.toBlob = function (callback) {
+				HTMLCanvasElement.prototype.toBlob = toBlob;
+				callback(null);
+			};
+		});
+		const failure = page.waitForEvent('console', message => message.type() === 'warning' && message.text().includes('Working logo atlas unavailable'));
+		await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+		await failure;
+		const logo = page.locator('.ash-chat-working-logo');
+		await expect(logo).toBeVisible();
+		await expect(logo).not.toHaveClass(/atlas/);
+		await expect.poll(() => logo.locator('.ash-icon-font-layer').first().evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+		await expect(logo.locator('.ash-icon')).toHaveCSS('visibility', 'visible');
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.setFooterPhase('ready');
+			window.ashChatInputIntegration.setFooterPhase('submitting');
+		});
+		await expect(logo).toHaveClass(/atlas/);
+	});
+	for (const [locale, theme] of [['en', 'light'], ['en', 'dark'], ['zh-CN', 'hcDark']]) {
+		test(`Working logo animates and respects visibility and reduced motion in ${locale} ${theme}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?inlineCode&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+			const logo = page.locator('.ash-chat-working-logo');
+			const mark = logo.locator('.ash-icon');
+			await expect(logo).toBeVisible();
+			await expect(logo).toHaveAttribute('aria-hidden', 'true');
+			await expect(logo.locator('..')).toHaveText(locale === 'en' ? 'Working…' : '正在运行…');
+			await expect(logo).toHaveClass(/atlas/);
+			const sheet = logo.locator('.ash-chat-working-logo-atlas');
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+			const frames = await sheet.evaluate(element => {
+				const animation = element.getAnimations()[0];
+				animation.pause();
+				const frames = [0, 1200, 2300].map(time => {
+					animation.currentTime = time;
+					return getComputedStyle(element).transform;
+				});
+				animation.play();
+				return frames;
+			});
+			expect(new Set(frames).size).toBe(3);
+			await expect(mark).toHaveCSS('visibility', 'hidden');
+			await expect(mark.locator('.ash-icon-font-layer')).toHaveCount(9);
+			await expect(mark).toHaveClass(/ash-icon-ash-titlebar-mark/);
+			const appearance = await logo.evaluate(element => {
+				const rect = element.getBoundingClientRect();
+				return { width: rect.width, height: rect.height, color: getComputedStyle(element).color, statusColor: getComputedStyle(element.parentElement!).color };
+			});
+			expect(appearance.width).toBeGreaterThan(0);
+			expect(appearance.width).toBe(appearance.height);
+			expect(appearance.color).toBe(appearance.statusColor);
+			await expect(sheet).toHaveCSS('background-color', appearance.statusColor);
+			await expect(sheet).toHaveCSS('mask-image', /blob:/);
+			await sheet.evaluate(element => {
+				const animation = element.getAnimations()[0];
+				animation.pause();
+				animation.currentTime = 1200;
+			});
+			await logo.locator('..').screenshot({ path: browserTests.info.outputPath(`atlas-working-logo-${locale}-${theme}.png`) });
+			await sheet.evaluate(element => element.getAnimations()[0].play());
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await expect(logo).toBeHidden();
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('paused');
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(true));
+			await expect.poll(() => sheet.evaluate(element => element.getAnimations()[0]?.playState)).toBe('running');
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect.poll(() => mark.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+			await expect(sheet).toHaveCount(0);
+			await expect(mark).toHaveCSS('visibility', 'visible');
+			await expect(mark.locator('.ash-icon-font-layer').first()).toHaveCSS('opacity', '1');
+			await expect(logo).toBeVisible();
+			await logo.locator('..').screenshot({ path: browserTests.info.outputPath(`working-logo-${locale}-${theme}.png`) });
+			await page.emulateMedia({ reducedMotion: 'no-preference' });
+			await expect(logo).toHaveClass(/atlas/);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await expect(logo).toBeHidden();
+			await expect.poll(() => logo.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
+			await page.evaluate(() => window.ashChatInputIntegration.dispose());
+			await expect(logo).toHaveCount(0);
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		test(`Catalog notifications open the real model picker and preserve dismissal in ${locale} ${theme}`, async () => {
 			const { page } = browserTests;

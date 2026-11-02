@@ -134,7 +134,7 @@
 	white-space: nowrap;
 }
 
-.ash-chat-status-summary:empty {
+.ash-chat-status-summary[hidden] {
 	display: none;
 }
 
@@ -146,7 +146,7 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
-.ash-chat-status:empty {
+.ash-chat-status[hidden] {
 	display: none;
 }
 

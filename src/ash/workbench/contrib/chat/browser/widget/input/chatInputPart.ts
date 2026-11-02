@@ -17,6 +17,7 @@ import { ChatPasteProvidersFeature, createChatFileAttachments } from './editor/c
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
 import { ChatChangesPill } from './chatChangesPill.js';
+import { ChatWorkingLogo } from '../chatWorkingLogo.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatHistoryNavigator } from '../../../common/widget/chatWidgetHistoryService.js';
 import type { MessageHistoryEntry } from '../../../../../../platform/messageHistory/common/messageHistory.js';
@@ -215,6 +216,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly pasteTarget: ChatWidgetPasteTarget;
 	private synchronizingSourceContext = false;
 	private readonly status: HTMLDivElement;
+	private readonly statusLabel: HTMLSpanElement;
+	private readonly workingLogo: ChatWorkingLogo;
 	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
 	protected readonly inputContainer: HTMLFormElement;
@@ -310,6 +313,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.status = h(ownerDocument, 'div');
 		this.status.className = 'ash-chat-status';
 		this.status.setAttribute('role', 'status');
+		this.status.hidden = true;
+		this.statusLabel = h(ownerDocument, 'span');
+		this.workingLogo = this._register(instantiationService.createInstance(ChatWorkingLogo, ownerDocument));
+		this.workingLogo.setVisible(false);
+		this.status.append(this.workingLogo.domNode, this.statusLabel);
 		this.dictationPreview = h(ownerDocument, 'div');
 		this.dictationPreview.className = 'ash-chat-dictation-preview';
 		this.dictationPreview.setAttribute('aria-hidden', 'true');
@@ -1439,7 +1447,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.inputNotifications.deleteNotification(this.notificationId('catalog'));
 		}
 		const summary = error ? '' : text;
-		if (this.status.textContent !== summary) this.status.textContent = summary;
+		if (this.statusLabel.textContent !== summary) this.statusLabel.textContent = summary;
+		this.status.hidden = !summary;
+		const working = !this.state.aiDisabled && !this.state.inputBlocked && !error
+			&& (this.state.phase === 'submitting' || this.state.phase === 'ready' && this.state.canInterrupt);
+		this.workingLogo.setVisible(this.visible && working && !!summary);
+		this.workingLogo.setActive(working);
 		this.renderFooter();
 	}
 
