@@ -742,6 +742,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "github-alt",
+      "file": "github-alt.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "global",
       "file": "global.svg",
       "rendering": "symbolic"

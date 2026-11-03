@@ -356,7 +356,8 @@
     "rocket": "E161",
     "local": "E162",
     "comment": "E163",
-    "rail-session": "E164"
+    "rail-session": "E164",
+    "github-alt": "E165"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -506,6 +507,7 @@
     "git-pull-request-error": "9f0aa7ac2d5e471cb5c36906137ae795ed00d0586b184de51260c024ec3d90e5",
     "git-pull-request": "8b643eec88d30dbfa77b5eab64ebae43800cda3f9f05180067bc69bbd54cc2fb",
     "git": "5321b1613a9a939b28298fd7a1d8e3d121ff6bf5c346cb8f15c023dd121694ba",
+    "github-alt": "0c9bc89388322fc0d05440a63c356959d138d25d5c2a5d7c46619584be70a1a6",
     "github": "123388e994eab2995a612e8388af330a5d10578e3686c391a3053c6a1986012c",
     "global": "b0436b33687597a8758c5a155925d1c687dfdffff570acc8a2399fe6d53c4845",
     "go-to-file": "f9df6182b5b57d3403cde2c1702b800a40213ce97083639cb3277dd64b5eb2cd",

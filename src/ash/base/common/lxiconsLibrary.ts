@@ -152,6 +152,7 @@ export const lxiconsLibrary = {
 	gitPullRequestDraft: registerLxicon("git-pull-request-draft", 0xe080),
 	gitPullRequestError: registerLxicon("git-pull-request-error", 0xe081),
 	github: registerLxicon("github", 0xe084),
+	githubAlt: registerLxicon("github-alt", 0xe165),
 	global: registerLxicon("global", 0xe148),
 	goToFile: registerLxicon("go-to-file", 0xe085),
 	h1: registerLxicon("h1", 0xe086),
