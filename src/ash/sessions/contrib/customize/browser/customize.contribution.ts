@@ -30,7 +30,7 @@ registerAction2(class OpenCustomize extends Action2 {
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {
 		await accessor.get(ISessionsLayoutService).openEntry({
-			id: 'customize', activityContext: 'sessions.activity.customizeSelected', content: 'editor', showEditorTabs: false,
+			id: 'customize', workspaceMode: 'current', activityContext: 'sessions.activity.customizeSelected', content: 'editor', showEditorTabs: false,
 			restoreCommand: 'sessions.open.customize', focus: 'editor',
 			editorInput: {
 				resource: URI.from({ scheme: 'ash-customize', path: '/page' }), label: localize('customize.title', 'Customize'),

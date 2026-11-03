@@ -404,6 +404,32 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
 	});
 
+	test('shared Customize retains Code navigation and restores in Code', async () => {
+		const entry: ISessionsEntry = {
+			id: 'customize', workspaceMode: 'current', content: 'editor',
+			activityContext: 'sessions.activity.customizeSelected', restoreCommand: 'sessions.open.customize', focus: 'editor',
+		};
+		using fixture = new EntryFixture();
+		await fixture.service.openEntry(documentEntry);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(fixture.opened, [{ id: documentEntry.sidebarContainerId, focus: false }]);
+		assert.equal(fixture.contextKeys.getValue(entry.activityContext), true);
+
+		const savedMode = fixture.storage.get('sessions.layout.activeEntryMode', StorageScope.WORKSPACE);
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(entry);
+		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
+		assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
+		fixture.dispose();
+
+		using restored = new EntryFixture();
+		restored.storage.store('sessions.layout.activeEntryMode', savedMode, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		await restored.service.openEntry(entry, undefined, { source: 'restore' });
+		assert.equal(restored.contextKeys.getValue('sessions.workspaceMode'), 'code');
+		assert.deepEqual(restored.opened, [{ id: documentEntry.sidebarContainerId, focus: false }]);
+	});
+
 	for (const fromCode of [false, true]) {
 		test(`product pages use the registered sidebar default ${fromCode ? 'when leaving Code' : 'on cold restoration'}`, async () => {
 			using fixture = new EntryFixture();

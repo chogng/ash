@@ -14,7 +14,8 @@ export interface ISessionEditorWorkingSetState {
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
 	readonly id: string;
-	readonly workspaceMode?: 'chat' | 'code';
+	/** Shared entries retain the current workspace mode, including on restoration. */
+	readonly workspaceMode?: 'chat' | 'code' | 'current';
 	readonly activityContext: string;
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */

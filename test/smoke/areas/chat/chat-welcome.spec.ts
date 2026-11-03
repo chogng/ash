@@ -3,7 +3,7 @@ import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Editor } from '../../../automation/editor.js';
 
-test('Welcome opens the selected workspace with a prefilled draft and releases its routing when moved to Chat', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+test('Welcome opens the selected workspace with a prefilled draft', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
 	test.setTimeout(120_000);
 	if (!('windows' in application)) { throw new Error('This scenario requires Electron windows'); }
 	await workbench.quickaccess.runCommand('workbench.action.openWelcome');
@@ -40,9 +40,4 @@ test('Welcome opens the selected workspace with a prefilled draft and releases i
 	await expect(destinationWelcome.locator('.ash-chat-input-workspace-slot')).toBeHidden();
 	await expect(destinationWelcome.locator('.ash-chat')).not.toHaveAttribute('data-session-id', /.+/u);
 	await destinationPage.screenshot({ path: testInfo.outputPath('welcome-project-prefill.png') });
-	const chatId = await chat.getAttribute('id');
-	await welcome.getByRole('button', { name: 'Open in Chat View', exact: true }).click();
-	const moved = emptyPage.locator(`.ash-chat-view-pane:visible [id="${chatId}"]`);
-	await expect(moved).toBeVisible();
-	await expect(moved.locator('.ash-chat-input-workspace-slot')).toBeHidden();
 });

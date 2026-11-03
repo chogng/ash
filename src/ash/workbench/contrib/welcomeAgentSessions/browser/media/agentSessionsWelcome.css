@@ -36,9 +36,22 @@
 	min-height: 240px;
 }
 
-.ash-agent-sessions-welcome-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size80);
-	padding-block: var(--ash-spacing-size160);
+/* Keep the draft composer with the heading. A conversation still needs the full chat area. */
+.ash-agent-sessions-welcome-content:has(
+	> .ash-agent-sessions-welcome-chat > .ash-chat.empty
+) {
+	justify-content: safe center;
+
+	> h1 {
+		text-align: center;
+	}
+
+	> .ash-agent-sessions-welcome-chat {
+		flex: 0 0 auto;
+		min-height: 0;
+	}
+}
+
+.ash-agent-sessions-welcome-chat > .ash-chat.empty {
+	height: auto;
 }

@@ -8,8 +8,10 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPick, type IQuickPickDidAcceptEvent, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import type { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
+import type { IActionListDelegate, IActionListItem } from '../../../../../platform/actionWidget/browser/actionList.js';
 import { WorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 
 function fixture() {
@@ -17,32 +19,41 @@ function fixture() {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	lifetime.add(toDisposable(() => dom.window.close()));
 	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	const changed = lifetime.add(new Emitter<void>());
-	const accepted = lifetime.add(new Emitter<IQuickPickDidAcceptEvent>());
-	const hidden = lifetime.add(new Emitter<void>());
-	const loaded = lifetime.add(new Emitter<void>());
-	let items: readonly IQuickPickItem[] = [];
+	let items: readonly IActionListItem<IAction>[] = [];
+	let delegate: IActionListDelegate<IAction> | undefined;
 	let shown = 0;
 	let closed = 0;
 	let selected = 0;
 	const errors: unknown[] = [];
-	const picker = {
-		get items() { return items; },
-		set items(value: readonly IQuickPickItem[]) { items = value; loaded.fire(); },
-		selectedItems: [] as readonly IQuickPickItem[],
-		onDidAccept: accepted.event, onDidHide: hidden.event,
-		show() { shown++; }, dispose() { closed++; }, [Symbol.dispose]() { closed++; },
-	} as unknown as IQuickPick<IQuickPickItem>;
-	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+	const dismiss = () => {
+		const current = delegate;
+		if (!current) { return; }
+		delegate = undefined;
+		closed++;
+		current.onHide();
+	};
+	const actionWidget = {
+		show: (_user: string, _preview: boolean, choices: typeof items, callbacks: IActionListDelegate<IAction>) => {
+			shown++;
+			items = choices;
+			delegate = callbacks;
+		},
+		updateItems: (choices: typeof items) => { items = choices; },
+		hide: dismiss,
+	} as unknown as IActionWidgetService;
 	services.registerInstance(INotificationService, { error: (error: unknown) => errors.push(error) } as unknown as INotificationService);
 	const choices: IAction[] = [{ id: 'folder', label: 'Folder', tooltip: '/project', enabled: true, checked: true, run: () => { selected++; } }];
 	const action = { id: 'workspace', label: 'Project', tooltip: 'Workspace: Project', enabled: true, run: (): void => control.showPicker(choices) };
 	services.registerInstance(IWorkspacesService, { getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
-	const control: WorkspacePicker = lifetime.add(services.createInstance(WorkspacePicker, { trigger: { action, onDidChange: changed.event, placeholder: 'Choose a workspace' } }));
+	const control: WorkspacePicker = lifetime.add(services.createInstance(WorkspacePicker, { trigger: { actionWidget, action, onDidChange: changed.event, placeholder: 'Choose a workspace' } }));
 	control.render(dom.window.document.body);
 	const button = dom.window.document.querySelector('button')!;
 	return {
-		control, action, changed, picker, choices, accepted, hidden, loaded, button, errors,
+		control, action, changed, choices, dismiss, button, errors,
+		get items() { return items; },
+		select(item: IActionListItem<IAction>) { if (item.item) { void delegate?.onSelect(item.item); } },
 		get shown() { return shown; }, get closed() { return closed; }, get selected() { return selected; },
 		press(key: string) { button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); },
 		[Symbol.dispose]() { lifetime.dispose(); },
@@ -54,23 +65,22 @@ test('Workspace picker opens with arrows, accepts once, and restores its trigger
 	f.press('ArrowDown');
 	assert.equal(f.shown, 1);
 	assert.equal(f.button.getAttribute('aria-expanded'), 'true');
-	const choice = f.picker.items[0];
+	const choice = f.items[0];
 	assert.ok(choice && !('type' in choice));
-	assert.equal(choice.picked, true);
-	f.picker.selectedItems = [choice];
-	f.accepted.fire({ inBackground: false });
+	assert.equal(choice.checked, true);
+	f.select(choice);
 	assert.equal(f.selected, 1);
 	assert.equal(f.closed, 1);
 	assert.equal(f.button.getAttribute('aria-expanded'), 'false');
 	assert.equal(f.button.ownerDocument.activeElement, f.button);
-	f.accepted.fire({ inBackground: false });
+	f.select(choice);
 	assert.equal(f.selected, 1);
 });
 
 test('Workspace picker preserves selection on cancellation and projects label and disabled changes', () => {
 	using f = fixture();
 	f.button.click();
-	f.hidden.fire();
+	f.dismiss();
 	assert.equal(f.selected, 0);
 	assert.equal(f.button.ownerDocument.activeElement, f.button);
 	f.action.label = 'Other project';
@@ -95,14 +105,13 @@ test('Closing or disposing workspace choices cancels provider loading and ignore
 		const result = new DeferredPromise<readonly IAction[]>();
 		let token: CancellationToken | undefined;
 		f.control.showPicker(f.choices, cancellation => { token = cancellation; return result.p; });
-		const items = f.picker.items;
-		assert.equal(f.picker.busy, true);
+		const items = f.items;
 		if (dispose) { f.control.dispose(); }
-		else { f.hidden.fire(); }
+		else { f.dismiss(); }
 		assert.equal(token?.isCancellationRequested, true);
 		await result.complete([{ ...f.choices[0]!, id: 'late', label: 'Late folder' }]);
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.equal(f.picker.items, items);
+		assert.equal(f.items, items);
 		assert.equal(f.selected, 0);
 		assert.deepEqual(f.errors, []);
 	}
@@ -113,11 +122,9 @@ test('Workspace provider failure leaves immediate choices usable and reports the
 	const failure = new Error('Cannot read worktrees');
 	f.control.showPicker(f.choices, async () => { throw failure; });
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(f.picker.busy, false);
 	assert.deepEqual(f.errors, [failure]);
-	const choice = f.picker.items[0];
+	const choice = f.items[0];
 	assert.ok(choice && !('type' in choice));
-	f.picker.selectedItems = [choice];
-	f.accepted.fire({ inBackground: false });
+	f.select(choice);
 	assert.equal(f.selected, 1);
 });

@@ -17,6 +17,7 @@ export interface IEditorGroupMenuIds {
 export interface IEditorGroupViewOptions {
 	readonly menuIds?: IEditorGroupMenuIds;
 	readonly showHeader?: boolean;
+	readonly hideTabs?: boolean;
 }
 
 /** Shared presentation marker for editor tabs connected to their pane. */

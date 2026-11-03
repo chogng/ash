@@ -164,6 +164,13 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => this.setReviewState(false),
 		}));
 		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
+			const gitActions = this.gitActions.value;
+			if (gitActions && this.changesetPicker.selectedOptions[0] === gitActions.workingTree) {
+				// The working-tree diff opens separately and does not change the conversation filter.
+				this.changesetPicker.value = this.changesetId ?? '';
+				gitActions.openWorkingTree();
+				return;
+			}
 			this.saveTreeState();
 			this.changesetId = this.changesetPicker.value || undefined;
 			this.renderRows();
@@ -446,6 +453,8 @@ export class ChangesViewPane extends ViewPane {
 				option.textContent = localize('sessions.changes.turn', 'Turn {0}', index + 1);
 				this.changesetPicker.append(option);
 			}
+			const workingTree = this.gitActions.value?.workingTree;
+			if (workingTree) { this.changesetPicker.append(workingTree); }
 			// Only an authoritative successful catalogue can clear a missing preference.
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';

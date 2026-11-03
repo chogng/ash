@@ -990,7 +990,7 @@ export abstract class Workbench extends Disposable {
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 		for (const tool of ['changes', 'browser', 'terminal'] as const) {
 			const scope = createToolScope(tool);
-			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, { ...editorOptions, contextKeyService: scope.context }));
+			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, { ...editorOptions, contextKeyService: scope.context, hideTabs: tool === 'changes' }));
 			scope.services.registerInstance(IEditorPart, part);
 			tools.set(tool, part);
 		}

@@ -144,11 +144,19 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		this.assertNotDisposed();
 		if (this.developmentStartupBarrier) {
 			await this.developmentStartupBarrier();
-		} else if (this.options.generationFile && !this.developmentRuntime) {
+		} else if (this.options.generationFile && (
+			!this.developmentRuntime || this.developmentRuntime.runtime !== readDevelopmentAppServerGenerationSync(this.options.generationFile)
+		)) {
+			// Another Desktop instance can adopt a publication even when this window
+			// is not watching Rust builds. Reconnecting with its old lease would
+			// replace the shared profile daemon and disconnect the newer window.
 			const lease = await this.acquireDevelopmentRuntime();
 			if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
+			const previous = this.ownedDevelopmentRuntime;
+			try { this.selectDevelopmentRuntime(lease); }
+			catch (error) { lease.dispose(); throw error; }
 			this.ownedDevelopmentRuntime = lease;
-			this.selectDevelopmentRuntime(lease);
+			previous?.dispose();
 		}
 		this.developmentRuntime?.assertActive();
 		if (!this.fileExists(this.executable)) throw new Error(`Packaged Ash binary is missing: ${this.executable}`);

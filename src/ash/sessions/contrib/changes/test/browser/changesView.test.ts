@@ -552,10 +552,19 @@ suite('changes browser component', () => {
 		await expect(page.getByRole('button', { name: 'Checks', exact: true })).toHaveAttribute('aria-expanded', 'false');
 		await page.getByRole('button', { name: 'Checks', exact: true }).press('Enter');
 		await expect(checks).toHaveAttribute('aria-expanded', 'true');
-		await page.getByRole('button', { name: 'Sync changes', exact: true }).click();
+		await page.getByRole('combobox', { name: 'Git branch actions' }).selectOption('sync');
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual(['git.pull:repository', 'git.push:repository']);
 		await page.evaluate(() => window.ashChangesIntegration.setLocale());
 		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 个文件 +3 −2');
+		await page.evaluate(() => window.ashChangesIntegration.rebuild());
+		await page.getByRole('combobox', { name: 'Git 分支操作' }).selectOption({ label: '发布分支' });
+		const scope = page.getByRole('combobox', { name: '选择回合更改' });
+		await scope.selectOption('change');
+		await scope.selectOption({ label: '查看工作区更改' });
+		await expect(scope).toHaveValue('change');
+		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.gitCalls())).toEqual([
+			'git.pull:repository', 'git.push:repository', 'git.publish:repository', 'git.openChangesSource:repository',
+		]);
 	});
 
 	test('Changes creates and attaches the edited PR, and cancellation restores keyboard focus', async function () {

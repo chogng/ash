@@ -298,15 +298,14 @@ export class SessionsList extends DomWidget {
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
-		if (showEmpty) {
-			this.empty.textContent = this.sessionService.state === 'loading' ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error ?? localize('sessions.list.empty', 'Create a session to begin.');
-		}
+		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error;
+		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...chatGroups);
 		if (recent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), recent));
-		if (showEmpty) ordered.push(this.empty);
+		if (showEmpty && emptyStatus) ordered.push(this.empty);
 		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
 		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
 		reconcileChildren(this.list, ordered);

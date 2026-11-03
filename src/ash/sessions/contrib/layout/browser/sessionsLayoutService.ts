@@ -40,6 +40,7 @@ interface EntryVisibility {
 
 const visibilityKey = 'sessions.layout.entryVisibility';
 const activeEntryKey = 'sessions.layout.activeEntry';
+const activeEntryModeKey = 'sessions.layout.activeEntryMode';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsLayoutService extends Disposable implements ISessionsLayoutService, IDesktopLayoutContext {
@@ -52,7 +53,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
-	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode ?? 'chat');
+	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
@@ -174,7 +175,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
-			await this.conversation.setConversationKind(entry.content === 'documents' ? 'code' : 'cowork');
+			const previousEntry = this.activeEntry.get();
+			const sharedWorkspace = entry.workspaceMode === 'current';
+			const retainedMode = previousEntry
+				? previousEntry.workspaceMode ?? 'chat'
+				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
+			if (!sharedWorkspace || !previousEntry) {
+				await this.conversation.setConversationKind(entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork');
+			}
 			if (this.isDisposed) { return; }
 			this.saveVisibility();
 			this.isChangingContent = true;
@@ -184,14 +192,17 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
-				const previousEntry = this.activeEntry.get();
+				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
+				if (entry.workspaceMode === 'current') {
+					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
+				}
 				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
 				const sidebarContainerId = entry.sidebarContainerId
 					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
+					?? (sharedWorkspace && entry.workspaceMode === 'code' ? CODE_NAVIGATION_CONTAINER_ID : undefined)
 					?? this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
-				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
 				// Navigation visibility belongs to the window, independently of the page's side content.
@@ -234,6 +245,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (this.customViews.activeCustomView.get()) { return; }
 				if (entry.focus === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }

@@ -64,7 +64,7 @@ export class EditorTitleControl extends Disposable {
 	) {
 		super();
 		this.delegate = delegate;
-		this.tabsMode = model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
+		this.tabsMode = viewOptions.hideTabs ? 'none' : model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'ash-editor-title-control';
@@ -92,7 +92,7 @@ export class EditorTitleControl extends Disposable {
 		this._register(this.header.onDidChangeHeight(() => this.heightEmitter.fire()));
 		if (configurationService) {
 			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
+				if (!viewOptions.hideTabs && model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
 					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);

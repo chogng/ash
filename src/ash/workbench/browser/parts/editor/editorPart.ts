@@ -130,6 +130,7 @@ export const IEditorPart =
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
+	readonly hideTabs?: boolean;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
 	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
 	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
@@ -223,6 +224,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.titleDomNode.remove();
 		this.domNode.setAttribute('aria-label', localize({ bundle: 'ash.regions', key: 'editor' }, 'Editor'));
 		this.groupOptions = {
+			hideTabs: options.hideTabs,
 			editorLimit: options.editorLimit,
 			registry: options.registry ?? EditorPanes,
 			resolveOpenError: (error, input, openOptions, open) => this.resolveEditorOpenError(error, input, openOptions, open),
