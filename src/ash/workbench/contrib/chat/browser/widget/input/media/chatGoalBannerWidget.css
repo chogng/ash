@@ -1,0 +1,13 @@
+.ash-chat-goal-banner {
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	margin: 8px 12px 0;
+	padding: 6px 8px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

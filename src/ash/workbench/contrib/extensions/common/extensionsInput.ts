@@ -30,7 +30,7 @@ export function getExtensionFallbackIcon(id: string, source = ExtensionsInputSou
 
 /** An installed version has a separate identity so actions always target the reviewed installation. */
 export class ExtensionsInput extends EditorInput {
-	public readonly typeId = 'ash.extensions.input';
+	public readonly typeId: string = 'ash.extensions.input';
 	public override readonly editorId = 'ash.extensions.editor';
 	private readonly labelChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeLabel = this.labelChanged.event;
@@ -40,9 +40,9 @@ export class ExtensionsInput extends EditorInput {
 	public readonly showBreadcrumbs = false;
 	public readonly resource: URI;
 
-	constructor(public readonly summary: ExtensionsPackageSummary, public readonly installationId?: string, public readonly source = ExtensionsInputSource.Registry) {
+	constructor(public readonly summary: ExtensionsPackageSummary, public readonly installationId?: string, public readonly source = ExtensionsInputSource.Registry, resourceFragment?: string) {
 		super();
-		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${source}/${installationId ?? summary.id}`, query: summary.version });
+		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${source}/${installationId ?? summary.id}`, query: summary.version, fragment: resourceFragment });
 		this.fallbackIcon = getExtensionFallbackIcon(summary.id, source);
 	}
 
@@ -60,7 +60,7 @@ export class ExtensionsInput extends EditorInput {
 // Persist identity and inert metadata, then resolve the installation from the backend on restore.
 EditorInputSerializers.registerStatic({
 	typeId: 'ash.extensions.input',
-	canSerialize: input => input instanceof ExtensionsInput,
+	canSerialize: input => input instanceof ExtensionsInput && input.typeId === 'ash.extensions.input',
 	serialize: input => {
 		if (!(input instanceof ExtensionsInput)) { throw new TypeError('Invalid Extensions input'); }
 		return { ...input.summary, installationId: input.installationId, source: input.source };

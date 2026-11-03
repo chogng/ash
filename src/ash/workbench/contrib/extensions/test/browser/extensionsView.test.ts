@@ -1123,6 +1123,22 @@ suite('extensions browser component', () => {
 		});
 	}
 
+	test('An open local plugin detail cannot enable a replacement with the same version', async () => {
+		const { page } = browserTests;
+		await page.goto('/extensions.html');
+		await page.evaluate(async () => {
+			window.ashExtensionsIntegration.addSkillOnlyPlugin();
+			await window.ashExtensionsIntegration.executeCommand('ash.extensions.manageLocal');
+		});
+		await page.locator('[data-view-id="ash.extensions.plugins"]').getByRole('option', { name: /Skill-only plugin/u }).click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('switch')).not.toBeChecked();
+		await page.evaluate(() => window.ashExtensionsIntegration.replaceLocalPluginDigest());
+		await editor.getByRole('switch').press('Space');
+		await expect(editor.locator('.extension-detail-header').getByRole('status')).toContainText('This extension is no longer installed');
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some(entry => Array.isArray(entry) && entry[0] === 'pluginEnable'))).toBe(false);
+	});
+
 	test('Local extension installation cancellation does not copy or grant a package', async function () {
 		const { page } = browserTests;
 

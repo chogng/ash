@@ -58,7 +58,7 @@ export interface IChatWidgetViewOptions {
 export interface IChatWidget {
 	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
 	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
-	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items'>;
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;

@@ -16,6 +16,8 @@ import { EditorPanes } from '../../../../../browser/editor.js';
 import type { IEditorPane } from '../../../../../common/editor.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ChatImageReveal, type IChatImageRevealOrigin } from '../../attachments/chatImageReveal.js';
+import { copyChatImage } from '../../chatImageActions.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 
 /** A provider-owned resource; only its reader knows authentication or protocol coordinates. */
 export interface IChatAttachmentResource {
@@ -47,6 +49,7 @@ class MediaRow extends Disposable {
 	public readonly association = this._register(new MutableDisposable<IChatResourceAssociation>());
 	public readonly media: HTMLElement;
 	public readonly downloadButton: HTMLButtonElement;
+	public readonly copyButton: HTMLButtonElement | undefined;
 	public blob: Blob | undefined;
 	public readonly preview = this._register(new MutableDisposable<IWebviewElement | IEditorPane>());
 	public readonly objectUrl = this._register(new MutableDisposable());
@@ -103,6 +106,13 @@ class MediaRow extends Disposable {
 		this.downloadButton.textContent = localize('chat.resource.download', 'Download');
 		this.downloadButton.hidden = true;
 		this.element.append(this.status, this.loadButton, this.imageContainer ?? this.media, this.openButton, this.downloadButton);
+		if (image) {
+			this.copyButton = h(document, 'button');
+			this.copyButton.type = 'button';
+			this.copyButton.textContent = localize('chat.media.copyImage', 'Copy image');
+			this.copyButton.hidden = true;
+			this.element.append(this.copyButton);
+		}
 		this._register(toDisposable(() => {
 			this.controller.abort();
 			if (this.media instanceof document.defaultView!.HTMLMediaElement && this.loaded) {
@@ -151,8 +161,30 @@ export class ChatAttachmentsContentPart extends Disposable {
 				row.resources.add(addDisposableListener(row.loadButton, 'click', () => { void this.load(current); }));
 				row.resources.add(addDisposableListener(row.openButton, 'click', () => { void this.open(current); }));
 				row.resources.add(addDisposableListener(row.downloadButton, 'click', () => { if (current.blob) triggerDownload(current.blob, mediaName(current.part), this.options.ownerDocument); }));
+				if (row.copyButton) {
+					const button = row.copyButton;
+					const image = row.media as HTMLImageElement;
+					row.resources.add(addDisposableListener(button, 'click', async () => {
+						if (button.hidden || button.getAttribute('aria-disabled') === 'true') return;
+						button.setAttribute('aria-disabled', 'true');
+						try {
+							await this.instantiation.invokeFunction(copyChatImage, image, current.blob);
+						} catch (error) {
+							if (!current.isDisposed) {
+								this.instantiation.invokeFunction(accessor => accessor.get(INotificationService).error(
+									localize('chat.media.copyFailed', 'Could not copy this image: {0}', String(error))));
+							}
+						} finally {
+							if (!current.isDisposed) button.removeAttribute('aria-disabled');
+						}
+					}));
+				}
 				row.resources.add(addDisposableListener(row.media, 'load', event => {
 					current.imageReveal.value?.reveal(event.timeStamp);
+					if (current.copyButton) {
+						const image = current.media as HTMLImageElement;
+						current.copyButton.hidden = !image.naturalWidth || !/^(?:blob:|data:image\/)/u.test(image.currentSrc || image.src);
+					}
 					if (current.imageContainer && current.association.value) {
 						current.openButton.hidden = false;
 						current.downloadButton.hidden = false;
@@ -162,6 +194,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 				row.resources.add(addDisposableListener(row.media, 'loadedmetadata', () => this._onDidChangeHeight.fire()));
 				row.resources.add(addDisposableListener(row.media, 'error', () => {
 					current.imageReveal.clear();
+					if (current.copyButton) current.copyButton.hidden = true;
 					if (current.imageContainer) {
 						current.media.hidden = true;
 						current.openButton.hidden = current.downloadButton.hidden = true;

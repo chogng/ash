@@ -1,3 +1,4 @@
+import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -7,7 +8,7 @@ import { defaultButtonStyles } from '../../../../../platform/theme/browser/defau
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { approvalModeDefinition } from '../../../../../platform/agentHost/common/approvalModes.js';
+import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
@@ -24,7 +25,7 @@ import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, Model
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
-import { formatChatGoal, type ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
+import type { ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
@@ -50,7 +51,7 @@ import { OpenSettingsCommandId } from '../../../preferences/common/preferences.j
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
-import { ChatSideChatWidget } from '../chatSideChat.js';
+import { ChatRequestOriginPart } from './chatContentParts/chatRequestOriginPart.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
@@ -103,7 +104,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private listWidget: ChatListWidget;
 	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
 	public readonly input: IChatInputPart;
-	private readonly goalElement: HTMLDivElement;
+	private readonly goalBanner: ChatGoalBannerWidget;
 	private readonly olderHistoryElement: HTMLDivElement;
 	private readonly olderHistoryButton: Button;
 	private readonly olderHistoryMessage: HTMLSpanElement;
@@ -168,9 +169,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			// Quick Chat borrows this widget by reparenting it; its original scope stays alive.
 			inQuickChat.set(contextKeys.getContext(this.element.parentElement).getValue<boolean>(ChatContextKeys.inQuickChat.key) === true);
 		}));
-		this.goalElement = h(ownerDocument, 'div');
-		this.goalElement.className = 'ash-chat-goal';
-		this.goalElement.hidden = true;
+		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
 		this.olderHistoryElement = h(ownerDocument, 'div');
 		this.olderHistoryElement.className = 'ash-chat-history-pagination';
 		this.olderHistoryElement.hidden = true;
@@ -287,17 +286,12 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			selectAgent: agent => this.model.selectAgent(agent),
 			selectMode: mode => this.model.selectMode(mode),
 			selectApprovalMode: async mode => {
+				const generation = this.model.composerGeneration;
 				const identity = this.model.threadId ?? this.model.untitledSessionId;
-				const definition = approvalModeDefinition(mode);
-				if (definition.requiresConfirmation) {
-					const result = await dialogs.confirm({
-						message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
-						detail: localize('sessions.chat.permission.fullDetail', 'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.'),
-						primaryButton: localize(definition.label.key, definition.label.text),
-					});
-					if (!result.confirmed) return;
-				}
-				if (!this.isDisposed && identity === (this.model.threadId ?? this.model.untitledSessionId)) this.model.selectApprovalMode(mode);
+				await applyAgentHostCompletionAction(mode, confirmation => dialogs.confirm(confirmation),
+					() => !this.isDisposed && generation === this.model.composerGeneration
+						&& identity === (this.model.threadId ?? this.model.untitledSessionId) && !this.model.inputState.aiDisabled,
+					selected => this.model.selectApprovalMode(selected));
 			},
 			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
 			resolveInteraction: (response, expectedRequestId) => this.model.resolveInteraction(response, expectedRequestId),
@@ -306,7 +300,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
 		this._register(widgets.register(this));
-		this._register(scopedInstantiation.createInstance(ChatSideChatWidget, this.element, model));
+		this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -320,7 +314,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			closeWindow: () => this.input.focus(),
 			showSessionsPicker: () => this.input.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalElement, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
+		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -524,7 +518,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				? voice.isListening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
 				: localize('agentsVoice.listening', 'Listening…')
 			: localize('agentsVoice.connecting', 'Connecting…'));
-		this.renderGoal();
+		this.goalBanner.setGoal(this.model.goal);
 		this.renderHistoryStatus();
 		this.renderOlderHistory();
 		const items = this.model.items;
@@ -596,17 +590,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				}
 			}
 		}
-	}
-
-	private renderGoal(): void {
-		const goal = this.model.goal;
-		if (!goal) {
-			this.goalElement.hidden = true;
-			this.goalElement.textContent = '';
-			return;
-		}
-		this.goalElement.hidden = false;
-		this.goalElement.textContent = formatChatGoal(goal);
 	}
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {

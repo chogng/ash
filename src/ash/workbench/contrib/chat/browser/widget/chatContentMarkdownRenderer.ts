@@ -1,3 +1,4 @@
+import { wrapTablesWithScrollable } from './chatContentParts/chatMarkdownTableScrolling.js';
 import { allowedMarkdownHtmlAttributes, allowedMarkdownHtmlTags, renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type IRenderedMarkdown, type MarkdownRenderOptions } from '../../../../../base/browser/markdownRenderer.js';
 import { addDisposableListener, getDocument, h } from '../../../../../base/browser/dom.js';
 import type { URI } from '../../../../../base/common/uri.js';
@@ -68,6 +69,7 @@ export class ChatContentMarkdownRenderer extends Disposable implements IMarkdown
 		// A resource image has no src while its loader is pending. Keep its node
 		// so the base render can install the result and own the object URL lifetime.
 		this.renderUnavailableMedia(result.element, hasResourceImages);
+		wrapTablesWithScrollable(result.element);
 		const store = new DisposableStore();
 		store.add(result);
 		if ((mathSyntax || options.markedExtensions?.length) && result.element.querySelector('.ash-katex-container[data-latex]')) {
@@ -124,6 +126,7 @@ export class ChatContentMarkdownRenderer extends Disposable implements IMarkdown
 			element.replaceChildren(sanitized);
 			block = element.firstElementChild as HTMLElement;
 		}
+		wrapTablesWithScrollable(element);
 		const state = { raw, block, policy };
 		this.tails.set(element, state);
 		const click = addDisposableListener<MouseEvent>(element, 'click', event => {

@@ -1,0 +1,6 @@
+.ash-chat-rich-tool-confirmation pre {
+	max-height: 240px;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

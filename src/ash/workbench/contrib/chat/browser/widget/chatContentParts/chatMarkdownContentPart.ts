@@ -1,4 +1,5 @@
 import './media/chatMarkdownPart.css';
+import { chatMarkdownTableScrollClass } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import type { MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
@@ -209,7 +210,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			&& !markdown.supportHtml && !this.options.markedExtensions?.length
 			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
 			&& previousTail?.element.childElementCount === 1
-			&& ['P', 'UL', 'OL', 'TABLE'].includes(previousTail.element.firstElementChild!.tagName)) sources = [tail];
+			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`)) sources = [tail];
 		// HTML and arbitrary extensions can carry state across blocks. Display math
 		// may acquire a closing delimiter several paragraphs later; formulas also
 		// share message-scoped macros. These inputs, reference definitions and

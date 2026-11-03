@@ -643,6 +643,37 @@ suite('chatRenderer browser component', () => {
 	});
 
 
+	test('wide Markdown tables scroll with the keyboard and retain their viewport during streaming', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		const columns = Array.from({ length: 24 }, (_, index) => `Wide column heading ${index + 1}`);
+		const row = (cells: readonly string[]) => `| ${cells.join(' | ')} |`;
+		const header = [row(columns), row(columns.map(() => '---'))];
+		const rows = Array.from({ length: 20 }, () => row(columns));
+		const text = [...header, ...rows].join('\n') + '\n';
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, false), text);
+		const viewport = page.getByRole('region', { name: '可滚动表格' });
+		await expect(viewport.getByRole('table')).toHaveCount(1);
+		assert.ok(await viewport.evaluate(node => node.scrollWidth > node.clientWidth));
+		await viewport.focus();
+		await viewport.press('ArrowRight');
+		await expect.poll(() => viewport.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
+		const scrollLeft = await viewport.evaluate(node => node.scrollLeft);
+		await page.evaluate(text => window.ashChatTranscriptIntegration.stream(text, true), text + row(columns.map(() => 'Appended cell')));
+		await expect(viewport.getByRole('row')).toHaveCount(22);
+		await expect(viewport).toBeFocused();
+		assert.ok(await viewport.evaluate(node => node.scrollLeft) >= scrollLeft);
+
+		await viewport.evaluate(node => { node.scrollLeft = 0; });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.showFind('Wide column heading 24'));
+		const cell = viewport.getByRole('columnheader', { name: 'Wide column heading 24' });
+		await expect.poll(async () => cell.evaluate(node => {
+			const cell = node.getBoundingClientRect();
+			const bounds = node.closest('.ash-chat-markdown-table-scroll')!.getBoundingClientRect();
+			return cell.left < bounds.right && cell.right > bounds.left;
+		})).toBe(true);
+	});
+
 	test('accessible transcript follows streamed model text and restores the focused response', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -857,6 +888,29 @@ suite('chatRenderer browser component', () => {
 		expect(await selected.evaluate((element, previous) => element === previous, original)).toBe(true);
 		expect(await page.evaluate(() => document.getSelection()!.toString())).toBe('Selected paragraph.');
 		await original?.dispose();
+	});
+
+	test('loaded chat images copy original PNG bytes and encode other formats for the clipboard', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		const gif = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+		const items: IChatListItem[] = [
+			{ id: 'stored-image', type: 'agentMessage', text: '', transient: false, content: [image], attachmentSource: source },
+			{ id: 'inline-image', type: 'agentMessage', text: '', transient: false, content: [{ type: 'imageUrl', detail: 'auto', url: gif }] },
+		];
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), items);
+		const stored = page.locator('[data-item-id="stored-image"]');
+		const copy = stored.getByRole('button', { name: '复制图片', exact: true });
+		await expect(copy).toHaveCount(0);
+		await stored.locator('.ash-chat-media > button').first().click();
+		await copy.press('Enter');
+		const expectedPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=', 'base64');
+		const clipboardImage = () => page.evaluate(() => window.ashChatTranscriptIntegration.state().copiedImage);
+		await expect.poll(clipboardImage).toEqual([...expectedPng]);
+		const inline = page.locator('[data-item-id="inline-image"]').getByRole('button', { name: '复制图片', exact: true });
+		await inline.click();
+		await expect.poll(async () => (await clipboardImage()).slice(16, 24)).toEqual([0, 0, 0, 1, 0, 0, 0, 1]);
+		assert.deepEqual((await clipboardImage()).slice(0, 8), [137, 80, 78, 71, 13, 10, 26, 10]);
 	});
 
 	test('streamed media appears and disappears without replacing the response code editor', async function () {
