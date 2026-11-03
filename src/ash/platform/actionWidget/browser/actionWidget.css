@@ -1,4 +1,6 @@
 .ash-action-widget {
+	--ash-action-widget-divider: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
 	box-sizing: border-box;
 	min-width: 0;
 	max-height: inherit;
@@ -67,6 +69,20 @@
 	padding: var(--ash-spacing-size80);
 }
 
+.ash-action-widget-filter:has(~ .ash-action-widget-items:not([hidden])) {
+	position: var(--ash-action-widget-filter-position, static);
+}
+
+/* Keep the search divider aligned with the filter's inset in every picker. */
+.ash-action-widget-filter:has(~ .ash-action-widget-items:not([hidden]))::after {
+	content: var(--ash-action-widget-filter-divider-content, none);
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset, var(--ash-spacing-size80));
+	inset-block-end: 0;
+	border-block-end: var(--ash-action-widget-divider);
+	pointer-events: none;
+}
+
 .ash-action-widget-items {
 	min-width: 0;
 }
@@ -83,7 +99,7 @@
 
 .ash-action-widget-menu .ash-menu-leading-check > .ash-icon {
 	position: absolute;
-	right: var(--ash-spacing-size80);
+	right: var(--ash-menu-trailing-inset);
 }
 
 .ash-action-widget-menu.ash-menu

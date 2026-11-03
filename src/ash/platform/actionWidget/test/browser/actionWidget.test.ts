@@ -658,6 +658,9 @@ suite('actionWidget browser component', () => {
 		await page.goto('/actionWidget.html');
 		await page.evaluate(() => window.ashActionWidgetIntegration.show(['Run', 'Run the selected action with a longer descriptive label'], { showFilter: true }));
 		const widget = page.locator('.ash-action-widget');
+		expect(await widget.locator('.ash-action-widget-filter').evaluate(element =>
+			getComputedStyle(element, '::after').content
+		)).toBe('none');
 		const width = await widget.evaluate(element => element.getBoundingClientRect().width);
 		await page.keyboard.press('ControlOrMeta+f');
 		const search = widget.getByRole('searchbox');
@@ -670,6 +673,23 @@ suite('actionWidget browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(widget).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Open actions' })).toBeFocused();
+	});
+
+	test('default action widgets retain the focus outline when opened by pointer', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		const trigger = page.getByRole('button', { name: 'Open actions' });
+		await trigger.evaluate(button => button.addEventListener('click', () => window.ashActionWidgetIntegration.show(['Run', 'Plan'])));
+		await trigger.click();
+		const run = page.getByRole('menuitemradio', { name: 'Run' });
+		await expect(run).toBeFocused();
+		await expect(run).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+		await page.keyboard.press('ArrowDown');
+		const plan = page.getByRole('menuitemradio', { name: 'Plan' });
+		await expect(plan).toBeFocused();
+		await expect(plan).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
 	});
 
 	test('switching tabs recomputes the menu width without replacing its owner', async function () {

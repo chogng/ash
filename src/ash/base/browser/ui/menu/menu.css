@@ -19,6 +19,8 @@
 }
 
 .ash-menu {
+	--ash-menu-padding: var(--ash-spacing-size40);
+	--ash-menu-trailing-inset: var(--ash-spacing-size80);
 	display: grid;
 	gap: 0;
 	box-sizing: border-box;
@@ -30,7 +32,7 @@
 		var(--ash-menu-background)
 	);
 	min-width: 180px;
-	padding: 4px;
+	padding: var(--ash-menu-padding);
 }
 .ash-menu .ash-action-view-item {
 	display: block;
@@ -121,27 +123,39 @@
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
 	display: none;
 }
-/* Override ActionBar's dimmed separator so the theme border stays visible in high contrast. */
+/* Count the menu padding toward the divider inset from the popup edge. */
 .ash-menu .ash-action-view-item-separator {
 	width: auto;
-	height: 1px;
-	margin: 4px 8px;
-	background: var(--ash-menu-style-separator-color, var(--ash-border));
+	height: var(--ash-strokeThickness);
+	margin-block: var(--ash-spacing-size40);
+	margin-inline: var(--ash-menu-divider-margin, var(--ash-spacing-size80));
+	background: var(
+		--ash-menu-divider-color,
+		var(--ash-menu-style-separator-color, var(--ash-border))
+	);
 	opacity: 1;
 }
 .ash-menu .ash-submenu-indicator {
+	position: var(--ash-menu-submenu-position, static);
+	inset-inline-end: var(--ash-menu-submenu-inset, auto);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 16px;
-	height: 16px;
-	flex: 0 0 16px;
-	margin-left: auto;
+	width: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	height: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	flex: 0 0 var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	margin-inline-start: auto;
 }
 .ash-menu .ash-submenu-indicator > .ash-icon {
-	width: 12px;
-	height: 12px;
-	font-size: var(--ash-lxiconFontSize-compact);
+	width: var(--ash-menu-submenu-icon-size, var(--ash-lxiconFontSize-compact));
+	height: var(
+		--ash-menu-submenu-icon-size,
+		var(--ash-lxiconFontSize-compact)
+	);
+	font-size: var(
+		--ash-menu-submenu-icon-size,
+		var(--ash-lxiconFontSize-compact)
+	);
 }
 .ash-menu .ash-menu-keybinding {
 	margin-left: auto;

@@ -12,6 +12,12 @@
 	--ash-fontSize-label2: 11px;
 	--ash-fontSize-label3: 10px;
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
+	--ash-menu-divider-inset: var(--ash-spacing-size80);
+	--ash-menu-trailing-icon-size: var(--ash-lxiconFontSize-large);
+	--ash-menu-submenu-icon-size: var(--ash-lxiconFontSize);
+	--ash-menu-submenu-position: absolute;
+	--ash-action-widget-filter-position: relative;
+	--ash-action-widget-filter-divider-content: "";
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
 }
@@ -101,6 +107,12 @@
 }
 
 .ash-sessions-window .ash-context-view-menu {
+	/* The inner menu owns the inset. Reset the native popover padding. */
+	padding: 0;
+}
+
+.ash-sessions-window .ash-context-view-menu,
+.ash-sessions-window .ash-context-view > .ash-action-widget {
 	border-radius: var(--ash-cornerRadius-xxLarge);
 }
 
@@ -119,8 +131,68 @@
 
 .ash-sessions-window .ash-menu {
 	--ash-list-rowHeight: var(--ash-spacing-size280);
+	--ash-menu-padding: var(--ash-spacing-size60);
+	--ash-menu-divider-margin: max(
+		0px,
+		calc(var(--ash-menu-divider-inset) - var(--ash-menu-padding))
+	);
+	--ash-menu-divider-color: var(
+		--ash-contrastBorder,
+		var(--ash-menu-style-separator-color, var(--ash-border))
+	);
+	--ash-menu-submenu-inset: var(--ash-menu-trailing-inset);
 	min-width: 160px;
-	padding: var(--ash-spacing-size60);
+}
+
+.ash-sessions-window .ash-chat-permission-menu .ash-action-widget-menu {
+	--ash-menu-padding: 0px;
+}
+
+/* Pointer opening can focus the current item before the menu receives pointer input. */
+.ash-sessions-window
+	.ash-action-widget-menu.ash-menu
+	> .ash-action-view-item.focused
+	> .ash-button:focus:not(:focus-visible) {
+	outline-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-window .ash-menu .ash-button:has(> .ash-submenu-indicator) {
+	position: relative;
+	padding-inline-end: calc(
+		var(--ash-menu-trailing-inset) + var(--ash-menu-trailing-icon-size) +
+			var(--ash-spacing-size20)
+	);
+}
+
+.ash-sessions-window .ash-chat-model-picker-footer {
+	position: relative;
+	border-top: 0;
+}
+
+.ash-sessions-window .ash-chat-model-picker-footer::before {
+	content: "";
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset);
+	inset-block-start: 0;
+	border-block-start: var(--ash-action-widget-divider);
+	pointer-events: none;
+}
+
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-window
+	.ash-context-view
+	.ash-menu:not(.ash-design-menu) {
+	--ash-menu-selectionBackground: var(--ash-menu-hoverBackground);
+}
+
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-window
+	.ash-chat-permission-menu
+	.ash-action-widget-menu {
+	--ash-menu-style-selection-background-color: var(
+		--ash-menu-selectionBackground
+	);
+	--ash-list-hoverBackground: var(--ash-menu-selectionBackground);
 }
 
 .ash-sessions-window .ash-menu .ash-button {
@@ -180,6 +252,26 @@
 
 .ash-sessions-window .ash-button-quiet:where(:not(:disabled):active) {
 	background: var(--ash-button-activeBackground);
+}
+
+.ash-sessions-window
+	:is(
+		.ash-button-quiet,
+		.ash-chat-input-picker-button,
+		.ash-chat-input-toolbars.ash-toolbar
+			.ash-chat-input-mode-selector
+			.ash-chat-input-action.ash-chat-input-mode-action
+	)[aria-haspopup]:is(:hover, [aria-expanded="true"]):not(
+		:disabled,
+		[aria-disabled="true"],
+		[aria-readonly="true"]
+	) {
+	background-color: var(
+		--ash-popup-trigger-background,
+		var(--ash-toolbar-hoverBackground)
+	);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
 }
 
 @media (forced-colors: active) {

@@ -60,6 +60,17 @@
 	background: var(--ash-sessions-selectionBackground);
 }
 
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-navigation {
+	--ash-popup-trigger-background: var(--ash-menu-hoverBackground);
+}
+
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-navigation
+	.ash-sessions-activity-item:is(.selected, :hover):not(:disabled) {
+	background: var(--ash-menu-hoverBackground);
+}
+
 .ash-sessions-activity-item .ash-icon {
 	width: var(--ash-lxiconFontSize-large);
 	height: var(--ash-lxiconFontSize-large);
