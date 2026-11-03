@@ -23,6 +23,8 @@ export interface ISplitViewOptions {
 	readonly orientation?: Orientation;
 	/** Scales existing visible panes with the primary axis before applying constraints. Defaults to true. */
 	readonly proportionalLayout?: boolean;
+	/** Projects stored split weights onto the viewport without saving constrained sizes. */
+	readonly preserveSplitWeights?: boolean;
 	/** Optional Sash presentation shared by separators created for this view. */
 	readonly sashPresentation?: SashPresentation;
 	readonly styles?: ISplitViewStyles;
@@ -63,6 +65,7 @@ interface ViewItem {
 	readonly view: IView;
 	readonly container: HTMLDivElement;
 	size: number;
+	weight: number;
 	visible: boolean;
 	cachedVisibleSize: number | undefined;
 	changeListener: IDisposable | undefined;
@@ -245,6 +248,7 @@ export class SplitView extends Disposable {
 				view.minimumSize,
 				view.maximumSize,
 			) : 0,
+			weight: resolved.size,
 			visible: resolved.visible,
 			cachedVisibleSize: resolved.visible ? undefined : resolved.size,
 			changeListener: undefined,
@@ -303,7 +307,13 @@ export class SplitView extends Disposable {
 	layout(size: number, orthogonalSize: number): void {
 		assertNonNegativeFinite(size, 'size');
 		assertNonNegativeFinite(orthogonalSize, 'orthogonal size');
-		if ((this.options.proportionalLayout ?? true) && this.size > 0 && size !== this.size) {
+		if (this.options.preserveSplitWeights) {
+			const visible = this.visibleItems();
+			const total = visible.reduce((sum, item) => sum + item.weight, 0);
+			if (total > 0) {
+				for (const item of visible) item.size = size * (item.weight / total);
+			}
+		} else if ((this.options.proportionalLayout ?? true) && this.size > 0 && size !== this.size) {
 			const scale = size / this.size;
 			for (const item of this.visibleItems()) item.size *= scale;
 		}
@@ -316,6 +326,20 @@ export class SplitView extends Disposable {
 
 	getViewSize(index: number): number {
 		return this.item(index).size;
+	}
+
+	/** Size to use when saving or rearranging the split. */
+	getViewLayoutSize(index: number): number {
+		const item = this.item(index);
+		return this.options.preserveSplitWeights ? item.weight : item.cachedVisibleSize ?? item.size;
+	}
+
+	private saveSplitWeights(): void {
+		if (!this.options.preserveSplitWeights) return;
+		const visible = this.visibleItems();
+		const total = visible.reduce((sum, item) => sum + item.weight, 0);
+		const scale = this.size > 0 && total > 0 ? total / this.size : 1;
+		for (const item of visible) item.weight = item.size * scale;
 	}
 
 	getViewCachedVisibleSize(index: number): number | undefined {
@@ -338,6 +362,7 @@ export class SplitView extends Disposable {
 		assertNonNegativeFinite(requestedSize, 'view size');
 		const item = this.item(index);
 		if (!item.visible) {
+			item.weight = requestedSize;
 			item.cachedVisibleSize = clamp(
 				requestedSize,
 				item.view.minimumSize,
@@ -351,6 +376,7 @@ export class SplitView extends Disposable {
 			item.view.maximumSize,
 		);
 		if (this.didLayout) this.fitToSize(new Set([item]), true);
+		this.saveSplitWeights();
 		if (this.didLayout) this.render();
 		this._onDidChangeViewSizes.fire();
 	}
@@ -372,6 +398,7 @@ export class SplitView extends Disposable {
 			);
 		}
 		this.fitToSize();
+		this.saveSplitWeights();
 		this.render();
 		this._onDidChangeViewSizes.fire();
 	}
@@ -392,6 +419,7 @@ export class SplitView extends Disposable {
 		const beforeSize = resetLeadingViewSize(total, before, after, leadingSize);
 		before.size = beforeSize;
 		after.size = total - beforeSize;
+		this.saveSplitWeights();
 		this.render();
 		this._onDidChangeViewSizes.fire();
 	}
@@ -584,6 +612,7 @@ export class SplitView extends Disposable {
 		}));
 		this.sashes.add(sash.onDidEnd(() => {
 			dragState = undefined;
+			this.saveSplitWeights();
 			this._onDidSashChange.fire(boundaryIndex);
 		}));
 		this.sashes.add(sash.onDidReset(() => this.handleSashReset(boundaryIndex)));

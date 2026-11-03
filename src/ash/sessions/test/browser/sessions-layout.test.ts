@@ -318,6 +318,45 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 		area.moveTool('terminal', 'changes', Direction.Right);
 		assert.ok(area.minimumWidth > 300);
 		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
+		const wide = new Dimension(1_600, 890);
+		layout.layout(wide);
+		const arranged = area.saveLayout();
+		const terminalEditors = terminalGroup.inputs.slice();
+		layout.layout(new Dimension(980, 890));
+		assert.equal(area.isToolVisible('terminal'), true);
+		assert.equal(area.isToolVisible('changes'), true);
+		assert.deepEqual(area.saveLayout(), arranged);
+		const narrow = new Dimension(980, 390);
+		layout.layout(narrow);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(area.isToolVisible('terminal'), false);
+		assert.equal(area.isToolVisible('changes'), true);
+		assert.deepEqual(area.saveLayout(), arranged);
+		await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
+		assert.equal(area.isToolVisible('terminal'), true);
+		assert.equal(area.isToolVisible('changes'), false);
+		assert.deepEqual(terminalGroup.inputs, terminalEditors);
+		assert.equal(terminalGroup.activePane, terminalPane);
+
+		layout.layout(new Dimension(760, 390));
+		assert.equal(layout.isPartVisible('sidebar'), false);
+		assert.equal(layout.isPartRequested('sidebar'), true);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(area.isToolVisible('terminal'), true);
+
+		layout.layout(new Dimension(600, 890));
+		assert.equal(layout.isPartVisible('sessions'), false);
+		assert.equal(layout.isPartVisible('editor'), true);
+		layout.showPart('sessions');
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartRequested('editor'), true);
+		layout.layout(wide);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(area.isToolVisible('changes'), true);
+		assert.equal(area.isToolVisible('terminal'), true);
+		assert.deepEqual(area.saveLayout(), arranged);
+
 		editor.hideTool(terminalGroup.id);
 		assert.equal(area.minimumWidth, 300);
 	} finally {

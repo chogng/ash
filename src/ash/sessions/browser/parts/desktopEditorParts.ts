@@ -1,7 +1,7 @@
 import { SessionSideChatEditorInput } from '../../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { Emitter } from '../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import type { SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
+import type { Direction, SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import type { IDimension } from '../../../base/browser/dom.js';
 import { isRecord } from '../../../base/common/types.js';
 import { EditorParts } from '../../../workbench/browser/parts/editor/editorParts.js';
@@ -19,13 +19,16 @@ import { IAccessibilityService } from '../../../platform/accessibility/common/ac
 import { IAuxiliaryWindowService } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { DesktopMainEditorPart } from './desktopEditorPart.js';
 import { DesktopToolEditorPart } from './desktopToolEditorPart.js';
-import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool } from './desktopEditorArea.js';
+import { DesktopEditorArea, desktopEditorTools, type DesktopEditorTool, type ToolSlot } from './desktopEditorArea.js';
 
 /** Documents are serialized once. Sessions adds only their Part membership and geometry. */
 export interface DesktopEditorWorkingSet extends EditorWorkingSet {
 	readonly toolParts?: {
 		readonly version: 1;
 		readonly layout: SerializedGridDescriptor;
+		readonly positioned?: readonly DesktopEditorTool[];
+		readonly manuallyArranged?: boolean;
+		readonly closedSlots?: Readonly<Partial<Record<DesktopEditorTool, ToolSlot>>>;
 		readonly parts: Readonly<Record<DesktopEditorTool, {
 			readonly groups: readonly number[];
 			readonly layout?: EditorWorkingSetLayout;
@@ -180,7 +183,12 @@ export class DesktopEditorParts extends EditorParts {
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
 		this.area.syncVisible([...this.hosts]
 			.filter(([tool, part]) => (!productPage || tool === 'files') && part.groups.some(group => part.isGroupVisible(group.id)))
-			.map(([tool]) => tool));
+			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), !productPage);
+	}
+
+	private toolForGroup(groupId: number): DesktopEditorTool {
+		const host = this.owner(groupId);
+		return [...this.hosts].find(([, part]) => part === host)![0];
 	}
 
 	public override setGroupVisible(id: number, visible: boolean): void {
@@ -224,11 +232,13 @@ export class DesktopEditorParts extends EditorParts {
 	public async toggleToolEditors(accepts: (input: IResourceEditorInput) => boolean, options: { readonly emptyGroupId?: number; } = {}): Promise<boolean> {
 		const groups = this.getToolGroups(accepts, options);
 		if (!groups.length) { return false; }
-		const visible = groups.some(group => this.isGroupVisible(group.id));
+		const visible = groups.some(group => this.isGroupVisible(group.id) && this.area.isToolVisible(this.toolForGroup(group.id)));
 		for (const group of groups) { this.setGroupVisible(group.id, !visible); }
 		if (!visible) {
 			this.activateGroup(groups[0]!.id);
-			this.focus();
+			this.syncArea();
+			if (this.area.domNode.hidden) this.revealed.fire();
+			else this.focus();
 		}
 		return true;
 	}
@@ -244,6 +254,10 @@ export class DesktopEditorParts extends EditorParts {
 			this.activateGroup(next.id);
 			this.focus();
 		}
+	}
+
+	public moveToolToEdge(direction: Direction, groupId = this.activeGroup.id): void {
+		if (groupId !== this.pageGroupId) this.area.moveToolToEdge(this.toolForGroup(groupId), direction);
 	}
 
 	public toggleMaximizeTool(groupId: number = this.activeGroup.id): void {
@@ -266,7 +280,7 @@ export class DesktopEditorParts extends EditorParts {
 		}
 		return {
 			id, groups, activeGroupIndex: Math.max(0, groups.findIndex(group => group.id === this.activeGroup.id)),
-			toolParts: { version: 1, layout: this.area.saveLayout(), parts },
+			toolParts: { version: 1, layout: this.area.saveLayout(), positioned: this.area.positionedTools, manuallyArranged: this.area.hasManualArrangement, closedSlots: this.area.closedSlots, parts },
 		};
 	}
 
@@ -277,6 +291,19 @@ export class DesktopEditorParts extends EditorParts {
 		const legacyWithoutChat = metadata.parts.chat === undefined;
 		const layout = legacyWithoutChat ? this.area.addChatToLayout(metadata.layout) : metadata.layout;
 		this.area.validateLayout(layout);
+		if (metadata.positioned !== undefined && (!Array.isArray(metadata.positioned) ||
+			metadata.positioned.some(tool => !desktopEditorTools.includes(tool)) ||
+			new Set(metadata.positioned).size !== metadata.positioned.length)) { throw new TypeError('Invalid positioned tools'); }
+		if (metadata.manuallyArranged !== undefined && typeof metadata.manuallyArranged !== 'boolean') { throw new TypeError('Invalid manual tool arrangement'); }
+		if (metadata.closedSlots !== undefined && (!isRecord(metadata.closedSlots) || Object.entries(metadata.closedSlots).some(([tool, slot]) =>
+			!desktopEditorTools.includes(tool as DesktopEditorTool) || !isRecord(slot) ||
+			!Array.isArray(slot.anchors) || !slot.anchors.length || new Set(slot.anchors).size !== slot.anchors.length ||
+			slot.anchors.some(anchor => anchor === tool || !desktopEditorTools.includes(anchor)) ||
+			!Array.isArray(slot.opposite) || slot.opposite.some(anchor => anchor === tool || !desktopEditorTools.includes(anchor)) ||
+			(slot.orientation !== 0 && slot.orientation !== 1) || typeof slot.after !== 'boolean' ||
+			typeof slot.ratio !== 'number' || !Number.isFinite(slot.ratio) || slot.ratio < 0.001 || slot.ratio > 1000))) {
+			throw new TypeError('Invalid closed tool slot');
+		}
 		const unassigned = new Set(saved.groups.map(group => group.id));
 		for (const tool of desktopEditorTools) {
 			const state = tool === 'chat' && legacyWithoutChat ? { groups: [] } : metadata.parts[tool];
@@ -334,7 +361,7 @@ export class DesktopEditorParts extends EditorParts {
 				}
 			}
 			const layout = metadata?.layout ?? (saved === 'empty' ? undefined : legacyToolLayout(saved));
-			if (layout) { this.area.restoreLayout(layout); }
+			if (layout) { this.area.restoreLayout(layout, metadata ? metadata.positioned : desktopEditorTools, metadata ? metadata.manuallyArranged : true, metadata?.closedSlots); }
 			if (saved !== 'empty') {
 				const activeId = restored.get(saved.groups[saved.activeGroupIndex]?.id ?? -1);
 				if (activeId !== undefined) { this.activateGroup(activeId); }
@@ -357,7 +384,7 @@ export class DesktopEditorParts extends EditorParts {
 				const layout = metadata.parts[tool].layout;
 				if (layout) { restorePartLayout(part, layout, groupIds); }
 			}
-			this.area.restoreLayout(metadata.layout);
+			this.area.restoreLayout(metadata.layout, metadata.positioned, metadata.manuallyArranged, metadata.closedSlots);
 		} finally {
 			this.applying = false;
 			this.syncArea();
@@ -375,7 +402,7 @@ export class DesktopEditorParts extends EditorParts {
 			const layout = previous.parts[tool].layout;
 			return [tool, { ...state, layout: layout ? projectLayout(layout, new Set(state.groups)) : state.layout }];
 		})) as NonNullable<DesktopEditorWorkingSet['toolParts']>['parts'];
-		return { ...saved, activeGroupIndex, toolParts: { version: 1, layout: previous.layout, parts } };
+		return { ...saved, activeGroupIndex, toolParts: { version: 1, layout: previous.layout, positioned: previous.positioned, manuallyArranged: previous.manuallyArranged, closedSlots: previous.closedSlots, parts } };
 	}
 
 	public restoreLayout(layout: EditorWorkingSetLayout, groupIds: ReadonlyMap<number, number>): void {
@@ -386,7 +413,7 @@ export class DesktopEditorParts extends EditorParts {
 			return id === undefined ? [] : [{ ...group, id }];
 		});
 		const tools = legacyToolLayout({ id: 'legacy-tool-layout', groups, activeGroupIndex: 0, layout });
-		if (tools) { this.area.restoreLayout(tools); }
+		if (tools) { this.area.restoreLayout(tools, desktopEditorTools, true); }
 		this.syncArea();
 	}
 }

@@ -1066,7 +1066,9 @@ export abstract class Workbench extends Disposable {
 			this._register(toDisposable(() => browserVisible.reset()));
 			this._register(editor.onDidChangeEditors(updateBrowserContext));
 			this._register(CommandsRegistry.register('ash.sessions.toggleBrowser', async () => {
-				await commandService.executeCommand('sessions.open.code');
+				if (contextKeys.getValue('sessions.desktopCode') !== true) {
+					await commandService.executeCommand('sessions.open.code');
+				}
 				if (!await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme)) {
 					const browsers = services.get(IBrowserViewWorkbenchService);
 					const retained = browsers.getKnownBrowserViews().values().next().value;
@@ -1220,6 +1222,7 @@ export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	setCustomViewVisible(visible: boolean): void;
 	isPartVisible(partId: SessionsPartId): boolean;
 	isPartAvailable(partId: SessionsPartId): boolean;
+	isPartRequested(partId: 'sidebar' | 'editor' | 'auxiliarybar'): boolean;
 	setPartAvailable(partId: 'sessions' | 'sidebar' | 'auxiliarybar' | 'editor', available: boolean): void;
 	updateParts(update: () => void): void;
 	showPart(partId: SessionsPartId): void;

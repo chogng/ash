@@ -22,6 +22,7 @@ import { Menus } from './menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js';
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
+const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
 const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
@@ -38,6 +39,7 @@ export function registerLayoutActions(
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
 	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
+	const covered = conversationCovered.bindTo(contextKeys);
 	let terminalToggle: Promise<void> | undefined;
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
@@ -46,6 +48,7 @@ export function registerLayoutActions(
 			forwardEnabled.set(sessions.canNavigateForward);
 			codeAvailable.set(contextKeys.getValue('sessions.desktopCode') === true);
 			panelVisible.set(false);
+			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
 			terminalVisible.set(layout.isPartVisible('editor') && editor.groups.some(group => editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput));
 		});
 	updateContext();
@@ -62,6 +65,7 @@ export function registerLayoutActions(
 				codeAvailable.reset();
 				panelVisible.reset();
 				terminalVisible.reset();
+				covered.reset();
 			}),
 		),
 	);
@@ -76,6 +80,20 @@ export function registerLayoutActions(
 	);
 	disposables.add(CommandsRegistry.register('ash.sessions.back', () => sessions.openPreviousSession()));
 	disposables.add(CommandsRegistry.register('ash.sessions.forward', () => sessions.openNextSession()));
+	disposables.add(registerAction2(class ShowConversationAction extends Action2 {
+		constructor() {
+			super({
+				id: 'ash.sessions.showConversation',
+				title: localize2({ bundle: 'ash', key: 'sessions.layout.showConversation' }, 'Show main conversation'),
+				icon: Lxicon.chat,
+				f1: true,
+				precondition: conversationCovered.isEqualTo(true),
+				menu: { id: Menus.TitleBarRightLayout, when: conversationCovered.isEqualTo(true), group: 'navigation', order: 0 },
+			});
+		}
+
+		override run(): void { layout.showPart('sessions'); }
+	}));
 	disposables.add(registerAction2(class OpenSideChatAction extends Action2 {
 		constructor() {
 			super({
@@ -88,7 +106,7 @@ export function registerLayoutActions(
 		}
 
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			if (!layout.isPartVisible('sessions') || !codeAvailable.get()) return;
+			if (!layout.isPartAvailable('sessions') || layout.isPartVisible('customview') || !codeAvailable.get()) return;
 			const management = accessor.get(ISessionsManagementService);
 			const title = localize('chat.title.new', 'New Chat');
 			// The tool Part chooses its active group. A fresh draft gives each tab its own identity

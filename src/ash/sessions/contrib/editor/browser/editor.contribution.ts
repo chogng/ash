@@ -1,3 +1,4 @@
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -124,6 +125,25 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			),
 		);
 		const codeWhen = codeContext.isEqualTo(true);
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderLayout, {
+			submenu: Menus.SessionsToolMove,
+			title: localize2({ bundle: 'ash', key: 'sessions.layout.moveTool' }, 'Move tool'),
+			when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.has('sessions.editorTool')),
+			group: 'layout',
+		}));
+		for (const [direction, id, title] of [
+			[Direction.Left, 'left', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolLeft' }, 'Move left')],
+			[Direction.Right, 'right', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolRight' }, 'Move right')],
+			[Direction.Up, 'up', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolUp' }, 'Move up')],
+			[Direction.Down, 'down', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolDown' }, 'Move down')],
+		] as const) {
+			const command = `ash.sessions.moveTool.${id}`;
+			this._register(CommandsRegistry.register(command, arg => run(async () => {
+				(editor as DesktopEditorParts).moveToolToEdge(direction, toolGroup(arg));
+			})));
+			this._register(MenusRegistry.appendMenuItem(Menus.SessionsToolMove, { command: { id: command, title } }));
+		}
+
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));
 		const toggleSidePane = {

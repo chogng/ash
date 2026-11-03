@@ -251,7 +251,7 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 			this.workingSets.set(this.editorSession, snapshot);
 			if (this.chatLayoutPresentation.configured === 'chat') {
-				this.chatVisibility.set(this.editorSession, { editor: this.layout.isPartVisible('editor'), auxiliarybar: this.layout.isPartVisible('auxiliarybar') });
+				this.chatVisibility.set(this.editorSession, { editor: this.layout.isPartRequested('editor'), auxiliarybar: this.layout.isPartRequested('auxiliarybar') });
 			}
 		}
 	}

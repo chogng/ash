@@ -578,6 +578,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ILayoutService, {
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
+			isPartRequested: (id: string) => this.visible.get(id) ?? false,
 			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },
 			hidePart: (id: string) => { this.visible.set(id, false); this.partChanges.push('hide:' + id); },
 			setPrimaryPart: (id: string) => this.partChanges.push('primary:' + id),

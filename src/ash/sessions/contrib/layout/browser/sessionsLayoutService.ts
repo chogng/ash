@@ -206,7 +206,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
 				// Navigation visibility belongs to the window, independently of the page's side content.
-				const sidebarVisible = this.layout.isPartVisible('sidebar');
+				const sidebarVisible = this.layout.isPartRequested('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
 					details: entry.detailsContainerId !== undefined,
 					documents: documents && this.controller.hasDocumentEditors,
@@ -275,8 +275,8 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const files = this.isDocumentContent ? (this.editor as DesktopEditorParts) : undefined;
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
-			details: files?.filesDetailsOpen ?? this.layout.isPartVisible('auxiliarybar'),
-			documents: this.isDocumentContent && (this.layout.isPartVisible('editor')),
+			details: files?.filesDetailsOpen ?? this.layout.isPartRequested('auxiliarybar'),
+			documents: this.isDocumentContent && this.layout.isPartRequested('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}

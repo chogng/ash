@@ -217,8 +217,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 	protected override canRestoreSessionEditors(): boolean { return this.context.isSessionContent; }
 	protected override shouldShowEditor(): boolean {
 		return !this.context.isSessionContent || (this.context.isDocumentContent && (
-			(this.layout.isPartVisible('editor') && (this.editor as DesktopEditorParts).filesDetailsOpen)
-			|| (this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
+			(this.layout.isPartRequested('editor') && (this.editor as DesktopEditorParts).filesDetailsOpen)
+			|| (this.editors.visibleEditors.length > 0 && (this.layout.isPartRequested('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)))
 		));
 	}
 	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
