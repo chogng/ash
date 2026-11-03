@@ -121,7 +121,7 @@
 	background: var(--sessions-row-background);
 }
 
-.ash-sessions-list-row.selected .ash-sessions-list-item {
+.ash-sessions-list-row.selected > .ash-sessions-list-item {
 	color: var(--ash-foreground);
 	background: var(--ash-sessions-selectionBackground);
 }
@@ -239,6 +239,7 @@
 	gap: var(--ash-spacing-size20);
 }
 
+.ash-sessions-list-nested-chats,
 .ash-sessions-list-subgroup > .ash-sessions-list-section-body {
 	padding-inline-start: var(--ash-spacing-size240);
 }

@@ -15,6 +15,7 @@ import { ISessionProviderScopeService } from '../../../browser/agentHost/session
 import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -33,6 +34,7 @@ registerAction2(class CompareAgentsAction extends Action2 {
 		const views = accessor.get(ISessionsService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const providers = accessor.get(ISessionsProvidersService);
+		const groups = accessor.get(ISessionGroupsService);
 		const scopes = accessor.get(ISessionProviderScopeService);
 		const chat = accessor.get(IChatService);
 		const quickInput = accessor.get(IQuickInputService);
@@ -98,6 +100,7 @@ registerAction2(class CompareAgentsAction extends Action2 {
 		};
 		const threadService = isolated ? scopes.getScope(session.sessionId).thread : undefined;
 		const results = await Promise.all(selected.map(async ({ agent }, index) => {
+			const title = localize('sessions.compare.attemptTitle', 'Attempt {0} · {1}', index + 1, agent.name);
 			let draftId: string | undefined;
 			try {
 				let targetSession: string;
@@ -105,14 +108,14 @@ registerAction2(class CompareAgentsAction extends Action2 {
 				if (threadService) {
 					// The same history sequence selects the same sealed repository trees for every fork.
 					const fork = await threadService.fork({
-						sessionId: session.sessionId, threadId, title: agent.name, target: 'session',
+						sessionId: session.sessionId, threadId, title, target: 'session',
 						commandId: `compare-${batch}-${index + 1}`,
 						comparison: { sourceSequence: snapshot.thread.sequence, agent, branchName: `ash/compare-${batch}-${index + 1}` },
 					});
 					targetSession = fork.sessionId;
 					targetThread = fork.threadId;
 				} else {
-					const { untitledSessionId: id } = sessions.createUntitledSession(agent.name, workspace, provider.id, false);
+					const { untitledSessionId: id } = sessions.createUntitledSession(title, workspace, provider.id, false);
 					draftId = id;
 					sessions.setUntitledSessionAgent(id, agent);
 					const target = await sessions.materializeUntitledSession(id);
@@ -136,6 +139,20 @@ registerAction2(class CompareAgentsAction extends Action2 {
 				return undefined;
 			}
 		}));
+
+		const targets = results.filter(result => result !== undefined);
+		if (targets.length) {
+			try {
+				const title = task.trim().replace(/\s+/gu, ' ').slice(0, 96).trimEnd();
+				const group = await groups.create(localize('sessions.compare.groupTitle', 'Compare · {0}', title), undefined, 'comparison');
+				for (const { targetSession, name } of targets) {
+					try { await groups.move(targetSession, group.sectionId); }
+					catch (error) { report(name, error); }
+				}
+			} catch (error) {
+				report(localize('sessions.compare.group', 'Comparison group'), error);
+			}
+		}
 
 		// Sessions serializes navigation by revision. Present the targets in picker
 		// order and stop opening panes if the user navigates while the batch runs.

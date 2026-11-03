@@ -14,6 +14,38 @@ import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING } from '../common/constants.js';
 
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+
+registerAction2(class NewChatInSessionAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.chat.newInSession',
+			title: localize2('sessions.nestedChat.action', 'New Chat in Current Session'),
+			f1: true,
+			precondition: SessionsWorkspaceModeContext.isEqualTo('code'),
+		});
+	}
+
+	run(accessor: ServicesAccessor): void {
+		const views = accessor.get(ISessionsService);
+		const selection = views.activeSelection;
+		if (selection?.kind !== 'session' || selection.active.session.status !== 'active') return;
+		const { session, threadId } = selection.active;
+		const { providerId } = parseSessionIdentity(session.sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		const provider = accessor.get(ISessionsProvidersService).getProvider(providerId);
+		if (!provider || !provider.forkChat) return;
+		views.openNewSession(localize('sessions.nestedChat.title', 'New Chat'), {
+			sideBySide: true,
+			providerId,
+			forkSource: { sessionId: session.sessionId, threadId },
+		});
+	}
+});
+
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	remove: [],
 	add: [{

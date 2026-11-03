@@ -242,41 +242,56 @@ export class SessionsList extends DomWidget {
 			item.domNode.dataset.item = key;
 			return item;
 		};
-		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false, open?: () => void): HTMLElement => {
 			activeSections.add(key);
 			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
 				this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 			}));
-			section.update(title, children, this.storage.getBoolean(storageKey, StorageScope.PROFILE, false));
+			section.update(title, children, this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open);
 			return section.domNode;
 		};
 		// Content belongs to the composer store; an open blank welcome page is not a recent conversation.
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
+		const nestedDrafts = new Map<string, HTMLElement[]>();
 		for (const session of this.sessionService.untitledSessions) {
 			let draft: ReturnType<typeof readNewChatDraftState>;
 			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
-			if (!draft || (!draft.text.trim() && draft.contexts.length === 0)) continue;
+			if (!session.forkSource && (!draft || (!draft.text.trim() && draft.contexts.length === 0))) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
 			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
-			recent.push(item.domNode);
+			if (session.forkSource) {
+				const id = session.forkSource.sessionId;
+				const rows = nestedDrafts.get(id) ?? [];
+				rows.push(item.domNode);
+				nestedDrafts.set(id, rows);
+			} else {
+				recent.push(item.domNode);
+			}
 		}
 		for (const session of this.sessionService.sessions) {
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
-			const thread = current
-				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === 'active')
-				: session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
+			const activeChats = session.chats.filter(chat => chat.status === 'active');
+			const thread = activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread || session.status !== 'active') continue;
 			const item = itemFor(`session:${session.sessionId}`);
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current !== undefined, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false)) pinned.push(item.domNode);
-			else remaining.set(session.sessionId, item.domNode);
+			const children = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn').map(chat => {
+				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`);
+				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
+					() => this.viewService.openSession(session.sessionId, chat.threadId), chat.management);
+				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
+				return child.domNode;
+			});
+			item.updateChats([...children, ...(nestedDrafts.get(session.sessionId) ?? [])]);
+			if (this.storage.getBoolean(this.pinKey(session.sessionId), StorageScope.PROFILE, false)) pinned.push(item.presentation);
+			else remaining.set(session.sessionId, item.presentation);
 		}
 		const projects: HTMLElement[] = [];
 		const chatGroups: HTMLElement[] = [];
@@ -292,7 +307,8 @@ export class SessionsList extends DomWidget {
 				const item = remaining.get(id);
 				if (item) { members.push(item); remaining.delete(id); }
 			}
-			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'));
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code',
+				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined));
 		}
 		recent.push(...remaining.values());
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
@@ -311,6 +327,25 @@ export class SessionsList extends DomWidget {
 		reconcileChildren(this.list, ordered);
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
+	private async openComparison(sessionIds: readonly string[]): Promise<void> {
+		for (const id of sessionIds) {
+			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
+			const thread = session?.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root')
+				?? session?.chats.find(candidate => candidate.status === 'active');
+			if (!thread) continue;
+			const revision = this.viewService.navigationRevision;
+			try {
+				await this.viewService.openThread(id, thread.threadId, { sideBySide: true });
+			} catch (error) {
+				this.notifications.error(String(error));
+				if (this.viewService.navigationRevision !== revision + 1) break;
+				continue;
+			}
+			const active = this.viewService.activeSelection;
+			if (active?.kind !== 'session' || active.active.session.sessionId !== id || active.active.threadId !== thread.threadId) break;
+		}
+	}
+
 }
 
 /** Retain rows and headings during refreshes so keyboard focus and scroll do not jump. */
@@ -328,6 +363,7 @@ class SessionListSection extends AbstractDisposable {
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private collapsed = false;
+	private open: (() => void) | undefined;
 	private readonly listeners: { dispose(): void; }[];
 
 	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed: boolean) => void) {
@@ -346,7 +382,7 @@ class SessionListSection extends AbstractDisposable {
 		this.button.setAttribute('aria-controls', this.body.id);
 		this.domNode.append(heading, this.body);
 		this.listeners = [
-			addDisposableListener(this.button, 'click', () => toggle(!this.collapsed)),
+			addDisposableListener(this.button, 'click', () => { if (this.open) this.open(); else toggle(!this.collapsed); }),
 			addDisposableListener(this.button, 'keydown', event => {
 				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
 				event.preventDefault();
@@ -355,9 +391,12 @@ class SessionListSection extends AbstractDisposable {
 		];
 	}
 
-	update(title: string, children: readonly HTMLElement[], collapsed: boolean): void {
+	update(title: string, children: readonly HTMLElement[], collapsed: boolean, open?: () => void): void {
+		this.open = open;
 		this.label.textContent = title;
-		this.button.title = title;
+		this.button.title = open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : title;
+		if (open) this.button.setAttribute('aria-label', this.button.title);
+		else this.button.removeAttribute('aria-label');
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
 		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
@@ -381,6 +420,9 @@ class SessionListItem extends AbstractDisposable {
 	private readonly actions: ActionBar;
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
+	private chats: HTMLElement | undefined;
+	private wrapper: HTMLElement | undefined;
+	get presentation(): HTMLElement { return this.chats?.childElementCount ? this.wrapper! : this.domNode; }
 	private readonly management: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
@@ -388,6 +430,20 @@ class SessionListItem extends AbstractDisposable {
 	private readonly clickListener;
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
+
+	updateChats(children: readonly HTMLElement[]): void {
+		if (!children.length) {
+			this.chats?.replaceChildren();
+			return;
+		}
+		const group = this.chats ??= h(this.domNode.ownerDocument, 'div', { className: 'ash-sessions-list-nested-chats' });
+		group.setAttribute('role', 'group');
+		group.setAttribute('aria-label', localize('sessions.list.nestedChats', 'Conversations in {0}', this.label.textContent ?? ''));
+		const wrapper = this.wrapper ??= h(this.domNode.ownerDocument, 'div');
+		if (!group.parentElement) wrapper.append(group);
+		if (this.domNode.parentElement !== wrapper) wrapper.prepend(this.domNode);
+		reconcileChildren(group, children);
+	}
 
 	constructor(ownerDocument: Document, icon?: ThemeIcon) {
 		super();
@@ -480,6 +536,7 @@ class SessionListItem extends AbstractDisposable {
 		this.clickListener.dispose();
 		this.actions.dispose();
 		for (const listener of this.contextListeners) listener.dispose();
+		this.wrapper?.remove();
 		this.domNode.remove();
 	}
 }

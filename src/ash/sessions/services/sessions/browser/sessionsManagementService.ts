@@ -39,7 +39,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private readonly hydrating = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
-	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>(this, new Map());
+	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly sideThread?: true; }>>(this, new Map());
 
 	private readonly providerListeners = new Map<ISessionsProvider, DisposableStore>();
 
@@ -214,10 +214,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true): IUntitledChatSession {
+	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
-		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace };
+		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}) };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		if (activate) {
 			this.selectionRevision++;
@@ -309,7 +309,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const session = this._untitledSessions.find(candidate => candidate.untitledSessionId === untitledSessionId);
 			if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
 			const cancellation = new CancellationTokenSource();
-			const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId, { token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName }));
+			const creating = Promise.resolve().then(() => this.createSession(session.title, session.workspace, session.agent, untitledSessionId, session.providerId, { token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName }, session.forkSource));
 			entry = { promise: creating, cancellation, waiters: 0, settled: false };
 			this.materializations.set(untitledSessionId, entry);
 			const owned = entry;
@@ -334,10 +334,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void {
 		this.materializations.delete(untitledSessionId);
 		const wasActive = this._activeUntitledSessionId === untitledSessionId;
+		const nested = this._untitledSessions.some(draft => draft.untitledSessionId === untitledSessionId && draft.forkSource);
 		this._untitledSessions = this._untitledSessions.filter(session => session.untitledSessionId !== untitledSessionId);
 		if (wasActive) this._activeUntitledSessionId = undefined;
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
-		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId }]]));
+		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId, ...(nested ? { sideThread: true as const } : {}) }]]));
 		if (wasActive || !this._active && !this.activeUntitledSession) this._active = active;
 		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
@@ -427,12 +428,23 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	private async createSession(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), providerId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread> {
+	private async createSession(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), providerId?: string, options?: ISessionCreateOptions, forkSource?: IUntitledChatSession['forkSource']): Promise<IActiveSessionThread> {
 		this.pendingCreations++;
 		this.setState('creating');
 		try {
 			const provider = this.creationProvider(workspace, providerId);
-			const created = await provider.create(title, workspace, agent, creationId, options);
+			let created: IActiveSessionThread;
+			if (forkSource) {
+				if (options?.token.isCancellationRequested) throw canceled();
+				const source = this._sessions.find(session => session.sessionId === forkSource.sessionId && session.status === 'active');
+				if (!source?.chats.some(chat => chat.threadId === forkSource.threadId && chat.status === 'active') || this.owner(source.sessionId) !== provider || !provider.forkChat) {
+					throw new Error(localize('sessions.nestedChat.sourceUnavailable', 'The source conversation is unavailable.'));
+				}
+				created = await provider.forkChat(backendSession(source, this.provider.id).sessionId,
+					parseSessionIdentity(forkSource.threadId, this.provider.id).backendSessionId, title, creationId);
+			} else {
+				created = await provider.create(title, workspace, agent, creationId, options);
+			}
 			if (this.creationProvider(undefined, provider.id) !== provider) throw canceled();
 			const active = { session: this.project(created.session, provider), threadId: threadIdentity(provider.id, created.threadId, this.provider.id) };
 			if (this.isDisposed) throw canceled();

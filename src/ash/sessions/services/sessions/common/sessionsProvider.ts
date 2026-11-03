@@ -43,6 +43,7 @@ export interface ISessionsProvider extends IDisposable {
 	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]>;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
+	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	deleteSession(session: ISession): Promise<void>;

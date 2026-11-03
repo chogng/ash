@@ -35,7 +35,7 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
 	navigateBack(): void;
@@ -147,8 +147,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.activate({ kind: 'session', sessionId, threadId, ...(sideThread ? { sideThread: true } : {}) }, this.current, sideBySide ? 'add' : 'open');
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession {
-		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId);
+	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
+		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId, true, options?.forkSource);
 		this.select({ kind: 'untitled', session }, this.current, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;
 	}
@@ -228,7 +228,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	private materializedReference(reference: SessionsViewReference): SessionsViewReference {
 		const active = reference.kind === 'untitled' ? this.sessionService.materializedSessions.get().get(reference.untitledSessionId) : undefined;
-		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId } : reference;
+		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId, ...(active.sideThread ? { sideThread: true } : {}) } : reference;
 	}
 
 	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' | 'add' = 'open', intent: 'explicit' | 'automatic' = 'explicit'): void {
@@ -478,6 +478,7 @@ function nonEmptyString(value: unknown): value is string {
 export function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
+		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))
 		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
 		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')

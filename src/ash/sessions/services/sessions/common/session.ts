@@ -182,6 +182,7 @@ export interface IActiveSessionThread {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
+	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
 	readonly title: string;
 	readonly model: ModelRef | undefined;
 	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */

@@ -40,5 +40,13 @@ suite('Sessions conversation link opener', () => {
 		await expect(slots).toHaveCount(2);
 		await expect(slots.first().locator('.ash-chat-input-editor .view-lines')).toHaveText('Keep the source draft');
 		await expect(slots.last().locator('.ash-chat-input-editor .stanza-editor').getByRole('textbox')).toBeFocused();
+		const nested = page.getByRole('group', { name: 'Conversations in Task from Host A' });
+		const followUp = nested.getByRole('button', { name: 'Follow-up chat' });
+		await expect(followUp).toBeVisible();
+		await page.getByRole('button', { name: 'Task from Host A', exact: true }).press('Enter');
+		await expect(followUp).toHaveAttribute('aria-current', 'false');
+		await followUp.press('Enter');
+		await expect(followUp).toHaveAttribute('aria-current', 'page');
+		await page.screenshot({ path: browser.info.outputPath('nested-session-chats.png') });
 	});
 });

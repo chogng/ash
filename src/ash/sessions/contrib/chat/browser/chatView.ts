@@ -8,6 +8,7 @@ import { SessionInfoRail } from '../../../browser/parts/sessionInfoRail.js';
 import type { ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
 
 /** Retains one Code surface and its provider scope when a draft acquires a durable Session identity. */
@@ -42,7 +43,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 			selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session },
 			this.sessions);
 		try {
-			this.widget = this._register(scope.createInstance(NewChatWidget, this.element, this.panelId, model, this.createNewSession));
+			this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget, this.element, this.panelId, model, this.createNewSession));
 		} catch (error) {
 			model.dispose();
 			throw error;

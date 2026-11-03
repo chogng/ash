@@ -15,7 +15,7 @@ export interface ISessionsManagementService {
 	readonly active: IActiveSessionThread | undefined;
 	readonly untitledSessions: readonly IUntitledChatSession[];
 	/** Keeps draft identity resolvable after materialization, independently of foreground selection. */
-	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>;
+	readonly materializedSessions: IObservable<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly sideThread?: true; }>>;
 	readonly activeUntitledSession: IUntitledChatSession | undefined;
 	readonly state: SessionsManagementState;
 	readonly error: string | undefined;
@@ -28,7 +28,7 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;

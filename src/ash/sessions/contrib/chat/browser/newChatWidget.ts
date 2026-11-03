@@ -29,8 +29,8 @@ import '../../../common/theme.js';
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	declare readonly input: NewChatInputWidget;
 	private readonly tips: ChatInputTipPresenter;
-	private readonly environmentPicker: SessionEnvironmentPicker;
-	private readonly workspacePicker: SessionWorkspacePicker;
+	private readonly environmentPicker: SessionEnvironmentPicker | undefined;
+	private readonly workspacePicker: SessionWorkspacePicker | undefined;
 	private submittedInput = false;
 	private composerThreadId: string | undefined;
 
@@ -92,19 +92,22 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this._register(toDisposable(() => tipContainer.remove()));
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
-			isEligible: () => !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
+			isEligible: () => !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
 				&& !this.model.inputState.interaction,
 			focusInput: () => this.input.focus(),
 		}, this.input.noticeHost));
 		footer.classList.add('ash-sessions-chat-input-footer');
-		this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
-		this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, footer, model, () => this.input.persistDraftForHostChange()));
+		if (!model.isNestedDraft) {
+			this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
+			this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, footer, model, () => this.input.persistDraftForHostChange()));
+		}
+		this.renderDraftNotice(parent);
 		parent.append(footer);
 		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
 		const pickersAvailable = NewSessionPickersAvailableContext.bindTo(this.scopedContextKeys);
-		const updatePickerAvailability = () => pickersAvailable.set(this.visible && !!model.untitledSessionId
+		const updatePickerAvailability = () => pickersAvailable.set(this.visible && !!model.untitledSessionId && !model.isNestedDraft
 			&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting');
 		this._register(this.onDidChangeVisibility(updatePickerAvailability));
 		this._register(model.onDidChange(() => {
@@ -119,12 +122,14 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this.updateComposer();
 	}
 
+	protected renderDraftNotice(_container: HTMLElement): void { }
+
 	focusWorkspacePicker(): void {
-		if (this.visible) { this.workspacePicker.showPicker(); }
+		if (this.visible) { this.workspacePicker?.showPicker(); }
 	}
 
 	focusEnvironmentPicker(): void {
-		if (this.visible) { this.environmentPicker.showPicker(); }
+		if (this.visible) { this.environmentPicker?.showPicker(); }
 	}
 
 	private updateComposer(): void {
@@ -135,7 +140,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		this.workspacePicker.setVisible(visible);
-		this.environmentPicker.setVisible(visible);
+		this.workspacePicker?.setVisible(visible);
+		this.environmentPicker?.setVisible(visible);
 	}
 }

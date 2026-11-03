@@ -267,6 +267,10 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'session' ? this.selection.active.session : undefined;
 	}
 
+	get isNestedDraft(): boolean {
+		return this.selection.kind === 'untitled' && this.selection.session.forkSource !== undefined;
+	}
+
 	get untitledSessionId(): string | undefined {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : undefined;
 	}

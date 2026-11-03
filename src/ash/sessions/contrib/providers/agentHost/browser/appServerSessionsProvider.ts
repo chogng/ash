@@ -257,6 +257,20 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
 	}
 
+	async forkChat(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const target = await this.rendererHost.thread.fork({ sessionId, threadId, title, commandId: creationId, target: 'thread' });
+		this.assertCurrentConnection(generation, epoch);
+		if (target.sessionId !== sessionId) throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
+		const session = await this.readCatalog(sessionId);
+		this.assertCurrentConnection(generation, epoch);
+		if (!session?.chats.some(chat => chat.threadId === target.threadId)) {
+			throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
+		}
+		return { session, threadId: target.threadId };
+	}
+
 	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), options?: ISessionCreateOptions): Promise<IActiveSessionThread> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;

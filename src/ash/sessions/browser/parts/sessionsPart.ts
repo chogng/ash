@@ -307,12 +307,15 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		for (const [key, view] of [...this.entries]) {
 			const selection = view.currentSelection;
 			if (selection.kind === 'session') continue;
-			const id =
-				view.activeChat.sessionId ??
-				this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)?.sessionId;
-			if (!id || key === sessionKey(id) || this.entries.has(sessionKey(id))) continue;
+			const materialized = this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId);
+			const id = view.activeChat.sessionId ?? materialized?.sessionId;
+			const target = selection.session.forkSource
+				? selections.find(candidate => candidate.kind === 'session' && candidate.active.session.sessionId === id && candidate.active.threadId === materialized?.threadId)
+				: undefined;
+			const destination = target ? sessionViewSelectionKey(target) : !selection.session.forkSource && id ? sessionKey(id) : undefined;
+			if (!destination || key === destination || this.entries.has(destination)) continue;
 			this.entries.delete(key);
-			this.entries.set(sessionKey(id), view);
+			this.entries.set(destination, view);
 		}
 		this.content.classList.toggle('single-chat', selections.length === 1);
 		this.empty.update(this.options.sessionService.state, this.options.sessionService.error);

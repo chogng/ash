@@ -14,6 +14,7 @@ import { IQuickInputService, QuickInputHideReason, type IQuickPick, type IQuickP
 import { IChatService, type StartTurnOptions } from '../../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import type { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
+import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
@@ -51,6 +52,18 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(INotificationService, { error: (error: unknown) => failures.push(error), warn: assert.fail } as unknown as INotificationService);
+	const grouped: string[] = [];
+	services.registerInstance(ISessionGroupsService, {
+		async create(name: string, _signal: AbortSignal | undefined, kind: string) {
+			assert.equal(kind, 'comparison');
+			assert.equal(name, 'Compare · Implement the fix');
+			return { sectionId: 'comparison', name, sessionIds: [] };
+		},
+		async move(id: string, section: string) {
+			assert.equal(section, 'comparison');
+			grouped.push(id);
+		},
+	} as unknown as ISessionGroupsService);
 	services.registerInstance(ISessionsManagementService, {} as ISessionsManagementService);
 	services.registerInstance(ISessionProviderScopeService, {
 		getScope(id: string) {
@@ -63,9 +76,10 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 						assert.equal(options.target, 'session');
 						assert.ok(options.comparison);
 						assert.equal(options.comparison.sourceSequence, 7);
-						assert.equal(options.comparison.agent.name, options.title);
-						branches.set(options.title, options.comparison.branchName);
-						return { sessionId: options.title, threadId: `${options.title}-thread` };
+						const name = options.comparison.agent.name;
+						assert.equal(options.title, `Attempt ${targets.indexOf(name) + 1} · ${name}`);
+						branches.set(name, options.comparison.branchName);
+						return { sessionId: name, threadId: `${name}-thread` };
 					}
 				}
 			};
@@ -122,5 +136,6 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 		await run;
 	}
 	assert.deepEqual(opened, ['source', 'Beta']);
+	assert.deepEqual(grouped, targets);
 	assert.deepEqual(failures, ['Alpha: Error: Pane unavailable']);
 });
