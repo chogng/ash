@@ -20,6 +20,7 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsP
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 
 export class SessionEnvironmentPicker extends Disposable {
 	private readonly popup = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -41,13 +42,14 @@ export class SessionEnvironmentPicker extends Disposable {
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IStorageService private readonly storage: IStorageService,
+		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 	) {
 		super();
 		this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-environment' });
 		container.prepend(this.host);
 		this._register(toDisposable(() => this.host.remove()));
 		this.button = this._register(new Button(this.host, {
-			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '', icon: Lxicon.remote,
+			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '',
 			onClick: () => this.open(),
 		}));
 		this.button.domNode.classList.add('ash-sessions-environment-picker');
@@ -89,7 +91,14 @@ export class SessionEnvironmentPicker extends Disposable {
 		const draft = this.draft;
 		const label = this.label(draft?.providerId, draft?.providerId ? this.providers.getProvider(draft.providerId)?.label : undefined);
 		this.host.hidden = !draft;
-		this.button.label = label;
+		const icon = draft?.providerId === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote;
+		if (this.button.icon !== icon) {
+			this.button.icon = icon;
+		}
+		if (this.button.label !== label) {
+			this.button.label = label;
+			this.button.setTitle(label);
+		}
 		this.button.domNode.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
 		this.button.enabled = this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
 		if (!this.button.enabled) this.close();
@@ -214,6 +223,18 @@ export class SessionEnvironmentPicker extends Disposable {
 				},
 			});
 		}
+		const sandboxStatus = h(this.button.domNode.ownerDocument, 'div');
+		const providerId = draft.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID;
+		sandboxStatus.setAttribute('role', 'status');
+		sandboxStatus.textContent = localize('sessions.environment.sandboxLoading', 'Checking sandbox…');
+		items.push({ kind: ActionListItemKind.Separator, label: '' }, {
+			kind: ActionListItemKind.Action,
+			label: localize('sessions.environment.sandboxSettings', 'Sandbox Settings'),
+			item: async () => {
+				if (!this.isCurrent(draft) || this.scopes.getScope().providerId !== providerId) return;
+				await this.commands.executeCommand('workbench.action.openSettings', { section: 'environment', query: '' });
+			},
+		});
 		this.menuOpen = true;
 		this.button.domNode.setAttribute('aria-expanded', 'true');
 		this.menus.show('sessionEnvironment', false, items, {
@@ -232,7 +253,37 @@ export class SessionEnvironmentPicker extends Disposable {
 		}, this.button.domNode, {
 			className: 'ash-sessions-environment-menu',
 			ariaLabel: localize('sessions.environment.menu', 'Run on'),
+			header: sandboxStatus,
 		});
+		void this.readSandboxStatus(providerId).then(status => {
+			if (this.popup.value === popup && this.isCurrent(draft)) sandboxStatus.textContent = status;
+		});
+	}
+
+	private async readSandboxStatus(providerId: string): Promise<string> {
+		const unavailable = localize('sessions.environment.sandboxUnavailable', 'Sandbox status unavailable');
+		try {
+			const scope = this.scopes.getProviderScope(providerId);
+			scope.assertCurrent();
+			const service = scope.services.host.agentCapabilities;
+			if (!service.isAvailable) return unavailable;
+			const { sandboxPolicy } = await service.read();
+			scope.assertCurrent();
+			if (!sandboxPolicy) return unavailable;
+			const files = {
+				readOnly: localize('sessions.environment.sandboxReadOnly', 'Read only'),
+				directoryWrite: localize('sessions.environment.sandboxDirectoryWrite', 'Authorized directories writable'),
+				fullAccess: localize('sessions.environment.sandboxFullAccess', 'Full file access profile'),
+			};
+			const network = {
+				denied: localize('sessions.environment.sandboxNetworkDenied', 'Network blocked'),
+				managed: localize('sessions.environment.sandboxNetworkManaged', 'Network checked by proxy'),
+				allowed: localize('sessions.environment.sandboxNetworkAllowed', 'Network allowed'),
+			};
+			return localize('sessions.environment.sandboxStatus', 'Sandbox: {0} · {1}', files[sandboxPolicy.fileSystem], network[sandboxPolicy.network]);
+		} catch {
+			return unavailable;
+		}
 	}
 
 	private isCurrent(draft: IUntitledChatSession): boolean {

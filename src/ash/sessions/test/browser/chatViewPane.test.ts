@@ -3734,6 +3734,9 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 		const menu = document.querySelector<HTMLElement>('.ash-chat-permission-menu')!;
 		assert.ok(menu);
 		const selected = document.activeElement;
+		fixture.model.selectMode('plan');
+		assert.ok(menu.isConnected);
+		assert.equal(document.activeElement, selected);
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), locale === 'en' ? /^Permissions/ : /^权限/);
 		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace/);

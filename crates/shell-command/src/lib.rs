@@ -83,6 +83,15 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         &self.definition
     }
 
+    /// Adds host-provided execution guidance to the model-visible tool definition.
+    pub fn with_execution_guidance(
+        mut self,
+        guidance: &str,
+    ) -> Result<Self, ShellCommandToolError> {
+        self.definition = shell_command_definition_with_guidance(guidance)?;
+        Ok(self)
+    }
+
     /// Executes one already materialized request under authority selected by the host.
     pub fn execute_authorized(
         &self,
@@ -434,9 +443,15 @@ impl ShellCommandRequest {
 
 /// Builds the model-visible host definition for the explicit process tool.
 pub fn shell_command_definition() -> Result<ToolDefinition, ShellCommandToolError> {
+    shell_command_definition_with_guidance("")
+}
+
+fn shell_command_definition_with_guidance(
+    guidance: &str,
+) -> Result<ToolDefinition, ShellCommandToolError> {
     ToolDefinition::function(
         ToolName::new("shell-command").map_err(definition_error)?,
-        "Run one approved command in a dir directory. Pass the program and each argument separately; no shell is started implicitly.",
+        format!("Run one approved command in a dir directory. Pass the program and each argument separately; no shell is started implicitly.{guidance}"),
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {

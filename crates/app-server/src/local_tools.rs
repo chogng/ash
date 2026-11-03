@@ -359,6 +359,7 @@ pub(crate) fn compose_local_tools_with_config(
                 max_output_bytes: DEFAULT_OUTPUT_BYTES,
             },
         )
+        .and_then(|tool| tool.with_execution_guidance(&shell_execution_guidance(shell_policy)))
         .map_err(LocalToolError::definition)?,
     );
     let mut apply_patch = ApplyPatchTool::new(
@@ -741,6 +742,9 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             },
         )
         .map_err(LocalToolError::definition)?;
+        let shell = shell
+            .with_execution_guidance(&shell_execution_guidance(shell_policy))
+            .map_err(LocalToolError::definition)?;
         let definition = to_protocol_tool_definition(shell.host_definition())
             .map_err(LocalToolError::definition)?;
         Ok(Self {
@@ -2185,6 +2189,26 @@ fn shell_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
         .with_host_acl_changes(local_acl_changes())
         .with_file_system_isolation(local_isolation())
+}
+
+fn shell_execution_guidance(policy: SandboxPolicy) -> String {
+    let files = match policy.file_system() {
+        FileSystemAccess::ReadOnly => "Filesystem access is read-only.",
+        FileSystemAccess::DirectoryWrite => {
+            "Writes are limited to authorized directories and paths."
+        }
+        FileSystemAccess::FullAccess => {
+            "Filesystem access is subject to active path grants and restrictions."
+        }
+    };
+    let network = match policy.network() {
+        NetworkAccess::Denied => "Network access is blocked.",
+        NetworkAccess::Managed => "Network destinations are checked by the host proxy.",
+        NetworkAccess::Allowed => "Network access is allowed by the baseline policy.",
+    };
+    format!(
+        "\n\nBaseline command sandbox: {files} {network} The host checks the effective permissions for each command."
+    )
 }
 
 fn configured_shell_policy(

@@ -95,8 +95,19 @@ fn sandbox_managed_ceilings_survive_approval_at_the_executor_boundary() {
         )
         .unwrap();
         let shell = &composition.executors[0];
+        let command = shell.executor.definition();
+        let session = composition
+            .tools
+            .definitions()
+            .into_iter()
+            .find(|definition| definition.name.as_str() == "shell-session")
+            .unwrap();
+        for description in [command.description(), session.description.as_str()] {
+            assert!(description.contains("Filesystem access is read-only."));
+            assert!(description.contains("Network access is blocked."));
+        }
         crate::tool_executor_adapter::assert_managed_sandbox_execution(
-            shell.executor.definition(),
+            command,
             Arc::clone(&shell.reviewer),
         );
     }

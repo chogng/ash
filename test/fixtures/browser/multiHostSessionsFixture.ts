@@ -58,7 +58,19 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 				child.registerInstance(IPromptsService, { onDidChangeSkills: Event.None, onDidChangeHooks: Event.None, findAgentSkills: async () => [], getHooks: async () => [], dispose() { }, [Symbol.dispose]() { } } as unknown as IPromptsService);
 				child.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 				const automation = name === 'Host A' && new URL(location.href).searchParams.has('search') ? globalThis.ashWebWorkbenchHost?.api.automation : undefined;
-				child.registerInstance(IAgentConnection, { ...host, automation, github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] } });
+				child.registerInstance(IAgentConnection, {
+					...host,
+					automation,
+					agentCapabilities: {
+						isAvailable: true,
+						onDidChange: Event.None,
+						read: async () => ({
+							localProcessSandboxConfigured: true, sandboxBackends: [], sandboxDiagnostics: [], directoryGrantsReadable: false,
+							sandboxPolicy: { profile: ':readOnly', fileSystem: 'readOnly', network: 'denied', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 0 },
+						}),
+					},
+					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
+				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
 				const session: ISession = { sessionId: 'same', title: `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }], agentTree: [] };
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {

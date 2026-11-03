@@ -1034,6 +1034,7 @@ test('the environment menu offers WSL when discovery finds a distribution', asyn
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`new Session host chooser preserves keyboard selection and scope in ${locale}`, async ({ page }) => {
+		await page.setViewportSize({ width: 1179, height: 770 });
 		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('.ash-window-mode-control')
@@ -1045,6 +1046,13 @@ for (const locale of ['en', 'zh-CN']) {
 		const picker = active.getByRole('button', {
 			name: locale === 'en' ? /^Run on:/ : /^运行位置：/,
 		});
+		const pickerLabels = active.locator(
+			':is(.ash-sessions-environment-picker, .ash-sessions-workspace-picker) .ash-icon-label-text',
+		);
+		await expect.poll(() => pickerLabels.evaluateAll(labels => labels.map(label =>
+			label.clientWidth > 0 && label.scrollWidth === label.clientWidth,
+		))).toEqual([true, true]);
+		await expect(picker.locator('[data-ash-icon-id="local"]')).toBeVisible();
 		await active.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.type('Draft survives changing host');
 		await picker.focus();
@@ -1060,6 +1068,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect
 			.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider()))
 			.toBe('Host B');
+		await expect(picker.locator('[data-ash-icon-id="remote"]')).toBeVisible();
 		await expect(draftPane).toHaveAttribute('data-untitled-session-id', draftId!);
 		await expect(active.locator('.stanza-editor-line-text')).toContainText('Draft survives changing host');
 		await active.locator('.ash-chat-input-model-action').click();
@@ -1067,6 +1076,11 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
 		await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
 		await expect(page.locator('.ash-sessions-chat-slot.active')).toContainText('Host B model');
+		await picker.press('ArrowDown');
+		await expect(menu.getByRole('status').filter({ hasText: locale === 'en' ? 'Sandbox: Read only · Network blocked' : '沙箱：只读 · 网络已阻止' })).toBeVisible();
+		await menu.getByRole('menuitem', { name: locale === 'en' ? 'Sandbox Settings' : '沙箱设置', exact: true }).click();
+		await expect(page.getByRole('heading', { level: 3, name: locale === 'en' ? 'Environment' : '环境', exact: true })).toBeVisible();
+		await expect(page.getByRole('heading', { level: 4, name: locale === 'en' ? 'Execution and permissions' : '执行与权限', exact: true })).toBeVisible();
 	});
 }
 

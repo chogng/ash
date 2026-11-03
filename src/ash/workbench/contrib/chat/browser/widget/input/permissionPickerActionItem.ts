@@ -51,11 +51,15 @@ export class PermissionPickerActionItem extends ButtonActionViewItem {
 			}
 		}));
 		const update = (): void => {
-			this.hide();
-			this.button.label = this.action.label;
-			this.button.enabled = this.action.enabled;
-			this.button.domNode.setAttribute('aria-label', this.action.tooltip);
-			this.hover?.update(this.action.tooltip);
+			const { label, enabled, tooltip } = this.action;
+			// Composer updates can arrive while the menu is open without invalidating its choices.
+			if (!enabled || this.button.label !== label) {
+				this.hide();
+			}
+			if (this.button.label !== label) this.button.label = label;
+			this.button.enabled = enabled;
+			this.button.domNode.setAttribute('aria-label', tooltip);
+			this.hover?.update(tooltip);
 			this.setTabbable(true);
 		};
 		this._register(this.onDidChange(update));

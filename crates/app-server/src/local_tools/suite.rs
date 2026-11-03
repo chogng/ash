@@ -188,7 +188,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             definition("glob", GLOB_DESCRIPTION, GLOB_SCHEMA),
             definition(
                 "shell-session",
-                SHELL_SESSION_DESCRIPTION,
+                &format!(
+                    "{SHELL_SESSION_DESCRIPTION}{}",
+                    super::shell_execution_guidance(shell.shell_policy)
+                ),
                 SHELL_SESSION_SCHEMA,
             ),
         ];
