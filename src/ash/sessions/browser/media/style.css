@@ -270,6 +270,10 @@
 	padding-block-start: var(--ash-spacing-size240);
 }
 
+.ash-sessions-directory-permission-dialog .ash-dialog-title {
+	font-weight: var(--ash-fontWeight-regular);
+}
+
 .ash-sessions-directory-permission-dialog > .ash-dialog-body {
 	padding-block-end: var(--ash-spacing-size240);
 }
@@ -289,6 +293,7 @@
 .ash-sessions-directory-permission-detail {
 	display: grid;
 	gap: var(--ash-spacing-size80);
+	font-size: 13px;
 }
 
 .ash-sessions-directory-permission-path {

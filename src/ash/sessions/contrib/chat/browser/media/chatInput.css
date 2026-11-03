@@ -165,6 +165,10 @@
 	flex: 0 1 auto;
 }
 
+.ash-sessions-chat-input-workspace {
+	max-inline-size: 200px;
+}
+
 .ash-sessions-environment[hidden],
 .ash-sessions-chat-input-workspace[hidden] {
 	display: none;

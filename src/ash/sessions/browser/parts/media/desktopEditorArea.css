@@ -1,3 +1,7 @@
+.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area {
+	background: var(--ash-sessions-conversation-background);
+}
+
 .ash-desktop-editor-area > .ash-workbench-part-content {
 	position: absolute;
 	inset: 0;
@@ -24,7 +28,8 @@
 	background: var(--ash-editor-background);
 	box-shadow:
 		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
-		var(--ash-sessions-soft-shadow);
+		0 2px 8px
+			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
 }
 
 .ash-desktop-editor-area

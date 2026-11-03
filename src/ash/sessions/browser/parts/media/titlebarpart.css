@@ -5,8 +5,14 @@
 		to right,
 		var(--ash-sideBar-background) 0
 			var(--ash-sessions-titlebar-sidebar-width, 0px),
-		var(--ash-titleBar-background)
+		var(--ash-sessions-titlebar-background, var(--ash-titleBar-background))
 			var(--ash-sessions-titlebar-sidebar-width, 0px)
+	);
+}
+
+.ash-workbench[data-color-scheme="light"] .ash-sessions-titlebar {
+	--ash-sessions-titlebar-background: var(
+		--ash-sessions-conversation-background
 	);
 }
 

@@ -1227,6 +1227,7 @@
     "sessions.modelPicker.maximumForeground": "突出显示的模型预设的文本颜色。",
     "sessions.modelPicker.maximumBackground": "突出显示的模型预设的主要填充颜色。",
     "sessions.modelPicker.maximumBackgroundAccent": "突出显示的模型预设的渐变强调色。",
+    "sessions.conversation.background": "会话窗口中主对话区的背景颜色。",
     "sessions.customize.cardNameForeground": "自定义卡片中资源名称的文本颜色。",
     "sessions.customize.cardDescriptionForeground": "自定义卡片中描述的文本颜色。",
     "sessions.changes.followUpTitle": "PR 自动跟进",

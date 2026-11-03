@@ -101,7 +101,12 @@ export class TerminalService extends Disposable implements ITerminalService {
 	async createTerminal(options: ICreateTerminalOptions = {}): Promise<ITerminalInstance> {
 		const workspace = this.workspaceContext.getWorkspace();
 		await this.trust.workspaceTrustInitialized;
-		const permissions = await Promise.all(workspace.folders.map(async folder => (await this.trust.getUriTrustInfo(folder.uri)).permissions));
+		// Native terminals in Session directories are authorized by the backend
+		// against the Session grant. These folders have no window workspace grant.
+		const customPty = options.config && 'customPtyImplementation' in options.config && options.config.customPtyImplementation;
+		const foldersToCheck = workspace.folders.filter(folder => !folder.id.startsWith('session:')
+			|| customPty || (options.profile && options.dirId !== folder.id));
+		const permissions = await Promise.all(foldersToCheck.map(async folder => (await this.trust.getUriTrustInfo(folder.uri)).permissions));
 		if (this.isDisposed || this.workspaceContext.getWorkspace() !== workspace) throw new CancellationError();
 		// All entrypoints, including opening an empty panel, must obtain trust before profile discovery.
 		if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {

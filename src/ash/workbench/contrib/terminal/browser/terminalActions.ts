@@ -291,7 +291,8 @@ export function registerTerminalActions(): void {
 			const trust = accessor.get(IWorkspaceTrustManagementService);
 			const requests = accessor.get(IWorkspaceTrustRequestService);
 			await trust.workspaceTrustInitialized;
-			const permissions = await Promise.all(workspace.folders.map(async folder => (await trust.getUriTrustInfo(folder.uri)).permissions));
+			const environmentFolders = workspace.folders.filter(folder => !folder.id.startsWith('session:'));
+			const permissions = await Promise.all(environmentFolders.map(async folder => (await trust.getUriTrustInfo(folder.uri)).permissions));
 			if (workspaceContext.getWorkspace() !== workspace) return;
 			if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
 				const accepted = await requests.requestWorkspaceTrust({

@@ -118,6 +118,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
+					'workbench.contrib.workspaceTrustRequestHandler',
 					'sessions.contrib.workspaceStatus',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.githubFileSystemProvider',

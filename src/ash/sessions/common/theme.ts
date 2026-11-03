@@ -2,9 +2,20 @@ import { registerColor, transparent } from '../../platform/theme/common/colorUti
 import { primaryButtonBackground } from '../../platform/theme/common/colors/inputColors.js';
 import { hoverBorder } from '../../platform/theme/common/colors/componentColors.js';
 import { accentForeground, foreground } from '../../platform/theme/common/colors/baseColors.js';
+import { editorBackground } from '../../platform/theme/common/colors/editorColors.js';
 import { localize } from '../../nls.js';
 
 // Sessions-only colors stay here; Agent colors shared by both windows belong in workbench/common/agentsColors.ts.
+registerColor('sessions.conversation.background', {
+	dark: editorBackground,
+	light: '#fdfcfb',
+	hcDark: editorBackground,
+	hcLight: editorBackground,
+}, {
+	description: localize('sessions.conversation.background', 'Background of the main conversation in the Sessions window.'),
+	owner: 'sessions.chat',
+});
+
 // Sessions keeps black tooltips in every theme; the shared hover defaults belong to Workbench.
 registerColor('sessions.tooltip.background', {
 	dark: '#000000',
