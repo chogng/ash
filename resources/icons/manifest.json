@@ -137,6 +137,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "brain",
+      "file": "brain.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "briefcase",
       "file": "briefcase.svg",
       "rendering": "symbolic"
@@ -949,11 +954,6 @@
     {
       "id": "library-filled",
       "file": "library-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "lighting-filled",
-      "file": "lighting-filled.svg",
       "rendering": "symbolic"
     },
     {
