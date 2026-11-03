@@ -1356,11 +1356,13 @@ export class AshApplication extends Disposable {
 			}
 		}));
 		const retireAgentHosts = (): void => agentHosts.reset();
-		window.webContents.on('did-navigate', retireAgentHosts);
-		window.webContents.on('render-process-gone', retireAgentHosts);
+		const contents = window.webContents;
+		contents.on('did-navigate', retireAgentHosts);
+		contents.on('render-process-gone', retireAgentHosts);
 		windowDisposables.add(toDisposable(() => {
-			window.webContents.removeListener('did-navigate', retireAgentHosts);
-			window.webContents.removeListener('render-process-gone', retireAgentHosts);
+			if (contents.isDestroyed()) return;
+			contents.removeListener('did-navigate', retireAgentHosts);
+			contents.removeListener('render-process-gone', retireAgentHosts);
 		}));
 		return [
 			...agentHosts.routes(),

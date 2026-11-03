@@ -1,0 +1,17 @@
+[package]
+name = "ash-app-server-subsecond"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+arg0 = { workspace = true }
+ash-app-server-diff = { workspace = true }
+ash-app-server-protocol = { workspace = true }
+ash-app-server-runtime = { workspace = true }
+ash-package-store = { workspace = true }
+build-identity = { workspace = true }
+process-hardening = { workspace = true }
+serde_json = { workspace = true }
+dioxus-devtools = "=0.7.10"
+subsecond = "=0.7.10"

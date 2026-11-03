@@ -5,7 +5,7 @@ import type { WebContents } from 'electron/main';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
-import { createCancelablePromise, disposableTimeout, TaskQueue, type CancelablePromise } from '../../../base/common/async.js';
+import { createCancelablePromise, DeferredPromise, disposableTimeout, TaskQueue, type CancelablePromise } from '../../../base/common/async.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -32,6 +32,7 @@ export class AppServerConnectionRelay extends Disposable {
 	private navigationGeneration = 0;
 	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
+	private drainRenderer?: () => Promise<void>;
 
 	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: AppServerConnectionLauncher; }, private readonly connection: AppServerConnectionTarget = 'workspace') {
 		super();
@@ -105,15 +106,16 @@ export class AppServerConnectionRelay extends Disposable {
 		await ready;
 	}
 
-	public stop(): Promise<void> {
+	public stop(options?: { readonly drainForRestart: boolean; }): Promise<void> {
 		// Stop ends this restart's lifetime, including validation that has not returned yet.
 		this.startPromise?.cancel();
 		this.startPromise = undefined;
-		return this.connectionOperations.schedule(() => this.stopConnection());
+		return this.connectionOperations.schedule(() => this.stopConnection(options?.drainForRestart));
 	}
 
-	private async stopConnection(): Promise<void> {
+	private async stopConnection(drainForRestart = false): Promise<void> {
 		this.setState('stopping');
+		if (drainForRestart) await this.drainRenderer?.();
 		const transport = this.transport.value;
 		this.generation++;
 		this.portResources.clear();
@@ -231,9 +233,24 @@ export class AppServerConnectionRelay extends Disposable {
 		let writeBytes = 0;
 		let closed = false;
 		let intentionalClose = false;
+		let drained: DeferredPromise<void> | undefined;
+		const drain = async (): Promise<void> => {
+			const completion = drained = new DeferredPromise<void>();
+			const deadline = setTimeout(() => void completion.complete(), 2_000);
+			try {
+				port1.postMessage({ drainForRestart: true });
+				await completion.p;
+			} finally {
+				clearTimeout(deadline);
+				drained = undefined;
+			}
+		};
+		this.drainRenderer = drain;
 		const close = (): void => {
 			if (closed) { return; }
 			closed = true;
+			if (this.drainRenderer === drain) this.drainRenderer = undefined;
+			void drained?.complete();
 			data.dispose();
 			ended.dispose();
 			const intentional = intentionalClose || this.state === 'stopping' || this.isDisposed;
@@ -279,6 +296,7 @@ export class AppServerConnectionRelay extends Disposable {
 				close();
 				return;
 			}
+			if (value.restartDrained === true && drained) { void drained.complete(); return; }
 			if (value.ack === true) {
 				const size = sent.shift();
 				if (size === undefined) { close(); return; }

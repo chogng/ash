@@ -105,13 +105,14 @@ class DevelopTests(unittest.TestCase):
             source = root / "context.json"
             source.write_text(json.dumps(context))
             with (
-                patch.dict(os.environ, {"ASH_DEV_BUILD_CONTEXT_FILE": str(source)}),
                 patch.object(develop, "current_package", return_value=package),
                 patch.object(
                     develop, "build_binaries", return_value={"ash-app-server": binary}
                 ),
             ):
-                changed, current = develop.build_development_server(root=root)
+                changed, current = develop.build_development_server(
+                    root=root, context_file=str(source)
+                )
                 self.assertTrue(changed)
                 record = json.loads((directory / "publication.json").read_text())
                 self.assertEqual(
@@ -127,7 +128,10 @@ class DevelopTests(unittest.TestCase):
                 context["buildId"] = str(uuid.uuid4())
                 source.write_text(json.dumps(context))
                 self.assertEqual(
-                    (False, current), develop.build_development_server(root=root)
+                    (False, current),
+                    develop.build_development_server(
+                        root=root, context_file=str(source)
+                    ),
                 )
                 self.assertEqual(
                     record, json.loads((directory / "publication.json").read_text())
@@ -155,11 +159,10 @@ class DevelopTests(unittest.TestCase):
                     )
                 )
                 with (
-                    patch.dict(os.environ, {"ASH_DEV_BUILD_CONTEXT_FILE": str(source)}),
                     patch.object(develop, "build_binaries") as build,
                 ):
                     with self.assertRaisesRegex(ValueError, "source paths"):
-                        develop.build_development_server()
+                        develop.build_development_server(context_file=str(source))
                     build.assert_not_called()
 
     def test_publication_collects_an_abandoned_image_pin_and_its_unreferenced_object(
@@ -543,15 +546,34 @@ class DevelopTests(unittest.TestCase):
                 develop.build_development_server(root=root, protocol_prepared=True)
             self.assertTrue(build.call_args.kwargs["protocol_prepared"])
 
-    def test_selecting_prepared_outputs_does_not_invoke_cargo(self):
+    def test_preparation_publishes_the_package_without_a_second_build(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             package = prepared_package(root)
+            lock = root / ".build/desktop/dev/app-server/build.lock"
+
+            def assert_build_lock_held():
+                with develop.exclusive_lock(lock, blocking=False) as acquired:
+                    self.assertFalse(acquired)
+
+            def prepare_package(*args, **kwargs):
+                assert_build_lock_held()
+                return package
+
+            def publish(*args, **kwargs):
+                assert_build_lock_held()
+                return development_store.publish_generation(*args, **kwargs)
+
             with (
-                patch.object(develop, "current_package", return_value=package),
+                patch.object(
+                    develop, "prepare_development_package", side_effect=prepare_package
+                ) as prepare,
+                patch.object(develop, "publish_generation", side_effect=publish),
                 patch.object(develop, "build_binaries") as build,
             ):
-                develop.build_development_server(root=root, select_prepared=True)
+                changed, _ = develop.build_development_server(root=root, prepare=True)
+            self.assertTrue(changed)
+            prepare.assert_called_once()
             build.assert_not_called()
 
     def test_failed_build_preserves_selected_generation(self):

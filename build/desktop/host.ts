@@ -301,7 +301,8 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 				for (const entry of entries) {
 					const path = join(directory, entry.name);
 					if (entry.isDirectory()) { await collect(path); }
-					else if (entry.isFile()) {
+					// Debugger metadata can change when the emitted code is identical.
+					else if (entry.isFile() && !entry.name.endsWith('.map')) {
 						const bytes = await readFile(path);
 						hash.update(JSON.stringify([path, bytes.length]));
 						hash.update(bytes);

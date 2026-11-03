@@ -66,6 +66,14 @@ test('development and production resolve the same canonical package entrypoint',
 			assert.equal(launcher.options.generationFile, generationFile);
 			assert.equal(development.generationFile, reloadBackend ? generationFile : undefined);
 		}
+		const subsecond = createAppServerDaemonLauncher({
+			packageLocation: { appPath, isPackaged: false, platform: 'darwin', resourcesPath: '' },
+			sourceEnvironment: { ASH_DEV_SUBSECOND: '1', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_APP_SERVER_GENERATION: generationFile },
+			profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
+		});
+		using subsecondLauncher = subsecond.launcher;
+		assert.deepStrictEqual(subsecondLauncher.options.args, ['connect']);
+		assert.equal(subsecond.generationFile, generationFile);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}

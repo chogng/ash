@@ -144,6 +144,33 @@ class DevelopmentBuildTests(unittest.TestCase):
                     build()
             self.assertFalse((self.directory / "build-plan.json").exists())
 
+    def test_remote_server_is_a_separate_development_build_group(self):
+        builds = []
+        inputs = dict.fromkeys(["ash-app-server", "ash-remote-server"])
+
+        def build(_root, _target, group, *_args):
+            builds.append(group)
+            return {name: self.root / name for name in group}
+
+        with (
+            patch.object(
+                package_binaries, "cargo_command_packages", return_value=set(inputs)
+            ),
+            patch.object(package_binaries, "cargo_environment", return_value={}),
+            patch.object(package_binaries, "_build_group", side_effect=build),
+            patch.object(DevelopmentBuildPlan, "record"),
+        ):
+            package_binaries.build_binaries(
+                self.root,
+                TARGETS["aarch64-apple-darwin"],
+                inputs,
+                cargo="cargo",
+                cargo_profile="dev-small",
+                protocol_prepared=True,
+                plan_directory=self.directory,
+            )
+        self.assertEqual([["ash-app-server"], ["ash-remote-server"]], builds)
+
     def test_content_edit_with_preserved_timestamp_rebuilds_only_owner_group(self):
         self.seed()
         source = self.root / "crates/first/src/lib.rs"
@@ -180,6 +207,28 @@ class DevelopmentBuildTests(unittest.TestCase):
         for name in self.outputs:
             self.assertIsNone(plan.reuse([name]))
 
+    def test_relinked_build_script_requires_identical_bytes(self):
+        alias = self.root / "target/build-script-build"
+        alias.write_bytes(b"script-a")
+        self.messages["first"].append(
+            {
+                **self.messages["first"][0],
+                "target": {"kind": ["custom-build"]},
+                "filenames": [str(alias)],
+            }
+        )
+        self.seed()
+        original = alias.stat()
+        replacement = alias.with_suffix(".replacement")
+        replacement.write_bytes(b"script-a")
+        os.utime(replacement, ns=(original.st_atime_ns, original.st_mtime_ns))
+        replacement.replace(alias)
+        plan = self.plan()
+        self.assertEqual(self.outputs["first"], plan.reuse(["first"]))
+        alias.write_bytes(b"script-b")
+        os.utime(alias, ns=(original.st_atime_ns, original.st_mtime_ns))
+        self.assertIsNone(plan.reuse(["first"]))
+
     def test_configuration_changes_discard_cached_dependency_selection(self):
         for kind in ["lock", "config", "manifest", "target", "environment", "member"]:
             with self.subTest(kind=kind):
@@ -206,6 +255,39 @@ class DevelopmentBuildTests(unittest.TestCase):
                 self.assertIsNone(
                     DevelopmentBuildPlan(self.root, command, self.directory).packages
                 )
+
+    def test_discovery_survives_an_uncacheable_build_without_reusing_outputs(self):
+        name = "first"
+        source = self.root / "crates/first/src/lib.rs"
+        dep_info = self.outputs[name][name].with_suffix(".d")
+        plan = self.plan()
+        plan.packages = {name}
+        source.write_text("first edit")
+        plan.record([name], self.outputs[name], self.messages[name])
+        plan.save()
+
+        plan = self.plan()
+        self.assertIsNone(plan.reuse([name]))
+        source.write_text("second edit")
+        open_path = Path.open
+
+        def reject_dep_info_read(path, *args, **kwargs):
+            self.assertNotEqual(path, dep_info, "fresh dep-info should reuse discovery")
+            return open_path(path, *args, **kwargs)
+
+        with patch.object(Path, "open", reject_dep_info_read):
+            plan.record([name], self.outputs[name], self.messages[name])
+        plan.save()
+
+        extra = self.root / "extra.rs"
+        extra.write_text("extra dependency")
+        dep_info.write_text(f"{self.outputs[name][name]}: extra.rs\n")
+        plan = self.plan()
+        plan.record([name], self.outputs[name], self.messages[name])
+        plan.save()
+        saved = json.loads((self.directory / "build-plan.json").read_text())
+        discovery = saved["discoveries"][json.dumps([name])]
+        self.assertIn(str(extra), discovery["tracked"])
 
     def test_missing_artifact_and_unsaved_failed_build_require_cargo(self):
         self.seed()

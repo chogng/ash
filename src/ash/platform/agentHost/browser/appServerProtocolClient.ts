@@ -13,6 +13,7 @@ import { decodeAppServerServerRequestResult } from '../../../../../.build/protoc
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { AppServerFrameDecoder } from './appServerFrameDecoder.js';
 import type { AppServerDecodeContext, DecodedAppServerCall, DecodedAppServerFrame } from './appServerProtocolDecoding.js';
 
@@ -91,6 +92,7 @@ export class AppServerProtocolClient {
 	private disposed = false;
 	private isClosing = false;
 	private firstRequestId = 1;
+	private restartDrain?: DeferredPromise<void>;
 
 	constructor(transport: AppServerTransport, options: AppServerProtocolClientOptions = {}, decoder?: AppServerFrameDecoder) {
 		this.transport = transport;
@@ -139,7 +141,7 @@ export class AppServerProtocolClient {
 	/** Uses the request deadline to await initialization, without starting recovery or replaying requests. */
 	public whenReady(): Promise<void> {
 		if (this.disposed) return Promise.reject(new Error('App Server client disposed'));
-		if (this._state === 'ready' && !this.isClosing && !this.receiving?.closed) return Promise.resolve();
+		if (this._state === 'ready' && !this.isClosing && !this.receiving?.closed && !this.restartDrain) return Promise.resolve();
 		return new Promise<void>((resolve, reject) => {
 			const complete = (error?: Error): void => {
 				clearTimeout(timeout);
@@ -205,12 +207,25 @@ export class AppServerProtocolClient {
 		return !this.disposed && this._generation === generation && this._state === state;
 	}
 
+	/** Finish work accepted by this connection before a planned development restart. */
+	public drainForRestart(): Promise<void> {
+		if (this._state !== 'ready' || this.isClosing || this.disposed) return Promise.resolve();
+		this.restartDrain ??= new DeferredPromise<void>();
+		this.completeRestartDrain();
+		return this.restartDrain.p;
+	}
+
+	private completeRestartDrain(): void {
+		if (!this.pending.size && !this.inbound.size && !this.receiving) void this.restartDrain?.complete();
+	}
+
 	/** The signal retires result payloads; settlement still tracks remote completion.
 	 * Callers own method-specific remote cancellation and must preserve write outcomes.
 	 */
 	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>> {
 		// Abort listeners can reenter before the final state event is published.
 		if (options?.signal?.aborted) return Promise.reject(canceled());
+		if (this.restartDrain) return Promise.reject(new AppServerConnectionStoppedError('App Server connection replaced'));
 		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== 'ready') return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
 		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs, options?.signal);
 	}
@@ -360,6 +375,7 @@ export class AppServerProtocolClient {
 				if (!next) {
 					this.receiving = undefined;
 					if (queue.closed) this.handleClosed(queue.closed.payload);
+					this.completeRestartDrain();
 					return;
 				}
 				queue.current = next;
@@ -411,6 +427,7 @@ export class AppServerProtocolClient {
 		const pending = this.pending.get(id);
 		if (!pending || pending.method !== method) throw new Error('App Server emitted an unmatched response ID');
 		this.pending.delete(id);
+		this.completeRestartDrain();
 		clearTimeout(pending.timeout);
 		pending.abortListener?.dispose();
 		if (!pending.resolve) { pending.reject(canceled()); return; }
@@ -451,6 +468,7 @@ export class AppServerProtocolClient {
 				// retire and cancel host work without serializing a reply to the closed peer.
 				const frame = this.receiving?.closed ? undefined : JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
 				this.inbound.delete(request.id);
+				this.completeRestartDrain();
 				clearTimeout(timeout);
 				if (options?.abort) { controller.abort(); }
 				if (frame !== undefined && this.isCurrentConnection(generation, 'ready') && !this.receiving?.closed) {
@@ -479,6 +497,7 @@ export class AppServerProtocolClient {
 				// Retire first: cancellation listeners and late promises must not send a second reply.
 				const generation = this._generation;
 				this.inbound.delete(id);
+				this.completeRestartDrain();
 				controller.abort();
 				if (this.isCurrentConnection(generation, 'ready') && !this.receiving?.closed) {
 					this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32800, message: 'Host request cancelled', data: null } }) });
@@ -500,6 +519,7 @@ export class AppServerProtocolClient {
 		const pending = this.pending.get(id);
 		if (!pending) return false;
 		this.pending.delete(id);
+		this.completeRestartDrain();
 		clearTimeout(pending.timeout);
 		pending.abortListener?.dispose();
 		pending.reject(error);
@@ -537,6 +557,8 @@ export class AppServerProtocolClient {
 			// synchronously dispose this client or complete another host operation.
 			this.pending.clear();
 			this.inbound.clear();
+			void this.restartDrain?.complete();
+			this.restartDrain = undefined;
 			reject?.(error);
 			for (const request of pending) {
 				clearTimeout(request.timeout);

@@ -415,9 +415,9 @@ invalidate the Electron backend package; none of those sources are inputs to its
 executables or package layout.
 If the executable and asset inputs remain unchanged, the selected package is
 reused; otherwise the assembler validates and publishes a new package.
-Desktop preparation then runs `desktop/develop.py --select-prepared`, which selects the
-prepared binaries without invoking Cargo. During Rust watch, `desktop/develop.py` reads
-the selected resource package and incrementally builds the backend executables in
+Desktop runs `desktop/develop.py --prepare` to prepare the shared package and publish
+its runtime under the same build lock used by the Rust watcher. During Rust watch,
+`desktop/develop.py` reads the selected resource package and incrementally builds the backend executables in
 the same Cargo cache; it does not assemble, validate, or publish a release package.
 Only changed binary contents are copied into immutable objects. Each development
 runtime links those objects and the `ash-path/` tools, and copies `ash-resources/`

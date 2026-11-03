@@ -1,5 +1,6 @@
 import { watchAppServer } from './appServer.ts';
 import { resolve, join } from 'node:path';
+import { SubsecondBuilder } from './subsecond.ts';
 import { LogFileWriter } from '../logFileWriter.ts';
 
 const args = process.argv.slice(2);
@@ -10,7 +11,14 @@ await logs.cleanUpLogs();
 // Cancellation may finish asynchronously. Flush after the build and its owned
 // processes have drained, so the final failure/cancellation record is retained.
 process.once('beforeExit', () => { void logs.close().catch(error => console.error('Failed to flush App Server build logs', error)); });
-const stop = await watchAppServer({
+const subsecond = process.env.ASH_DEV_SUBSECOND === '1' ? new SubsecondBuilder(resolve(import.meta.dirname, '../..'), process.env) : undefined;
+const lifetime = new AbortController();
+const shutdown = (): void => lifetime.abort();
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+await watchAppServer({
+	subsecond,
+	signal: lifetime.signal,
 	skipInitial: args.includes('--skip-initial'), buildLog: join(logs.sessionPath, 'main.log'),
 	log: (event, detail, error) => {
 		const level = error === undefined || event === 'Build cancelled' ? 'information' : 'error';
@@ -20,6 +28,4 @@ const stop = await watchAppServer({
 		else console.info(`[app-server] ${line}`);
 		void logs.append('main', line + '\n').catch(error => console.error('Failed to persist App Server build log', error));
 	},
-});
-process.once('SIGINT', stop);
-process.once('SIGTERM', stop);
+}).catch(error => { if (!lifetime.signal.aborted) throw error; });

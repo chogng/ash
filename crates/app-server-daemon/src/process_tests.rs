@@ -42,6 +42,24 @@ fn malformed_package_identity_cannot_select_a_daemon_generation() {
 }
 
 #[test]
+fn identical_server_images_in_different_development_generations_are_distinct() {
+    let root = tempfile::tempdir().unwrap();
+    let identity = |generation: &str| {
+        let runtime = root.path().join(generation);
+        let executable = runtime.join("bin/ash-app-server");
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::write(runtime.join("ash-development.json"), "{}").unwrap();
+        fs::write(&executable, b"same backend").unwrap();
+        super::binary_identity(&executable).unwrap()
+    };
+    let previous = identity("previous");
+    let next = identity("next");
+
+    assert!(previous.same_generation(&previous));
+    assert!(!previous.same_generation(&next));
+}
+
+#[test]
 fn selected_backend_verifies_the_package_digest_with_its_generation_identity() {
     use sha2::Digest;
 

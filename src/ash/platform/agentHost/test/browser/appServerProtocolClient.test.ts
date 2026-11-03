@@ -217,6 +217,27 @@ test('readiness waits through replacement and initialization without opening a c
 	assert.equal(client.state, 'ready');
 });
 
+test('a planned restart preserves accepted RPCs and waits for the replacement before admitting new work', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const request = client.request(APP_SERVER_METHODS['session/list'], {});
+	const id = transport.frames.at(-1)!.id;
+	let drained = false;
+	const drain = client.drainForRestart().then(() => { drained = true; });
+	const ready = client.whenReady();
+	await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /connection replaced/);
+	assert.equal(drained, false);
+	transport.frame({ id, error: { code: -32000, message: 'old generation response', data: { kind: 'InternalError' } } });
+	await assert.rejects(request, /old generation response/);
+	await drain;
+	client.disconnect();
+	await client.connect();
+	await ready;
+	assert.equal(client.state, 'ready');
+});
+
 test('readiness has a bounded deadline without failing or starting the connection', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });
 	try {

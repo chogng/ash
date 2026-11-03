@@ -66,6 +66,8 @@ pub(crate) struct ExecutableIdentity {
     #[serde(default)]
     package_build_id: Option<String>,
     #[serde(default)]
+    development_root: Option<PathBuf>,
+    #[serde(default)]
     runtime_binding: Option<crate::runtime::ElectronRuntimeBinding>,
     #[serde(default)]
     runtime_availability: Option<crate::runtime::RuntimeAvailability>,
@@ -92,6 +94,7 @@ impl ExecutableIdentity {
         !self.sha256.is_empty()
             && self.sha256 == other.sha256
             && self.package_build_id == other.package_build_id
+            && self.development_root == other.development_root
             && self.runtime_binding == other.runtime_binding
             && self.runtime_availability == other.runtime_availability
     }
@@ -170,6 +173,13 @@ pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String>
     Ok(ExecutableIdentity {
         sha256,
         package_build_id: package_build_id(path)?,
+        // Companion binaries and resources can change without changing the server image.
+        development_root: path
+            .parent()
+            .filter(|directory| directory.file_name().is_some_and(|name| name == "bin"))
+            .and_then(Path::parent)
+            .filter(|root| root.join("ash-development.json").is_file())
+            .map(Path::to_path_buf),
         runtime_binding: None,
         runtime_availability: None,
     })

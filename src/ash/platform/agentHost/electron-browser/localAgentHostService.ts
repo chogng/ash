@@ -42,7 +42,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		this.carrier = this._register(new AppServerMessagePortTransport(() => {
 			// Recovery owns rejection reporting and the bounded retry budget.
 			void this.connect().catch(() => { });
-		}, options.connection, options.initializeTimeoutMs));
+		}, options.connection, options.initializeTimeoutMs, () => this.client.drainForRestart()));
 		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(this.connectionId), connectionToken: undefined }),
 			getMetadata: () => this.connectionMetadata,

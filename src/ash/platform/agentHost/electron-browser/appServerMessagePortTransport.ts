@@ -19,7 +19,7 @@ export class AppServerMessagePortTransport extends Disposable {
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly restart: () => void, private readonly connection: AppServerConnectionTarget = 'workspace', private readonly acquisitionTimeoutMs = 10_000) {
+	constructor(private readonly restart: () => void, private readonly connection: AppServerConnectionTarget = 'workspace', private readonly acquisitionTimeoutMs = 10_000, private readonly drainForRestart?: () => Promise<void>) {
 		super();
 		this._register(toDisposable(() => this.close()));
 		const subscription = subscribe(`${this.channelPrefix}:restart`, restart);
@@ -58,7 +58,7 @@ export class AppServerMessagePortTransport extends Disposable {
 				value.close();
 				throw new CancellationError();
 			}
-			this.socketOwner.value = new MessagePortSocket(value);
+			this.socketOwner.value = new MessagePortSocket(value, this.drainForRestart);
 		}, error => { if (enabled !== false) { throw error; } });
 		let timeout: ReturnType<typeof setTimeout>;
 		const timedOut = new Promise<never>((_resolve, reject) => {
@@ -132,7 +132,7 @@ class MessagePortSocket extends Disposable implements ISocket {
 		return this.closed ? this.failure ?? new AppServerConnectionStoppedError('App Server socket is closed') : undefined;
 	}
 
-	constructor(private readonly port: MessagePort) {
+	constructor(private readonly port: MessagePort, drainForRestart?: () => Promise<void>) {
 		super();
 		this._register(toDisposable(() => this.finish()));
 		port.onmessage = event => {
@@ -142,6 +142,12 @@ class MessagePortSocket extends Disposable implements ISocket {
 			const value: unknown = event.data;
 			if (!isRecord(value)) {
 				this.finish(new Error('Invalid transport message'));
+				return;
+			}
+			if (value.drainForRestart === true) {
+				if (drainForRestart) void drainForRestart().then(() => this.drain()).then(() => {
+					if (!this.closed) port.postMessage({ restartDrained: true });
+				}).catch(() => { /* Main owns the bounded wait and may already have closed the port. */ });
 				return;
 			}
 			if (value.ack === true) {
