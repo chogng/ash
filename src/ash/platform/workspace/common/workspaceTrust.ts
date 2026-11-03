@@ -41,7 +41,7 @@ export interface IWorkspaceTrustApi {
 	readonly onDidChangeTrust: Event<void>;
 	/** Reads the effective grant of an existing workspace directory without management authority. */
 	readWorkspaceDirectory(dirId: string): Promise<readonly WorkspaceTrustPermission[] | undefined>;
-	readDirectory(path: string): Promise<{ readonly dir: string; readonly permissions: readonly WorkspaceTrustPermission[] | undefined; }>;
+	readDirectory(path: string): Promise<{ readonly dir: string; readonly permissions: readonly WorkspaceTrustPermission[] | undefined; readonly inheritedWorkspacePermissions?: readonly WorkspaceTrustPermission[]; }>;
 	listDirectories(): Promise<WorkspaceTrustSnapshot>;
 	setDirectoryPermissions(path: string, permissions: readonly WorkspaceTrustPermission[], expectedRevision: number): Promise<WorkspaceTrustCommandResult>;
 	forgetDirectory(dir: string, expectedRevision: number): Promise<WorkspaceTrustCommandResult>;

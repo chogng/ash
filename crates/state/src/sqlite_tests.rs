@@ -967,6 +967,49 @@ fn sqlite_session_cache_migration_retains_outer_branch_management_without_histor
 }
 
 #[test]
+fn sqlite_session_catalog_persists_and_recovers_automation_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("automation-source.sqlite3");
+    let id = format!("thread:automation-session-sha256-{}", "b".repeat(64));
+    let session_id = SessionId::new(&id).unwrap();
+    let thread_id = ThreadId::new(&id).unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let json: String = connection
+        .query_row("SELECT record_json FROM session_catalog", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        legacy.as_object_mut().unwrap().remove("source").unwrap(),
+        "automation"
+    );
+    let json = serde_json::to_string(&legacy).unwrap();
+    connection
+        .execute(
+            "UPDATE session_catalog SET record_json = ?1, record_digest = ?2",
+            rusqlite::params![
+                json,
+                ash_protocol::ContentDigest::sha256(json.as_bytes()).as_str()
+            ],
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    let source = Some(ash_protocol::SessionSource::Automation);
+    assert_eq!(
+        reopened.read_session(&session_id).unwrap().unwrap().source,
+        source
+    );
+    assert_eq!(reopened.list_sessions().unwrap()[0].source, source);
+}
+
+#[test]
 fn sqlite_session_catalog_tracks_model_only_updates() {
     assert_session_catalog_fact_updates(
         Some(ModelRef::new(

@@ -166,6 +166,7 @@ export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetS
 
 /** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
 export interface IChatViewPane extends IView {
+	reopenLastClosedSessionTab(): void;
 	createNewChatEditorInput(source?: ChatEditorInput): ChatEditorInput;
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;

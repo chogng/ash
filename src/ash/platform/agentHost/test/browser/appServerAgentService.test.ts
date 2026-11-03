@@ -403,7 +403,7 @@ test('message checkpoints and restoration use the existing typed session protoco
 
 test('Session catalog and subscriptions share the Agent domain snapshot boundary', async () => {
 	const session = {
-		sessionId: 'session', title: 'Task', status: 'active' as const,
+		sessionId: 'session', title: 'Task', status: 'active' as const, source: 'automation' as const,
 		executionTarget: { type: 'local' as const, root: '/workspace' },
 		model: { provider: 'openai', model: 'test' },
 		manager: { status: 'working' as const, statusChangedAtUnixMs: 4 }, threads: [],

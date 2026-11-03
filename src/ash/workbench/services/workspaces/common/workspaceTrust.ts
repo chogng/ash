@@ -182,11 +182,14 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		}
 		const path = remote ? getRemoteWorkspacePath(canonical.with({ query: null, fragment: null })) : canonical.fsPath;
 		// Active roots use their runtime grant on both local and remote hosts; saved grants can differ.
-		const permissions = folder
-			? await this.trust.readWorkspaceDirectory(folder.id)
-			: (await this.trust.readDirectory(path)).permissions;
+		const configured = folder ? undefined : await this.trust.readDirectory(path);
+		const permissions = folder ? await this.trust.readWorkspaceDirectory(folder.id) : configured?.permissions;
 		if (!this.current(generation)) { return { uri, trusted: false, permissions: undefined }; }
-		return { uri: canonical, trusted: resolved?.options?.isTrusted !== false && hasDevelopmentPermissions(permissions), permissions };
+		return {
+			uri: canonical,
+			trusted: resolved?.options?.isTrusted !== false && hasDevelopmentPermissions(permissions ?? configured?.inheritedWorkspacePermissions),
+			permissions,
+		};
 	}
 
 	public async getWorkspaceTrustInfo(): Promise<IWorkspaceTrustInfo | undefined> {

@@ -550,6 +550,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
+			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
 			setConversationKind: async () => {
 				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
 				await this.conversationGate;

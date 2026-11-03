@@ -8,3 +8,6 @@ export const SessionsWorkspaceModeContext = new RawContextKey<'chat' | 'code'>('
 
 /** The navigation action whose context menu is being resolved. */
 export const ActivityBarItemContext = new RawContextKey<string>('sessions.activityBar.actionId', '');
+
+/** Describes the row that opened a Sessions context menu. */
+export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);

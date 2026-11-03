@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -305,7 +306,7 @@ const drafts: IUntitledChatSession[] = [{
 	untitledSessionId: 'draft', title: 'Draft', model: undefined, agent: undefined,
 	get workspace() { return { type: 'local' as const, root: directory }; }
 }];
-const backgroundSession: ISession = { sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
+const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
 const management = {
 	sessions: [backgroundSession], untitledSessions: drafts, state: 'ready', materializedSessions: observableValue('materialized', new Map()),
 	onDidChange: sessionChanged.event,
@@ -331,6 +332,7 @@ const management = {
 } as unknown as ISessionsManagementService;
 const sessions = resources.add(new SessionsService(management, services.get(IStorageService), custom));
 services.registerInstance(ISessionsManagementService, management);
+services.registerInstance(ISessionsListModelService, services.createInstance(SessionsListModelService));
 services.registerInstance(ISessionsService, sessions);
 await sessions.initialize();
 

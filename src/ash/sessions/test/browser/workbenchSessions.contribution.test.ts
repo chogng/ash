@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
@@ -234,6 +235,7 @@ test('Sessions contributes Turn changes and commit actions to the shared multi-d
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IStorageService, {} as IStorageService);
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	const resolvers = new MultiDiffSourceResolverService();
 	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
@@ -323,6 +325,7 @@ test('Chat opens the current checkpoint when composer counts arrive before its f
 	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
 	services.registerInstance(IStorageService, {} as IStorageService);
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	const opened: MultiDiffEditorInput[] = [];
@@ -354,6 +357,7 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 	services.registerInstance(ISessionsManagementService, sessions as unknown as ISessionsManagementService);
 	services.registerInstance(IStorageService, {} as IStorageService);
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 	services.registerInstance(IChatService, chat);
 	let opened = false;

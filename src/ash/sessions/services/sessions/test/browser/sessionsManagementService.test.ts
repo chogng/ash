@@ -1,3 +1,4 @@
+import { isUntitledSession } from '../../browser/sessionGridState.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -73,7 +74,6 @@ test('independent conversation drafts create their own root worktree only on mat
 });
 
 test('changing a conversation folder clears its pending worktree branch and invalid stored choices are rejected', async () => {
-	const { isUntitledSession } = await import('../../browser/sessionGridState.js');
 	using management = createManagement(sessionHost([]));
 	const draft = management.createUntitledSession('First', { type: 'local', root: '/project' });
 	management.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { branchName: 'review/topic' });
@@ -100,6 +100,11 @@ test('provider worktree choices stay on the conversation host and exclude other 
 	await provider.list();
 	assert.deepEqual(await provider.getWorktrees(source, CancellationToken.None), [
 		{ label: 'review', target: { type: 'ssh', host: 'build', root: '/checkouts/review' } },
+	]);
+	const catalog = await provider.getWorktrees(source, CancellationToken.None, true);
+	assert.deepEqual(catalog.map(checkout => checkout.repository), [
+		{ type: 'ssh', host: 'build', root: '/project' },
+		{ type: 'ssh', host: 'build', root: '/other-project' },
 	]);
 	assert.deepEqual(await provider.getWorktrees({ type: 'local', root: '/project' }, CancellationToken.None), []);
 });

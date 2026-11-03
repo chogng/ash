@@ -188,6 +188,24 @@ test('invalid attachment positions explain recovery in Chinese', async () => {
 	}
 });
 
+test('Code reports history subscription and reconciliation separately without conversation data', async () => {
+	const f = fixture('Code', async threadId => {
+		if (threadId === 'B') throw new Error('Fixture subscription failed');
+		return { ...snapshot(threadId, 1), updates: [] };
+	});
+	using resources = f.resources;
+	assert.ok(f.model instanceof ChatWidgetModel);
+	const results: Parameters<Parameters<ChatWidgetModel['onDidFinishHistoryBinding']>[0]>[0][] = [];
+	using listener = f.model.onDidFinishHistoryBinding(result => results.push(result));
+	await f.model.initialize();
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.deepEqual(results.map(result => result.outcome), ['bound', 'failed']);
+	assert.equal(typeof results[0]?.subscriptionMs, 'number');
+	assert.equal(typeof results[0]?.reconciliationMs, 'number');
+	assert.equal(results[1]?.subscriptionMs, undefined);
+	assert.ok(results.every(result => !('threadId' in result) && !('error' in result)));
+});
+
 test('Code transcript updates preserve live body revisions across stale reads and same-ID navigation', async () => {
 	const original = messageHistory('A', 1, 'Committed body');
 	const f = fixture('Code', async threadId => ({ ...(threadId === 'A' ? original : messageHistory(threadId, 1, 'Other thread body')), updates: [] }));

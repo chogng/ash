@@ -1,3 +1,5 @@
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { SessionsRecentWorkspacesService } from './sessionsRecentWorkspacesService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -43,8 +45,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private readonly providerListeners = new Map<ISessionsProvider, DisposableStore>();
 
-	constructor(private readonly defaultProviderId: string, @ISessionsProvidersService private readonly providers: ISessionsProvidersService) {
+	private readonly recentWorkspaces: SessionsRecentWorkspacesService | undefined;
+
+	constructor(private readonly defaultProviderId: string, @ISessionsProvidersService private readonly providers: ISessionsProvidersService, @IStorageService storage?: IStorageService) {
 		super();
+		this.recentWorkspaces = storage && new SessionsRecentWorkspacesService(storage);
 		this._register(toDisposable(() => {
 			for (const entry of this.materializations.values()) entry.cancellation.dispose(true);
 			this.materializations.clear();
@@ -238,7 +243,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
-		workspace ??= provider.currentWorkspace();
+		if (!workspace) {
+			const current = provider.currentWorkspace();
+			workspace = (activate && !forkSource ? this.recentWorkspaces?.getSelected(provider.id, current) : undefined) ?? current;
+		}
 		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}) };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		if (activate) {

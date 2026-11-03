@@ -231,7 +231,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]> {
+	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories = false): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository?: SessionExecutionTarget; }[]> {
 		const source = buildAgentHostSessionWorkspace(workspace)!;
 		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
 		const generation = this.appServer.connectionGeneration;
@@ -241,8 +241,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (token.isCancellationRequested) { throw canceled(); }
 		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
 		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
-		return worktrees.filter(worktree => projectSources.has(worktree.sourcePath))
-			.map(worktree => ({ label: worktree.label, target: { ...workspace, root: worktree.path } }));
+		return worktrees.filter(worktree => includeOtherRepositories || projectSources.has(worktree.sourcePath))
+			.map(worktree => ({
+				label: worktree.label,
+				target: { ...workspace, root: worktree.path },
+				...(includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
+			}));
 	}
 
 	private ownsSourceAuthority(authority: string): boolean {
@@ -407,6 +411,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 	return {
 		application: getSessionApplication('ash'),
 		sessionId: session.sessionId,
+		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,
 		workspace: buildAgentHostSessionWorkspace(session.executionTarget),

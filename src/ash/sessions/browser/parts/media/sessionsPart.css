@@ -54,3 +54,49 @@
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body1);
 }
+
+.ash-session-comparison-controls:not([hidden]) {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	border-bottom: 1px solid var(--ash-editorGroup-border);
+}
+
+.ash-session-comparison-controls details[open] {
+	flex-basis: 100%;
+	max-height: 25vh;
+	overflow: auto;
+}
+
+.ash-session-comparison-custom label {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	align-items: center;
+	margin-block: var(--ash-spacing-size80);
+}
+
+.ash-session-comparison-custom select {
+	max-width: 100%;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+}
+
+.ash-session-comparison-instructions {
+	display: flex;
+	flex: 1 1 100%;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-session-comparison-instructions textarea {
+	flex: 1 1 20ch;
+	min-width: 0;
+	resize: vertical;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+}

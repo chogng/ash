@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -138,6 +139,7 @@ test('opens a local Chat conversation before the backend session request settles
 	viewServices.registerInstance(IFileService, files);
 	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
+	viewServices.registerSingleton(ISessionsListModelService, () => viewServices.createInstance(SessionsListModelService));
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(ChatHistoryModel));
 	using view = viewServices.createInstance(SessionChatViewPane, document.body, { id: 'workbench.chat', title: 'Chat' });
 

@@ -89,11 +89,11 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		const sessions: ISessionsService = {
 			navigationRevision: 0,
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
-			canNavigateBack: false, canNavigateForward: false,
+			canNavigateBack: false, canNavigateForward: false, recentSessions: [],
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
 			async initialize() { }, async openThread() { }, openSession() { }, openUntitledSession() { },
 			openNewSession(): never { throw new Error('This test selects durable conversations'); },
-			activateSelection() { }, closeVisibleSelection() { }, async openPreviousSession() { }, async openNextSession() { },
+			activateSelection() { }, closeVisibleSelection() { }, async reopenLastClosedItem() { }, async openPreviousSession() { }, async openNextSession() { },
 		};
 		const old = new DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][]; }>();
 		const details = changes('current');

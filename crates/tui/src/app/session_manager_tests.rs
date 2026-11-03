@@ -851,6 +851,7 @@ fn active_session_app() -> App {
 
 fn session() -> Session {
     Session {
+        source: None,
         model: None,
         session_id: SessionId::new("current").unwrap(),
         title: "Snapshot session".into(),

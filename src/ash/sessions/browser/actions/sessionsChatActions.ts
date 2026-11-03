@@ -9,6 +9,7 @@ import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/cha
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { getRecencyEntryKey } from '../../services/sessions/browser/sessionsRecencyHistory.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -131,7 +132,7 @@ export class ShowSessionsChatHistoryAction extends Action2 {
 		const disposables = new DisposableStore();
 		disposables.add(quickPick);
 		quickPick.placeholder = 'Select a session';
-		quickPick.items = sessions.sessions.flatMap(session => {
+		const items = sessions.sessions.flatMap(session => {
 			if (session.status !== 'active') return [];
 			const threads = session.chats.filter(thread => thread.status === 'active');
 			return threads.map((thread, index) => ({
@@ -142,6 +143,10 @@ export class ShowSessionsChatHistoryAction extends Action2 {
 				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));
 		});
+		const rank = new Map(view.recentSessions.map((entry, index) => [getRecencyEntryKey(entry), index]));
+		const getRank = (item: SessionsHistoryQuickPickItem) => rank.get(getRecencyEntryKey(item)) ?? Infinity;
+		quickPick.sortByLabel = false;
+		quickPick.items = items.sort((left, right) => getRank(left) - getRank(right));
 		disposables.add(quickPick.onDidAccept(() => {
 			const item = quickPick.selectedItems[0];
 			if (!item) return;

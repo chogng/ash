@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { SavedSSHConversationHost } from './agentHost/savedSSHConversationHost.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -162,6 +163,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 
 registerSingleton(ISessionGroupsService, SessionGroupsService, InstantiationType.Delayed);
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
+registerSingleton(ISessionsListModelService, SessionsListModelService, InstantiationType.Delayed);
 registerSingleton(IAgentSessionsService, ChatHistoryModel, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
 registerChatSessionsActions();

@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
@@ -109,6 +110,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	services.registerInstance(IQuickInputService, quickInput);
 	const commands = resources.add(new CommandService(services));
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(actionsDescriptor));
 	return Object.assign(resources, { provider, sessions, services, commands, quickInput, opened, configuration, storage });
 }

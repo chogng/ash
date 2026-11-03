@@ -2147,6 +2147,7 @@ fn manager_session(
 ) -> Session {
     let session_id = SessionId::new(id).unwrap();
     Session {
+        source: None,
         model: None,
         session_id: session_id.clone(),
         title: id.into(),

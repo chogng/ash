@@ -72,6 +72,10 @@ export class SessionGridLayout extends Disposable {
 		this.changing = true;
 		try {
 			const changed = previous.length !== next.length || previous.some((item, index) => item !== next[index]);
+			const grid = this.grid.value;
+			if (grid?.hasMaximizedView() && (changed || !next.some(item => item.entry.id === active && grid.isViewMaximized(item)))) {
+				this.preserveFocus(() => grid.exitMaximizedView());
+			}
 			if (changed) {
 				this.preserveFocus(() => {
 					const reordered = previous.length === next.length && previous.every(item => next.includes(item));
@@ -106,6 +110,25 @@ export class SessionGridLayout extends Disposable {
 		this.scheduleRestore();
 	}
 
+	neighbor(id: string, direction: Direction): string | undefined {
+		const item = this.items.find(candidate => candidate.entry.id === id);
+		return item && this.grid.value!.getNeighborViews(item, direction)[0]?.entry.id;
+	}
+
+	toggleMaximized(id: string): void {
+		const item = this.items.find(candidate => candidate.entry.id === id);
+		const grid = this.grid.value;
+		if (!item || !grid || this.items.length < 2) return;
+		this.restoreFrame.clear();
+		this.preserveFocus(() => {
+			if (grid.isViewMaximized(item)) {
+				grid.exitMaximizedView();
+			} else {
+				grid.maximizeView(item);
+			}
+		});
+		this.scheduleRestore();
+	}
 	layout(width: number, height: number): void {
 		if (this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height)) this.restorePending = true;
 		this.dimension = { width, height };
@@ -138,7 +161,7 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private captureLayout(): void {
-		if (this.changing || this.restorePending || this.restoring || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
+		if (this.changing || this.restorePending || this.restoring || this.grid.value?.hasMaximizedView() || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
 		this.savedLayout = this.grid.value!.serialize() as SessionGridNode;
 		this.saveState();
 	}
@@ -149,7 +172,7 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private scheduleRestore(): void {
-		if (!this.visible || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
+		if (!this.visible || this.grid.value?.hasMaximizedView() || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
 		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
 			this.restoreFrame.clear();
 			if (this.items.some(item => item.entry.id === 'empty')) return;

@@ -15,6 +15,8 @@ export type SessionsViewReference =
 	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly sideThread?: true; }
 	| { readonly kind: 'untitled'; readonly untitledSessionId: string; };
 
+export type SessionSlotPlacement = 'open' | 'add' | number | { readonly index: number; readonly replacedBy: SessionsViewReference; };
+
 /** Owns the slot order and preferred foreground identity for one Sessions window. */
 export class VisibleSessions {
 	private references: SessionsViewReference[] = [];
@@ -52,16 +54,24 @@ export class VisibleSessions {
 		this.publish(catalogUnavailable);
 	}
 
-	select(reference: SessionsViewReference, add: boolean, catalogUnavailable: boolean, tx?: ITransaction): void {
+	select(reference: SessionsViewReference, placement: SessionSlotPlacement, catalogUnavailable: boolean, tx?: ITransaction): { readonly reference: SessionsViewReference; readonly index: number; } | undefined {
+		let replaced: { readonly reference: SessionsViewReference; readonly index: number; } | undefined;
 		const existing = this.references.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
 		if (existing >= 0) {
 			this.references[existing] = reference;
-		} else if (add) {
+		} else if (placement === 'add') {
 			this.references.push(reference);
+		} else if (typeof placement === 'number') {
+			this.references.splice(placement, 0, reference);
+		} else if (typeof placement === 'object') {
+			const index = this.references.findIndex(candidate =>
+				visibilityKey(candidate) === visibilityKey(placement.replacedBy) && referenceKey(candidate) === referenceKey(placement.replacedBy));
+			this.references.splice(index < 0 ? placement.index : index, index < 0 ? 0 : 1, reference);
 		} else {
 			// Ordinary opens replace the active editor group in place and preserve its siblings.
 			const active = this.references.findIndex(candidate => visibilityKey(candidate) === visibilityKey(this.preferred));
 			if (active >= 0) {
+				replaced = { reference: this.references[active]!, index: active };
 				this.references[active] = reference;
 			} else {
 				this.references = [reference];
@@ -69,9 +79,10 @@ export class VisibleSessions {
 		}
 		this.preferred = reference;
 		this.publish(catalogUnavailable, tx);
+		return replaced;
 	}
 
-	remove(selection: SessionsViewSelection): { readonly wasActive: boolean; readonly replacement: SessionsViewReference | undefined; } | undefined {
+	remove(selection: SessionsViewSelection): { readonly index: number; readonly wasActive: boolean; readonly replacement: SessionsViewReference | undefined; } | undefined {
 		const key = sessionViewSelectionKey(selection);
 		const index = this.references.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) {
@@ -85,7 +96,7 @@ export class VisibleSessions {
 		}
 		const replacement = this.references.slice(index).find(reference => this.resolve(reference))
 			?? this.references.slice(0, index).reverse().find(reference => this.resolve(reference));
-		return { wasActive, replacement };
+		return { index, wasActive, replacement };
 	}
 
 	publish(catalogUnavailable: boolean, tx?: ITransaction): void {

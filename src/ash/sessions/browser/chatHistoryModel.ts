@@ -1,7 +1,7 @@
+import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { Event } from '../../base/common/event.js';
 import { URI } from '../../base/common/uri.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
-import { StorageScope, IStorageService } from '../../platform/storage/common/storage.js';
 import type { IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import type { IAgentSession, IAgentSessionsModel } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsModel.js';
 import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
@@ -22,14 +22,11 @@ export class ChatHistoryModel implements IAgentSessionsService, IAgentSessionsMo
 
 	constructor(
 		@ISessionsManagementService private readonly owner: ISessionsManagementService,
-		@IStorageService private readonly storage: IStorageService,
+		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionGroupsService private readonly groups: ISessionGroupsService,
 		@ICommandService private readonly commands: ICommandService,
 	) {
-		this.onDidChangeSessions = Event.any(owner.onDidChange, groups.onDidChange,
-			listener => storage.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) listener();
-			}));
+		this.onDidChangeSessions = Event.any(owner.onDidChange, groups.onDidChange, listModel.onDidChange);
 	}
 
 	get state(): IAgentSessionsModel['state'] {
@@ -66,7 +63,7 @@ export class ChatHistoryModel implements IAgentSessionsService, IAgentSessionsMo
 			if (!archived && !chat) continue;
 			const resource = sessionResource('session', session.sessionId);
 			const label = session.title.trim();
-			const pinned = this.storage.getBoolean(`sessions.list.pinned.${session.sessionId}`, StorageScope.PROFILE, false);
+			const pinned = this.listModel.isSessionPinned(session);
 			const active = this.owner.activeUntitledSession === undefined && this.owner.active?.session.sessionId === session.sessionId;
 			const activity = getInProgressSessionDescription(chat?.management ?? session.management);
 			records.push({

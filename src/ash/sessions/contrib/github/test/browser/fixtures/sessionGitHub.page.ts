@@ -1,3 +1,5 @@
+import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
+import { SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
 import type { Automation } from '../../../../../../platform/automations/common/automation.js';
@@ -270,7 +272,7 @@ toolbarServices.registerInstance(ISessionProviderScopeService, scopes);
 toolbarServices.registerInstance(ICustomViewService, listCustomViews);
 toolbarServices.registerInstance(ISessionGitHubService, github);
 toolbarServices.registerInstance(INotificationService, notifications);
-const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, () => input.focus(), github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
+const toolbar = resources.add(new SessionChatInputToolbar(main, () => input.focus(), toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);
@@ -281,7 +283,7 @@ if (inputStack) {
 	refreshChatInputStack(main);
 }
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
-const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
+const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage)));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

@@ -84,6 +84,8 @@ the saved arrangement, draft catalog, and split geometry.
 
 Visible-session slots have stable identities independent of list position. The view service coordinates membership, activation, directional placement, cancellation, and persisted leaf bindings; the Sessions Part owns rendering and split geometry. Explicit batch opening resolves and prepares its sessions before committing a visibility change. Geometry and layout operations remain independent of providers and comparison membership. See [LAYOUT.md](LAYOUT.md#sessions-part) for the grid and restoration contract.
 
+Explicit opens of durable conversations and custom pages update a workspace-local recent-visit history. The active draft's first materialization also records a visit. The history picker ranks available conversations, while window restoration places the Back and Forward cursor on the restored destination when it has a saved visit. Explicit opens move that destination to the front. Traversal preserves the recorded visit order.
+
 ### `ISessionsConversationService`
 
 The Sessions Part owns conversation UI selection. Code uses the existing Chat

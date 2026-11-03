@@ -35,6 +35,10 @@ pub struct Session {
     pub session_id: SessionId,
     pub title: String,
     pub status: SessionStatus,
+    /// How this Session was created, when it has a non-interactive source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source: Option<SessionSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub execution_target: Option<SessionExecutionTarget>,
@@ -45,6 +49,34 @@ pub struct Session {
     #[serde(default)]
     pub manager: SessionManagerInfo,
     pub threads: Vec<SessionThread>,
+}
+
+/// Durable provenance for Sessions created outside the interactive workflow.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionSource {
+    Automation,
+}
+
+impl SessionSource {
+    /// Recovers provenance from the deterministic ID issued for automation-created Sessions.
+    /// The exact namespace and digest length distinguish it from ordinary creation IDs.
+    pub fn from_session_id(session_id: &SessionId) -> Option<Self> {
+        Self::is_automation_creation_command(session_id.as_str().strip_prefix("thread:")?)
+            .then_some(Self::Automation)
+    }
+
+    /// Whether a creation command occupies the namespace reserved for automation runs.
+    pub fn is_automation_creation_command(command_id: &str) -> bool {
+        command_id
+            .strip_prefix("automation-session-sha256-")
+            .is_some_and(|digest| {
+                digest.len() == 64
+                    && digest
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+            })
+    }
 }
 
 /// The execution authority selected for a Session, independent of the editor's open Workspace.

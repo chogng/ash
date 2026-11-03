@@ -14,19 +14,27 @@ import { IQuickInputService, QuickInputHideReason, type IQuickPick, type IQuickP
 import { IChatService, type StartTurnOptions } from '../../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import type { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
+import { ISessionComparisonService, SessionComparisonService } from '../../../../services/sessions/browser/sessionComparisonService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
-test('Compare Agents sends identical tasks in parallel from separate worktrees and opens the next result when the first pane fails', async () => {
-	const dom = new JSDOM();
+test('Compare Agents sends identical tasks in parallel from separate worktrees and supports Judge retry and isolated synthesis', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
 	using browser = { [Symbol.dispose]: () => dom.window.close() };
 	using aria = setARIAContainer(dom.window.document.body);
 	using services = new InstantiationService();
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'comparison-test' });
+	services.registerInstance(IStorageService, storage);
+	const comparisons = services.createInstance(SessionComparisonService);
+	services.registerInstance(ISessionComparisonService, comparisons);
 	const source = { sessionId: 'source', providerId: 'host', status: 'active', workspace: { authorityId: 'local', root: '/project' } } as ISession;
 	const workspace = { type: 'local', root: '/project' } as const;
+	const model = { provider: 'fixture', model: 'participant-model' };
 	const targets = ['Alpha', 'Beta'];
 	const failures: unknown[] = [];
 	let revision = 0;
@@ -53,22 +61,35 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(INotificationService, { error: (error: unknown) => failures.push(error), warn: assert.fail } as unknown as INotificationService);
 	const grouped: string[] = [];
+	let evaluation = false;
+	let judgeCount = 0;
+	let judgeReply = 'invalid verdict';
+	const group = { sectionId: 'comparison', name: 'Compare · Implement the fix', kind: 'comparison', sessionIds: grouped };
 	services.registerInstance(ISessionGroupsService, {
+		groups: [group],
 		async create(name: string, _signal: AbortSignal | undefined, kind: string) {
 			assert.equal(kind, 'comparison');
 			assert.equal(name, 'Compare · Implement the fix');
-			return { sectionId: 'comparison', name, sessionIds: [] };
+			return group;
 		},
 		async move(id: string, section: string) {
 			assert.equal(section, 'comparison');
 			grouped.push(id);
 		},
 	} as unknown as ISessionGroupsService);
-	services.registerInstance(ISessionsManagementService, {} as ISessionsManagementService);
+	services.registerInstance(ISessionsManagementService, {
+		sessions: [source],
+		createUntitledSession() { return { untitledSessionId: `judge-${++judgeCount}` }; },
+		setUntitledSessionAgent() { },
+		async materializeUntitledSession(id: string) { return { session: { sessionId: id }, threadId: `${id}-thread` }; },
+		promoteUntitledSession() { },
+	} as unknown as ISessionsManagementService);
 	services.registerInstance(ISessionProviderScopeService, {
 		getScope(id: string) {
 			assert.equal(id, source.sessionId);
 			return {
+				assertCurrent() { },
+				services: { models: { listModels: async () => [{ model, displayName: 'Participant model', supportedReasoningEfforts: [{ effort: 'high' }] }] } },
 				thread: {
 					async fork(options: Parameters<IAgentThreadService['fork']>[0]) {
 						assert.equal(options.sessionId, source.sessionId);
@@ -77,6 +98,10 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 						assert.ok(options.comparison);
 						assert.equal(options.comparison.sourceSequence, 7);
 						const name = options.comparison.agent.name;
+						if (options.title.startsWith('Synthesis')) {
+							assert.match(options.comparison.branchName, /^ash\/compare-synthesis-/);
+							return { sessionId: 'synthesis', threadId: 'synthesis-thread' };
+						}
 						assert.equal(options.title, `Attempt ${targets.indexOf(name) + 1} · ${name}`);
 						branches.set(name, options.comparison.branchName);
 						return { sessionId: name, threadId: `${name}-thread` };
@@ -87,7 +112,28 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	} as unknown as ISessionProviderScopeService);
 	services.registerInstance(IChatService, {
 		async readThread(id: string) {
+			const submission = submissions.find(candidate => candidate.sessionId === id);
+			if (evaluation && submission) {
+				return {
+					directory: workspace, thread: {
+						sequence: 8, turns: [{
+							turnId: 'comparison-turn', status: 'completed', items: [
+								{ type: 'userMessage', text: submission.text },
+								{ type: 'agentMessage', text: id.startsWith('judge-') ? judgeReply : `Result from ${id}` },
+								{ type: 'toolCall', name: 'shell-command', toolCallId: 'check', argumentsJson: '{"program":"test"}' },
+								{ type: 'toolResult', toolCallId: 'check', text: 'Fixture check completed', isError: false },
+							],
+						}]
+					}
+				};
+			}
 			return { directory: workspace, thread: { sequence: 7, turns: id === 'source' ? [{ items: [{ type: 'userMessage', text: 'Prior question' }, { type: 'agentMessage', text: 'Prior answer' }] }] : [] } };
+		},
+		async listTurnChanges() {
+			return [{ turnId: 'comparison-turn', changeSetId: 'changes', statistics: { files: 1, additions: 3, deletions: 1 } }];
+		},
+		async readTurnChange(id: string) {
+			return { files: [{ path: `src/${id}.ts`, kind: 'modified' }] };
 		},
 		async startTurn(options: StartTurnOptions) {
 			submissions.push(options);
@@ -106,7 +152,9 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 				onDidAccept: accept.event,
 				onDidHide: hide.event,
 				show() {
-					this.selectedItems = this.canSelectMany ? this.items : this.items.slice(1);
+					this.selectedItems = this.canSelectMany ? this.items : evaluation
+						? [this.items.find(item => item.label === 'Synthesize Recommended' || item.label === 'Beta') ?? this.items[0]!]
+						: [this.items[1]!];
 					accept.fire({ inBackground: false });
 				},
 				hide() { hide.fire({ reason: QuickInputHideReason.Other }); },
@@ -115,7 +163,7 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 			};
 			return picker as unknown as IQuickPick<T>;
 		},
-		input: async () => 'Implement the fix',
+		input: async () => evaluation ? 'Preserve the public API.' : 'Implement the fix',
 	} as unknown as IQuickInputService);
 
 	const command = CommandsRegistry.getCommand('sessions.chat.compareAgents')!;
@@ -130,6 +178,8 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 			assert.equal(submission.expectedSequence, 7);
 			assert.equal(submission.commandInterpretation, 'literal');
 			assert.equal(submission.contexts, undefined);
+			assert.deepEqual(submission.model, model);
+			assert.equal(submission.reasoningEffort, 'high');
 		}
 	} finally {
 		await release.complete();
@@ -138,4 +188,32 @@ test('Compare Agents sends identical tasks in parallel from separate worktrees a
 	assert.deepEqual(opened, ['source', 'Beta']);
 	assert.deepEqual(grouped, targets);
 	assert.deepEqual(failures, ['Alpha: Error: Pane unavailable']);
+	evaluation = true;
+	const evaluate = CommandsRegistry.getCommand('sessions.chat.evaluateComparison')!;
+	await services.invokeFunction(evaluate);
+	assert.deepEqual(failures, ['Alpha: Error: Pane unavailable']);
+	assert.equal(comparisons.get(group.sectionId)?.judge?.sessionId, 'judge-1');
+	assert.equal(submissions.at(-1)?.mode, 'ask');
+	assert.deepEqual(submissions.at(-1)?.model, model);
+	assert.match(submissions.at(-1)?.contexts?.[0]?.content ?? '', /Result from Alpha/);
+	assert.match(submissions.at(-1)?.contexts?.[0]?.content ?? '', /src\/Alpha\.ts/);
+	const manifest = JSON.parse(submissions.at(-1)?.contexts?.[0]?.content ?? 'null');
+	assert.equal(manifest.schema, 'ash.attempt-comparison.v1');
+	assert.deepEqual(manifest.evidence[0].verification, {
+		actions: [{ source: 'recordedToolResult', tool: 'shell-command', arguments: '{"program":"test"}', result: 'Fixture check completed', toolReportedError: false }],
+		truncated: false,
+	});
+	await services.invokeFunction(evaluate);
+	assert.equal(comparisons.get(group.sectionId)?.judge?.sessionId, 'judge-2');
+	assert.deepEqual(submissions.at(-1)?.model, model);
+
+	judgeReply = JSON.stringify({ winner: 2, comparison: 'More complete', validation: 'Reported tests', quality: 'Clearer', solution: 'Prefer Beta' });
+	await services.invokeFunction(evaluate);
+	const saved = services.createInstance(SessionComparisonService).get(group.sectionId);
+	assert.equal(saved?.verdict?.winner, 2);
+	assert.equal(saved?.synthesis?.sessionId, 'synthesis');
+	assert.equal(submissions.at(-1)?.mode, 'agent');
+	assert.deepEqual(submissions.at(-1)?.model, model);
+	assert.match(submissions.at(-1)?.text ?? '', /Preserve the public API/);
+	assert.deepEqual(grouped, ['Alpha', 'Beta', 'judge-1', 'judge-2', 'synthesis']);
 });

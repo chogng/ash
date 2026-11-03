@@ -92,6 +92,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 	private readonly tabsOptions: TabListOptions<string>;
 	private draggedPaneId: string | undefined;
 	private readonly closingPanes = new Set<string>();
+	private closedSessionTab: { readonly id: string; readonly index: number; readonly threadId?: string; } | undefined;
 	private readonly empty: HTMLDivElement;
 	private renderedPanes: readonly IChatViewPaneEntry<TModel>[] = [];
 	private sidebarPane: ChatWidget<TModel> | undefined;
@@ -277,7 +278,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		readonly entries: readonly IChatViewPaneEntry<TModel>[];
 		readonly activePaneId: string | undefined;
 	};
-	protected abstract activatePane(id: string): void;
+	protected abstract activatePane(id: string, threadId?: string): void;
 	protected abstract ensureConversationForVisibleChat(): void;
 	/** Borrows a distinct retained conversation without navigating the main Chat selection. */
 	public abstract createEmbeddedChat(parent: HTMLElement, titleId: string, options?: IChatWidgetViewOptions): IQuickChatSession;
@@ -696,6 +697,20 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		}
 	}
 
+	reopenLastClosedSessionTab(): void {
+		const closed = this.closedSessionTab;
+		if (!closed) return;
+		this.closedSessionTab = undefined;
+		if (!this.openedPaneIds.includes(closed.id)) {
+			this.openedPaneIds.splice(closed.index, 0, closed.id);
+		}
+		this.syncSessions();
+		if (this.renderedPanes.some(entry => entry.id === closed.id)) {
+			this.activatePane(closed.id, closed.threadId);
+			this.saveViewState();
+		}
+	}
+
 	private getTabActions(id: string): readonly IAction[] {
 		const entry = this.renderedPanes.find(entry => entry.id === id);
 		if (!entry) return [];
@@ -703,7 +718,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		const others = ids.filter(candidate => candidate !== id);
 		const right = ids.slice(ids.indexOf(id) + 1);
 		const close = async (targets: readonly string[]): Promise<void> => {
-			for (const target of targets) await this.closePane(target);
+			for (const target of targets) await this.closePane(target, false);
 		};
 		return Separator.join([...(entry.getActions?.() ?? [])], [
 			{
@@ -714,8 +729,13 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		], [
 			{
 				id: 'chat.closeTab', label: localize({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'),
-				tooltip: '', enabled: true, run: () => close([id]),
+				tooltip: '', enabled: true, run: () => this.closePane(id),
 			},
+			...(this.closedSessionTab ? [{
+				id: 'chat.reopenClosedTab',
+				label: localize('chat.sessions.reopenClosedTab', 'Reopen Closed Chat Tab'),
+				tooltip: '', enabled: true, run: () => this.reopenLastClosedSessionTab(),
+			}] : []),
 			{
 				id: 'chat.closeOtherTabs', label: localize({ bundle: 'ash', key: 'workbench.closeOtherEditors' }, 'Close Others'),
 				tooltip: '', enabled: others.length > 0, run: () => close(others),
@@ -738,7 +758,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 		]);
 	}
 
-	private async closePane(id: string): Promise<void> {
+	private async closePane(id: string, record = true): Promise<void> {
 		const pane = this.renderedPanes.find(entry => entry.id === id)?.pane;
 		if (!pane || this.closingPanes.has(id)) {
 			return;
@@ -755,6 +775,7 @@ export abstract class ChatViewPane<TModel extends IChatWidgetModel = IChatWidget
 				return;
 			}
 			const index = this.openedPaneIds.indexOf(id);
+			if (record && index >= 0) this.closedSessionTab = { id, index, threadId: pane.threadId };
 			this.openedPaneIds = this.openedPaneIds.filter(candidate => candidate !== id);
 			if (this.activePane === pane) {
 				const next = this.openedPaneIds[Math.min(index, this.openedPaneIds.length - 1)];

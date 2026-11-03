@@ -503,7 +503,7 @@ suite('changes browser component', () => {
 		]);
 	});
 
-	test('Changes keeps keyboard selection through refresh and clears stale actions on failure', async function () {
+	test('Changes keeps keyboard selection and last known totals, but clears stale actions on failure', async function () {
 		const { page } = browserTests;
 
 		const errors: string[] = [];
@@ -525,9 +525,17 @@ suite('changes browser component', () => {
 		await expect(tree).toBeFocused();
 		await page.evaluate(() => window.ashChangesIntegration.fail(true));
 		await expect(file).toHaveCount(0);
+		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file +3 −2');
 		await expect(page.getByRole('button', { name: 'Review all changes' })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'Preview selected changes' })).toBeDisabled();
 		await expect(page.getByRole('button', { name: 'Retry loading changes' })).toBeVisible();
+		await page.evaluate(() => window.ashChangesIntegration.rebuild());
+		await expect(page.getByRole('button', { name: 'Retry loading changes' })).toBeVisible();
+		await expect(page.locator('.ash-sessions-changes-summary')).toHaveText('1 file +3 −2');
+		await page.evaluate(() => window.ashChangesIntegration.selectSession('unseen'));
+		await expect(page.getByRole('button', { name: 'Retry loading changes' })).toBeVisible();
+		await expect(page.locator('.ash-sessions-changes-summary')).toBeHidden();
+		await page.evaluate(() => window.ashChangesIntegration.selectSession('session'));
 		await page.evaluate(() => window.ashChangesIntegration.fail(false));
 		await expect(file).toHaveCount(1);
 		await page.setViewportSize({ width: 320, height: 600 });

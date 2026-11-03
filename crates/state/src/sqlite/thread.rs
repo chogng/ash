@@ -7,6 +7,7 @@ use ash_history::supports_stored_event_schema_version;
 use ash_protocol::ContentDigest;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
+use ash_protocol::SessionSource;
 use ash_protocol::ThreadId;
 use ash_thread_store::AppendBatchResult;
 use ash_thread_store::ThreadCatalogRecord;
@@ -1003,6 +1004,11 @@ fn decode_session_catalog(
     if &session.session_id != session_id {
         return Err(ThreadStoreError::SessionCatalogDamaged(session_id.clone()));
     }
+    // Catalogs written before provenance was stored still have the original
+    // creation identity. Recover it without accessing the automation store.
+    session.source = session
+        .source
+        .or_else(|| SessionSource::from_session_id(session_id));
     if session
         .threads
         .iter()

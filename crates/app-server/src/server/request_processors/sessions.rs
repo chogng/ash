@@ -358,6 +358,11 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         &self,
         params: SessionCreateParams,
     ) -> Result<SessionResult, RpcError> {
+        if ash_protocol::SessionSource::is_automation_creation_command(params.command_id.as_str()) {
+            return Err(core_error(core_api::CoreError::InvalidInput(
+                "Session creation command ID belongs to automation".into(),
+            )));
+        }
         let execution_target = match &params.execution_target {
             None => None,
             Some(SessionExecutionTarget::Local { root }) => {

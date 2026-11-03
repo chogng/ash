@@ -40,7 +40,11 @@ export interface ISessionsProvider extends IDisposable {
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
 	/** Available checkouts on this provider's host, preserving execution authority. */
-	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]>;
+	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories?: boolean): Promise<readonly {
+		readonly label: string;
+		readonly target: SessionExecutionTarget;
+		readonly repository?: SessionExecutionTarget;
+	}[]>;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
 	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;

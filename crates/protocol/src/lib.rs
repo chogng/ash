@@ -255,6 +255,7 @@ pub use session::SessionManagerInfo;
 pub use session::SessionManagerStatus;
 pub use session::SessionRuntimeRequest;
 pub use session::SessionRuntimeResult;
+pub use session::SessionSource;
 pub use session::SessionStatus;
 pub use session::SessionThread;
 pub use session::ThreadOrigin;

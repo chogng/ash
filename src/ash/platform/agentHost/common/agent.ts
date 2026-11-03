@@ -132,6 +132,7 @@ export interface AgentSessionChange {
 
 export interface AgentSession {
 	readonly sessionId: string;
+	readonly source?: 'automation';
 	readonly title: string;
 	readonly status: 'active' | 'archived';
 	readonly executionTarget?: SessionCreateParams['executionTarget'];

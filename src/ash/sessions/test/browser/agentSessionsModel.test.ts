@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -38,6 +39,7 @@ function fixture() {
 		refresh: async () => { refreshes++; changed.fire(); },
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IStorageService, { getBoolean: () => pinned, onDidChangeValue: storageChanged.event } as unknown as IStorageService);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerInstance(ISessionGroupsService, { get groups() { return groups; }, onDidChange: groupChanged.event } as ISessionGroupsService);
 	services.registerInstance(ICommandService, { onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async () => { throw new Error('Unexpected mutation'); } });
 	const catalog = services.createInstance(ChatHistoryModel);

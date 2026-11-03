@@ -1,6 +1,8 @@
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { captureSessionActionTarget } from '../../../../browser/sessionActionsService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
+import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -37,6 +39,26 @@ registerAction2(class CloseSessionAction extends Action2 {
 		if (selection.kind === 'untitled') {
 			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`, chatInputStatePersistence);
 		}
+	}
+});
+
+registerAction2(class ReopenLastClosedItemAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.reopenLastClosedItem',
+			title: localize2('reopenLastClosedItem', 'Reopen Closed Chat or Session'),
+			f1: true,
+			precondition: IsSessionsWindowContext.isEqualTo(true),
+			keybinding: {
+				weight: KeybindingWeight.SessionsContrib,
+				when: ContextKeyExpr.not('sessions.editorTool'),
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT,
+			},
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ISessionsService).reopenLastClosedItem();
 	}
 });
 

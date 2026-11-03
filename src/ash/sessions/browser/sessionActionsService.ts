@@ -1,7 +1,8 @@
+import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { isRecord } from '../../base/common/types.js';
 import { localize } from '../../nls.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import { IStorageService } from '../../platform/storage/common/storage.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
 import {
 	getAgentSessionId,
@@ -65,6 +66,7 @@ export class SessionActionsService implements IAgentSessionActionsService {
 		@ISessionsManagementService private readonly sessionsOwner: ISessionsManagementService,
 		@IStorageService private readonly storage: IStorageService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
+		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 	) { }
 
 	get sessions(): readonly IAgentSessionActionItem[] { return this.sessionsOwner.sessions.map(actionItem); }
@@ -113,9 +115,12 @@ export class SessionActionsService implements IAgentSessionActionsService {
 	}
 
 	async togglePin(argument: unknown): Promise<string> {
-		const target = await this.resolveTarget(argument, true).resolve();
-		const key = `sessions.list.pinned.${target.sessionId}`;
-		this.storage.store(key, !this.storage.getBoolean(key, StorageScope.PROFILE, false), StorageScope.PROFILE, StorageTarget.USER);
+		const target = await captureSessionActionTarget(this.sessionsOwner, this.storage, this.navigation, argument, true).resolve();
+		if (this.listModel.isSessionPinned(target)) {
+			this.listModel.unpinSession(target);
+		} else {
+			this.listModel.pinSession(target);
+		}
 		return target.sessionId;
 	}
 

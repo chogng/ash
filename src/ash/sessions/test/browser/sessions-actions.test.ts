@@ -77,7 +77,7 @@ test('Sessions owns its New Session command and routes explicit provider choices
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
-		canNavigateForward: false,
+		canNavigateForward: false, recentSessions: [],
 		async initialize() { },
 		openSession() { },
 		openUntitledSession() { },
@@ -87,6 +87,7 @@ test('Sessions owns its New Session command and routes explicit provider choices
 		},
 		activateSelection() { },
 		closeVisibleSelection() { },
+		async reopenLastClosedItem() { },
 		async openPreviousSession() { },
 		async openNextSession() { },
 	};
@@ -145,6 +146,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	services.registerInstance(IQuickInputService, input);
 	services.registerInstance(ISessionsService, {
 		openNewSession: (_title: string, options?: { providerId?: string; }) => { created.push(options?.providerId); return { untitledSessionId: 'draft' }; },
+		recentSessions: [],
 		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
@@ -171,7 +173,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	assert.deepEqual(opened, ['session/thread']);
 });
 
-test('Sessions History opens the selected active chat', async () => {
+test('Sessions History ranks recent active chats ahead of unvisited chats', async () => {
 	const opened: Array<{ sessionId: string; threadId: string; }> = [];
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
@@ -186,6 +188,13 @@ test('Sessions History opens the selected active chat', async () => {
 			],
 		},
 		{
+			sessionId: 'recent',
+			title: 'Recent Session',
+			status: 'active',
+			nextApprovalMode: 'manual',
+			chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }],
+		},
+		{
 			sessionId: 'session-2',
 			title: 'Archived Session',
 			status: 'archived',
@@ -196,6 +205,10 @@ test('Sessions History opens the selected active chat', async () => {
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, { sessions, onDidChange: Event.None } as ISessionsManagementService);
 	services.registerInstance(ISessionsService, {
+		recentSessions: [
+			{ sessionId: 'session-2', threadId: 'thread-3' },
+			{ sessionId: 'recent', threadId: 'root' },
+		],
 		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),
 	} as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
@@ -204,9 +217,9 @@ test('Sessions History opens the selected active chat', async () => {
 	await commands.executeCommand(ShowSessionsChatHistoryAction.ID);
 
 	assert.equal(quickInput.picker?.placeholder, 'Select a session');
-	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['First Session']);
+	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['Recent Session', 'First Session']);
 	quickInput.picker?.acceptFirst();
-	assert.deepEqual(opened, [{ sessionId: 'session-1', threadId: 'thread-1' }]);
+	assert.deepEqual(opened, [{ sessionId: 'recent', threadId: 'root' }]);
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
@@ -224,7 +237,7 @@ test('Session History shows each branch management state in Chinese before openi
 			],
 		}], onDidChange: Event.None
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(ISessionsService, { openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, { recentSessions: [], openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 	try {

@@ -5,6 +5,7 @@ use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionManagerStatus;
+use ash_protocol::SessionSource;
 use ash_protocol::SessionStatus;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
@@ -58,8 +59,11 @@ pub fn session_from_catalog(
         SessionStatus::Active
     };
     let manager = catalog_session_manager(&records, created_at_unix_ms, status);
+    // Creation identity survives journal replay, catalog rebuilds, and plan deletion.
+    let source = SessionSource::from_session_id(&session_id);
     Ok(Session {
         session_id,
+        source,
         title,
         status,
         execution_target: root.execution_target.clone(),

@@ -15,12 +15,23 @@ export class SessionsNavigation<T> {
 	get canGoForward(): boolean { return this.find(1) !== undefined; }
 
 	recordOpened(entry: T): void {
-		const current = this.entries[this.index];
-		if (this.navigating || current !== undefined && this.key(current) === this.key(entry)) {
+		if (this.navigating) {
 			return;
 		}
-		this.entries.splice(this.index + 1, this.entries.length, entry);
+		const key = this.key(entry);
+		this.entries = this.entries.filter(candidate => this.key(candidate) !== key);
+		this.entries.push(entry);
 		this.index = this.entries.length - 1;
+	}
+
+	restorePreviousVisits(entries: readonly T[], current: T): boolean {
+		if (this.entries.length !== 0) return false;
+		const index = entries.findIndex(entry => this.key(entry) === this.key(current));
+		if (index < 0) return false;
+		this.entries = [...entries];
+		this.entries[index] = current;
+		this.index = index;
+		return true;
 	}
 
 	insertBeforeInitialVisit(entry: T, matches: (entry: T) => boolean): void {
@@ -31,7 +42,16 @@ export class SessionsNavigation<T> {
 	}
 
 	updateEntries(update: (entry: T) => T): void {
-		this.entries = this.entries.map(update);
+		const current = this.entries[this.index];
+		const currentKey = current === undefined ? undefined : this.key(update(current));
+		const byKey = new Map<string | undefined, T>();
+		for (const entry of this.entries.map(update)) {
+			const key = this.key(entry);
+			byKey.delete(key);
+			byKey.set(key, entry);
+		}
+		this.entries = [...byKey.values()];
+		this.index = this.entries.findIndex(entry => this.key(entry) === currentKey);
 	}
 
 	goBack(): void { this.navigate(-1); }

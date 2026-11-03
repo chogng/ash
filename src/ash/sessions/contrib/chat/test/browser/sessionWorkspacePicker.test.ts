@@ -10,6 +10,9 @@ import { URI } from '../../../../../base/common/uri.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
+import { ILocalGitService } from '../../../../../platform/git/common/localGitService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import type { IActionListItem, IActionListDelegate } from '../../../../../platform/actionWidget/browser/actionList.js';
@@ -18,25 +21,37 @@ import { IQuickInputService, type IInputOptions } from '../../../../../platform/
 import { IWorkspacesService, type IRecent } from '../../../../../platform/workspaces/common/workspaces.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = []) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[]) {
 	const lifetime = new DisposableStore();
-	const dom = new JSDOM('<!doctype html><body></body>');
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
 	const changed = lifetime.add(new Emitter<void>());
 	const updated = lifetime.add(new Emitter<void>());
 	const loaded = lifetime.add(new Emitter<void>());
 	const dialog = new DeferredPromise<readonly URI[] | undefined>();
 	const branch = new DeferredPromise<string | undefined>();
+	const checkout = new DeferredPromise<void>();
+	const cloneStarted = new DeferredPromise<{ operation: string; url: string; target: string; }>();
+	const cancelled: string[] = [];
+	services.registerInstance(ILocalGitService, {
+		async clone(operation: string, url: string, target: string) {
+			await cloneStarted.complete({ operation, url, target });
+			await checkout.p;
+		},
+		async cancel(operation: string) { cancelled.push(operation); },
+	} as ILocalGitService);
 	let inputOptions: IInputOptions | undefined;
 	let drafts: readonly IUntitledChatSession[] = ['first', 'second'].map(id => ({
-		untitledSessionId: id, title: id, providerId: 'host', model: undefined, agent: undefined, workspace: target,
+		untitledSessionId: id, title: id, providerId: LOCAL_AGENT_HOST_PROVIDER_ID, model: undefined, agent: undefined, workspace: target,
 	}));
 	let items: readonly IActionListItem<IAction>[] = [];
 	let delegate: IActionListDelegate<IAction> | undefined;
@@ -62,13 +77,13 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	services.registerInstance(ISessionsProvidersService, {
 		getProvider: () => ({
 			isDevContainerWorkspaceAvailable: async () => false,
-			getWorktrees: async () => [{ label: 'review', target: { ...target, root: '/checkouts/review' } }],
+			getWorktrees: async () => worktrees ?? [{ label: 'review', target: { ...target, root: '/checkouts/review' } }],
 		}),
 	} as unknown as ISessionsProvidersService);
 	services.registerInstance(IWorkspaceContextService, {
 		getWorkspace: () => ({ id: 'project', folders: [] }), onDidChangeWorkspaceFolders: Event.None,
 	} as unknown as IWorkspaceContextService);
-	let history: readonly IRecent[] = [{ folderUri: URI.file('/recent'), label: 'Recent project' }];
+	let history: readonly IRecent[] = [{ folderUri: URI.file('/recent'), label: 'Recent project' }, ...additionalRecents];
 	services.registerInstance(IWorkspacesService, {
 		getRecentlyOpened: async () => ({ workspaces: history }),
 		addRecentlyOpened: async (entries: readonly IRecent[]) => { history = [...entries, ...history]; },
@@ -80,7 +95,8 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	const control = lifetime.add(services.createInstance(SessionWorkspacePicker, dom.window.document.body, model as unknown as IChatWidgetModel));
 	const button = dom.window.document.querySelector('button')!;
 	return {
-		button, control, model, changed, updated, dialog, branch, errors,
+		button, control, model, changed, updated, loaded: loaded.event, dialog, branch, errors, checkout, cloneStarted, cancelled,
+		get history() { return history; },
 		get labels() { return items.map(item => item.label); }, get drafts() { return drafts; }, get inputOptions() { return inputOptions; }, get disposed() { return disposed; },
 		async open() {
 			button.click();
@@ -89,7 +105,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		choose(label: string) {
 			const action = items.find(item => item.label === label)?.item;
 			assert.ok(action && delegate, `Missing choice: ${label}`);
-			void delegate.onSelect(action);
+			return delegate.onSelect(action);
 		},
 		[Symbol.dispose]() { lifetime.dispose(); },
 	};
@@ -126,15 +142,66 @@ test('Recent folders are selectable in the first menu before Open Folder', async
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/recent').fsPath });
 });
 
+test('Hiding a recent folder applies to another draft and restoring leaves shared history intact', async () => {
+	using f = fixture();
+	await f.open();
+	await f.choose('Manage Recent Folders…');
+	const hidden = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
+	await f.choose('Hide Recent project');
+	await hidden;
+	f.model.untitledSessionId = 'second';
+	f.updated.fire();
+	await f.open();
+	assert.ok(!f.labels.includes('Recent project'));
+	assert.ok(f.history.some(recent => 'folderUri' in recent && recent.folderUri.path === '/recent'));
+	await f.choose('Manage Recent Folders…');
+	const reloaded = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
+	await f.choose('Restore Recent project');
+	await reloaded;
+	assert.ok(f.labels.includes('Recent project'));
+	assert.deepEqual(f.drafts.map(draft => draft.workspace), [
+		{ type: 'local', root: URI.file('/project').fsPath },
+		{ type: 'local', root: URI.file('/project').fsPath },
+	]);
+});
+
+test('A recent checkout verified by the current host appears once as a worktree', async () => {
+	using f = fixture(undefined, [], [
+		{ folderUri: URI.file('/checkouts/review'), label: 'Duplicate checkout' },
+		{ folderUri: URI.file('/other.worktrees/review'), label: 'Unverified folder' },
+	]);
+	await f.open();
+	assert.ok(f.labels.includes('Worktree · review'));
+	assert.ok(!f.labels.includes('Duplicate checkout'));
+	assert.ok(f.labels.includes('Unverified folder'));
+});
+
+test('Recents fold a verified checkout under a different visible repository', async () => {
+	const target = (root: string): SessionExecutionTarget => ({ type: 'local', root: URI.file(root).fsPath });
+	using f = fixture(undefined, [], [
+		{ folderUri: URI.file('/another-repo'), label: 'Another repository' },
+		{ folderUri: URI.file('/checkouts/another'), label: 'Another checkout' },
+		{ folderUri: URI.file('/checkouts/alone'), label: 'Standalone checkout' },
+	], [
+		{ label: 'another', target: target('/checkouts/another'), repository: target('/another-repo') },
+		{ label: 'alone', target: target('/checkouts/alone'), repository: target('/missing-repo') },
+	]);
+	await f.open();
+	assert.ok(f.labels.includes('Another repository'));
+	assert.ok(!f.labels.includes('Another checkout'));
+	assert.ok(!f.labels.includes('Worktree · another'));
+	assert.ok(f.labels.includes('Standalone checkout'));
+});
+
 test('Workspace includes recent active Session folders from the draft host after explicit recents', async () => {
-	const session = (id: string, lastActivity: number, providerId = 'host', status: ISession['status'] = 'active'): ISession => ({
+	const session = (id: string, lastActivity: number, providerId = LOCAL_AGENT_HOST_PROVIDER_ID, status: ISession['status'] = 'active'): ISession => ({
 		sessionId: id, title: id, status, providerId, nextApprovalMode: 'manual',
 		workspace: { authorityId: 'local', root: URI.file(`/${id}`).fsPath },
 		chats: [{ threadId: id, status: 'active', origin: { type: 'root' }, updatedAt: new Date(lastActivity) }],
 	});
 	using f = fixture(undefined, [
 		session('earlier', 10), session('latest', 20), session('recent', 30),
-		session('archived', 40, 'host', 'archived'), session('other-host', 50, 'another-host'),
+		session('archived', 40, LOCAL_AGENT_HOST_PROVIDER_ID, 'archived'), session('other-host', 50, 'another-host'),
 	]);
 	await f.open();
 	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('Open Folder…')), ['Recent project', 'latest', 'earlier']);
@@ -190,6 +257,7 @@ test('Browsing a local folder changes only the owning conversation without chang
 test('Browsing a remote conversation preserves its host instead of opening a local native dialog', async () => {
 	using f = fixture({ type: 'ssh', host: 'build', root: '/source' });
 	await f.open();
+	assert.ok(!f.labels.includes('Clone Repository…'));
 	f.choose('Open Folder…');
 	assert.equal(f.inputOptions?.value, '/source');
 	const updated = new Promise<void>(resolve => Event.once(f.changed.event)(resolve));
@@ -204,6 +272,7 @@ test('Workspace cancellation keeps the draft and the Chinese picker exposes tran
 	try {
 		using f = fixture();
 		await f.open();
+		assert.ok(f.labels.includes('克隆仓库…'));
 		f.choose('打开文件夹…');
 		await f.dialog.complete(undefined);
 		await new Promise<void>(resolve => setImmediate(resolve));
@@ -218,4 +287,40 @@ test('Workspace cancellation keeps the draft and the Chinese picker exposes tran
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('Cloning from the workspace menu selects and records the new checkout after Git completes', async () => {
+	using f = fixture();
+	await f.open();
+	const complete = f.choose('Clone Repository…');
+	assert.ok(await f.inputOptions?.validateInput?.('https://example.test/org/CON.git'));
+	assert.equal(await f.inputOptions?.validateInput?.('git@example.test:org/repo.git'), undefined);
+	await f.branch.complete('git@example.test:org/repo.git');
+	await f.dialog.complete([URI.file('/checkouts')]);
+	const clone = await f.cloneStarted.p;
+	assert.equal(clone.url, 'git@example.test:org/repo.git');
+	assert.equal(clone.target, URI.file('/checkouts/repo').fsPath);
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
+	await f.checkout.complete();
+	await complete;
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: clone.target });
+	assert.deepEqual(f.drafts[1]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
+	assert.deepEqual(f.history[0], { folderUri: URI.file('/checkouts/repo'), label: 'repo' });
+});
+
+test('Switching drafts cancels the Git clone and ignores a late checkout result', async () => {
+	using f = fixture();
+	await f.open();
+	const complete = f.choose('Clone Repository…');
+	await f.branch.complete('https://example.test/org/repo.git');
+	await f.dialog.complete([URI.file('/checkouts')]);
+	const clone = await f.cloneStarted.p;
+	f.model.untitledSessionId = 'second';
+	f.updated.fire();
+	await f.checkout.complete();
+	await complete;
+	assert.deepEqual(f.cancelled, [clone.operation]);
+	assert.ok(f.drafts.every(draft => (draft.workspace as SessionExecutionTarget).root === URI.file('/project').fsPath));
+	assert.equal(f.history.length, 1);
+	assert.deepEqual(f.errors, []);
 });

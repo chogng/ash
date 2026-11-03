@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
@@ -1294,6 +1295,7 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerSingleton(IAgentSessionsService, () => lifecycleServices.createInstance(historyDescriptor));
 		lifecycleServices.registerSingleton(ISessionGroupsService, () => lifecycleServices.createInstance(SessionGroupsService));
 		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+		lifecycleServices.registerSingleton(ISessionsListModelService, () => lifecycleServices.createInstance(SessionsListModelService));
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IAgentConnection, disconnected);

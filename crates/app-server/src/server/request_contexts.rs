@@ -70,6 +70,23 @@ impl super::codebase_retrieval_operations::CodebaseRetrievalRequestProcessorCont
 }
 
 impl super::config_operations::ConfigRequestProcessorContext for AppServer {
+    fn managed_workspace_trust_source(
+        &self,
+        dir: &ash_file_access::Dir,
+    ) -> Option<ash_file_access::DirId> {
+        let dirs = self.dir_services.as_ref()?;
+        let bindings = dirs
+            .bindings
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let binding = bindings.values().find(|binding| {
+            binding.kind() == worktree::ManagedDirKind::Git && binding.dir() == dir.canonical_path()
+        })?;
+        // Check the recovered binding against the current source directory identity.
+        let source = ash_file_access::Dir::open_local(binding.source_directory()).ok()?;
+        (source.id().as_str() == binding.source_dir_id() && source.id() != dir.id())
+            .then(|| source.id())
+    }
     fn active_dir_id(&self) -> Option<ash_file_access::DirId> {
         AppServer::active_dir_id(self)
     }

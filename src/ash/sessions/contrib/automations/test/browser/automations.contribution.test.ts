@@ -1,3 +1,7 @@
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { Event } from '../../../../../base/common/event.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -452,6 +456,10 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		value.services.registerInstance(IAutomationDialogService, { showAutomationDialog: async () => undefined });
 		value.services.registerInstance(IAutomationRunner, value.services.createInstance(AutomationRunner));
 		value.services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+		const storage = value.resources.add(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'automation-card-order', flushInterval: 0 }));
+		value.services.registerInstance(IStorageService, storage);
+		value.services.registerInstance(ISessionsListModelService, value.services.createInstance(SessionsListModelService));
+		value.services.registerInstance(ISessionsManagementService, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
 		const widget = value.resources.add(value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body));
 		browserEnvironment.window.document.body.append(widget.element);
 		const oldTitle = widget.element.querySelector<HTMLButtonElement>('h3 button')!;
@@ -584,6 +592,17 @@ test('An offline automation host does not suppress another host failure or dupli
 
 suite('automations browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Run card can show and hide its automation session in the Sessions list', async () => {
+		const { page } = browserTests;
+		await page.goto('/automations.html?locale=zh-CN');
+		const show = page.getByRole('button', { name: '在会话列表中显示', exact: true });
+		await show.click();
+		const hide = page.getByRole('button', { name: '从会话列表隐藏', exact: true });
+		await expect(hide).toBeFocused();
+		await hide.click();
+		await expect(show).toBeFocused();
+	});
+
 	for (const [locale, theme] of [['en', 'light'], ['zh-CN', 'dark'], ['zh-CN', 'hcDark'], ['en', 'hcLight']] as const) {
 		test(`Automations uses cards, a commit-aware dialog and host dispatch (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;

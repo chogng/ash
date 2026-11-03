@@ -14,7 +14,7 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { computeAggregateIssueIcon, computeIssueIcon } from '../../../../workbench/common/chatIssue.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { Event } from '../../../../base/common/event.js';
+import { ISessionContext } from '../../../services/sessions/browser/sessionContext.js';
 import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -42,8 +42,8 @@ export class SessionChatInputToolbar extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly model: { readonly sessionId: string | undefined; readonly onDidChange: Event<void>; },
 		private readonly focusFallback: () => void,
+		@ISessionContext private readonly sessionContext: ISessionContext,
 		@IGitHubService private readonly github: IGitHubService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -108,7 +108,7 @@ export class SessionChatInputToolbar extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsChat,
 					{ type: AccessibleViewType.View },
-					() => [this.issueSummaryDomNode.textContent, ...this.github.getSessionIssues(this.model.sessionId!).map(getIssueLabel)].join('\n'),
+					() => [this.issueSummaryDomNode.textContent, ...this.github.getSessionIssues(this.sessionContext.sessionId!).map(getIssueLabel)].join('\n'),
 					() => { if (focused.isConnected) { focused.focus(); } else { this.attachIssueDomNode.focus(); } },
 					AccessibilityVerbositySettingId.Chat,
 				);
@@ -119,12 +119,12 @@ export class SessionChatInputToolbar extends Disposable {
 			this.element.remove();
 		}));
 		this._register(github.onDidChange(() => this.render()));
-		this._register(model.onDidChange(() => this.render()));
+		this._register(sessionContext.onDidChange(() => this.render()));
 		this.render();
 	}
 
 	private render(): void {
-		const sessionId = this.model.sessionId;
+		const sessionId = this.sessionContext.sessionId;
 		const focused = this.element.ownerDocument.activeElement;
 		const focusWithin = this.element.contains(focused);
 		const sessionChanged = this.renderedSessionId !== sessionId;
@@ -170,7 +170,7 @@ export class SessionChatInputToolbar extends Disposable {
 	}
 
 	private renderIssues(reader?: IReader): void {
-		const issues = this.model.sessionId ? this.github.getSessionIssues(this.model.sessionId, reader) : [];
+		const issues = this.sessionContext.sessionId ? this.github.getSessionIssues(this.sessionContext.sessionId, reader) : [];
 		const focused = this.element.ownerDocument.activeElement;
 		const focusWithin = this.issuesDomNode.contains(focused);
 		this.issuesDomNode.hidden = issues.length === 0;
@@ -191,7 +191,7 @@ export class SessionChatInputToolbar extends Disposable {
 			let entry = this.issueEntries.get(key);
 			if (!entry) {
 				entry = this.issueEntries.set(key, new IssueEntry(this.issueListDomNode, issue, this.opener, this.notifications, async reference => {
-					const sessionId = this.model.sessionId;
+					const sessionId = this.sessionContext.sessionId;
 					if (!sessionId) { return; }
 					await this.github.detachIssue(sessionId, reference);
 					if (!this.isDisposed) {
@@ -210,12 +210,12 @@ export class SessionChatInputToolbar extends Disposable {
 	}
 
 	private async attachIssue(): Promise<void> {
-		const sessionId = this.model.sessionId;
+		const sessionId = this.sessionContext.sessionId;
 		if (!sessionId || this.attachIssueDomNode.disabled) { return; }
 		this.attachIssueDomNode.disabled = true;
 		try {
 			const url = await this.quickInput.input({ title: localize('sessions.github.attachIssueTitle', 'Attach an issue to this session'), placeHolder: 'https://github.com/owner/repo/issues/123' });
-			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) { return; }
+			if (url === undefined || this.isDisposed || this.sessionContext.sessionId !== sessionId) { return; }
 			await this.github.attachIssue(sessionId, url);
 			status(localize('sessions.github.issueAttached', 'Issue attached.'));
 		} finally {
@@ -225,12 +225,12 @@ export class SessionChatInputToolbar extends Disposable {
 	}
 
 	private async attach(): Promise<void> {
-		const sessionId = this.model.sessionId;
+		const sessionId = this.sessionContext.sessionId;
 		if (!sessionId || this.attachDomNode.disabled) { return; }
 		this.attachDomNode.disabled = true;
 		try {
 			const url = await this.quickInput.input({ title: localize('sessions.github.attachTitle', 'Attach a pull request to this session'), placeHolder: 'https://github.com/owner/repo/pull/123' });
-			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) { return; }
+			if (url === undefined || this.isDisposed || this.sessionContext.sessionId !== sessionId) { return; }
 			await this.github.attachPullRequest(sessionId, url);
 			status(localize('sessions.github.attached', 'Pull request attached.'));
 		} finally {

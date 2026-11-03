@@ -1,3 +1,8 @@
+import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
+import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -178,6 +183,7 @@ function createInputServices(
 	const editorServices = createCodeEditorServices(inputResources);
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
+	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
@@ -218,7 +224,7 @@ function createInputServices(
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
 }
-type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [...infer Head, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService]
+type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [...infer Head, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService, ISessionsListModelService]
 	? [...Head, opener?: IOpenerService, editor?: IEditorService]
 	: never;
 
@@ -246,6 +252,7 @@ function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): I
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(descriptor));
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	return services.createInstance(SessionChatViewPane, args[0], args[1]);
 }
 
@@ -689,6 +696,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ISessionsManagementService, sessions);
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -1203,6 +1211,7 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.input.dispose();
 		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+		fixture.services.registerInstance(ISessionContext, fixture.model);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
@@ -1283,7 +1292,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.ok(form.querySelector('[data-action-id="ash.chat.input.send"] button'));
 		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
 		assert.equal(ring.hidden, false);
 		assert.equal(ring.disabled, true);
@@ -1520,6 +1529,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+	editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
@@ -2050,6 +2060,7 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(IQuickInputService, quickInput);
@@ -2134,6 +2145,7 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 			services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 			const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+			services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 			services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 			services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 			services.registerInstance(IConfigurationService, configuration);
@@ -5301,6 +5313,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	viewServices.registerInstance(IChatService, chat);
 	commandServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessions);
+	viewServices.registerSingleton(ISessionsListModelService, () => viewServices.createInstance(SessionsListModelService));
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1]));
 	viewServices.registerInstance(ICommandService, commands);
 	viewServices.registerInstance(IWorkbenchLayoutService, layout);
@@ -5944,6 +5957,14 @@ for (const command of ['chat.closeTab', 'chat.closeOtherTabs', 'chat.closeTabsTo
 			'chat.closeAllTabs': [right],
 		}[command]);
 		if (command === 'chat.closeAllTabs') assert.equal(f.layout.isPartVisible('auxiliarybar'), false);
+		if (command === 'chat.closeTab') {
+			title.querySelector<HTMLButtonElement>('.ash-tab-label')!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true }));
+			const reopen = menu.getActions().find(action => action.id === 'chat.reopenClosedTab');
+			assert.ok(reopen?.enabled);
+			await reopen.run();
+			assert.deepEqual(JSON.parse(f.storage.get('chat.viewState', StorageScope.WORKSPACE)!).opened, ['session:session-1', middle, right]);
+			assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, drafts[0]!.untitledSessionId);
+		}
 		f.sessions.selectUntitledSession(drafts[1]!.untitledSessionId);
 		await waitFor(() => f.pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')?.value === 'Keep right draft');
 		f.sessions.selectThread('session-1', 'thread-1');
@@ -6995,6 +7016,7 @@ test('IDE item organization retains the background composer and never submits it
 	f.sessions.selectThread('session-1', 'thread-1');
 	await nextTask();
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	f.commandServices.registerSingleton(ISessionsListModelService, () => f.commandServices.createInstance(SessionsListModelService));
 	f.commandServices.registerSingleton(IAgentSessionActionsService, () => f.commandServices.createInstance(actionsDescriptor));
 	const navDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
 	f.commandServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);

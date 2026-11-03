@@ -83,7 +83,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;
 		parent.classList.add('ash-sessions-chat-input', 'floating-card', 'chat-composer');
-		const toolbar = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, model, () => this.input.focus()));
+		const toolbar = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, () => this.input.focus()));
 		parent.insertBefore(toolbar.element, inputContainer);
 		const activities = this._register(instantiationService.createInstance(SessionBackgroundActivitiesControl, parent, model));
 		parent.insertBefore(activities.element, inputContainer);

@@ -8,6 +8,7 @@ pub(super) fn session(
     activity: Option<SessionManagerActivity>,
 ) -> Session {
     Session {
+        source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
@@ -105,6 +106,7 @@ fn every_group_heading_is_selectable_and_collapses_only_its_own_sessions() {
         session("idle", SessionManagerStatus::Idle, None),
         session("pinned", SessionManagerStatus::Idle, None),
         Session {
+            source: None,
             model: None,
             status: SessionStatus::Archived,
             ..session("archived", SessionManagerStatus::Idle, None)

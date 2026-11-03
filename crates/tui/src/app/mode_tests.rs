@@ -430,6 +430,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
     ["first", "second"]
         .into_iter()
         .map(|name| ash_protocol::Session {
+            source: None,
             model: None,
             session_id: ash_protocol::SessionId::new(name).unwrap(),
             title: format!("{name} session"),

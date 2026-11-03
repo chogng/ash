@@ -18,9 +18,9 @@ import { sessionViewSelectionKey } from '../../services/sessions/browser/visible
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
-import type { IView } from '../../../base/browser/ui/grid/grid.js';
+import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
-import { Disposable, DisposableStore, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
@@ -46,6 +46,7 @@ export interface SessionsPartOptions {
 	) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
+	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
 }
 
 /** Owns one conversation grid and one retained view per visible Session. */
@@ -55,6 +56,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionView>();
 	private activeView: SessionView | undefined;
+	private readonly splitActive: IContextKey<boolean>;
 	private readonly infoVisible: IContextKey<boolean>;
 	private mainKeys: readonly string[] = [];
 	private kind: SessionsConversationKind = 'code';
@@ -109,6 +111,27 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				})),
 			),
 		);
+		this.splitActive = new RawContextKey('sessions.splitActive', false).bindTo(contextKeys);
+		this._register(toDisposable(() => this.splitActive.reset()));
+		const splitCommands = [
+			{ id: 'sessions.focusLeft', title: localize2('sessions.focusLeft', 'Focus Session to the Left'), run: () => this.focusNeighbor(Direction.Left) },
+			{ id: 'sessions.focusRight', title: localize2('sessions.focusRight', 'Focus Session to the Right'), run: () => this.focusNeighbor(Direction.Right) },
+			{ id: 'sessions.focusAbove', title: localize2('sessions.focusAbove', 'Focus Session Above'), run: () => this.focusNeighbor(Direction.Up) },
+			{ id: 'sessions.focusBelow', title: localize2('sessions.focusBelow', 'Focus Session Below'), run: () => this.focusNeighbor(Direction.Down) },
+			{
+				id: 'sessions.toggleMaximized', title: localize2('sessions.toggleMaximized', 'Toggle Maximized Session'), run: () => {
+					const id = this.activeGridId;
+					if (id) this.grid.toggleMaximized(id);
+				}
+			},
+		];
+		for (const { id, title, run } of splitCommands) {
+			this._register(CommandsRegistry.register(id, run));
+			this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+				command: { id, title },
+				when: ContextKeyExpr.has('sessions.splitActive'),
+			}));
+		}
 		this.content = h(container.ownerDocument, 'section');
 		this.content.className = 'ash-sessions-chat-view';
 		this.contentDomNode.append(this.content);
@@ -118,6 +141,17 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			),
 		);
 		this.grid = this._register(services.createInstance(SessionGridLayout, this.content, this.empty));
+		if (options.createComparisonControls) {
+			this._register(options.createComparisonControls(this.contentDomNode));
+		}
+		if (options.createComparisonControls && typeof ResizeObserver !== 'undefined') {
+			const observer = new ResizeObserver(() => {
+				const { width, height } = this.content.getBoundingClientRect();
+				if (width && height) this.grid.layout(width, height);
+			});
+			observer.observe(this.content);
+			this._register(toDisposable(() => observer.disconnect()));
+		}
 		this._register(
 			storageService.onDidChangeValue(event => {
 				if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY)
@@ -252,13 +286,35 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		}
 	}
 
+	private get activeGridId(): string | undefined {
+		const active = this.activeView;
+		return active && !this.popouts.has(active) ? this.mainKeys.find(id => this.entries.get(id) === active) : undefined;
+	}
+
+	private focusNeighbor(direction: Direction): void {
+		if (!this.visible) return;
+		const id = this.activeGridId;
+		const neighbor = id && this.grid.neighbor(id, direction);
+		const view = neighbor ? this.entries.get(neighbor) : undefined;
+		if (!view || this.popouts.has(view)) return;
+		this.options.activateSelection(view.currentSelection);
+		view.focus();
+	}
 	private reconcileGrid(): void {
 		const entries = this.mainKeys.flatMap(id => {
 			const view = this.entries.get(id);
 			return view ? [{ id, view: this.popouts.get(view)?.placeholder ?? view }] : [];
 		});
 		const active = [...this.entries].find(([, view]) => view === this.activeView)?.[0] ?? 'empty';
+		this.splitActive.set(this.visible && entries.length > 1 && this.activeGridId !== undefined);
 		this.grid.reconcile(entries.length ? entries : [{ id: 'empty', view: this.empty }], active);
+	}
+
+	focusDraftPicker(picker: 'workspace' | 'environment'): void {
+		const view = this.activeView;
+		if (!this.visible || !view || this.popouts.has(view) || view.currentSelection.kind !== 'untitled') return;
+		const pane = view.activeChat;
+		if (pane instanceof NewChatView) pane.focusDraftPicker(picker);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -404,6 +460,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		super.setVisible(visible);
 		this.visible = visible;
 		this.grid.setVisible(visible);
+		this.splitActive.set(visible && this.mainKeys.length > 1 && this.activeGridId !== undefined);
 		for (const view of this.entries.values()) view.setVisible(visible || this.popouts.has(view));
 	}
 

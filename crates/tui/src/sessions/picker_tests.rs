@@ -17,6 +17,7 @@ use crossterm::event::KeyModifiers;
 #[test]
 fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
     let sessions = vec![Session {
+        source: None,
         model: None,
         session_id: SessionId::new("session-1").unwrap(),
         title: "Current work".into(),
@@ -47,6 +48,7 @@ fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
 #[test]
 fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
     let session = |id: &str| Session {
+        source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),
         title: id.into(),
@@ -69,6 +71,7 @@ fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
 fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
     let sessions = vec![
         Session {
+            source: None,
             model: None,
             session_id: SessionId::new("session-2").unwrap(),
             title: "Archived work".into(),
@@ -78,6 +81,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             threads: Vec::new(),
         },
         Session {
+            source: None,
             model: None,
             session_id: SessionId::new("session-1").unwrap(),
             title: "Active work".into(),
@@ -87,6 +91,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             threads: Vec::new(),
         },
         Session {
+            source: None,
             model: None,
             session_id: SessionId::new("session-3").unwrap(),
             title: "Other work".into(),
@@ -123,6 +128,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
 #[test]
 fn resume_items_show_time_and_tokens_without_branches_or_ids() {
     let mut session = Session {
+        source: None,
         model: None,
         session_id: SessionId::new("session-sized").unwrap(),
         title: "Sized work".into(),
@@ -160,6 +166,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
 #[test]
 fn resume_picker_is_empty_when_every_session_is_archived() {
     let session = Session {
+        source: None,
         model: None,
         session_id: SessionId::new("archived").unwrap(),
         title: "Archived work".into(),
@@ -191,6 +198,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
         .into_iter()
         .enumerate()
         .map(|(index, elapsed)| Session {
+            source: None,
             model: None,
             session_id: SessionId::new(format!("thread:{index}")).unwrap(),
             title: format!("Conversation {}", index + 1),
@@ -236,6 +244,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
 #[test]
 fn resume_time_floors_elapsed_time_and_omits_zero_trailing_units() {
     let mut session = Session {
+        source: None,
         model: None,
         session_id: SessionId::new("session-time").unwrap(),
         title: "Time formatting".into(),
@@ -283,6 +292,7 @@ fn resume_time_shows_local_date_starting_at_seven_days() {
         .unwrap()
         .timestamp_millis() as u64;
     let session = Session {
+        source: None,
         model: None,
         session_id: SessionId::new("session-date").unwrap(),
         title: "Older work".into(),

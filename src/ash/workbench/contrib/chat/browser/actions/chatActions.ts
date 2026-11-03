@@ -35,6 +35,23 @@ export const CHAT_SETUP_ACTION_ID = 'workbench.action.chat.triggerSetup';
 export const CHAT_CATEGORY = localize2('chat.category', 'Chat');
 
 export function registerChatActions(): void {
+	registerAction2(class ReopenClosedChatTabAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.chat.reopenClosedTab',
+				title: localize2('chat.sessions.reopenClosedTab', 'Reopen Closed Chat Tab'),
+				category: CHAT_CATEGORY,
+				precondition: ChatContextKeys.enabled.isEqualTo(true),
+				f1: true,
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const view = await accessor.get(IViewsService).openView<IChatViewPane>(CHAT_VIEW_ID);
+			view?.reopenLastClosedSessionTab();
+		}
+	});
+
 	registerAction2(class FocusNoticeAction extends Action2 {
 		constructor() {
 			super({

@@ -1,3 +1,6 @@
+import { ILogService } from '../../platform/log/common/log.js';
+import { logSessionHistoryBinding } from '../services/sessions/browser/sessionOpenTelemetryService.js';
+import { ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISessionProviderScopeService } from './agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -91,6 +94,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IOpenerService private readonly openerService: IOpenerService | undefined,
 		@IEditorService editorService: IEditorService | undefined,
 		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
+		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 	) {
 		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
 		this.chatService = chatService;
@@ -105,7 +109,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			const captured: SessionsViewSelection = 'untitledSessionId' in selection
 				? { kind: 'untitled', session: selection }
 				: { kind: 'session', active: { session: selection, threadId: 'threadId' in target ? target.threadId! : selection.chats[0]!.threadId } };
-			return createSessionItemActions(captured, commandService, storage, notifications, () => this.openInNewWindow(captured));
+			return createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured));
 		}, preserveFocus => {
 			const focusChat = !this.sessionsSideBySide || !preserveFocus;
 			this.hideSessionsAfterSelection();
@@ -365,6 +369,8 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		let model: ChatWidgetModel | undefined;
 		try {
 			model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
+			const log = services.getOptional(ILogService);
+			if (log) resources.add(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
 			const pane = services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 				this.paneHost,
 				`ash-chat-pane-${++chatPaneInstanceId}`,
@@ -482,7 +488,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	private getSessionTabActions(selection: SessionsViewSelection): readonly IAction[] {
-		const actions = createSessionItemActions(selection, this.commandService, this.storage, this.notifications, () => this.openInNewWindow(selection))
+		const actions = createSessionItemActions(selection, this.commandService, this.listModel, this.notifications, () => this.openInNewWindow(selection))
 			.filter(action => ['agentSession.rename', 'sessions.list.togglePin', 'sessions.openInNewWindow'].includes(action.id));
 		const rename = actions.find(action => action.id === 'agentSession.rename')!;
 		return [
@@ -572,11 +578,14 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		}
 	}
 
-	protected override activatePane(id: string): void {
+	protected override activatePane(id: string, threadId?: string): void {
 		const pane = this.panes.get(id);
 		if (!pane) return;
 		if (pane.model.untitledSessionId) this.sessionService.selectUntitledSession(pane.model.untitledSessionId);
-		else if (pane.sessionId && pane.threadId) this.sessionService.selectThread(pane.sessionId, pane.threadId);
+		else if (pane.sessionId && pane.threadId) {
+			const session = threadId && this.sessionService.sessions.find(candidate => candidate.sessionId === pane.sessionId);
+			this.sessionService.selectThread(pane.sessionId, session && isActiveThread(session, threadId) ? threadId : pane.threadId);
+		}
 	}
 
 

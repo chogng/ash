@@ -16,6 +16,7 @@ import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptio
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
+import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
@@ -52,6 +53,8 @@ export class ChatWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
+	private readonly historyBindingFinished = this._register(new Emitter<SessionHistoryBindingDiagnostic>());
+	readonly onDidFinishHistoryBinding = this.historyBindingFinished.event;
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
 	private _composerGeneration = 0;
 	private materializingComposer: { readonly untitledSessionId: string; readonly generation: number; readonly threadId: ThreadId; } | undefined;
@@ -896,6 +899,10 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async performSubscribe(active: IActiveSessionThread): Promise<void> {
+		const started = performance.now();
+		let subscribedAt: number | undefined;
+		let reconciliationMs: number | undefined;
+		let outcome: SessionHistoryBindingDiagnostic['outcome'] = 'superseded';
 		const generation = ++this.generation;
 		const oldThreadId = this._thread?.threadId;
 		const request = ++this.readRequest;
@@ -924,6 +931,7 @@ export class ChatWidgetModel extends Disposable {
 		}
 		try {
 			const subscribed = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, this.durableSequence, this, { type: 'latest', turnLimit: historyPageTurns });
+			subscribedAt = performance.now();
 			if (this.isDisposed || generation !== this.generation) return;
 			const result = { ...await this.bridgeHistoryGap(subscribed, generation), updates: subscribed.updates };
 			if (this.isDisposed || generation !== this.generation) return;
@@ -940,11 +948,20 @@ export class ChatWidgetModel extends Disposable {
 			}
 			if (snapshot.thread) { this._historyStatus.set(undefined); this.setState('ready'); }
 			else if (snapshot.transcript) this._onDidChange.fire();
+			reconciliationMs = Math.round(performance.now() - subscribedAt);
+			if (snapshot.thread || snapshot.transcript) outcome = 'bound';
 			void this.loadTurnChanges(generation);
 			void this.loadQueue();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation || request !== this.readRequest) return;
+			outcome = isCancellationError(error) ? 'cancelled' : 'failed';
 			this.setHistoryError(error, 'history');
+		} finally {
+			this.historyBindingFinished.fire({
+				outcome, durationMs: Math.round(performance.now() - started),
+				subscriptionMs: subscribedAt === undefined ? undefined : Math.round(subscribedAt - started),
+				reconciliationMs,
+			});
 		}
 	}
 

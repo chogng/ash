@@ -3003,6 +3003,8 @@ use ash_protocol::SessionRuntimeRequest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionRuntimeResult;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionSource;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
@@ -3138,7 +3140,7 @@ use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputQuestion;
-#[cfg(feature = "export")]
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputValidation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::VoiceTranscript;
@@ -7068,6 +7070,7 @@ typescript_bindings! {
     DirectoryGrantsSetParams,
     DirectoryGrantsForgetParams,
     SessionStatus,
+    SessionSource,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,

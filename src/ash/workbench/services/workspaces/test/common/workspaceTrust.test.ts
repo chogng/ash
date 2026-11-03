@@ -535,3 +535,33 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	const requests = resources.add(services.createInstance(WorkspaceTrustRequestService));
 	return Object.assign(state, { trust, requests, workspace, resolver, recovered, notifications, [Symbol.dispose]: () => resources.dispose() });
 }
+
+test('managed checkout trust follows the source grant without exposing its execution permissions', async () => {
+	using workspace = new TestWorkspaceService({ id: 'empty' });
+	using services = new InstantiationService();
+	const checkout = URI.file('/managed/checkouts/review');
+	let source: readonly WorkspaceTrustPermission[] | undefined = DEVELOPMENT_DIR_PERMISSIONS;
+	let explicit: readonly WorkspaceTrustPermission[] | undefined;
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IWorkspaceTrustApi, {
+		...createDisconnectedWorkspaceTrustApi(async () => { throw new Error('Unexpected workspace trust operation'); }),
+		readDirectory: async path => {
+			assert.equal(path, checkout.fsPath);
+			return { dir: 'checkout', permissions: explicit, inheritedWorkspacePermissions: source };
+		},
+	});
+	using resolver = services.createInstance(RemoteAuthorityResolverService);
+	services.registerInstance(IRemoteAuthorityResolverService, resolver);
+	services.registerInstance(IAppServerApi, {
+		isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None,
+		getSlashCommands: async () => [],
+		recovery: { status: 'idle', error: undefined, onDidChange: () => Disposable.None, reconnect: async () => { } },
+	});
+	using trust = services.createInstance(WorkspaceTrustManagementService);
+	assert.deepEqual(await trust.getUriTrustInfo(checkout), { uri: checkout, trusted: true, permissions: undefined });
+	explicit = RESTRICTED_DIR_PERMISSIONS;
+	assert.deepEqual(await trust.getUriTrustInfo(checkout), { uri: checkout, trusted: false, permissions: explicit });
+	explicit = undefined;
+	source = undefined;
+	assert.deepEqual(await trust.getUriTrustInfo(checkout), { uri: checkout, trusted: false, permissions: undefined });
+});

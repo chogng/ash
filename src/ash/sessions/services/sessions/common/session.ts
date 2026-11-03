@@ -161,6 +161,7 @@ export interface ISession {
 	readonly backendSessionId?: string;
 	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
+	readonly source?: 'automation';
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;

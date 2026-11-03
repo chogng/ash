@@ -1,15 +1,15 @@
+import { type ISessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { Separator, type IAction } from '../../base/common/actions.js';
 import type { ICommandService } from '../../platform/commands/common/commands.js';
 import type { INotificationService } from '../../platform/notification/common/notification.js';
-import { StorageScope, type IStorageService } from '../../platform/storage/common/storage.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
 import { localize } from '../../nls.js';
 
 /** Both list hosts invoke the same captured-target commands; only their window owner differs. */
-export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, storage: IStorageService, notifications: INotificationService, openInNewWindow: () => Promise<unknown>, didPin?: (sessionId: string) => void): readonly IAction[] {
+export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, listModel: ISessionsListModelService, notifications: INotificationService, openInNewWindow: () => Promise<unknown>, didPin?: (sessionId: string) => void): readonly IAction[] {
 	const id = selection.kind === 'session' ? selection.active.session.sessionId : undefined;
 	const target = selection.kind === 'untitled' ? { untitledSessionId: selection.session.untitledSessionId } : id;
-	const pinned = id !== undefined && storage.getBoolean(`sessions.list.pinned.${id}`, StorageScope.PROFILE, false);
+	const pinned = selection.kind === 'session' && listModel.isSessionPinned(selection.active.session);
 	const action = (commandId: string, label: string, argument: unknown = target): IAction => ({
 		id: commandId, label, enabled: true, tooltip: '',
 		run: () => commands.executeCommand(commandId, argument).catch(error => notifications.error(String(error))),

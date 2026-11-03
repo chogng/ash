@@ -3,8 +3,7 @@ import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHisto
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
-import { NewChatWidget } from './newChatWidget.js';
+import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import {
 	FOCUS_NEW_SESSION_WORKSPACE_PICKER_KEYBINDING, FOCUS_NEW_SESSION_WORKSPACE_PICKER_WHEN,
 	FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_KEYBINDING, FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_WHEN,
@@ -93,8 +92,7 @@ registerAction2(class FocusNewSessionWorkspacePickerAction extends Action2 {
 	}
 
 	run(accessor: ServicesAccessor): void {
-		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget instanceof NewChatWidget) { widget.focusWorkspacePicker(); }
+		accessor.get(ISessionsConversationService).focusDraftPicker('workspace');
 	}
 });
 
@@ -110,7 +108,6 @@ registerAction2(class FocusNewSessionEnvironmentPickerAction extends Action2 {
 	}
 
 	run(accessor: ServicesAccessor): void {
-		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
-		if (widget instanceof NewChatWidget) { widget.focusEnvironmentPicker(); }
+		accessor.get(ISessionsConversationService).focusDraftPicker('environment');
 	}
 });

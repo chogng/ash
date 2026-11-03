@@ -1,3 +1,5 @@
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { logSessionHistoryBinding } from '../../../services/sessions/browser/sessionOpenTelemetryService.js';
 import './media/chatView.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,6 +10,7 @@ import { SessionInfoRail } from '../../../browser/parts/sessionInfoRail.js';
 import type { ISessionsConversationPane } from '../../../browser/parts/sessionView.js';
 import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { ISessionContext } from '../../../services/sessions/browser/sessionContext.js';
 import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
 
@@ -42,6 +45,9 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 		const model = scope.createInstance(ChatWidgetModel, this.chatService,
 			selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session },
 			this.sessions);
+		scope.registerInstance(ISessionContext, model);
+		const log = scope.getOptional(ILogService);
+		if (log) this._register(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
 		try {
 			this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget, this.element, this.panelId, model, this.createNewSession));
 		} catch (error) {
@@ -62,6 +68,10 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	public get infoVisible(): boolean { return this.info.visible; }
 	public toggleInfo(): void { this.info.toggle(); }
 	public focus(): void { this.widget.focus(); }
+	public focusDraftPicker(picker: 'workspace' | 'environment'): void {
+		if (picker === 'workspace') this.widget.focusWorkspacePicker();
+		else this.widget.focusEnvironmentPicker();
+	}
 	public startVoiceConversation(): Promise<void> { return this.widget.startVoiceConversation(); }
 	public addContext(...args: Parameters<ISessionsConversationPane['addContext']>): void { this.widget.addContext(...args); }
 	public appendToDraft(...args: Parameters<ISessionsConversationPane['appendToDraft']>): void { this.widget.appendToDraft(...args); }
