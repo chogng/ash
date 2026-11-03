@@ -1033,6 +1033,16 @@ impl VoiceHost {
                     let rejected = std::mem::take(&mut *self.session.rejected.lock().unwrap());
                     for id in rejected { if proposals.remove(&id).is_some() { if let Some(commands) = self.session.commands.lock().unwrap().as_ref() { let _ = commands.try_send(AgentCommand::Commentary { delegation_id: id, text: self.session.spec.task_labels.rejected.clone() }); } } }
                     for (id, proposal) in proposals.iter_mut() {
+                        // Terminal Core turns have already been narrated and cannot advance.
+                        if matches!(
+                            proposal.last_progress,
+                            Some(ProposalProgress::Core(
+                                _,
+                                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                            ))
+                        ) {
+                            continue;
+                        }
                         let threads = self.threads.clone(); let thread = self.session.spec.thread_id.clone(); let command_id = proposal.command_id.clone(); let transcript = proposal.transcript.clone();
                         let progress = tokio::task::spawn_blocking(move || threads.read_voice_task_progress(&thread, &command_id, &transcript)).await;
                         let labels = &self.session.spec.task_labels;
