@@ -902,6 +902,19 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     turn_id,
                 )?,
             )),
+            SessionRequest::CancelUserInput {
+                thread_id,
+                turn_id,
+                request_id,
+            } => result(&SessionRequestResult::Interaction(
+                self.cancel_user_input_request(
+                    connection.connection_id,
+                    &mutation.session_id,
+                    &thread_id,
+                    &turn_id,
+                    &request_id,
+                )?,
+            )),
             SessionRequest::ResolveInteraction {
                 thread_id,
                 expected_sequence,
@@ -2014,6 +2027,65 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             turn_id: receipt.turn_id,
             sequence: receipt.sequence,
         })
+    }
+
+    fn cancel_user_input_request(
+        &self,
+        connection_id: u64,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+        turn_id: &ash_protocol::TurnId,
+        request_id: &ash_protocol::RequestId,
+    ) -> Result<TurnInteractionResolveResult, RpcError> {
+        let _env_runtime = self
+            .env_runtime_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let runtime = self.context.agent_runtime();
+        let thread = runtime.read_thread(thread_id).map_err(core_error)?;
+        let is_pending_question = thread.session_id == *session_id
+            && thread.turns.iter().any(|turn| {
+                turn.turn_id == *turn_id
+                    && turn
+                        .pending_interaction
+                        .as_ref()
+                        .is_some_and(|interaction| {
+                            interaction.request_id == *request_id
+                                && matches!(
+                                    interaction.request,
+                                    ash_protocol::AgentRequest::UserInput { .. }
+                                )
+                        })
+            });
+        if !is_pending_question
+            || !self
+                .updates
+                .is_agent_interaction_owner(connection_id, request_id)
+        {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AgentInteractionNotOwner,
+            ));
+        }
+        if self
+            .updates
+            .is_agent_interaction_expired(request_id, super::update_broker::unix_time_millis())
+        {
+            return Err(RpcError::new(
+                -32031,
+                AppServerErrorName::AgentInteractionExpired,
+            ));
+        }
+        runtime
+            .cancel_interaction(
+                thread_id,
+                turn_id,
+                request_id,
+                ash_protocol::InteractionCancelReason::UserCancelled,
+            )
+            .map_err(core_error)?;
+        let sequence = runtime.read_thread(thread_id).map_err(core_error)?.sequence;
+        Ok(TurnInteractionResolveResult { sequence })
     }
 
     fn resolve_turn_interaction_request(

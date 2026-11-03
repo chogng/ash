@@ -182,6 +182,7 @@ pub enum InteractionCancelReason {
     TurnInterrupted,
     DeadlineElapsed,
     OwnerDisconnected,
+    UserCancelled,
     ServerShutdown,
 }
 

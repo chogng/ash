@@ -9,7 +9,7 @@ import { ILanguageModelsConfigurationService } from '../common/languageModelsCon
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
@@ -135,6 +135,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	get inputState(): ChatInputState {
+		const pendingInteraction = activeTurn(this._thread)?.pendingInteraction;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			inputBlocked: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
@@ -162,6 +163,7 @@ export class CoworkWidgetModel extends Disposable {
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
 			interaction: this.interaction,
+			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};
 	}
 
@@ -521,14 +523,14 @@ export class CoworkWidgetModel extends Disposable {
 		}
 	}
 
-	async resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void> {
+	async resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void> {
 		const thread = this._thread;
 		const offer = thread ? this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) : undefined;
 		const interaction = offer?.interaction;
 		const turn = activeTurn(thread);
 		if (!thread || !turn || !offer || !interaction || offer.turnId !== turn.turnId) return;
 		if (expectedRequestId !== undefined && interaction.requestId !== expectedRequestId) { throw canceled(); }
-		if (response.type !== interaction.request.type) {
+		if ((response.type === 'cancelUserInput' ? 'userInput' : response.type) !== interaction.request.type) {
 			throw new Error('Interaction response kind does not match request');
 		}
 		const operation = this.captureOperation();
@@ -658,7 +660,11 @@ export class CoworkWidgetModel extends Disposable {
 		const generation = ++this.generation;
 		const oldThreadId = this._thread?.threadId;
 		const request = ++this.readRequest;
-		this._thread = undefined;
+		// The new connection supplies authority. Keep the last readable snapshot
+		// for the same thread so a pending question retains its draft during hydration.
+		if (this._thread?.sessionId !== active.session.sessionId || oldThreadId !== active.threadId) {
+			this._thread = undefined;
+		}
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
 		this._changeSets = [];

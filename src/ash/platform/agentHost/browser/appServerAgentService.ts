@@ -626,7 +626,12 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 			appServerRequest(
 				connection,
 				'session/request',
-				sessionRequest(params, {
+				sessionRequest(params, params.response.type === 'cancelUserInput' ? {
+					type: 'cancelUserInput',
+					threadId: params.threadId,
+					turnId: params.turnId,
+					requestId: params.requestId
+				} : {
 					type: 'resolveInteraction',
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,

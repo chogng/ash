@@ -100,6 +100,7 @@ impl SwitchModeToolService {
                         })
                         .collect(),
                     allow_free_form: false,
+                    validation: None,
                 }],
             })?;
             let approved = match outcome {

@@ -339,6 +339,7 @@ fn user_answers_keep_their_question_and_precede_a_later_revocation() {
                             question: "Where may I publish?".into(),
                             options: vec![],
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

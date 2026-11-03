@@ -156,7 +156,7 @@ impl RequestLane {
                 params
                     .pointer("/request/type")
                     .and_then(serde_json::Value::as_str),
-                Some("stop" | "interruptTurn" | "resolveInteraction")
+                Some("stop" | "interruptTurn" | "resolveInteraction" | "cancelUserInput")
             )
         {
             return Self::Control;

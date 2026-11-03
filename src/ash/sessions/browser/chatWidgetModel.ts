@@ -11,7 +11,7 @@ import { ILanguageModelsService } from '../../workbench/contrib/chat/common/lang
 import { Emitter, type Event } from '../../base/common/event.js';
 import { canceled, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
-import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
@@ -162,6 +162,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get inputState(): ChatInputState {
+		const pendingInteraction = activeTurn(this._thread)?.pendingInteraction;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
@@ -190,6 +191,7 @@ export class ChatWidgetModel extends Disposable {
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
 			interaction: this.interaction,
+			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};
 	}
 
@@ -729,13 +731,13 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
-	async resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void> {
+	async resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void> {
 		const thread = this._thread;
 		const offer = thread ? this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) : undefined;
 		const interaction = offer?.interaction;
 		if (!thread || !offer || !interaction) return;
 		if (expectedRequestId !== undefined && interaction.requestId !== expectedRequestId) { throw canceled(); }
-		if (response.type !== interaction.request.type) {
+		if ((response.type === 'cancelUserInput' ? 'userInput' : response.type) !== interaction.request.type) {
 			throw new Error('Interaction response kind does not match request');
 		}
 		const operation = this.captureOperation();

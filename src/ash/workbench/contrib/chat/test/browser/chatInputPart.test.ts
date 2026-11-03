@@ -5000,6 +5000,150 @@ for (const locale of ['en', 'zh-CN']) test(`MCP questions retain required fields
 	} finally { initializeTestLocalization('en'); }
 });
 
+test('Question choices require selection and retain both presets and custom answers', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const responses: unknown[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		part.render({
+			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			interaction: {
+				requestId: 'choose-mode',
+				request: {
+					type: 'userInput', request: {
+						questions: [{
+							id: 'mode', header: 'Mode', question: 'How should we proceed?', required: true, allowFreeForm: true,
+							options: [{ label: 'Plan', description: 'Investigate first' }],
+						}]
+					}
+				},
+			},
+		});
+		const form = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;
+		const select = form.querySelector('select')!;
+		const customInput = form.querySelector('input')!;
+		assert.match(form.textContent!, /Mode — How should we proceed/);
+		assert.equal(select.options[0].text, '请选择答案');
+		assert.equal(select.options[1].text, 'Plan — Investigate first');
+		assert.equal(select.options[2].text, '输入自定义答案');
+		form.requestSubmit();
+		assert.deepEqual(responses, []);
+		select.selectedIndex = 1;
+		form.requestSubmit();
+		select.selectedIndex = 2;
+		select.dispatchEvent(new browserEnvironment.window.Event('change'));
+		assert.equal(customInput.disabled, false);
+		form.requestSubmit();
+		assert.equal(responses.length, 1);
+		customInput.value = 'Ask first';
+		form.requestSubmit();
+		assert.deepEqual(responses, [
+			{ type: 'userInput', response: { answers: { mode: { value: 'Plan' } } } },
+			{ type: 'userInput', response: { answers: { mode: { value: 'Ask first' } } } },
+		]);
+	} finally { initializeTestLocalization('en'); }
+});
+
+test('MCP type and bounds errors keep the request open for correction', () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
+		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'mcp-types', request: {
+				type: 'userInput', request: {
+					questions: [
+						{ id: 'whole', header: 'Whole', question: 'Integer', required: true, allowFreeForm: true, validation: { type: 'integer', min: '9007199254740993', max: null } },
+						{ id: 'decimal', header: 'Decimal', question: 'Number', required: true, allowFreeForm: true, validation: { type: 'number', min: '0', max: '2' } },
+						{ id: 'text', header: 'Text', question: 'String', required: true, allowFreeForm: true, validation: { type: 'string', min: '1', max: '1' } },
+					]
+				}
+			}
+		},
+	});
+	const form = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;
+	const fill = (name: string, value: string) => {
+		const input = form.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+		input.value = value;
+		input.dispatchEvent(new browserEnvironment.window.Event('input'));
+		return input.validity.valid;
+	};
+	assert.equal(fill('whole', '9007199254740992'), false);
+	assert.equal(fill('decimal', '0x1'), false);
+	assert.equal(fill('text', '😀😀'), false);
+	form.requestSubmit();
+	assert.deepEqual(responses, []);
+	assert.equal(fill('whole', '9223372036854775808'), false);
+	assert.equal(fill('whole', '9007199254740993'), true);
+	assert.equal(fill('decimal', '1.5'), true);
+	assert.equal(fill('text', '😀'), true);
+	form.requestSubmit();
+	assert.deepEqual(responses, [{
+		type: 'userInput', response: {
+			answers: {
+				whole: { value: '9007199254740993' }, decimal: { value: '1.5' }, text: { value: '😀' },
+			}
+		}
+	}]);
+});
+
+test('Cancelling a question sends its identity without submitting required answers', () => {
+	const decisions: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		resolveInteraction: async (decision, requestId) => { decisions.push({ decision, requestId }); },
+	});
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [],
+		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'pending', request: {
+				type: 'userInput', request: {
+					questions: [{
+						id: 'answer', header: 'Answer', question: 'Question', required: true, allowFreeForm: true,
+					}]
+				}
+			}
+		},
+	});
+	const cancel = part.element.querySelector<HTMLButtonElement>('.ash-chat-interaction form button[type="button"]')!;
+	cancel.click();
+	assert.deepEqual(decisions, [{ decision: { type: 'cancelUserInput' }, requestId: 'pending' }]);
+});
+
+test('Question draft survives a fresh offer for the same pending request', () => {
+	using part = inputPart(sharedNotifications);
+	const interaction = {
+		requestId: 'question',
+		request: {
+			type: 'userInput' as const, request: {
+				questions: [{
+					id: 'answer', header: 'Answer', question: 'Question', required: true, allowFreeForm: true,
+				}]
+			}
+		},
+	};
+	const state: ChatInputState = {
+		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [],
+		isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction, pendingUserInputRequestId: interaction.requestId,
+		conversation: { sessionId: 'session', threadId: 'thread' },
+	};
+	const field = () => part.element.querySelector<HTMLInputElement>('.ash-chat-interaction form input')!;
+	part.render(state);
+	field().value = 'Unsubmitted answer';
+	field().dispatchEvent(new browserEnvironment.window.Event('input'));
+
+	part.render({ ...state, interaction: undefined });
+	assert.equal(field(), null);
+	part.render({ ...state, interaction: { ...interaction } });
+	assert.equal(field().value, 'Unsubmitted answer');
+
+	part.render({ ...state, interaction: undefined, pendingUserInputRequestId: undefined });
+	part.render({ ...state, interaction: { ...interaction } });
+	assert.equal(field().value, '');
+});
+
 test('Retired answer forms cannot resolve a replacement interaction or hidden composer', async () => {
 	const replies: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { replies.push(response); } });

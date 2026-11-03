@@ -22,7 +22,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -67,7 +67,7 @@ export interface ICoworkWidgetModel extends IDisposable {
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode(mode: ApprovalMode): void;
-	resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void>;
+	resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }
 

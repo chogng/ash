@@ -143,6 +143,7 @@ pub use interaction::UserInput;
 pub use interaction::UserInputAnswer;
 pub use interaction::UserInputOption;
 pub use interaction::UserInputQuestion;
+pub use interaction::UserInputValidation;
 pub use item::PlanStep;
 pub use item::PlanStepStatus;
 pub use item::PlanUpdate;

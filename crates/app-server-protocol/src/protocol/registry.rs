@@ -3136,6 +3136,8 @@ use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputQuestion;
+#[cfg(feature = "export")]
+use ash_protocol::UserInputValidation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::VoiceTranscript;
 #[cfg(any(test, feature = "export"))]
@@ -7244,6 +7246,7 @@ typescript_bindings! {
     RequestUserInput,
     RequestUserInputResponse,
     UserInputQuestion,
+    UserInputValidation,
     UserInputOption,
     UserInputAnswer,
     DynamicToolCall,

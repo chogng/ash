@@ -3879,6 +3879,7 @@ impl ToolService for InteractiveTool {
                 question: "Which city?".into(),
                 options: Vec::new(),
                 allow_free_form: true,
+                validation: None,
             }],
         })?;
         match outcome {

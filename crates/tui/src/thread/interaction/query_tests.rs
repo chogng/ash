@@ -299,6 +299,7 @@ fn optional_question_projects_the_protocol_and_preserves_explicit_false() {
                     })
                     .collect(),
                 allow_free_form: false,
+                validation: None,
             }],
         },
     )

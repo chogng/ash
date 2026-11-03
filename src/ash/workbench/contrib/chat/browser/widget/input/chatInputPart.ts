@@ -96,6 +96,7 @@ import type { ChatContextAttachment, ChatImageCapture } from '../../../../../ser
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type SlashCommandInput } from '../../../common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
+import { isChatQuestionAnswerValid } from '../../../common/model/chatQuestionValidation.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
@@ -247,6 +248,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private renderedInteraction: ChatInputState['interaction'];
+	private questionDraft: { readonly requestId: string; readonly fields: Map<string, { choice?: number; text: string; }>; } | undefined;
 	private renderedToolIdentity: string | undefined;
 	private confirmationCarousel: ChatToolConfirmationCarouselPart | undefined;
 	private readonly elicitationFocused: IContextKey<boolean>;
@@ -1274,6 +1276,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			|| state.conversation?.threadId !== this.state.conversation?.threadId) {
 			this.clearInputNotifications();
 			this.renderedInteraction = undefined;
+			this.questionDraft = undefined;
 		}
 		const draftMode = this.selectDraft(state.draftIdentity);
 		const restoreMode = draftMode !== undefined && draftMode !== state.mode;
@@ -1876,6 +1879,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	private renderInteraction(state: ChatInputState): void {
 		const interaction = state.interaction;
+		const questionRequestId = interaction?.request.type === 'userInput' ? interaction.requestId : state.pendingUserInputRequestId;
+		if (this.questionDraft?.requestId !== questionRequestId) {
+			this.questionDraft = questionRequestId ? { requestId: questionRequestId, fields: new Map() } : undefined;
+		}
 		this.toolConfirmation?.setVisible(this.visible && !state.aiDisabled && state.phase !== 'submitting');
 		this.elicitationFocused.set(interaction?.request.type === 'userInput' && !state.aiDisabled);
 		// Streaming and catalog updates must not replace the approval button under keyboard focus.
@@ -2013,27 +2020,92 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			case 'userInput': {
 				const form = h(this.element.ownerDocument, 'form');
 				form.className = 'ash-chat-interaction-form';
-				const inputs = new Map<string, HTMLInputElement | HTMLSelectElement>();
+				const inputs = new Map<string, () => string>();
+				const fields = this.questionDraft!.fields;
+				const validators: (() => void)[] = [];
 				for (const question of request.request.questions) {
 					const label = h(this.element.ownerDocument, 'label');
-					label.textContent = question.question;
-					const required = question.required;
-					const input = question.options && !question.allowFreeForm ? this.questionSelect(question.options, required) : h(this.element.ownerDocument, 'input');
-					input.required = required;
+					const prompt = question.header && question.header !== question.question
+						? localize('chat.interaction.questionPrompt', "{0} — {1}", question.header, question.question)
+						: question.question;
+					label.textContent = prompt;
+					const options = question.options;
+					const select = options?.length ? this.questionSelect(options, question.required) : undefined;
+					const input = select ?? h(this.element.ownerDocument, 'input');
+					const saved = fields.get(question.id);
+					input.required = question.required;
 					input.name = question.id;
 					label.append(input);
 					form.append(label);
-					inputs.set(question.id, input);
+					inputs.set(question.id, () => input.value);
+
+					if (!select) {
+						input.value = saved?.text ?? '';
+						const validation = question.validation;
+						const validate = () => {
+							const invalid = validation && input.value !== '' && !isChatQuestionAnswerValid(input.value, validation);
+							input.setCustomValidity(invalid ? localize('chat.interaction.invalidAnswer', "Enter an answer that matches the requested type and limits.") : '');
+						};
+						validators.push(validate);
+						validate();
+						this.interactionListeners.add(addDisposableListener(input, 'input', () => {
+							fields.set(question.id, { text: input.value });
+							validate();
+						}));
+						continue;
+					}
+					if (question.allowFreeForm) {
+						const customOption = h(this.element.ownerDocument, 'option');
+						customOption.value = 'custom';
+						customOption.textContent = localize('chat.interaction.customOption', "Enter a custom answer");
+						select.append(customOption);
+
+						const customField = h(this.element.ownerDocument, 'div');
+						const customLabel = h(this.element.ownerDocument, 'label');
+						customLabel.textContent = localize('chat.interaction.customAnswer', "Custom answer for {0}", prompt);
+						const customInput = h(this.element.ownerDocument, 'input');
+						customInput.value = saved?.text ?? '';
+						customLabel.append(customInput);
+						customField.append(customLabel);
+						form.append(customField);
+						const isCustom = () => select.selectedIndex === customOption.index;
+						const updateCustomInput = () => {
+							const enabled = isCustom();
+							customField.hidden = !enabled;
+							customInput.disabled = !enabled;
+							customInput.required = enabled;
+						};
+						select.selectedIndex = saved?.choice ?? 0;
+						updateCustomInput();
+						const save = () => fields.set(question.id, { choice: select.selectedIndex, text: customInput.value });
+						this.interactionListeners.add(addDisposableListener(select, 'change', () => {
+							updateCustomInput();
+							save();
+						}));
+						this.interactionListeners.add(addDisposableListener(customInput, 'input', save));
+						inputs.set(question.id, () => isCustom() ? customInput.value : select.value);
+					} else {
+						select.selectedIndex = saved?.choice ?? 0;
+						this.interactionListeners.add(addDisposableListener(select, 'change', () => fields.set(question.id, { choice: select.selectedIndex, text: '' })));
+					}
 				}
+				const cancel = this.interactionButton(localize('chat.interaction.cancelQuestion', "Cancel question"));
+				this.interactionListeners.add(addDisposableListener(cancel, 'click', () => {
+					void resolve({ type: 'cancelUserInput' }).catch(() => undefined);
+				}));
+				form.append(cancel);
 				const submit = this.interactionButton(localize('chat.interaction.submit', 'Submit answers'), true);
 				submit.type = 'submit';
 				form.append(submit);
 				this.interaction.append(form);
 				this.interactionListeners.add(addDisposableListener(form, 'submit', (event) => {
 					event.preventDefault();
+					for (const validate of validators) validate();
+					if (!form.reportValidity()) return;
 					const answers: Record<string, { value: string; }> = {};
-					for (const [id, input] of inputs) {
-						if (input.required || input.value !== '') answers[id] = { value: input.value };
+					for (const [id, readValue] of inputs) {
+						const value = readValue();
+						if (value !== '') answers[id] = { value };
 					}
 					void resolve({
 						type: 'userInput',
@@ -2058,18 +2130,22 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return button;
 	}
 
-	private questionSelect(options: readonly { readonly label: string; }[], required = true): HTMLSelectElement {
+	private questionSelect(options: readonly { readonly label: string; readonly description: string; }[], required: boolean): HTMLSelectElement {
 		const select = h(this.element.ownerDocument, 'select');
-		if (!required) {
-			const unanswered = h(this.element.ownerDocument, 'option');
-			unanswered.value = '';
-			unanswered.textContent = localize('chat.interaction.unanswered', 'No answer');
-			select.append(unanswered);
-		}
+		const unanswered = h(this.element.ownerDocument, 'option');
+		unanswered.value = '';
+		unanswered.disabled = required;
+		unanswered.selected = true;
+		unanswered.textContent = required
+			? localize('chat.interaction.chooseAnswer', "Choose an answer")
+			: localize('chat.interaction.unanswered', "No answer");
+		select.append(unanswered);
 		for (const option of options) {
 			const element = h(this.element.ownerDocument, 'option');
 			element.value = option.label;
-			element.textContent = option.label;
+			element.textContent = option.description && option.description !== option.label
+				? localize('chat.interaction.optionDescription', "{0} — {1}", option.label, option.description)
+				: option.label;
 			select.append(element);
 		}
 		return select;

@@ -440,6 +440,7 @@ fn failed_interaction_resume_keeps_the_answer_and_records_terminal_failure() {
                             question: "Which one?".into(),
                             options: vec![],
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

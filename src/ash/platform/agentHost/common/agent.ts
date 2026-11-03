@@ -87,7 +87,7 @@ interface SessionOperations {
 		readonly expectedSequence: number;
 		readonly turnId: string;
 		readonly requestId: string;
-		readonly response: AgentResponse;
+		readonly response: AgentInteractionDecision;
 	};
 }
 
@@ -639,6 +639,13 @@ export interface UserInputQuestion {
 	readonly required: boolean;
 	readonly options?: readonly UserInputOption[];
 	readonly allowFreeForm: boolean;
+	readonly validation?: UserInputValidation | null;
+}
+
+export interface UserInputValidation {
+	readonly type: 'string' | 'number' | 'integer';
+	readonly min: string | null;
+	readonly max: string | null;
 }
 
 export interface RequestUserInput {
@@ -723,6 +730,8 @@ export type AgentRequest =
 	| { readonly type: 'toolResultReview'; readonly request: ToolResultReviewRequest; }
 	| { readonly type: 'userInput'; readonly request: RequestUserInput; }
 	| { readonly type: 'dynamicTool'; readonly call: DynamicToolCall; };
+
+export type AgentInteractionDecision = AgentResponse | { readonly type: 'cancelUserInput'; };
 
 export type AgentResponse =
 	| { readonly type: 'toolResultReview'; readonly response: { readonly decision: 'share' | 'skip'; }; }

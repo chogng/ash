@@ -893,6 +893,7 @@ fn readable_wait_state_excludes_the_owner_directed_request_payload() {
                     question: "Do not broadcast this payload".into(),
                     options: Vec::new(),
                     allow_free_form: true,
+                    validation: None,
                 }],
             },
         },

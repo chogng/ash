@@ -56,6 +56,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
   pending.set(id, message.id);
   send({ id, method: 'elicitation/create', params: { mode: 'form', message: 'Complete the synthetic form', requestedSchema: { type: 'object', properties: {
    project: { type: 'string', title: 'Project', description: 'Required project', minLength: 1 },
+   count: { type: 'integer', title: 'Count', minimum: 1, maximum: 3 },
    note: { type: 'string', title: 'Note', description: 'Optional note', minLength: 2 },
    color: { type: 'string', title: 'Color', description: 'Optional color', enum: ['red', 'blue'] },
    enabled: { type: 'boolean', title: 'Enabled', description: 'Optional enabled' }
@@ -113,6 +114,33 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			await expect(form.locator('select[name="enabled"]')).toHaveValue('');
 			expect(await form.evaluate(element => (element as HTMLFormElement).checkValidity())).toBe(false);
 			await project.fill('Synthetic project');
+			const count = form.locator('input[name="count"]');
+			await count.fill('1.5');
+			await form.getByRole('button', { name: 'Submit answers', exact: true }).click();
+			await expect.poll(() => count.evaluate(input => (input as HTMLInputElement).validity.customError)).toBe(true);
+			expect(await answers()).toHaveLength(explicit ? 1 : 0);
+			await count.fill('2');
+			if (!explicit && target.kind === 'electron' && 'evaluate' in application) {
+				const before = await project.elementHandle();
+				const requestId = (await read()).turns.at(-1)?.pendingInteraction?.requestId;
+				expect(requestId).toBeTruthy();
+				const stopped = await application.evaluate(() => {
+					const runtime = process as typeof process & { _getActiveHandles(): unknown[]; };
+					const carriers = runtime._getActiveHandles().filter((handle): handle is import('node:child_process').ChildProcess => {
+						const child = handle as Partial<import('node:child_process').ChildProcess>;
+						return typeof child.kill === 'function' && typeof child.spawnfile === 'string'
+							&& /ash-app-server-daemon(?:\.exe)?$/.test(child.spawnfile)
+							&& child.spawnargs?.some(arg => arg === 'connect' || arg === 'connect-selected') === true;
+					});
+					return carriers.filter(carrier => carrier.kill()).length;
+				});
+				expect(stopped).toBeGreaterThan(0);
+				await expect.poll(() => before!.evaluate(input => input.isConnected)).toBe(false);
+				await expect(project).toHaveValue('Synthetic project');
+				await expect(count).toHaveValue('2');
+				expect((await read()).turns.at(-1)?.pendingInteraction?.requestId).toBe(requestId);
+				await before!.dispose();
+			}
 			if (explicit) {
 				await form.locator('input[name="note"]').fill('A note');
 				await form.locator('select[name="color"]').selectOption('red');
@@ -120,7 +148,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 			}
 			await form.getByRole('button', { name: 'Submit answers', exact: true }).click();
 			await expect.poll(async () => (await read()).turns.at(-1)?.status).toBe('completed');
-			const result = { action: 'accept', content: { project: 'Synthetic project', ...(explicit ? { note: 'A note', color: 'red', enabled: false } : {}) } };
+			const result = { action: 'accept', content: { project: 'Synthetic project', count: 2, ...(explicit ? { note: 'A note', color: 'red', enabled: false } : {}) } };
 			await expect.poll(async () => (await answers()).at(-1)).toEqual(result);
 			expect(await answers()).toHaveLength(explicit ? 2 : 1);
 		}

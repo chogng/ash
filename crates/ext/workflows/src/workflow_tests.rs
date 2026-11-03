@@ -690,6 +690,7 @@ fn waiting_stage_keeps_its_identity_and_cancellation_reaches_its_pending_interac
                             question: "Which scope?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

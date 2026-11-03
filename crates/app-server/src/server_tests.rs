@@ -6049,6 +6049,7 @@ impl ToolService for AppServerInteractiveTool {
                 question: "Which city?".into(),
                 options: Vec::new(),
                 allow_free_form: true,
+                validation: None,
             }],
         })? {
             ash_core::ToolUserInputOutcome::Answered(response) => Ok(ToolExecutionOutput::Success(
@@ -6097,6 +6098,15 @@ impl ash_core::TurnExecutionBackend for CountingResumeBackend {
 
 #[test]
 fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_resume() {
+    live_tool_interaction_finishes(false);
+}
+
+#[test]
+fn live_tool_question_can_be_cancelled_without_interrupting_the_turn() {
+    live_tool_interaction_finishes(true);
+}
+
+fn live_tool_interaction_finishes(cancel: bool) {
     let model = Arc::new(AppServerInteractiveModel::default());
     let server = server_with_model(model.clone()).with_tool_service(
         Arc::new(AppServerInteractiveTool),
@@ -6186,6 +6196,45 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
         );
         thread::sleep(Duration::from_millis(2));
     };
+    if cancel {
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0",
+                "id":7,
+                "method":"session/request",
+                "params":{
+                    "commandId":"cancel-wrong-turn",
+                    "sessionId":session_id,
+                    "request":{
+                        "type":"cancelUserInput",
+                        "threadId":thread_id,
+                        "turnId":"wrong-turn",
+                        "requestId":request_id
+                    }
+                }
+            }),
+        );
+        assert_eq!(rejected["error"]["code"], -32030);
+    }
+    let request = if cancel {
+        serde_json::json!({
+            "type":"cancelUserInput",
+            "threadId":thread_id,
+            "turnId":turn_id,
+            "requestId":request_id,
+        })
+    } else {
+        serde_json::json!({
+            "type":"resolveInteraction",
+            "expectedSequence":sequence,
+            "threadId":thread_id,
+            "turnId":turn_id,
+            "requestId":request_id,
+            "response":{"type":"userInput","response":{"answers":{"city":{"value":"Paris"}}}}
+        })
+    };
     let resolved = call(
         &server,
         &mut connection,
@@ -6196,14 +6245,7 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
             "params":{
                 "commandId":"resolve-live-tool-input",
                 "sessionId":session_id,
-                "request":{
-                    "type":"resolveInteraction",
-                    "expectedSequence":sequence,
-                    "threadId":thread_id,
-                    "turnId":turn_id,
-                    "requestId":request_id,
-                    "response":{"type":"userInput","response":{"answers":{"city":{"value":"Paris"}}}}
-                }
+                "request":request
             }
         }),
     );
@@ -6214,7 +6256,8 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
     let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
     assert!(snapshot.items.iter().any(|item| matches!(
         item,
-        ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text == "Paris"
+        ash_protocol::ThreadItem::ToolResult { text, is_error, .. }
+            if if cancel { *is_error && text.contains("UserCancelled") } else { !*is_error && text == "Paris" }
     )));
 }
 

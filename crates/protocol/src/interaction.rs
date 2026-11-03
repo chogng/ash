@@ -30,6 +30,7 @@ pub use request_user_input::RequestUserInputResponse;
 pub use request_user_input::UserInputAnswer;
 pub use request_user_input::UserInputOption;
 pub use request_user_input::UserInputQuestion;
+pub use request_user_input::UserInputValidation;
 pub use tool_result_review::ToolResultReview;
 pub use tool_result_review::ToolResultReviewDecision;
 pub use tool_result_review::ToolResultReviewRequest;

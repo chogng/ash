@@ -174,6 +174,7 @@ impl FormField {
             required: self.required,
             options: self.kind.options(),
             allow_free_form: self.kind.allows_free_form(),
+            validation: self.kind.validation(),
         }
     }
 }
@@ -206,6 +207,25 @@ impl FormFieldKind {
             }),
             Some("boolean") => Ok(Self::Boolean),
             _ => Err(invalid_form()),
+        }
+    }
+
+    fn validation(&self) -> Option<ash_protocol::UserInputValidation> {
+        use ash_protocol::UserInputValidation;
+        match self {
+            Self::String { min, max } => Some(UserInputValidation::String {
+                min: min.map(|value| value.to_string()),
+                max: max.map(|value| value.to_string()),
+            }),
+            Self::Number { min, max } => Some(UserInputValidation::Number {
+                min: min.map(|value| value.to_string()),
+                max: max.map(|value| value.to_string()),
+            }),
+            Self::Integer { min, max } => Some(UserInputValidation::Integer {
+                min: min.map(|value| value.to_string()),
+                max: max.map(|value| value.to_string()),
+            }),
+            Self::Boolean | Self::Enum(_) => None,
         }
     }
 

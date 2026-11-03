@@ -25,6 +25,27 @@ pub struct UserInputQuestion {
     pub options: Vec<UserInputOption>,
     #[serde(default)]
     pub allow_free_form: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub validation: Option<UserInputValidation>,
+}
+
+/// Bounds use decimal strings so integer limits survive JavaScript transport exactly.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum UserInputValidation {
+    String {
+        min: Option<String>,
+        max: Option<String>,
+    },
+    Number {
+        min: Option<String>,
+        max: Option<String>,
+    },
+    Integer {
+        min: Option<String>,
+        max: Option<String>,
+    },
 }
 
 const fn default_required() -> bool {

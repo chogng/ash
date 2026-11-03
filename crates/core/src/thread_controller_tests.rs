@@ -293,6 +293,7 @@ fn user_input_interaction() -> AgentRequest {
                 question: "Continue?".into(),
                 options: Vec::new(),
                 allow_free_form: true,
+                validation: None,
             }],
         },
     }

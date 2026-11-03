@@ -536,6 +536,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                             question: "Which target?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

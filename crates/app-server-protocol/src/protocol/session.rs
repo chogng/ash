@@ -328,6 +328,11 @@ pub enum SessionRequest {
         expected_sequence: u64,
         turn_id: TurnId,
     },
+    CancelUserInput {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        request_id: RequestId,
+    },
     ResolveInteraction {
         thread_id: ThreadId,
         #[ts(type = "number")]
