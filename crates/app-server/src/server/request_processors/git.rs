@@ -405,9 +405,8 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             Ok(version) => GitInstallationDto::Available {
                 version: version.display,
             },
-            Err(GitError::Io { source, .. }) if source.kind() == std::io::ErrorKind::NotFound => {
-                GitInstallationDto::Missing
-            }
+            Err(GitError::ExecutableNotFound { .. }) => GitInstallationDto::Missing,
+            Err(GitError::LaunchFailed { .. }) => GitInstallationDto::LaunchFailed,
             Err(GitError::UnsupportedVersion { installed }) => GitInstallationDto::Unsupported {
                 version: installed,
                 minimum_version: ash_git::GitVersion::minimum_supported(),

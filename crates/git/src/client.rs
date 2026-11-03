@@ -366,7 +366,12 @@ impl GitClient {
         match &self.executable {
             ExecutableSource::System(system) => system
                 .find(&HostExecutableName::new("git").expect("fixed executable basename"))
-                .map_err(|source| GitError::io("locate system Git", source)),
+                .map_err(|source| match source.kind() {
+                    std::io::ErrorKind::NotFound => GitError::ExecutableNotFound {
+                        source: Arc::new(source),
+                    },
+                    _ => GitError::io("locate system Git", source),
+                }),
             ExecutableSource::Explicit(path) => Ok(path.clone()),
         }
     }
@@ -1064,8 +1069,10 @@ impl GitClient {
         for name in REPOSITORY_SELECTOR_ENVIRONMENT {
             command.env_remove(name);
         }
+        if let Some(cwd) = &invocation.cwd {
+            command.current_dir(cwd);
+        }
         command
-            .current_dir(&invocation.cwd)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GCM_INTERACTIVE", "Never")
             .env("LC_ALL", "C")
@@ -1123,16 +1130,19 @@ impl GitClient {
             .as_ref()
             .map(|observer| GitProcessMeasurement::new(observer.clone(), &invocation));
         #[cfg(windows)]
-        let job = pty::JobObject::create()
-            .map_err(|source| GitError::io("create Git process job", source))?;
+        let job = pty::JobObject::create().map_err(|source| GitError::LaunchFailed {
+            source: Arc::new(source),
+        })?;
         #[cfg(windows)]
-        let mut child = job
-            .spawn_contained(&mut command)
-            .map_err(|source| GitError::io("spawn Git process", source))?;
+        let mut child =
+            job.spawn_contained(&mut command)
+                .map_err(|source| GitError::LaunchFailed {
+                    source: Arc::new(source),
+                })?;
         #[cfg(not(windows))]
-        let mut child = command
-            .spawn()
-            .map_err(|source| GitError::io("spawn Git process", source))?;
+        let mut child = command.spawn().map_err(|source| GitError::LaunchFailed {
+            source: Arc::new(source),
+        })?;
         if let Some(measurement) = &mut measurement {
             measurement.spawned = Some(measurement.clock.elapsed());
         }
@@ -1266,7 +1276,7 @@ enum GitHooks {
 
 struct GitInvocation {
     hooks: GitHooks,
-    cwd: PathBuf,
+    cwd: Option<PathBuf>,
     args: Vec<OsString>,
     profile: GitCommandProfile,
     stdin: Option<Vec<u8>>,
@@ -1281,7 +1291,7 @@ impl GitInvocation {
     {
         Self {
             hooks: GitHooks::Disabled,
-            cwd: cwd.to_path_buf(),
+            cwd: Some(cwd.to_path_buf()),
             args: collect_args(args),
             profile: GitCommandProfile::Clone,
             stdin: None,
@@ -1295,7 +1305,7 @@ impl GitInvocation {
     {
         Self {
             hooks: GitHooks::Disabled,
-            cwd: cwd.to_path_buf(),
+            cwd: Some(cwd.to_path_buf()),
             args: collect_args(args),
             profile: GitCommandProfile::Query { fsmonitor },
             stdin: None,
@@ -1310,7 +1320,7 @@ impl GitInvocation {
     {
         Self {
             hooks: GitHooks::Disabled,
-            cwd: cwd.to_path_buf(),
+            cwd: Some(cwd.to_path_buf()),
             args: collect_args(args),
             profile: GitCommandProfile::ConfigurationProbe,
             stdin: None,
@@ -1325,7 +1335,7 @@ impl GitInvocation {
     {
         Self {
             hooks: GitHooks::Disabled,
-            cwd: cwd.to_path_buf(),
+            cwd: Some(cwd.to_path_buf()),
             args: collect_args(args),
             profile: GitCommandProfile::Mutation,
             stdin: None,
@@ -1680,12 +1690,28 @@ impl GitClient {
 
     /// Reads the installation identity even when it is too old for repository operations.
     pub async fn version(&self) -> GitResult<GitVersion> {
+        // Check configured paths before spawning. A spawn-time NotFound can also
+        // mean a missing interpreter or loader for an executable that exists.
+        if let ExecutableSource::Explicit(path) = &self.executable
+            && let Err(source) = path.metadata()
+            && source.kind() == std::io::ErrorKind::NotFound
+        {
+            return Err(GitError::ExecutableNotFound {
+                source: Arc::new(source),
+            });
+        }
         let output = self
-            .run_process(GitInvocation::query(
-                &std::env::temp_dir(),
-                ["--version"],
-                FsmonitorOverride::Disabled,
-            ))
+            .run_process(GitInvocation {
+                hooks: GitHooks::Disabled,
+                // A version probe needs no repository or temporary directory.
+                cwd: None,
+                args: vec!["--version".into()],
+                profile: GitCommandProfile::Query {
+                    fsmonitor: FsmonitorOverride::Disabled,
+                },
+                stdin: None,
+                environment: Vec::new(),
+            })
             .await?
             .require_success()?;
         GitVersion::parse(&output.command, &output.stdout)

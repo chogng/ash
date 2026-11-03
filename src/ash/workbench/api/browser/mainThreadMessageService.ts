@@ -4,7 +4,9 @@ import { localize } from '../../../nls.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { INotificationService, Severity, type INotificationHandle } from '../../../platform/notification/common/notification.js';
+import { MainThreadLocalization } from './mainThreadLocalization.js';
 import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
 
 /** Adapts extension messages to the window's notification owner and returns button selections. */
@@ -15,6 +17,7 @@ export class MainThreadMessageService extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 		@IExtensionApi private readonly extensions: IExtensionApi,
 		@ICommandService private readonly commands: ICommandService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 	}
@@ -27,7 +30,16 @@ export class MainThreadMessageService extends Disposable {
 		let label = extensionId;
 		try {
 			const catalog = await this.extensions.list('cached');
-			label = catalog.extensions.find(extension => extension.id.toLowerCase() === extensionId.toLowerCase())?.displayName || extensionId;
+			const extension = catalog.extensions.find(extension => extension.id.toLowerCase() === extensionId.toLowerCase());
+			let displayName = extension?.displayName;
+			if (extension && displayName && /^%[^%]+%$/.test(displayName)) {
+				const localization = this.instantiation.createInstance(MainThreadLocalization);
+				const manifest = JSON.parse(await localization.localizeManifest(extension.id, extension.manifestJson, catalog.generation));
+				displayName = manifest.displayName;
+			}
+			if (typeof displayName === 'string' && displayName.trim() && !/^%[^%]+%$/.test(displayName)) {
+				label = displayName;
+			}
 		} catch {
 			// Catalog failures must not hide the original message; the authenticated identity remains usable.
 		}

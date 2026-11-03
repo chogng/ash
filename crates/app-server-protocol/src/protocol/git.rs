@@ -1468,6 +1468,7 @@ pub struct GitDiscoveryParams {
 )]
 pub enum GitInstallationDto {
     Missing,
+    LaunchFailed,
     Unsupported {
         version: String,
         minimum_version: String,

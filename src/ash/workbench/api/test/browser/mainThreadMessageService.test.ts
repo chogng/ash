@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { promiseWithResolvers } from '../../../../base/common/async.js';
+import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
+import { extensionResourceRequest } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
+import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
+import { createEmptyTestLanguagePacks } from '../../../services/localization/test/common/localizationTestUtils.js';
 import { ICommandService, CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
@@ -72,4 +76,36 @@ test('an extension message without choices completes immediately with an identit
 	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications()[0].source, 'fixture.unknown');
 	await assert.rejects(messages.handle({ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] }, 'fixture.unknown', new AbortController().signal), /button labels/);
 	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications().length, 1);
+});
+
+test('extension notifications resolve manifest source labels in the client language', async () => {
+	using services = createServices();
+	services.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
+	services.get(IExtensionApi).list = async () => ({
+		generation: 1, diagnostics: [], extensions: [{
+			id: 'fixture.git', name: 'git', publisher: 'fixture', version: '1.0.0',
+			sourceKind: 'builtIn', manifestSha256: 'sha256:' + 'a'.repeat(64),
+			packageSha256: 'sha256:' + 'b'.repeat(64),
+			displayName: '%displayName%', manifestJson: '{"displayName":"%displayName%"}',
+		}],
+	});
+	Object.assign(services.get(IExtensionApi), {
+		resources: {
+			readExtensionResourceBytes: async () => { throw new Error('Unused binary resource'); },
+			readExtensionResource: async uri => {
+				if (extensionResourceRequest(uri)?.path === 'package.nls.zh-cn.json') {
+					return '{"displayName":"版本控制"}';
+				}
+				throw new Error('Missing optional resource');
+			},
+		} satisfies IExtensionApi['resources']
+	});
+	using messages = services.createInstance(MainThreadMessageService);
+	setNlsMessages('zh-CN', {});
+	try {
+		await messages.handle({ operation: 'showMessage', message: 'Git', severity: 'warning' }, 'fixture.git', new AbortController().signal);
+		assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications()[0].source, '版本控制');
+	} finally {
+		resetNlsResolver();
+	}
 });

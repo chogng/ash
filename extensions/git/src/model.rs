@@ -133,6 +133,7 @@ pub struct Discovery {
 )]
 pub enum Installation {
     Missing,
+    LaunchFailed,
     Unsupported {
         version: String,
         minimum_version: String,

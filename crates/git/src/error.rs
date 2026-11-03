@@ -9,6 +9,12 @@ pub type GitResult<T> = Result<T, GitError>;
 /// Failure returned while configuring, invoking, or parsing a Git operation.
 #[derive(Clone, Debug)]
 pub enum GitError {
+    ExecutableNotFound {
+        source: Arc<io::Error>,
+    },
+    LaunchFailed {
+        source: Arc<io::Error>,
+    },
     UnsupportedVersion {
         installed: String,
     },
@@ -80,6 +86,8 @@ impl GitError {
 impl fmt::Display for GitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ExecutableNotFound { source } => write!(formatter, "locate Git failed: {source}"),
+            Self::LaunchFailed { source } => write!(formatter, "start Git failed: {source}"),
             Self::UnsupportedVersion { installed } => write!(
                 formatter,
                 "Ash requires Git {} or newer; found {installed}. Upgrade Git and restart Ash.",
@@ -139,7 +147,9 @@ impl fmt::Display for GitError {
 impl std::error::Error for GitError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Io { source, .. } => Some(source.as_ref()),
+            Self::Io { source, .. }
+            | Self::ExecutableNotFound { source }
+            | Self::LaunchFailed { source } => Some(source.as_ref()),
             _ => None,
         }
     }

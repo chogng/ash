@@ -661,6 +661,7 @@
   "git.ignoreRebaseWarning.title": "Ignore Rebase Warning",
   "git.ignoreRebaseWarning.description": "Skip the pull confirmation when the upstream reflog indicates rewritten history.",
   "git.missingInstallation": "Git was not found. Install Git or update git.path.",
+  "git.launchFailed": "Ash found Git but could not start it. Check the Git installation or the executable configured in git.path.",
   "git.unsupportedInstallation": "Ash requires Git {0} or newer. Found {1}. Upgrade Git and restart Ash. If git.path is configured, point it to the upgraded Git executable.",
   "git.rewrittenPullConfirm": "The upstream history appears to have been rewritten. Pulling may replay commits. Continue?",
   "git.worktreeIncludeFiles.title": "Worktree Included Files",
