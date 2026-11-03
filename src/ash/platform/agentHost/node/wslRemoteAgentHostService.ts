@@ -4,6 +4,7 @@ import { localize } from '../../../nls.js';
 import type { RemoteAgentHostConnection } from '../common/remoteAgentHostService.js';
 
 const run = promisify(execFile);
+const DISTRO_LIST_MAX_AGE_MS = 30_000;
 
 interface IWSLProcessHost {
 	list(args: readonly string[]): Promise<Buffer>;
@@ -12,6 +13,9 @@ interface IWSLProcessHost {
 
 /** Acquires a WSL process; the window's existing connection pool owns its lease. */
 export class WSLRemoteAgentHostService {
+	private distros: Promise<readonly string[]> | undefined;
+	private distrosExpireAt = 0;
+
 	constructor(
 		private readonly platform = process.platform,
 		private readonly processes: IWSLProcessHost = {
@@ -21,6 +25,18 @@ export class WSLRemoteAgentHostService {
 	) { }
 
 	public async listDistros(): Promise<readonly string[]> {
+		if (this.distros && Date.now() < this.distrosExpireAt) return this.distros;
+		this.distrosExpireAt = Infinity;
+		const distros = this.distros = this.enumerateDistros();
+		void distros.then(() => {
+			this.distrosExpireAt = Date.now() + DISTRO_LIST_MAX_AGE_MS;
+		}, () => {
+			this.distros = undefined;
+		});
+		return distros;
+	}
+
+	private async enumerateDistros(): Promise<readonly string[]> {
 		if (this.platform !== 'win32') return [];
 		const execute = async (flag: string): Promise<string> => {
 			const stdout = await this.processes.list(['--list', flag]);
@@ -43,7 +59,7 @@ export class WSLRemoteAgentHostService {
 		return {
 			description: `WSL ${target.distro}`,
 			validate: async () => {
-				if (!(await this.listDistros()).includes(target.distro)) throw new Error(localize('agentHost.wslUnavailable', 'The selected WSL 2 distribution is unavailable.'));
+				if (!(await this.enumerateDistros()).includes(target.distro)) throw new Error(localize('agentHost.wslUnavailable', 'The selected WSL 2 distribution is unavailable.'));
 			},
 			// No shell or user-supplied executable: the independently installed Remote runtime owns the daemon.
 			launch: (): ChildProcessWithoutNullStreams => this.processes.launch([

@@ -32,6 +32,7 @@ interface EnvironmentDialogOptions {
 
 export class NewEnvironmentDialog extends Disposable {
 	private readonly dialog: Dialog;
+	readonly appendHost: (host: EnvironmentHost) => void;
 	private readonly title = localize('sessions.environment.newEnvironment', 'New Environment');
 
 	constructor(container: HTMLElement, options: EnvironmentDialogOptions) {
@@ -85,7 +86,13 @@ export class NewEnvironmentDialog extends Disposable {
 		localHosts.label = localize('sessions.environment.localGroup', 'Local');
 		const remoteHosts = doc.createElement('optgroup');
 		remoteHosts.label = localize('sessions.environment.remote', 'Remote');
-		options.hosts.forEach(({ label, group }, index) => (group === 'local' ? localHosts : remoteHosts).append(new Option(label, String(index))));
+		const hosts: EnvironmentHost[] = [];
+		this.appendHost = host => {
+			const group = host.group === 'local' ? localHosts : remoteHosts;
+			group.append(new Option(host.label, String(hosts.length)));
+			hosts.push(host);
+		};
+		options.hosts.forEach(this.appendHost);
 		select.append(localHosts, remoteHosts);
 		const cloud = new Option(localize('sessions.environment.cloudUnavailable', 'Cloud (unavailable)'), '');
 		cloud.disabled = true;
@@ -96,9 +103,9 @@ export class NewEnvironmentDialog extends Disposable {
 		connectionWorkspace.placeholder = '/home/user/project';
 		field(main, localize('sessions.environment.workspacePath', 'Absolute workspace path'), connectionWorkspace);
 		const connectionField = connectionWorkspace.parentElement!;
-		connectionField.hidden = !options.hosts[options.selected]?.needsWorkspace;
+		connectionField.hidden = !hosts[options.selected]?.needsWorkspace;
 		const resolveHost = async () => {
-			const target = options.hosts[Number(select.value)];
+			const target = hosts[Number(select.value)];
 			if (!target) throw new Error(localize('sessions.environment.unavailable', 'Host unavailable'));
 			const workspace = connectionWorkspace.value.trim();
 			if (target.needsWorkspace && (!workspace.startsWith('/') || workspace.includes('\0'))) {
@@ -248,7 +255,7 @@ export class NewEnvironmentDialog extends Disposable {
 		this._register(addDisposableListener(select, 'change', () => {
 			host = undefined;
 			connectionWorkspace.value = '';
-			connectionField.hidden = !options.hosts[Number(select.value)]?.needsWorkspace;
+			connectionField.hidden = !hosts[Number(select.value)]?.needsWorkspace;
 			folders.length = 0;
 			closeRecent();
 			remotePathRow.hidden = true;

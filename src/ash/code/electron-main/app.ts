@@ -243,6 +243,8 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private remoteConnections: RemoteConnections | undefined;
+	private readonly wslHosts = new WSLRemoteAgentHostService();
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
 	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
 	private readonly browserChannels = new Map<string, { readonly view: IServerChannel<string>; readonly host: IServerChannel<string>; }>();
@@ -687,6 +689,12 @@ export class AshApplication extends Disposable {
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
+		this.remoteConnections = this.createRemoteConnections(workspaces);
+		if (this.remoteConnections) {
+			// Warm the local catalog independently of the window's initial mode.
+			void this.remoteConnections.list().catch(error => this.logService.debug('Remote catalog warmup failed', error));
+			void this.wslHosts.listDistros().catch(error => this.logService.debug('WSL catalog warmup failed', error));
+		}
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		launchServices.registerInstance(ILogService, this.logService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
@@ -1332,10 +1340,12 @@ export class AshApplication extends Disposable {
 		})).routes();
 	}
 
-	private remoteAgentHostRoutes(window: BrowserWindow, entryUrl: string, connections: IRemoteConnectionApi, windowDisposables: DisposableStore): IpcRoute<unknown, unknown>[] {
+	private remoteAgentHostRoutes(window: BrowserWindow, entryUrl: string, windowDisposables: DisposableStore): IpcRoute<unknown, unknown>[] {
 		const target = { webContents: window.webContents, allowedEntryUrls: new Set([normalizeEntryUrl(entryUrl)]) };
-		const wslHosts = new WSLRemoteAgentHostService();
-		const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(connections, async (connection, id, signal, ticket) => {
+		const wslHosts = this.wslHosts;
+		const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool({
+			list: () => this.remoteConnections?.listCurrent() ?? UnavailableRemoteConnectionApi.list(),
+		}, async (connection, id, signal, ticket) => {
 			const resources = new DisposableStore();
 			try {
 				let tunnel: TunnelAgentHostService | undefined;
@@ -1550,7 +1560,7 @@ export class AshApplication extends Disposable {
 			: undefined;
 		if (localSupervisor) this.trackAppServerConnection(window, localSupervisor, resources);
 
-		const remoteConnections = this.createRemoteConnections(workspaces);
+		const remoteConnections = this.remoteConnections ?? UnavailableRemoteConnectionApi;
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
@@ -1723,7 +1733,7 @@ export class AshApplication extends Disposable {
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...this.terminalLifetimeRoutes(windowDisposables),
-			...this.remoteAgentHostRoutes(window, rendererEntry.url, record.remoteConnections, windowDisposables),
+			...this.remoteAgentHostRoutes(window, rendererEntry.url, windowDisposables),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => {
 				const folder = workspaceContext.getResolvedWorkspace().folders[0]?.uri;
@@ -1799,9 +1809,9 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionApi {
+	private createRemoteConnections(workspaces: WorkspacesManagementMainService): RemoteConnections | undefined {
 		return this.appServerStartupMode === 'disabled'
-			? UnavailableRemoteConnectionApi
+			? undefined
 			: new RemoteConnections({
 				remoteExecutable: remoteExecutablePath({
 					appPath: app.getAppPath(),
@@ -2012,7 +2022,7 @@ export class AshApplication extends Disposable {
 		if (!workspaces) throw new Error('Workspace service is not initialized');
 		let sessions = this.sessionsWindow.value;
 		if (!sessions) {
-			const remoteConnections = this.createRemoteConnections(workspaces);
+			const remoteConnections = this.remoteConnections ?? UnavailableRemoteConnectionApi;
 			const workspaceContext = new WorkspaceContextMainService(workspace, resolvedWorkspace);
 			sessions = new SessionsWindowRecord(workspaceContext, remoteConnections);
 			this.sessionsWindow.value = sessions;
@@ -2122,7 +2132,7 @@ export class AshApplication extends Disposable {
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...this.terminalLifetimeRoutes(windowDisposables),
-						...this.remoteAgentHostRoutes(window, sessionsEntry.url, session.remoteConnections, windowDisposables),
+						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),

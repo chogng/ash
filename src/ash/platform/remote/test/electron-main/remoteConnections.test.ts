@@ -28,6 +28,32 @@ test('Electron Main lists and resolves named targets through the shared Rust cat
 	assert.deepEqual(scheduled, [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }]);
 });
 
+test('Remote catalog shares startup reads and reloads after a mutation', async () => {
+	const calls: string[] = [];
+	const target = { name: 'build', host: 'build-linux', workspace: '/srv/project' };
+	const record = { name: target.name, host: target.host, dir: target.workspace };
+	let saved = false;
+	const service = new RemoteConnections({
+		remoteExecutable: 'ash-remote',
+		environment: {},
+		runCommand: async (_executable, [, command]) => {
+			calls.push(command);
+			if (command === 'save') saved = true;
+			const output = command === 'list' ? (saved ? [record] : []) : record;
+			return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' };
+		},
+		scheduleConnect: () => { },
+	});
+
+	const warmup = service.list();
+	assert.equal(service.list(), warmup);
+	assert.deepEqual(await warmup, []);
+	assert.deepEqual(await service.list(), []);
+	await service.save(target);
+	assert.deepEqual(await service.list(), [target]);
+	assert.deepEqual(calls, ['list', 'save', 'list']);
+});
+
 test('Electron Main creates, atomically updates, and removes targets through the Rust CLI', async () => {
 	const calls: string[][] = [];
 	const outputs = [

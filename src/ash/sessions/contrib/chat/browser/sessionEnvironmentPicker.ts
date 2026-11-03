@@ -126,29 +126,58 @@ export class SessionEnvironmentPicker extends Disposable {
 	private openPicker(): void {
 		const draft = this.draft;
 		if (!draft || this.dropdown.element.disabled) { return; }
+		let catalog: ReturnType<SessionEnvironmentPicker['loadCatalog']> | undefined;
+		const loadCatalog = () => catalog ??= this.loadCatalog();
+		const openNewEnvironment = () => this.showNewEnvironment(draft, loadCatalog());
 		this.dropdown.showItems({
 			requireIdle: true,
-			load: token => this.loadItems(draft, token),
+			load: () => this.buildItems(draft, [], [], openNewEnvironment),
+			refresh: async (token, publish) => {
+				let saved: readonly RemoteConnectionDefinition[] = [];
+				let distros: readonly string[] = [];
+				const isOpen = () => !token.isCancellationRequested && this.isCurrent(draft);
+				const update = () => {
+					if (isOpen()) publish(this.buildItems(draft, saved, distros, openNewEnvironment));
+				};
+				const catalog = loadCatalog();
+				await Promise.all([
+					catalog.saved.then(targets => {
+						saved = targets;
+						update();
+					}, error => {
+						if (isOpen() && !isCancellationError(error)) {
+							this.notifications.error(error instanceof Error ? error : String(error));
+						}
+					}),
+					catalog.distros.then(names => {
+						distros = names;
+						update();
+					}),
+				]);
+			},
 			select: run => run(),
 		});
 	}
 
-	private async loadItems(draft: IUntitledChatSession, token: CancellationToken): Promise<readonly IActionListItem<() => Promise<unknown>>[]> {
-		const [savedResult, wslResult] = await Promise.allSettled([
-			this.remoteHosts.isAvailable && this.connections.available ? this.connections.list() : [],
-			this.remoteHosts.isAvailable ? this.remoteHosts.listWSLDistros() : [],
-		]);
-		if (token.isCancellationRequested || !this.isCurrent(draft)) { return []; }
-		const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
-		if (savedResult.status === 'rejected' && !isCancellationError(savedResult.reason)) {
-			this.notifications.error(savedResult.reason instanceof Error ? savedResult.reason : String(savedResult.reason));
-		}
+	private loadCatalog() {
+		return {
+			saved: this.remoteHosts.isAvailable && this.connections.available ? this.connections.list() : Promise.resolve([]),
+			distros: this.remoteHosts.isAvailable ? this.remoteHosts.listWSLDistros().catch(() => []) : Promise.resolve([]),
+		};
+	}
+
+	private buildItems(
+		draft: IUntitledChatSession,
+		saved: readonly RemoteConnectionDefinition[],
+		distros: readonly string[],
+		openNewEnvironment: () => Promise<void>,
+	): readonly IActionListItem<() => Promise<unknown>>[] {
 		const providers = this.providers.getProviders();
 		const disconnected = saved.filter(target => !this.findSSHProvider(target, providers));
-		const distros = wslResult.status === 'fulfilled' ? wslResult.value : [];
 		const items: IActionListItem<() => Promise<unknown>>[] = [];
 		const providerItem = (provider: ISessionsProvider): IActionListItem<() => Promise<void>> => ({
 			kind: ActionListItemKind.Action,
+			id: `provider:${provider.id}`,
 			label: this.label(provider.id, provider.label),
 			group: { title: '', icon: provider.id === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote },
 			checked: provider.id === draft.providerId && !draft.environment,
@@ -165,7 +194,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		for (const distro of distros) {
 			if (wslProviders.some(provider => provider.label === distro)) continue;
 			items.push({
-				kind: ActionListItemKind.Action, label: localize('sessions.environment.wslDistro', 'WSL: {0}', distro), checked: false,
+				kind: ActionListItemKind.Action, id: `wsl:${distro}`, label: localize('sessions.environment.wslDistro', 'WSL: {0}', distro), checked: false,
 				group: { title: '', icon: Lxicon.remote },
 				item: async () => {
 					const target = await this.commands.executeCommand<RemoteAgentHostConnection | undefined>('sessions.action.connectWSLAgentHost', distro);
@@ -203,6 +232,7 @@ export class SessionEnvironmentPicker extends Disposable {
 					: provider.connectionStatus?.get() === 'disconnected' ? localize('sessions.environment.disconnectedStatus', 'Disconnected') : undefined,
 		})), ...disconnected.map(target => ({
 			kind: ActionListItemKind.Action,
+			id: `ssh:${target.name}`,
 			label: target.name,
 			group: { title: '', icon: Lxicon.remote },
 			badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
@@ -234,7 +264,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			if (!saved) continue;
 			const provider = this.providers.getProvider(saved.providerId);
 			items.push({
-				kind: ActionListItemKind.Action, label: saved.environment.name,
+				kind: ActionListItemKind.Action, id: key, label: saved.environment.name,
 				disabled: !provider || provider.connectionStatus?.get() === 'disconnected',
 				checked: draft.environment?.id === saved.environment.id && draft.providerId === saved.providerId,
 				item: () => this.applyEnvironment(draft, saved.providerId, saved.environment),
@@ -246,7 +276,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				if (saved && this.isCurrent(draft)) this.showPicker();
 			};
 			items.push({
-				kind: ActionListItemKind.Action, label: localize('sessions.environment.remote', 'Remote'),
+				kind: ActionListItemKind.Action, id: 'remote', label: localize('sessions.environment.remote', 'Remote'),
 				group: { title: '', icon: Lxicon.remote },
 				submenu: [
 					{
@@ -264,9 +294,9 @@ export class SessionEnvironmentPicker extends Disposable {
 			kind: ActionListItemKind.Action, label: localize('sessions.environment.cloud', 'Cloud'),
 			group: { title: '', icon: Lxicon.cloud }, disabled: true,
 		}, { kind: ActionListItemKind.Separator, label: '' }, {
-			kind: ActionListItemKind.Action, label: localize('sessions.environment.newEnvironment', 'New Environment'),
+			kind: ActionListItemKind.Action, id: 'newEnvironment', label: localize('sessions.environment.newEnvironment', 'New Environment'),
 			group: { title: '', icon: Lxicon.add },
-			item: () => this.showNewEnvironment(draft, distros, disconnected),
+			item: openNewEnvironment,
 		});
 		return items;
 	}
@@ -294,7 +324,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		}
 	}
 
-	private async showNewEnvironment(draft: IUntitledChatSession, distros: readonly string[], saved: readonly RemoteConnectionDefinition[]): Promise<void> {
+	private async showNewEnvironment(draft: IUntitledChatSession, catalog: ReturnType<SessionEnvironmentPicker['loadCatalog']>): Promise<void> {
 		if (this.newEnvironment.value || !this.isCurrent(draft)) return;
 		const sourceOf = (provider: ISessionsProvider) => {
 			const workspace = provider.currentWorkspace();
@@ -313,36 +343,6 @@ export class SessionEnvironmentPicker extends Disposable {
 			});
 		}
 		const controller = new AbortController();
-		for (const distro of distros) {
-			const label = localize('sessions.environment.wslDistro', 'WSL: {0}', distro);
-			if (this.providers.getProviders().some(provider => {
-				const workspace = provider.currentWorkspace();
-				return workspace.type === 'remote' && workspace.authority.startsWith('wsl+') && provider.label === distro;
-			})) continue;
-			hosts.push({
-				id: '', label, group: 'local', needsWorkspace: true,
-				resolve: async workspace => {
-					const { connection } = await this.remoteHosts.connect({ type: 'wsl', name: distro, distro, workspace }, controller.signal);
-					if (!connection) return;
-					const authority = remoteAgentHostRoot(connection).authority;
-					const provider = this.providers.getProviders().find(candidate => {
-						const workspace = candidate.currentWorkspace();
-						return workspace.type === 'remote' && workspace.authority === authority && workspace.root === connection.workspace;
-					});
-					return provider && sourceOf(provider);
-				},
-			});
-		}
-		for (const target of saved) {
-			hosts.push({
-				id: '', label: target.name, group: 'remote',
-				resolve: async () => {
-					await this.remoteHosts.connect(target, controller.signal);
-					const provider = this.findSSHProvider(target);
-					return provider && sourceOf(provider);
-				},
-			});
-		}
 		const selected = Math.max(0, hosts.findIndex(host => host.id === draft.providerId));
 		const workspace = draft.workspace;
 		const initial = hosts[selected]?.id === draft.providerId && workspace.type !== 'current' && workspace.type !== 'multiple' ? workspace : undefined;
@@ -379,6 +379,48 @@ export class SessionEnvironmentPicker extends Disposable {
 			},
 		});
 		this.newEnvironment.value = dialog;
+		const canUpdate = () => this.newEnvironment.value === dialog && this.isCurrent(draft);
+		void catalog.distros.then(distros => {
+			if (!canUpdate()) return;
+			for (const distro of distros) {
+				const label = localize('sessions.environment.wslDistro', 'WSL: {0}', distro);
+				if (this.providers.getProviders().some(provider => {
+					const workspace = provider.currentWorkspace();
+					return workspace.type === 'remote' && workspace.authority.startsWith('wsl+') && provider.label === distro;
+				})) continue;
+				dialog.appendHost({
+					label, group: 'local', needsWorkspace: true,
+					resolve: async workspace => {
+						const { connection } = await this.remoteHosts.connect({ type: 'wsl', name: distro, distro, workspace }, controller.signal);
+						if (!connection) return;
+						const authority = remoteAgentHostRoot(connection).authority;
+						const provider = this.providers.getProviders().find(candidate => {
+							const workspace = candidate.currentWorkspace();
+							return workspace.type === 'remote' && workspace.authority === authority && workspace.root === connection.workspace;
+						});
+						return provider && sourceOf(provider);
+					},
+				});
+			}
+		});
+		void catalog.saved.then(saved => {
+			if (!canUpdate()) return;
+			for (const target of saved) {
+				if (this.findSSHProvider(target)) continue;
+				dialog.appendHost({
+					label: target.name, group: 'remote',
+					resolve: async () => {
+						await this.remoteHosts.connect(target, controller.signal);
+						const provider = this.findSSHProvider(target);
+						return provider && sourceOf(provider);
+					},
+				});
+			}
+		}, error => {
+			if (canUpdate() && !isCancellationError(error)) {
+				this.notifications.error(error instanceof Error ? error : String(error));
+			}
+		});
 		try { await dialog.show(); }
 		finally {
 			controller.abort();
