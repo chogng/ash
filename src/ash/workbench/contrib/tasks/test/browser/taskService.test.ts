@@ -10,7 +10,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { RunAutomaticTasks } from '../../browser/runAutomaticTasks.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { TerminalGroupService } from '../../../terminal/browser/terminalGroupService.js';
-import { ITerminalGroupService } from '../../../terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService } from '../../../terminal/browser/terminal.js';
 import { formatMessageForTerminal } from '../../../../../platform/terminal/common/terminalStrings.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
@@ -482,6 +482,7 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
+	services.registerInstance(ITerminalEditorService, { openEditor: async () => { throw new Error('Panel task unexpectedly opened an editor'); } } as unknown as ITerminalEditorService);
 	services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService), { instantiation: InstantiationType.Delayed });
@@ -1045,7 +1046,7 @@ test('TaskService selects the execution host platform before resolving command, 
 	const task = (await service.refresh())[0];
 	assert.equal(terminals.instances.length, 0);
 	const run = await service.run(task);
-	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', type: 'Task', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
+	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', type: 'Task', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true, deferEditorOpen: true }]);
 	assert.deepEqual(terminals.instances[0].writes, []);
 	await service.terminate(run);
 });

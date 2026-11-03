@@ -1,3 +1,4 @@
+import { isEditorPaneWithViewState } from './editorWithViewState.js';
 import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
@@ -9,7 +10,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
-import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorIdentifier, type IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, isEditorPaneWithSelection, type IResourceEditorInput, type IEditorIdentifier, type IEditorPane } from '../../../common/editor.js';
 import './media/editorpart.css';
 import { basename } from '../../../../base/common/resources.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
@@ -182,6 +183,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	public readonly onDidLayout = this.layoutEmitter.event;
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
+	private movingModalEditor = false;
 	private readonly groupOptions: Omit<EditorGroupOptions, 'onDidActivate' | 'dragAndDrop'>;
 	private readonly _groups: EditorGroupHost[] = [];
 	/** Grid retains hidden sizes; retain only the visibility and layout needed to restore this operation. */
@@ -776,6 +778,37 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (!input || target === this) return false;
 		await this._activeGroup.moveEditorTo(input, target.activeGroup, target.activeGroup.inputs.length);
 		return true;
+	}
+
+	/** Opens the destination while the modal still owns its working copies. */
+	public async moveModalEditorTo(target: IEditorGroupView, reveal: () => void): Promise<boolean> {
+		const input = this.modalEditor.activeInput;
+		const pane = this.modalEditor.activePane;
+		if (!input || !pane || this.movingModalEditor) return false;
+		const veto = input.canMove?.(-1, target.id);
+		if (typeof veto === 'string') throw new Error(veto);
+		this.movingModalEditor = true;
+		try {
+			const viewState = isEditorPaneWithViewState(pane) ? pane.saveViewState() : undefined;
+			const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
+			const forceReload = target.inputs.some(candidate => candidate !== input && this.isSameEditor(candidate, input));
+			const destination = await target.openEditor(input, {
+				pinned: true, preserveFocus: true, preferredEditorId: pane.id, ignoreError: true, forceReload,
+			});
+			if (this.isDisposed || this.modalEditor.activePane !== pane || this.modalEditor.activeInput !== input) return false;
+			this.modalEditor.closeEditor(input, false);
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'modalEditorChanged', visible: false }));
+			reveal();
+			if (viewState !== undefined && isEditorPaneWithViewState(pane) && isEditorPaneWithViewState(destination)
+				&& pane.viewStateTypeId === destination.viewStateTypeId) {
+				destination.restoreViewState(viewState);
+			} else if (selection && isEditorPaneWithSelection(destination)) {
+				destination.restoreSelection(selection, TextEditorSelectionSource.PROGRAMMATIC);
+			}
+			return true;
+		} finally {
+			this.movingModalEditor = false;
+		}
 	}
 
 	async saveActiveEditor(): Promise<void> {

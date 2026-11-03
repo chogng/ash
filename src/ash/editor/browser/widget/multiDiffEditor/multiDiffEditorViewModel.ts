@@ -1,4 +1,4 @@
-import { isFiniteNumber } from '../../../../base/common/numbers.js';
+import { isFiniteNumber, isNonNegativeSafeInteger } from '../../../../base/common/numbers.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCodeEditorViewState, type CodeEditorViewState } from '../codeEditor/codeEditorWidget.js';
@@ -14,6 +14,7 @@ export interface MultiDiffEditorViewState {
 	readonly scrollTop: number;
 	readonly scrollAnchor?: { readonly itemId: string; readonly offset: number; };
 	readonly activeItemId?: string;
+	readonly activeChange?: MultiDiffEditorLocation;
 	readonly collapsedItemIds: readonly string[];
 	readonly itemViewStates: readonly {
 		readonly id: string;
@@ -103,6 +104,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 		return {
 			scrollTop,
 			...(this.activeItemId ? { activeItemId: this.activeItemId } : {}),
+			...(this.selectedChange ? { activeChange: this.selectedChange } : {}),
 			collapsedItemIds: [...this.collapsedItemIds],
 			itemViewStates: [...this.itemViewStates].flatMap(([id, state]) =>
 				state.original || state.modified || state.preview ? [{ id, ...state }] : []),
@@ -119,7 +121,7 @@ export class MultiDiffEditorViewModel extends Disposable {
 				...state, ...(state.preview ? { preview: { ...state.preview, range: Range.lift(state.preview.range) } } : {}),
 			});
 		}
-		this.selectedChange = undefined;
+		this.selectedChange = value.activeChange && this.itemIds.has(value.activeChange.itemId) ? { ...value.activeChange } : undefined;
 		this.activeItemId = value.activeItemId && this.itemIds.has(value.activeItemId) ? value.activeItemId : undefined;
 		this.collapseStateChanged.fire();
 		return value.scrollTop;
@@ -133,6 +135,8 @@ function isMultiDiffEditorViewState(value: unknown): value is MultiDiffEditorVie
 		&& (state.scrollAnchor === undefined || state.scrollAnchor !== null && typeof state.scrollAnchor === 'object'
 			&& typeof state.scrollAnchor.itemId === 'string' && isFiniteNumber(state.scrollAnchor.offset) && state.scrollAnchor.offset >= 0)
 		&& (state.activeItemId === undefined || typeof state.activeItemId === 'string')
+		&& (state.activeChange === undefined || state.activeChange !== null && typeof state.activeChange === 'object'
+			&& typeof state.activeChange.itemId === 'string' && isNonNegativeSafeInteger(state.activeChange.rowIndex))
 		&& Array.isArray(state.collapsedItemIds) && state.collapsedItemIds.every((id: unknown) => typeof id === 'string')
 		&& Array.isArray(state.itemViewStates) && state.itemViewStates.every((item: unknown) => {
 			if (!item || typeof item !== 'object') return false;

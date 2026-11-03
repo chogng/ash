@@ -35,6 +35,32 @@
 	content: "";
 }
 
+.ash-editor-tabs-and-actions:has(> .ash-editor-tabs-trailing > :not([hidden]))
+	> .ash-editor-tabs-control {
+	flex: 0 1 max-content;
+}
+
+/* Include the tab contents in the row's intrinsic width while keeping its viewport scrollable. */
+.ash-editor-tabs-and-actions:has(> .ash-editor-tabs-trailing > :not([hidden]))
+	> .ash-editor-tabs-control
+	.ash-tab-list
+	> .ash-scrollbar-viewport {
+	position: relative;
+	height: 100%;
+}
+
+.ash-editor-tabs-and-actions > .ash-editor-tabs-trailing {
+	align-self: end;
+	display: flex;
+	flex: 0 0 auto;
+	height: var(--ash-pane-titleHeight);
+	align-items: center;
+}
+
+.ash-editor-tabs-trailing:not(:has(> :not([hidden]))) {
+	display: none;
+}
+
 .ash-editor-title-actions {
 	display: flex;
 	height: var(--ash-pane-titleHeight);

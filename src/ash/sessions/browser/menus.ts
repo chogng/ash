@@ -15,7 +15,6 @@ export const Menus = {
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
-	SessionsToolMove: new MenuId('SessionsToolMove'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),
 } as const;

@@ -21,7 +21,6 @@ export interface TaskCatalog {
 	readonly runs: readonly TaskRunSummary[];
 }
 
-/** Window-owned capabilities used by application tools; transport details stay in the adapter. */
 export interface ISessionsListTools {
 	listSections(): readonly SessionGroup[];
 	readTree(): {
@@ -37,13 +36,18 @@ export interface ISessionsListTools {
 	reorderSection(sectionId: string, sessionIds: readonly string[], signal: AbortSignal): Promise<void>;
 }
 
-export interface IAppToolsHost extends IDisposable {
+export interface IAppToolsTaskRunner {
 	listTasks(directory: string, signal: AbortSignal): Promise<TaskCatalog>;
 	describeTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<ITaskDescription>;
 	runTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<TaskRunSummary>;
 	taskStatus(directory: string, runId: string): TaskRunSummary;
 	taskOutput(directory: string, runId: string, cursor: number, maxCharacters: number): ITaskOutput;
 	cancelTask(directory: string, runId: string): Promise<TaskRunSummary>;
+}
+
+/** Window-owned capabilities used by application tools; transport details stay in the adapter. */
+export interface IAppToolsHost extends IDisposable {
+	readonly taskRunner: IAppToolsTaskRunner;
 	openFile(resource: URI, line?: number): Promise<void>;
 	openReview(original: URI, modified: URI): Promise<void>;
 	openBrowser(resource: URI): Promise<boolean>;

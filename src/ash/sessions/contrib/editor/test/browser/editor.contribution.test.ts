@@ -1,18 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Direction } from '../../../../../base/browser/ui/grid/grid.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { MenuId, MenuItemAction, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { ITerminalService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -89,7 +93,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
 	const changesAction = () => layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool', 'submenu.SessionsToolMove']);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -112,6 +116,10 @@ test('editor contributions follow layout state, serialize open commands without 
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
+	contextKeys.setContext('sessions.editorTool', 'terminal');
+	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
+	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
+	contextKeys.setContext('sessions.editorTool', 'files');
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.filesVisible'), true, 'Files remains selected while its editor is visible without the attached tree');
@@ -181,11 +189,72 @@ test('editor contributions follow layout state, serialize open commands without 
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域', '移动工具']);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 		assert.equal(changesAction().label, '更改');
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('the Terminal title split opens a fresh shell below the selected group and cleans up on launch failure', async () => {
+	using services = new InstantiationService();
+	using contextKeys = new ContextKeyService();
+	using commands = new CommandService(services);
+	contextKeys.setContext('sessions.editorTool', 'terminal');
+	contextKeys.setContext('appServerAvailable', true);
+	services.registerInstance(IContextKeyService, contextKeys);
+	const unavailable = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
+	const source = { id: 1, activeInput: unavailable, inputs: [unavailable], selectedInputs: [unavailable] };
+	const destination = { id: 2, inputs: [] as TerminalEditorInput[] };
+	const groups: { id: number; inputs: TerminalEditorInput[]; }[] = [source];
+	let failLaunch = false;
+	services.registerInstance(IEditorGroupsService, { getGroup: (id: number) => groups.find(group => group.id === id) } as IEditorGroupsService);
+	services.registerInstance(ILayoutService, { isPartVisible: () => false, onDidLayoutMainContainer: Event.None } as unknown as IAgentWorkbenchLayoutService);
+	services.registerInstance(IEditorPart, {
+		groups,
+		onDidChangeEditors: Event.None,
+		addGroup(id: number, direction: Direction) {
+			assert.equal(id, source.id);
+			assert.equal(direction, Direction.Down);
+			groups.push(destination);
+			return destination;
+		},
+		async removeGroup(group: typeof destination) {
+			assert.equal(group, destination);
+			groups.splice(groups.indexOf(group), 1);
+			return true;
+		},
+	} as unknown as IEditorPart);
+	const fresh = new TerminalEditorInput(URI.parse('vscode-terminal:/test/2'));
+	services.registerInstance(ITerminalService, {
+		async createTerminal(options: unknown) {
+			assert.deepEqual(options, { location: { viewColumn: destination.id, preserveFocus: false } });
+			if (failLaunch) throw new Error('launch failed');
+			destination.inputs.push(fresh);
+			return { resource: fresh.resource };
+		},
+	} as ITerminalService);
+	using splitMenu = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+		command: { id: 'workbench.action.splitEditor', title: 'Split Down' },
+		alt: { id: 'workbench.action.splitEditorRight', title: 'Split Right' },
+	});
+	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, { supportsDetails: true }, {
+		isDocumentContent: true,
+		documentContent: observableValue('document content', true),
+	});
+	const menus = new MenuService(commands, contextKeys);
+	using title = menus.createMenu(Menus.SessionsEditorTitle);
+	const split = title.getActions({ arg: { groupId: source.id } }).flatMap(([, actions]) => actions)
+		.find(action => action instanceof MenuItemAction && action.id === 'ash.sessions.splitTerminalDown');
+	assert.ok(split instanceof MenuItemAction);
+	assert.equal(split.label, 'Split Down');
+	failLaunch = true;
+	await assert.rejects(split.run(), /launch failed/);
+	assert.deepEqual(groups, [source]);
+	failLaunch = false;
+	await split.run();
+	assert.deepEqual(source.inputs, [unavailable]);
+	assert.deepEqual(destination.inputs, [fresh]);
 });

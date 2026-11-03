@@ -21,3 +21,7 @@
 	margin: var(--ash-spacing-size80) 0 0;
 	font-size: var(--ash-fontSize-body1);
 }
+
+.ash-browser-welcome > .ash-button {
+	margin-top: var(--ash-spacing-size120);
+}

@@ -558,6 +558,9 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	});
 	try {
 		layout.layout(new Dimension(1_200, 800));
+		assert.equal(surface().style, 'modern');
+		assert.equal(container.classList.contains('modern-ui'), true);
+		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
 		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px', bottomInset: '0px' });
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');

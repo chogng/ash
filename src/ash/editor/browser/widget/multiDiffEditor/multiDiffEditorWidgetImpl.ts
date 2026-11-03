@@ -45,6 +45,7 @@ import {
 	hideUnchangedRegions,
 	validateMultiDiffEditorOptions,
 	type IMultiDiffEditorWidgetOptions,
+	type MultiDiffViewOptions,
 } from './multiDiffEditorOptions.js';
 import { MultiDiffEditorViewModel, type MultiDiffEditorLocation, type MultiDiffEditorViewState } from './multiDiffEditorViewModel.js';
 import { VirtualizedItemManager } from './virtualizedItemManager.js';
@@ -84,6 +85,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private showLineNumbers: boolean;
 	private fontInfoSettings: ReturnType<typeof createBareFontInfoFromRawSettings>;
 	private fontInfo: FontInfo | undefined;
+	private viewOptions: MultiDiffViewOptions;
 	private configuredWordWrap: NonNullable<DiffEditorWidgetOptions['wordWrap']>;
 	private temporaryWordWrap: 'on' | 'off' | undefined;
 	private viewportWidth = 0;
@@ -126,6 +128,11 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
 		this.loopChanges = options.loopChanges ?? true;
 		this.showLineNumbers = options.showLineNumbers ?? true;
+		this.viewOptions = {
+			renderSideBySide: options.renderSideBySide,
+			useInlineViewWhenSpaceIsLimited: options.useInlineViewWhenSpaceIsLimited,
+			renderSideBySideInlineBreakpoint: options.renderSideBySideInlineBreakpoint,
+		};
 		this.configuredWordWrap = options.wordWrap ?? 'off';
 		this.editorOptions = {
 			lineHeight: rawLineHeight,
@@ -364,6 +371,15 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.refreshLayout();
 		if (!this.restoredScrollAnchor && !(state as MultiDiffEditorViewState).scrollAnchor) this.scrollView.setLogicalScrollTop(scrollTop);
 		this.project();
+	}
+
+	public setViewMode(renderSideBySide: boolean, useInlineViewWhenSpaceIsLimited: boolean, inlineBreakpoint: number): void {
+		this.viewOptions = { renderSideBySide, useInlineViewWhenSpaceIsLimited, renderSideBySideInlineBreakpoint: inlineBreakpoint };
+		for (const section of this.sections.values()) {
+			section.editor?.setViewMode(renderSideBySide, useInlineViewWhenSpaceIsLimited, inlineBreakpoint);
+		}
+		this.measuredHeights.clear();
+		this.refreshLayout();
 	}
 
 	public setConfiguredWordWrap(mode: NonNullable<DiffEditorWidgetOptions['wordWrap']>): void {
@@ -689,6 +705,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 						scrollBeyondLastLine: false,
 						scrollbar: { vertical: 'hidden' },
 						renderOverviewRuler: false,
+						...this.viewOptions,
 						wordWrap: this.temporaryWordWrap ?? this.configuredWordWrap,
 						// Restoring the unchanged default cursor emits no selection change.
 						// Only other cursors need restoration before compacting their regions.
@@ -714,7 +731,7 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 					this.syncingEditorScroll = false;
 				}
 				if (this.viewModel.activeChange?.itemId === item.id && editor.currentChangeRow !== this.viewModel.activeChange.rowIndex) {
-					editor.revealChangeRow(this.viewModel.activeChange.rowIndex, false);
+					editor.restoreChangeRow(this.viewModel.activeChange.rowIndex);
 				}
 			}
 		} finally {

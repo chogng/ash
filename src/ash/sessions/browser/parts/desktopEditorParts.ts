@@ -1,7 +1,10 @@
+import { isEditorPaneWithSelection } from '../../../workbench/common/editor.js';
+import { isEditorPaneWithViewState } from '../../../workbench/browser/parts/editor/editorWithViewState.js';
+import { TextEditorSelectionSource } from '../../../platform/editor/common/editor.js';
 import { SessionSideChatEditorInput } from '../../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { Emitter } from '../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import type { Direction, SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
+import type { SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import type { IDimension } from '../../../base/browser/dom.js';
 import { isRecord } from '../../../base/common/types.js';
 import { EditorParts } from '../../../workbench/browser/parts/editor/editorParts.js';
@@ -213,6 +216,40 @@ export class DesktopEditorParts extends EditorParts {
 		return pane;
 	}
 
+	public async moveModalEditorToMain(): Promise<void> {
+		const source = this.activePart;
+		const input = source.activeInput;
+		if (!source.isModalEditorVisible || !input
+			|| !(source instanceof DesktopMainEditorPart || source instanceof DesktopToolEditorPart)) return;
+		const host = this.hosts.get(editorTool(input));
+		if (!(host instanceof DesktopMainEditorPart || host instanceof DesktopToolEditorPart)) return;
+		const target = host.resolveDefaultGroup(input);
+		const moved = await source.moveModalEditorTo(target, () => {
+			this.setGroupVisible(target.id, true);
+			this.activateGroup(target.id);
+			this.revealed.fire();
+		});
+		if (!moved) return;
+		target.focus();
+	}
+
+	public async openActiveEditorInModal(): Promise<void> {
+		const source = this.activePart;
+		const input = source.activeInput;
+		const pane = source.activePane;
+		if (source.isModalEditorVisible || !input || !pane) return;
+		if (!isEditorPaneWithSelection(pane) && input.resource.scheme !== 'ash-session-changes') return;
+		const viewState = isEditorPaneWithViewState(pane) ? pane.saveViewState() : undefined;
+		const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
+		const modal = await source.openEditor(input, { preferredEditorId: pane.id, ignoreError: true }, 'modalGroup');
+		if (viewState !== undefined && isEditorPaneWithViewState(pane) && isEditorPaneWithViewState(modal)
+			&& pane.viewStateTypeId === modal.viewStateTypeId) {
+			modal.restoreViewState(viewState);
+		} else if (selection && isEditorPaneWithSelection(modal)) {
+			modal.restoreSelection(selection, TextEditorSelectionSource.PROGRAMMATIC);
+		}
+	}
+
 	public async openFiles(): Promise<void> {
 		await this.filesPart.openFiles();
 		this.syncArea();
@@ -254,10 +291,6 @@ export class DesktopEditorParts extends EditorParts {
 			this.activateGroup(next.id);
 			this.focus();
 		}
-	}
-
-	public moveToolToEdge(direction: Direction, groupId = this.activeGroup.id): void {
-		if (groupId !== this.pageGroupId) this.area.moveToolToEdge(this.toolForGroup(groupId), direction);
 	}
 
 	public toggleMaximizeTool(groupId: number = this.activeGroup.id): void {
