@@ -51,11 +51,15 @@ jobs:
           workspaces: ". -> .build/cargo"
           shared-key: component-fixtures
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Prepare the existing frontend toolchain
+      - name: Install locked tools and dependencies
         run: |
           python -B scripts/install_python_tools.py
           pnpm install --frozen-lockfile
-          pnpm exec playwright install chromium
+      - uses: ./.github/actions/setup-playwright
+        with:
+          install-args: chromium
+      - name: Prepare generated frontend inputs
+        run: |
           pnpm protocol:generate
           pnpm prepare:generated
       - name: Check types and screenshot tooling
