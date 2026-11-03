@@ -3,6 +3,8 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind } from '../../../../../platform/actionWidget/browser/actionList.js';
@@ -17,7 +19,10 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IRemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
@@ -43,16 +48,23 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 		listWSLDistros: () => { discoveries++; return discovery.p; },
 	} as unknown as IRemoteAgentHostService);
 	services.registerInstance(IRemoteConnectionService, { available: false } as IRemoteConnectionService);
-	services.registerInstance(ICommandService, {} as ICommandService);
+	const commands: unknown[][] = [];
+	services.registerInstance(ICommandService, {
+		async executeCommand(...args: unknown[]) { commands.push(args); return false; },
+	} as unknown as ICommandService);
 	services.registerInstance(INotificationService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as INotificationService);
 	services.registerInstance(IStorageService, { keys: () => [] } as unknown as IStorageService);
-	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
+	services.registerInstance(IAgentConnection, {} as IAgentConnection);
+	services.registerInstance(ILayoutService, {} as ILayoutService);
+	services.registerInstance(IFileDialogService, {} as IFileDialogService);
+	services.registerInstance(IWorkspacesService, {} as IWorkspacesService);
 	const draft = { untitledSessionId: 'draft', providerId: LOCAL_AGENT_HOST_PROVIDER_ID, workspace: { type: 'current' } };
 	services.registerInstance(ISessionsManagementService, {
 		untitledSessions: [draft], onDidChange: Event.None,
 	} as unknown as ISessionsManagementService);
+	const providers: ISessionsProvider[] = [];
 	services.registerInstance(ISessionsProvidersService, {
-		onDidChangeProviders: Event.None, getProviders: () => [], getProvider: () => undefined,
+		onDidChangeProviders: Event.None, getProviders: () => providers, getProvider: () => undefined,
 	} as unknown as ISessionsProvidersService);
 	const model = { untitledSessionId: draft.untitledSessionId, inputState: { phase: 'ready' }, onDidChange: Event.None };
 	lifetime.add(services.createInstance(SessionEnvironmentPicker, footer, model as unknown as IChatWidgetModel, async () => { }));
@@ -79,12 +91,52 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	assert.ok(document.querySelector('[aria-label="Open Folder"]'));
 	menus.hide();
 
+	providers.push({
+		id: 'ssh:devbox', label: 'devbox', connectionStatus: constObservable('connected'),
+		currentWorkspace: () => ({ type: 'ssh', host: 'devbox', root: '/workspace' }),
+	} as ISessionsProvider);
 	trigger.focus();
 	trigger.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(discoveries, 2);
 	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
 	assert.ok(document.querySelector('[aria-label="WSL: Ubuntu"]'));
+	assert.ok(document.querySelector('[aria-label="Cloud"]:disabled'));
+	assert.ok(document.querySelector('[aria-label="New Environment"]'));
+	assert.equal(document.querySelector('[aria-label="Add Remote…"]'), null);
+	const remote = document.querySelector<HTMLElement>('[aria-label="Remote"]');
+	assert.ok(remote);
+	const host = document.querySelector<HTMLElement>('[aria-label="devbox"]');
+	assert.ok(host);
+	assert.equal(host.closest('[role="menu"]'), remote.closest('[role="menu"]'));
+	assert.ok(host.compareDocumentPosition(remote) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+	assert.equal(remote.getAttribute('aria-haspopup'), 'menu');
+	remote.focus();
+	remote.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+	assert.equal(remote.getAttribute('aria-expanded'), 'true');
+	assert.ok(document.querySelector('[aria-label="Cloud"]'));
+	assert.ok(document.querySelector('[aria-label="SSH"]'));
+	const tunnel = document.querySelector<HTMLButtonElement>('[aria-label="Ash Tunnel"]');
+	assert.ok(tunnel);
+	assert.equal(document.activeElement, tunnel);
+
+	tunnel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+	assert.equal(remote.getAttribute('aria-expanded'), 'false');
+	assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+	assert.equal(document.activeElement, remote);
+
+	remote.click();
+	assert.equal(remote.getAttribute('aria-expanded'), 'true');
+	const reopenedTunnel = document.querySelector<HTMLButtonElement>('[aria-label="Ash Tunnel"]');
+	assert.ok(reopenedTunnel);
+	reopenedTunnel.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(commands, [['sessions.action.newRemoteEnvironment', 'tunnel']]);
+	assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+	trigger.focus();
+	trigger.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	menus.hide();
 	assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 	assert.equal(document.activeElement, trigger);

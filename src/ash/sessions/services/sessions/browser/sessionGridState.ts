@@ -3,7 +3,7 @@ import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
-import type { IUntitledChatSession, SessionWorkspaceSelection } from '../common/session.js';
+import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
 
 const storageKey = 'sessions.viewState';
@@ -118,7 +118,13 @@ export function isUntitledSession(value: unknown): value is IUntitledChatSession
 		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')
 		&& (value.branchName === undefined || typeof value.branchName === 'string' && value.branchName.trim().length > 0 && value.branchName.length <= 1024)
 		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))
+		&& (value.environment === undefined || isSessionEnvironmentSelection(value.environment))
 		&& isWorkspaceSelection(value.workspace);
+}
+
+export function isSessionEnvironmentSelection(value: unknown): value is SessionEnvironmentSelection {
+	return isRecord(value) && nonEmptyString(value.id) && nonEmptyString(value.name) && typeof value.hasVariables === 'boolean'
+		&& Array.isArray(value.folders) && value.folders.every(folder => isRecord(folder) && folder.type !== 'current' && folder.type !== 'multiple' && isWorkspaceSelection(folder));
 }
 
 function isWorkspaceSelection(value: unknown): value is SessionWorkspaceSelection {

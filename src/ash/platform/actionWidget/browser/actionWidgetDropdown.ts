@@ -4,7 +4,7 @@ import { getTabbableElements } from '../../../base/browser/focus.js';
 import { EventType, Gesture } from '../../../base/browser/touch.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../base/common/cancellation.js';
-import { Button } from '../../../base/browser/ui/button/button.js';
+import { Button, type IButtonOptions } from '../../../base/browser/ui/button/button.js';
 import { Separator, type IAction } from '../../../base/common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -20,7 +20,8 @@ export interface IActionWidgetDropdownActionProvider {
 }
 
 export interface IActionWidgetDropdownOptions {
-	readonly trigger?: { readonly button: Button; readonly open: () => void; };
+	readonly onOpen?: () => void;
+	readonly buttonOptions?: Pick<IButtonOptions, 'icon' | 'presentation' | 'size' | 'title'>;
 	readonly label: string;
 	readonly ariaLabel: string;
 	readonly actions?: readonly IActionWidgetDropdownAction[];
@@ -32,6 +33,7 @@ export interface IActionWidgetDropdownOptions {
 	/** Installs popup-specific presentation and listeners for the lifetime of the open menu. */
 	readonly onShow?: (menu: HTMLElement) => IDisposable;
 	readonly tabLeavesPopup?: boolean;
+	readonly focusItemOnPointerOpen?: boolean;
 	readonly onError?: (error: unknown) => void;
 }
 
@@ -42,27 +44,28 @@ interface IActionWidgetDropdownItems<T> {
 	readonly select: (item: T) => unknown;
 	readonly requireIdle?: boolean;
 	readonly restoreFocusOnSelect?: boolean;
+	readonly focusItemOnOpen?: boolean;
 }
 
 const pendingDropdowns = new WeakMap<Document, CancellationTokenSource>();
 
 /** Bind activation for a dropdown trigger without taking over its content or popup. */
-export function bindActionWidgetActivation(trigger: HTMLElement, activate: () => void, isEnabled: () => boolean): IDisposable {
+export function bindActionWidgetActivation(trigger: HTMLElement, activate: (source: 'pointer' | 'keyboard') => void, isEnabled: () => boolean): IDisposable {
 	const listeners = new DisposableStore();
 	listeners.add(addDisposableListener(trigger, 'mousedown', event => {
 		if (event.button !== 0 || !isEnabled()) { return; }
 		stopEvent(event);
-		activate();
+		activate('pointer');
 	}));
 	listeners.add(addDisposableListener(trigger, 'keydown', event => {
 		if (event.isComposing || !isEnabled() || (event.key !== 'Enter' && event.key !== ' ')) { return; }
 		stopEvent(event);
-		activate();
+		activate('keyboard');
 	}));
 	listeners.add(Gesture.addTarget(trigger));
 	listeners.add(addDisposableListener(trigger, EventType.Tap, event => {
 		stopEvent(event);
-		if (isEnabled()) { activate(); }
+		if (isEnabled()) { activate('pointer'); }
 	}));
 	return listeners;
 }
@@ -84,14 +87,15 @@ export class ActionWidgetDropdown extends Disposable {
 		@IActionWidgetService private readonly actionWidgetService: IActionWidgetService,
 	) {
 		super();
-		if (!options.trigger && !options.actions && !options.actionProvider) { throw new TypeError('An action dropdown requires actions or an action provider'); }
-		const button = this.button = options.trigger?.button ?? this._register(new Button(container, {
+		if (!options.onOpen && !options.actions && !options.actionProvider) { throw new TypeError('An action dropdown requires actions or an action provider'); }
+		const button = this.button = this._register(new Button(container, {
 			...defaultButtonStyles,
 			label: options.label,
 			ariaLabel: options.ariaLabel,
 			icon: options.labelRenderer ? undefined : Lxicon.chevronDown,
 			presentation: options.labelRenderer ? 'quiet' : 'secondary',
 			size: options.labelRenderer ? 'standard' : 'small',
+			...options.buttonOptions,
 		}));
 		this.element = button.domNode;
 		this.element.classList.add('ash-action-widget-dropdown');
@@ -102,7 +106,7 @@ export class ActionWidgetDropdown extends Disposable {
 		this.element.setAttribute('aria-haspopup', 'menu');
 		this.element.setAttribute('aria-expanded', 'false');
 		this._register(toDisposable(() => this.hide()));
-		this._register(bindActionWidgetActivation(this.element, () => this.activate(), () => !this.element.disabled));
+		this._register(bindActionWidgetActivation(this.element, source => this.activate(source), () => !this.element.disabled));
 		// Assistive technology activates semantic buttons via click without a preceding pointer sequence.
 		this._register(addDisposableListener(this.element, 'click', event => {
 			if (event.detail === 0 && !this.element.disabled) { this.activate(); }
@@ -116,13 +120,13 @@ export class ActionWidgetDropdown extends Disposable {
 		}));
 	}
 
-	private open(): void {
+	private open(source: 'pointer' | 'keyboard' = 'keyboard'): void {
 		if (this.visible || this.request || this.element.disabled) { return; }
-		if (this.options.trigger) { this.options.trigger.open(); }
-		else { this.show(); }
+		if (this.options.onOpen) { this.options.onOpen(); }
+		else { this.show(source !== 'pointer' || this.options.focusItemOnPointerOpen !== false); }
 	}
 
-	public show(): void {
+	public show(focusItemOnOpen = true): void {
 		const toItems = (actions: readonly IActionWidgetDropdownAction[]): readonly IActionListItem<IActionWidgetDropdownAction>[] => actions.map(action => ({
 			kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
 			item: action,
@@ -137,12 +141,12 @@ export class ActionWidgetDropdown extends Disposable {
 				? Promise.resolve(this.options.actionProvider.getActions()).then(toItems)
 				: toItems(this.options.actions!),
 			select: action => action.run(),
+			focusItemOnOpen,
 		});
 	}
 
 	public showItems<T>(options: IActionWidgetDropdownItems<T>): void {
 		if (this.isDisposed || this.visible || this.request || this.element.disabled || (options.requireIdle && this.actionWidgetService.isVisible)) { return; }
-		if (this.options.trigger) { this.element.focus(); }
 		const document = this.element.ownerDocument;
 		const revision = ContextView.getPopupRevision(document);
 		pendingDropdowns.get(document)?.cancel();
@@ -205,13 +209,14 @@ export class ActionWidgetDropdown extends Disposable {
 				},
 			}, this.options.getAnchor?.() ?? this.element, {
 				...this.options.listOptions,
+				focusItemOnOpen: options.focusItemOnOpen ?? this.options.listOptions?.focusItemOnOpen,
 				onDidChangeFilter: text => {
 					this.options.listOptions?.onDidChangeFilter?.(text);
 					if (this.request !== request || !options.filterItems || text === query) { return; }
 					query = text;
 					update();
 				},
-				className: [this.options.listOptions?.className, !this.options.trigger && ACTION_WIDGET_DROPDOWN_MOTION_CLASS].filter(Boolean).join(' '),
+				className: [this.options.listOptions?.className, !this.options.onOpen && ACTION_WIDGET_DROPDOWN_MOTION_CLASS].filter(Boolean).join(' '),
 			});
 			if (this.request === request && options.refresh) {
 				void options.refresh(request.token).then(loaded => {
@@ -272,15 +277,27 @@ export class ActionWidgetDropdown extends Disposable {
 		if (!enabled) { this.hide(); }
 	}
 
+	public focus(): void {
+		if (!this.isDisposed && !this.element.disabled) { this.button.focus(); }
+	}
+
+	public setIcon(icon: IButtonOptions['icon']): void {
+		if (this.button.icon !== icon) { this.button.icon = icon; }
+	}
+
 	public setLabel(label: string): void {
 		if (this.button.label === label) { return; }
 		this.hide();
 		this.button.label = label;
 	}
 
-	private activate(): void {
-		this.element.focus();
+	private activate(source: 'pointer' | 'keyboard' = 'keyboard'): void {
+		// Pointer activation prevents the native focus action to open the popup on press.
+		const focusOptions: FocusOptions & { focusVisible?: boolean; } = {
+			focusVisible: source === 'pointer' ? false : undefined,
+		};
+		this.element.focus(focusOptions);
 		if (this.visible || this.request) { this.hide(); }
-		else { this.open(); }
+		else { this.open(source); }
 	}
 }

@@ -163,6 +163,9 @@ export interface IAgentSessionService {
 	/** Optional runtime capability; cancellation belongs to the originating connection. */
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
+	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
+	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
+	readEnvironmentProfile?(environmentId: string): Promise<Readonly<Record<string, string>> | undefined>;
 	listAgents(): Promise<Agent.AgentRoleListResult>;
 	/** Includes packaged workflow roles for Settings, without changing selectable root definitions. */
 	readRoleCatalog(): Promise<Agent.AgentRoleCatalog>;

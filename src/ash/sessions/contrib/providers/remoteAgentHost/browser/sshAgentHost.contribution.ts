@@ -53,33 +53,40 @@ export class SSHAgentHostContribution extends Disposable {
 			try { await this.showHosts(); }
 			catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
 		}));
-		this._register(CommandsRegistry.register('sessions.action.newRemoteEnvironment', () => this.addEnvironment()));
+		this._register(CommandsRegistry.register('sessions.action.newRemoteEnvironment', (_accessor, transport) => {
+			if (transport !== undefined && transport !== 'ssh' && transport !== 'tunnel') return false;
+			return this.addEnvironment(transport);
+		}));
 		const command = { id: manageHostsCommand, title: localize2({ bundle: 'ash.workbench', key: 'agentHosts.manage' }, 'Agents: Manage Connected Hosts') };
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command }));
 		this._register(MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: '2_manage' }));
 	}
 
-	private async addEnvironment(): Promise<boolean> {
-		if (this.newEnvironment.value) return false;
+	private async addEnvironment(transport?: 'ssh' | 'tunnel'): Promise<boolean> {
+		if (this.newEnvironment.value || (transport === 'ssh' && !this.connections.available)) return false;
 		const cancel = localize('sessions.environment.cancel', 'Cancel');
 		const transports = this.connections.available ? [
 			localize('sessions.environment.ssh', 'SSH'),
 			localize('sessions.environment.tunnel', 'Ash Tunnel'),
 		] : [localize('sessions.environment.tunnel', 'Ash Tunnel')];
 		const dialogStyles = { buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles };
-		const choose = new Dialog(this.layout.activeContainer, localize('sessions.environment.newRemote', 'New Remote Environment'), [...transports, cancel], {
-			...dialogStyles,
-			cancelId: transports.length,
-			detail: localize('sessions.environment.transportHelp', 'Save an SSH connection or connect using an authenticated Ash Tunnel URL.'),
-		});
-		this.newEnvironment.value = choose;
 		try {
-			const choice = await choose.show();
-			if (this.isDisposed || choice.button === transports.length) return false;
-			this.newEnvironment.clear();
-			if (!this.connections.available || choice.button === 1) {
+			if (transport === undefined) {
+				const choose = new Dialog(this.layout.activeContainer, localize('sessions.environment.newEnvironment', 'New Environment'), [...transports, cancel], {
+					...dialogStyles,
+					cancelId: transports.length,
+					detail: localize('sessions.environment.transportHelp', 'Save an SSH connection or connect using an authenticated Ash Tunnel URL.'),
+				});
+				this.newEnvironment.value = choose;
+				const choice = await choose.show();
+				if (this.isDisposed || choice.button === transports.length) return false;
+				this.newEnvironment.clear();
+				transport = transports.length === 1 || choice.button === 1 ? 'tunnel' : 'ssh';
+			}
+			if (transport === 'tunnel') {
 				return !!await this.commands.executeCommand<string>('sessions.action.connectTunnelAgentHost');
 			}
+			if (!this.connections.available) return false;
 			const ssh = new Dialog(this.layout.activeContainer, localize('sessions.environment.newSSH', 'New SSH Connection'), [localize('sessions.environment.save', 'Save'), cancel], {
 				...dialogStyles, cancelId: 1,
 				inputs: [

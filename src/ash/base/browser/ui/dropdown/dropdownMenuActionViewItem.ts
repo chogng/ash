@@ -55,7 +55,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			enabled: this.action.enabled,
 			onClick: event => {
 				if (this.visible) {
-					this.menuCancellation.value?.cancel();
+					this.hide();
 				} else {
 					this.show(event.detail === 0);
 				}
@@ -120,10 +120,14 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		}
 	}
 
+	protected hide(): void {
+		this.menuCancellation.value?.cancel();
+	}
+
 	protected override disposeCore(): void {
 		// Close this item's presentation while its trigger and visibility listeners still exist.
 		try {
-			this.menuCancellation.value?.cancel();
+			this.hide();
 		} finally {
 			super.disposeCore();
 		}

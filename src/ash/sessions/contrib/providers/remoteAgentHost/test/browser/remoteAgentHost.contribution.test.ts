@@ -118,6 +118,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const deleted: string[] = [];
 	let openResult: ((target: RemoteAgentHostConnection, host: IRemoteAgentHostProtocolClient) => Promise<IRemoteAgentHostProtocolClient>) | undefined;
 	const renderer = createDisconnectedRendererApi();
+	let readCapabilities: typeof renderer.agentCapabilities.read | undefined;
 	let containerSessions = false;
 	const sessionDirectoryRequests: unknown[] = [];
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
@@ -269,6 +270,9 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						},
 					},
 					appServer: { ...renderer.appServer, getConnectionState: async () => 'ready' },
+					agentCapabilities: readCapabilities
+						? { ...renderer.agentCapabilities, isAvailable: true, read: readCapabilities }
+						: renderer.agentCapabilities,
 					session: {
 						...renderer.session,
 						subscribeCatalog: async () => ({ sessions: [session] }), unsubscribeCatalog: async () => { },
@@ -328,7 +332,8 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	}
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
-		services, commands, contribution, scopeOwner, registry, automations, container, errors,
+		services, commands, contribution, scopeOwner, registry, automations, container, errors, notifications,
+		readCapabilities: (read: typeof readCapabilities) => { readCapabilities = read; },
 		opened, closed, renamed, deleted, reconnected, connect, choose, dialog, closeDialog, sessionDirectoryRequests,
 		crash: (name: string) => {
 			const entry = [...hosts.entries()].find(([, value]) => value.connection.name === name);
@@ -344,6 +349,42 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		deferOpen: (next: typeof openResult) => { openResult = next; },
 	};
 }
+
+test('remote Windows sandbox setup notice refreshes against the connected execution host', async () => {
+	using context = fixture();
+	let ready = false;
+	let reads = 0;
+	context.readCapabilities(async () => {
+		reads++;
+		return {
+			localProcessSandboxConfigured: true,
+			directoryGrantsReadable: false,
+			sandboxBackends: ['mxc', 'windows'],
+			sandboxPolicy: { profile: 'workspace', fileSystem: 'directoryWrite', network: 'denied', hostRead: 'host', managedConstraints: false, pathRuleCount: 0 },
+			sandboxDiagnostics: [
+				{ backend: 'mxc', network: 'denied', readiness: { type: 'unsupported', reason: 'Missing OS capability' } },
+				{ backend: 'windows', network: 'denied', readiness: ready ? { type: 'ready' } : { type: 'unavailable', reason: 'Setup required' } },
+			],
+		};
+	});
+	const notices: { readonly message: unknown; readonly actions?: { readonly primary?: readonly { readonly id: string; run(): unknown; }[]; }; }[] = [];
+	using listener = context.notifications.model.onDidAdd(notice => notices.push(notice));
+	await context.connect('build-a');
+	assert.match(String(notices[0]?.message), /build-a.*administrator setup/);
+	const refresh = notices[0]?.actions?.primary?.find(action => action.id === 'sessions.remoteSandbox.refresh');
+	assert.ok(refresh);
+	await refresh.run();
+	assert.equal(reads, 2);
+	assert.equal(notices.length, 1);
+	ready = true;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(chinese.locale, chinese.bundles);
+	try {
+		await refresh.run();
+		assert.equal(reads, 3);
+		assert.equal(String(notices[1]?.message), 'build-a 上的命令沙箱已就绪。');
+	} finally { resetNlsResolver(); }
+});
 
 test('remote provider scopes bind their own connection while borrowing window connection management', async () => {
 	using context = fixture();

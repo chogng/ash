@@ -29,6 +29,7 @@ declare global {
 		ashActionWidgetIntegration: {
 			show(labels: string[], options?: IActionListOptions): void;
 			showTabs(): void;
+			showSubmenu(): void;
 			mountSelect(): void;
 			mountDropdown(): void;
 			update(labels: string[]): void;
@@ -92,6 +93,12 @@ window.ashActionWidgetIntegration = {
 	show(labels, options): void {
 		source.focus();
 		widget.show('integration', false, createItems(labels), delegate, source, options);
+	},
+	showSubmenu(): void {
+		source.focus();
+		widget.show('submenu', false, [{
+			kind: ActionListItemKind.Action, label: 'Remote', submenu: createItems(['SSH', 'Ash Tunnel']),
+		}], delegate, source);
 	},
 	showTabs(): void {
 		source.focus();

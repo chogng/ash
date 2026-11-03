@@ -5,6 +5,7 @@ use ash_sandboxing::SandboxBackend;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxScope;
 use ash_utils_pty::TerminalSize;
+pub use exec_server::execution::CommandEnvironment;
 pub use exec_server::execution::CommandExecutionAuthority;
 pub use exec_server::execution::CommandExecutionOutcome;
 pub use exec_server::execution::CommandInput;

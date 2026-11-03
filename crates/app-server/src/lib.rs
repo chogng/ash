@@ -92,3 +92,5 @@ pub type DiffRequestHandler =
     fn(
         &serde_json::Value,
     ) -> Result<serde_json::Value, ash_app_server_protocol::protocol::error::AppServerError>;
+
+mod session_environment;

@@ -548,6 +548,9 @@ impl super::search_operations::SearchRequestProcessorContext for AppServer {
 }
 
 impl super::session_operations::SessionRequestProcessorContext for AppServer {
+    fn session_environments(&self) -> &crate::session_environment::SessionEnvironments {
+        &self.session_environments
+    }
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }

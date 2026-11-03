@@ -74,6 +74,7 @@ pub(crate) fn execute_in_directory(
                             .collect(),
                         working_directory: directory.to_owned(),
                         input: CommandInput::Closed,
+                        environment: Default::default(),
                     },
                     CommandExecutionAuthority::Unrestricted,
                     cancellation,

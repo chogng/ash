@@ -32,6 +32,7 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 				accessibilityHelp: () => accessibleViews.show(AccessibleViewType.Help),
 			},
 			tabLeavesPopup: true,
+			focusItemOnPointerOpen: false,
 			onShow: menu => this.decorateMenu(menu),
 			onError: error => notifications.error(error instanceof Error ? error : String(error)),
 		}, instantiationService);

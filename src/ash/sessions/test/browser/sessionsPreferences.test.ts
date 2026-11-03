@@ -292,7 +292,22 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 			preferenceOpens.push({ keybindings: textual });
 		},
 	});
-	services.registerInstance(IAccountService, { readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); }, onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
+	services.registerInstance(IAccountService, {
+		readRateLimits: async (provider, accountId) => ({
+			provider, accountId, plan: 'Plus', credits: null, xai: null,
+			limits: [{
+				id: 'codex', name: 'Codex', model: null, allowed: true, limitReached: false,
+				primary: { usedPercent: 37, windowSeconds: 18000, resetsAt: 1800000000 },
+				secondary: { usedPercent: 20, windowSeconds: 604800, resetsAt: 1800200000 },
+			}],
+		}),
+		onDidChangeAccounts: Event.None,
+		onDidCompleteLogin: Event.None,
+		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'test', status: 'ready', credentialRevision: 1n }] }),
+		startLogin: async () => { throw new Error('Not used'); },
+		cancelLogin: async () => { },
+		logout: async () => { },
+	});
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
 	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
@@ -407,6 +422,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ section: 'chat-usage' });
 	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
 	assert.ok(usageButton?.querySelector('.ash-icon-dashboard'));
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const subscription = window.document.querySelector('[data-settings-item-id="chat.subscriptionUsage"]');
+	assert.match(subscription?.textContent ?? '', /5-hour window · 63% remaining \(37% used\) · Resets:/u);
+	assert.match(subscription?.textContent ?? '', /7-day window · 80% remaining \(20% used\) · Resets:/u);
 	assert.ok(window.document.querySelector('[data-settings-item-id="chat.usage"]'));
 	assert.match(window.document.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');

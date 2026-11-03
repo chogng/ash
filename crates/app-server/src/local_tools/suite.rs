@@ -134,6 +134,7 @@ const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 /// The fixed local coding-tool suite and its path-scoped execution state.
 pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
     grep: Arc<grep::Service>,
     file_search: Arc<file_search::Service>,
     authorization: Authorization,
@@ -197,6 +198,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ];
         Self {
             shell,
+            session_environments: Arc::default(),
             grep,
             file_search,
             authorization,
@@ -895,7 +897,8 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 };
                 let request = ShellCommandRequest::new(program, arguments, command_directory)
                     .map_err(|error| CoreError::Execution(error.to_string()))?
-                    .with_dir_root(resolved.root.canonical_path());
+                    .with_dir_root(resolved.root.canonical_path())
+                    .with_environment(self.session_environments.load(Some(session_id))?);
                 let (scope, authorizations) = self.command_scope_for(
                     &resolved.authorization,
                     Some(session_id),
@@ -1051,6 +1054,14 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             Some(command) => self.dir_grants.execute_command(&command, execute),
             None => execute(),
         }
+    }
+
+    pub(super) fn with_session_environments(
+        mut self,
+        environments: Arc<crate::session_environment::SessionEnvironments>,
+    ) -> Self {
+        self.session_environments = environments;
+        self
     }
 
     fn review_shell_session(
@@ -1472,6 +1483,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 resolved.relative,
                 network_policy,
                 &self.sandbox_scope_for(&resolved.authorization, session_id, thread_id)?,
+                self.session_environments.load(session_id)?,
             );
         }
         if call.name.as_str() == "shell-session" {

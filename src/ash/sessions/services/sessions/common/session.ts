@@ -179,11 +179,19 @@ export interface IActiveSessionThread {
 	readonly threadId: ThreadId;
 }
 
+export interface SessionEnvironmentSelection {
+	readonly id: string;
+	readonly name: string;
+	readonly folders: readonly SessionExecutionTarget[];
+	readonly hasVariables: boolean;
+}
+
 /** An untitled Chat session that has not yet acquired a durable Session identity. */
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
 	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
+	readonly environment?: SessionEnvironmentSelection;
 	readonly title: string;
 	readonly model: ModelRef | undefined;
 	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */

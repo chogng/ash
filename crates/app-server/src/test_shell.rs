@@ -159,6 +159,7 @@ impl ToolService for Shell {
                             arguments: arguments.arguments,
                             working_directory: arguments.working_directory,
                             input: CommandInput::Closed,
+                            environment: Default::default(),
                         },
                         CommandExecutionAuthority::Unrestricted,
                         cancellation,

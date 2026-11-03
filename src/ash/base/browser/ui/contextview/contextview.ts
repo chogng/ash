@@ -41,6 +41,8 @@ export interface ContextViewOptions {
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly anchorPosition?: AnchorPosition;
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
+	/** For a side-by-side view, align this content element with the anchor’s top edge. */
+	readonly alignTopTo?: Element;
 	readonly gap?: number;
 	readonly presentation?: ContextViewPresentation;
 	readonly focusRestore?: ContextViewFocusRestore;
@@ -48,6 +50,8 @@ export interface ContextViewOptions {
 	/** Shield background controls from pointer interaction while the popup is open. */
 	readonly blockOutsidePointer?: boolean;
 	readonly isTargetWithin?: (target: Node) => boolean;
+	/** Handle Escape inside the popup before the default dismissal. */
+	readonly onEscape?: (event: KeyboardEvent) => boolean;
 	readonly onHide?: (reason: ContextViewHideReason) => void;
 }
 
@@ -194,7 +198,9 @@ export class ContextView
 				}
 				event.preventDefault();
 				event.stopPropagation();
-				this.hide(ContextViewHideReason.Escape);
+				if (!options.onEscape?.(event)) {
+					this.hide(ContextViewHideReason.Escape);
+				}
 			},
 			true,
 		));
@@ -250,10 +256,14 @@ export class ContextView
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();
 		const viewport = getViewport(targetWindow);
+		// Account for the surface inset before viewport fitting so rows can line up.
+		const topInset = options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && options.alignTopTo
+			? options.alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop
+			: 0;
 		const result = layout2d(
 			viewport,
 			{ width: bounds.width, height: bounds.height },
-			anchor,
+			{ ...anchor, top: anchor.top - topInset },
 			options,
 		);
 		const titlebar = getVisibleWCOTitlebarAreaRect(targetWindow);

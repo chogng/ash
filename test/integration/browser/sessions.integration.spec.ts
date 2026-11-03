@@ -1070,7 +1070,7 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	const picker = page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: /^Run on:/ });
 	await picker.press('ArrowDown');
 	const menu = page.locator('.ash-sessions-environment-menu');
-	await expect(menu).toBeVisible();
+	await expect(menu.locator('.ash-action-widget-filter input')).toBeFocused();
 	await page.keyboard.press('Escape');
 	await expect(menu).toHaveCount(0);
 	await expect(picker).toBeFocused();
@@ -1078,8 +1078,16 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(picker).toHaveCSS('outline-style', 'solid');
 	const foreground = await picker.evaluate(button => getComputedStyle(button).color);
 	await expect(picker).toHaveCSS('outline-color', foreground);
+	// Observe the trigger during activation, before the menu moves focus to its search box.
+	const pointerFocusVisible = await picker.evaluateHandle(button => {
+		const states: boolean[] = [];
+		button.addEventListener('mousedown', () => states.push(button.matches(':focus-visible')), { once: true });
+		return states;
+	});
 	await picker.click();
-	await expect(menu).toBeVisible();
+	expect(await pointerFocusVisible.jsonValue()).toEqual([false]);
+	await pointerFocusVisible.dispose();
+	await expect(menu.locator('.ash-action-widget-filter input')).toBeFocused();
 	await page.mouse.click(600, 200);
 	await expect(menu).toHaveCount(0);
 	await expect(picker).toBeFocused();
@@ -1094,6 +1102,68 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(workspace).toHaveCSS('outline-color', workspaceForeground);
 	await page.keyboard.press('Shift+Tab');
 	await expect(picker).toBeFocused();
+
+	await workspace.click();
+	await expect(workspace).toHaveAttribute('aria-expanded', 'true');
+	const workspaceSearch = page.locator('.ash-action-widget-filter input');
+	await expect(workspaceSearch).toBeFocused();
+	await workspaceSearch.fill('Open Folder');
+	await workspaceSearch.press('ControlOrMeta+ArrowDown');
+	await expect(page.getByRole('menuitem', { name: 'Open Folder…', exact: true })).toBeFocused();
+	await page.keyboard.press('ArrowUp');
+	await expect(workspaceSearch).toBeFocused();
+	await expect(workspaceSearch).toHaveValue('Open Folder');
+	await workspaceSearch.press('ArrowDown');
+	await page.keyboard.press('o');
+	await expect(workspaceSearch).toBeFocused();
+	await expect(workspaceSearch).toHaveValue('o');
+	await workspaceSearch.press('Escape');
+	await expect(workspaceSearch).toHaveValue('');
+	await expect(workspaceSearch).toBeFocused();
+	await workspaceSearch.evaluate(input => input.dispatchEvent(new CompositionEvent('compositionstart')));
+	await workspaceSearch.fill('no matching workspace');
+	await expect(page.getByRole('menuitem', { name: 'Open Folder…', exact: true })).toBeVisible();
+	await workspaceSearch.evaluate(input => input.dispatchEvent(new CompositionEvent('compositionend')));
+	await expect(page.getByRole('menuitem', { name: 'Open Folder…', exact: true })).toHaveCount(0);
+	await page.mouse.click(600, 200);
+	await expect(workspace).toHaveAttribute('aria-expanded', 'false');
+	await expect(workspace).toBeFocused();
+	await expect(workspace).toHaveCSS('outline-style', 'none');
+
+	await picker.press('ArrowDown');
+	await expect(menu.locator('.ash-action-widget-filter input')).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(menu).toHaveCount(0);
+	await expect(workspace).toBeFocused();
+	await workspace.press('ArrowDown');
+	await expect(workspaceSearch).toBeFocused();
+	await page.keyboard.press('Shift+Tab');
+	await expect(workspace).toHaveAttribute('aria-expanded', 'false');
+	await expect(picker).toBeFocused();
+
+	for (const [triggerSelector, menuSelector, nextOption] of [
+		['.ash-chat-input-mode-action', '.ash-chat-input-mode-menu', 'Plan'],
+		['.ash-chat-input-permission-picker', '.ash-chat-permission-menu', 'Bypass permissions'],
+	]) {
+		const trigger = page.locator('.ash-sessions-chat-slot.active').locator(triggerSelector);
+		const popup = page.locator(menuSelector);
+		const checked = popup.getByRole('menuitemradio', { checked: true });
+		await trigger.click();
+		await expect(checked).toBeVisible();
+		const menuBody = popup.getByRole('menu');
+		await expect(menuBody).toBeFocused();
+		await expect(menuBody).toHaveCSS('outline-style', 'none');
+		await expect(popup.locator('.ash-action-view-item.focused')).toHaveCount(0);
+		await page.keyboard.press('ArrowDown');
+		await expect(popup.getByRole('menuitemradio', { name: nextOption })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		await expect(checked).toBeFocused();
+		await page.keyboard.press('Tab');
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(trigger).not.toBeFocused();
+	}
 
 	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
 	await input.focus();

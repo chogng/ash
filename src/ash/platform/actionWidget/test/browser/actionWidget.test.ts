@@ -612,6 +612,41 @@ suite('actionWidget browser component', () => {
 		}
 	});
 
+	test('cascading action menus use the same surface and row styles', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(scheme => {
+				window.ashActionWidgetIntegration.theme(scheme);
+				window.ashActionWidgetIntegration.showSubmenu();
+			}, scheme);
+			await page.getByRole('menuitem', { name: 'Remote', exact: true }).press('ArrowRight');
+			const panel = page.locator('.ash-context-view-menu:has(> .ash-action-widget-submenu)');
+			await expect(panel).toBeVisible();
+			const styles = await page.evaluate(() => {
+				const properties = (element: Element, keys: readonly string[]) =>
+					keys.map(key => getComputedStyle(element).getPropertyValue(key));
+				const parent = document.querySelector('.ash-action-widget')!;
+				const submenu = document.querySelector('.ash-action-widget-submenu')!;
+				const panelKeys = ['background-color', 'border-top-color', 'border-top-width', 'border-radius', 'box-shadow', 'font-size'];
+				const rowKeys = ['height', 'padding-inline-start', 'padding-inline-end', 'border-radius', 'font-size'];
+				return {
+					parent: properties(parent, panelKeys),
+					child: properties(submenu.parentElement!, panelKeys),
+					parentRow: properties(parent.querySelector('.ash-menu .ash-button')!, rowKeys),
+					childRow: properties(submenu.querySelector('.ash-button')!, rowKeys),
+					rowTopDifference: submenu.querySelector('.ash-button')!.getBoundingClientRect().top
+						- parent.querySelector('.ash-menu .ash-button')!.getBoundingClientRect().top,
+				};
+			});
+			expect(styles.child).toEqual(styles.parent);
+			expect(styles.childRow).toEqual(styles.parentRow);
+			expect(Math.abs(styles.rowTopDifference)).toBeLessThanOrEqual(0.5);
+			await page.getByRole('menuitemradio', { name: 'SSH' }).press('ArrowLeft');
+			await page.keyboard.press('Escape');
+		}
+	});
+
 	test('single-line action menu rows use the standard 22px height and pitch', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;

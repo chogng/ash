@@ -303,6 +303,7 @@ pub(crate) fn compose_local_tools_with_config(
     pty_helper: Option<&std::path::PathBuf>,
     documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
     threads: Arc<ash_core::ThreadController>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let requirements = config
         .requirements
@@ -360,7 +361,15 @@ pub(crate) fn compose_local_tools_with_config(
             },
         )
         .and_then(|tool| tool.with_execution_guidance(&shell_execution_guidance(shell_policy)))
-        .map_err(LocalToolError::definition)?,
+        .map_err(LocalToolError::definition)?
+        .with_session_environment({
+            let environments = Arc::clone(&session_environments);
+            move |context| {
+                environments
+                    .load(context.session_id())
+                    .map_err(|error| error.to_string())
+            }
+        }),
     );
     let mut apply_patch = ApplyPatchTool::new(
         environment_id.clone(),
@@ -394,7 +403,8 @@ pub(crate) fn compose_local_tools_with_config(
         revision: action_policy_revision.clone(),
     };
     let mut service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant)
-        .with_permission_requests(requests);
+        .with_permission_requests(requests)
+        .with_session_environments(session_environments);
     if let Some(documents) = documents {
         service = service.with_text_document_editor(documents);
     }
@@ -874,12 +884,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         relative: PathBuf,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
         scope: &SandboxScope,
+        environment: exec_server::execution::CommandEnvironment,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
+        let request = self
+            .materialize_at(request, dir_authorization.dir(), relative)?
+            .with_environment(environment);
         self.execute_request_scoped(
             request,
             authorization,
@@ -2075,6 +2088,9 @@ pub(crate) fn local_command_authority(
     // profile read-only constraints when choosing the process launch path.
     let restricted = scope
         .map(|scope| {
+            if cfg!(windows) {
+                return scope.can_run_unrestricted().map(|allowed| !allowed);
+            }
             if scope.host_read() == ash_sandboxing::HostReadScope::Minimal
                 || scope
                     .grants()

@@ -102,16 +102,23 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			layer: contextViewLayer,
 			focusRestore: ContextViewFocusRestore.None,
 			blockOutsidePointer: true,
+			isTargetWithin: target => list.contains(target),
+			onEscape: event => !event.shiftKey && list.clearFocusedFilter(),
 			onHide: reason => {
 				const didCancel = this.cancelOnHide;
 				// ContextView detaches content before this callback, so remember the last focused node.
-				const restore = list.domNode.contains(focused) && isHTMLElement(source) && source.isConnected &&
+				const restore = focused !== null && list.contains(focused) && isHTMLElement(source) && source.isConnected &&
 					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic || reason === ContextViewHideReason.OutsidePointer);
 				if (this.current.value === lifetime) {
 					this.current.clear();
 				}
 				if (restore) {
-					source.focus({ preventScroll: true });
+					// The pointer shield consumes the click, so restoring focus here has no native pointer target.
+					const focusOptions: FocusOptions & { focusVisible?: boolean; } = { preventScroll: true };
+					if (reason === ContextViewHideReason.OutsidePointer) {
+						focusOptions.focusVisible = false;
+					}
+					source.focus(focusOptions);
 				}
 				notifyHide(didCancel);
 			},
@@ -121,7 +128,7 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			if (listOptions.focusFilterOnOpen && listOptions.filterVisible !== false) {
 				list.focusFilter();
 			} else {
-				list.focus();
+				list.focus(listOptions.focusItemOnOpen);
 			}
 		}
 	}

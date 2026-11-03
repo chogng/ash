@@ -295,6 +295,7 @@ pub(crate) struct EnvRuntimeControl {
     config: Option<Arc<ConfigStore>>,
     grant_policy: DirGrantPolicy,
     env_config: Arc<RwLock<EnvRuntimeConfig>>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
     file_search: Arc<file_search::Service>,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
@@ -404,6 +405,7 @@ impl EnvRuntimeControl {
             self.pty_helper.as_ref(),
             Some(self.text_document_host.clone()),
             self.threads.clone(),
+            Arc::clone(&self.session_environments),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         if let Some(codebase) = codebase
@@ -566,6 +568,7 @@ impl EnvRuntimeControl {
             self.pty_helper.as_ref(),
             Some(self.text_document_host.clone()),
             self.threads.clone(),
+            Arc::clone(&self.session_environments),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -1636,6 +1639,7 @@ impl AppServer {
             config: self.config.clone(),
             grant_policy: host.grants.clone(),
             env_config: Arc::clone(&self.env_config),
+            session_environments: Arc::clone(&self.session_environments),
             file_search: Arc::clone(&self.file_search),
             pty_helper: self.pty_helper.clone(),
             codebase_models: self.codebase_models.clone(),
@@ -2568,6 +2572,7 @@ impl AppServer {
                 self.pty_helper.as_ref(),
                 Some(self.text_document_host.clone()),
                 self.threads.clone(),
+                Arc::clone(&self.session_environments),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
             self.commit_full_env_runtime(authorization, local, grep, host)

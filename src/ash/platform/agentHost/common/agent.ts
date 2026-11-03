@@ -98,6 +98,7 @@ export interface SessionReadParams {
 }
 
 export interface SessionCreateParams {
+	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
 	readonly title: string;
 	/** A new branch for this conversation's managed worktree; omitted keeps the default target. */

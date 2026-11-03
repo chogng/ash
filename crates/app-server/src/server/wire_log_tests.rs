@@ -189,3 +189,31 @@ fn wire_log_bounds_untrusted_metadata_without_changing_the_frame_kind() {
     assert!(frames[1].request_id.is_none());
     assert!(log.capture.as_ref().unwrap().pending.is_empty());
 }
+
+#[test]
+fn wire_log_redacts_session_environment_values_even_for_unpaired_replies() {
+    let mut log = WireLog::default();
+    log.start(&params()).unwrap();
+    incoming(
+        &mut log,
+        json!({
+            "id": 1, "method": "session/environmentProfile/save",
+            "params": { "environmentId": "profile", "variables": {"MODE": "secret-value"} }
+        }),
+    );
+    incoming(
+        &mut log,
+        json!({
+            "id": 2, "method": "session/create",
+            "params": { "environmentVariables": {"MODE": "secret-value"} }
+        }),
+    );
+    log.sent(r#"{"id":99,"result":{"variables":{"MODE":"secret-value"}}}"#);
+    let frames = page(&log, 0, 100).frames;
+    assert_eq!(frames.len(), 3);
+    assert!(
+        frames
+            .iter()
+            .all(|frame| frame.raw.contains("[REDACTED]") && !frame.raw.contains("secret-value"))
+    );
+}

@@ -17,6 +17,7 @@ import { IAgentSessionService, IAgentTurnService } from '../../../../../platform
 import { type ThreadSubscription } from '../../../../../platform/agentHost/common/agent.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
+import { isUntitledSession } from '../../browser/sessionGridState.js';
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import { AppServerSessionsProvider } from '../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
 import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from '../../common/session.js';
@@ -71,6 +72,41 @@ test('independent conversation drafts create their own root worktree only on mat
 	assert.equal(requests.length, 2);
 	assert.equal(requests[1]?.branchName, undefined);
 	assert.deepEqual(requests[1]?.executionTarget, second.workspace);
+});
+
+test('an environment selects the primary folder and grants the additional folders on first send', async () => {
+	const fake = sessionHost([]);
+	const primary = { type: 'local', root: '/project' } as const;
+	const additional = { type: 'local', root: '/shared' } as const;
+	const grants: [string, string][] = [];
+	fake.host.session.create = async params => {
+		assert.deepEqual(params.executionTarget, primary);
+		const created = session('environment-session', 'environment-thread');
+		fake.sessions.push(created);
+		return { session: created, agentTree: { roots: [] } };
+	};
+	fake.host.session.addWorkspaceFolder = async (sessionId, path) => { grants.push([sessionId, path]); };
+	using management = createManagement(fake);
+	await management.initialize();
+	const draft = management.createUntitledSession('Draft');
+	const environment = { id: 'environment', name: 'Development', folders: [primary, additional], hasVariables: false };
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, primary, { environment });
+	assert.equal(management.activeUntitledSession?.environment, environment);
+	assert.deepEqual(grants, []);
+	await management.materializeUntitledSession(draft.untitledSessionId);
+	assert.deepEqual(grants, [['environment-session', '/shared']]);
+});
+
+test('an environment requiring variables cannot send when its saved secret is missing', async () => {
+	using management = createManagement(sessionHost([]));
+	await management.initialize();
+	const folder = { type: 'local', root: '/project' } as const;
+	const draft = management.createUntitledSession('Draft', folder);
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, folder, {
+		environment: { id: 'environment', name: 'Development', folders: [folder], hasVariables: true },
+	});
+	await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), /saved environment variables are unavailable/);
+	assert.equal(management.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 });
 
 test('changing a conversation folder clears its pending worktree branch and invalid stored choices are rejected', async () => {

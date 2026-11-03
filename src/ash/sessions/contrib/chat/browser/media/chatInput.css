@@ -123,6 +123,13 @@
 	padding-inline: var(--ash-spacing-size40);
 }
 
+.ash-sessions-chat-input-footer
+	.ash-chat-input-toolbars
+	.ash-chat-model-picker-control
+	> .ash-chat-input-picker-button {
+	padding: 0 var(--ash-spacing-size40);
+}
+
 .ash-sessions-chat-input
 	.ash-chat-input-toolbars.ash-toolbar
 	.ash-chat-input-mode-selector.mode-agent

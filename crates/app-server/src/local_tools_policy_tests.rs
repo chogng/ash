@@ -2,6 +2,53 @@ use super::*;
 
 #[test]
 #[cfg(windows)]
+fn approved_windows_command_with_multiple_writable_roots_keeps_scoped_authority() {
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let grant = |path: &Path| {
+        ash_file_access::Grant::for_environment(
+            Dir::open_local(path).unwrap(),
+            ash_file_access::GrantSource::HostConfiguration,
+            ash_file_access::Permissions::new([
+                DirPermission::WriteFiles,
+                DirPermission::ExecuteCommands,
+            ]),
+        )
+    };
+    let first_grant = grant(first.path());
+    let second_grant = grant(second.path());
+    let command = first_grant
+        .authorize(DirPermission::ExecuteCommands)
+        .unwrap();
+    let first_write = first_grant.authorize(DirPermission::WriteFiles).unwrap();
+    let second_write = second_grant.authorize(DirPermission::WriteFiles).unwrap();
+    let approval = ToolAuthorization::UnsandboxedGrant {
+        grant_id: ash_action_policy::GrantId::new("multiple-writable-roots"),
+    };
+    let single = local_sandbox_scope(&command, std::slice::from_ref(&first_write), None).unwrap();
+    assert_eq!(
+        local_command_authority(&approval, shell_sandbox(), Some(&single)).unwrap(),
+        CommandExecutionAuthority::Unrestricted,
+    );
+    let scope = local_sandbox_scope(&command, &[first_write, second_write], None).unwrap();
+    let CommandExecutionAuthority::Sandboxed(policy) =
+        local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap()
+    else {
+        panic!("multiple roots must retain scoped execution");
+    };
+    assert_eq!(policy.file_system(), FileSystemAccess::DirectoryWrite);
+    assert_eq!(
+        policy.file_system_isolation(),
+        ash_sandboxing::FileSystemIsolation::WindowsAccount
+    );
+    let filesystem = scope.resolve_filesystem(policy.file_system()).unwrap();
+    for root in [first.path(), second.path()] {
+        assert!(filesystem.allows_write(&root.join("note")));
+    }
+}
+
+#[test]
+#[cfg(windows)]
 fn approved_command_with_protected_metadata_uses_scoped_windows_authority() {
     let temporary = tempfile::tempdir().unwrap();
     std::fs::create_dir(temporary.path().join(".git")).unwrap();
@@ -92,6 +139,7 @@ fn sandbox_managed_ceilings_survive_approval_at_the_executor_boundary() {
             Arc::new(ash_core::ThreadController::with_store(Arc::new(
                 ash_core::InMemoryThreadStore::default(),
             ))),
+            Arc::default(),
         )
         .unwrap();
         let shell = &composition.executors[0];

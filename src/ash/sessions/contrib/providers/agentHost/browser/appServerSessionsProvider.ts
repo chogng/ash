@@ -295,7 +295,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (!this.connectionReady) await this.initialConnectionState;
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) throw canceled();
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const additional = options?.additionalFolders ?? [];
+		if (additional.length && (!this.sessionApi.addWorkspaceFolder || additional.some(folder => !this.ownsSourceAuthority(buildAgentHostSessionWorkspace(folder)!.authorityId)))) {
+			throw new Error(localize('sessions.environment.foldersUnavailable', 'The selected host cannot access every environment folder.'));
+		}
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
@@ -310,6 +314,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
 		}
 		try {
+			for (const folder of additional) {
+				if (token.isCancellationRequested) throw canceled();
+				this.assertCurrentConnection(generation, epoch);
+				await this.sessionApi.addWorkspaceFolder!(created.session.sessionId, folder.root);
+			}
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);
 			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === 'active')) {

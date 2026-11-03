@@ -1,4 +1,17 @@
+import { trackChatInputPickerFocus } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem.js';
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
+import { parseSessionEnvironment } from '../../../services/sessions/common/sessionEnvironment.js';
+import { isSessionEnvironmentSelection } from '../../../services/sessions/browser/sessionGridState.js';
+import { NewEnvironmentDialog } from './newEnvironmentDialog.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IWorkspacesService } from '../../../../platform/workspaces/common/workspaces.js';
+import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
+import { createUuid } from '../../../../base/common/uuid.js';
+import { StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { buildAgentHostSessionWorkspace, selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import type { SessionExecutionTarget, SessionEnvironmentSelection } from '../../../services/sessions/common/session.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { listSavedTunnelEndpoints, tunnelEnvironmentLabel } from '../../../common/savedTunnelEnvironments.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
@@ -11,23 +24,20 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import type { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 import { h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 
 export class SessionEnvironmentPicker extends Disposable {
+	private readonly newEnvironment = this._register(new MutableDisposable<NewEnvironmentDialog>());
 	private readonly dropdown: ActionWidgetDropdown;
 	private readonly connecting = this._register(new MutableDisposable());
 	private readonly host: HTMLElement;
-	private readonly button: Button;
 	private visible = true;
 
 	constructor(
@@ -42,41 +52,33 @@ export class SessionEnvironmentPicker extends Disposable {
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IStorageService private readonly storage: IStorageService,
-		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
+		@ILayoutService private readonly layout: ILayoutService,
+		@IFileDialogService private readonly fileDialogs: IFileDialogService,
+		@IWorkspacesService private readonly workspaces: IWorkspacesService,
+		@IAgentConnection private readonly localHost: IAgentConnection,
 	) {
 		super();
 		this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-environment' });
 		container.prepend(this.host);
 		this._register(toDisposable(() => this.host.remove()));
-		this.button = this._register(new Button(this.host, {
-			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '',
-			title: localize('sessions.environment.tooltip', 'Environment'),
-		}));
-		this.button.domNode.classList.add('ash-sessions-environment-picker');
-		const sandboxStatus = h(container.ownerDocument, 'div');
-		sandboxStatus.setAttribute('role', 'status');
 		this.dropdown = this._register(new ActionWidgetDropdown(this.host, {
 			label: '', ariaLabel: '',
-			trigger: { button: this.button, open: () => this.showPicker() },
+			buttonOptions: { presentation: 'quiet', size: 'small', icon: undefined, title: localize('sessions.environment.tooltip', 'Environment') },
+			onOpen: () => this.openPicker(),
+			tabLeavesPopup: true,
 			onError: error => {
 				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			},
-			onShow: () => {
-				let current = true;
-				const draft = this.draft;
-				const providerId = draft?.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID;
-				sandboxStatus.textContent = localize('sessions.environment.sandboxLoading', 'Checking sandbox…');
-				void this.readSandboxStatus(providerId).then(status => {
-					if (current && draft && this.isCurrent(draft)) sandboxStatus.textContent = status;
-				});
-				return toDisposable(() => { current = false; });
-			},
 			listOptions: {
-				header: sandboxStatus,
 				className: 'ash-sessions-environment-menu ash-action-widget-accent-checks',
+				showFilter: true,
+				focusFilterOnOpen: true,
+				filterPlaceholder: localize('sessions.environment.search', 'Search environments'),
 				ariaLabel: localize('sessions.environment.menu', 'Run on'),
 			},
 		}, menus));
+		this.dropdown.element.classList.add('ash-sessions-environment-picker');
+		this._register(trackChatInputPickerFocus(this.host));
 		this._register(sessions.onDidChange(() => this.update()));
 		this._register(providers.onDidChangeProviders(() => { this.dropdown.hide(); this.update(); }));
 		this._register(model.onDidChange(() => this.update()));
@@ -97,30 +99,30 @@ export class SessionEnvironmentPicker extends Disposable {
 		this.visible = visible;
 		if (!visible) {
 			this.connecting.clear();
-			this.button.domNode.removeAttribute('aria-busy');
+			this.dropdown.element.removeAttribute('aria-busy');
 		}
 		this.update();
 	}
 
 	private update(): void {
 		const draft = this.draft;
-		const label = this.label(draft?.providerId, draft?.providerId ? this.providers.getProvider(draft.providerId)?.label : undefined);
+		const label = draft?.environment?.name ?? this.label(draft?.providerId, draft?.providerId ? this.providers.getProvider(draft.providerId)?.label : undefined);
 		this.host.hidden = !draft;
 		const icon = draft?.providerId === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote;
-		if (this.button.icon !== icon) {
-			this.button.icon = icon;
-		}
-		if (this.button.label !== label) {
-			this.button.label = label;
-		}
-		this.button.domNode.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
-		this.button.enabled = this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
-		if (!this.button.enabled) this.dropdown.hide();
+		this.dropdown.setIcon(icon);
+		this.dropdown.setLabel(label);
+		this.dropdown.element.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
+		this.dropdown.setEnabled(this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting');
 	}
 
 	public showPicker(): void {
+		this.dropdown.focus();
+		this.openPicker();
+	}
+
+	private openPicker(): void {
 		const draft = this.draft;
-		if (!draft || !this.button.enabled) { return; }
+		if (!draft || this.dropdown.element.disabled) { return; }
 		this.dropdown.showItems({
 			requireIdle: true,
 			load: token => this.loadItems(draft, token),
@@ -145,7 +147,8 @@ export class SessionEnvironmentPicker extends Disposable {
 		const providerItem = (provider: ISessionsProvider): IActionListItem<() => Promise<void>> => ({
 			kind: ActionListItemKind.Action,
 			label: this.label(provider.id, provider.label),
-			checked: provider.id === draft.providerId,
+			group: { title: '', icon: provider.id === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote },
+			checked: provider.id === draft.providerId && !draft.environment,
 			disabled: provider.connectionStatus?.get() === 'disconnected',
 			item: () => this.select(draft, provider),
 		});
@@ -154,13 +157,13 @@ export class SessionEnvironmentPicker extends Disposable {
 			const workspace = provider.currentWorkspace();
 			return workspace.type === 'remote' && workspace.authority.startsWith('wsl+');
 		});
-		items.push({ kind: ActionListItemKind.Header, label: localize('sessions.environment.localGroup', 'Local') });
 		if (local) items.push(providerItem(local));
 		items.push(...wslProviders.map(providerItem));
 		for (const distro of distros) {
 			if (wslProviders.some(provider => provider.label === distro)) continue;
 			items.push({
 				kind: ActionListItemKind.Action, label: localize('sessions.environment.wslDistro', 'WSL: {0}', distro), checked: false,
+				group: { title: '', icon: Lxicon.remote },
 				item: async () => {
 					const target = await this.commands.executeCommand<RemoteAgentHostConnection | undefined>('sessions.action.connectWSLAgentHost', distro);
 					if (!target || !this.isCurrent(draft)) return;
@@ -187,90 +190,188 @@ export class SessionEnvironmentPicker extends Disposable {
 			return !endpoint || !savedTunnels.includes(endpoint) || provider.connectionStatus?.get() !== 'disconnected';
 		});
 		const offlineTunnels = savedTunnels.filter(endpoint => !remote.some(provider => tunnelForProvider(provider) === endpoint));
-		if (remote.length || disconnected.length || offlineTunnels.length) {
-			items.push({ kind: ActionListItemKind.Header, label: localize('sessions.environment.remoteGroup', 'Remote') });
-			items.push(...remote.map(provider => ({
-				...providerItem(provider),
-				badge: provider.connectionStatus?.get() === 'connected' ? localize('sessions.environment.connectedStatus', 'Connected')
-					: provider.connectionStatus?.get() === 'connecting' ? localize('sessions.environment.connectingStatus', 'Connecting')
-						: provider.connectionStatus?.get() === 'disconnected' ? localize('sessions.environment.disconnectedStatus', 'Disconnected') : undefined,
-			})), ...disconnected.map(target => ({
-				kind: ActionListItemKind.Action,
-				label: target.name,
-				badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
-				detail: target.host,
-				checked: false,
-				item: () => this.connect(draft, target),
-			})));
-			items.push(...offlineTunnels.map(endpoint => ({
-				kind: ActionListItemKind.Action,
-				label: tunnelEnvironmentLabel(endpoint),
-				badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
-				checked: false,
-				item: async () => {
-					if (!this.isCurrent(draft)) return;
-					const authority = await this.commands.executeCommand<string | undefined>('sessions.action.connectTunnelAgentHost', endpoint);
-					if (!authority || !this.isCurrent(draft)) return;
-					const provider = this.providers.getProviders().find(candidate => {
-						const workspace = candidate.currentWorkspace();
-						return workspace.type === 'remote' && workspace.authority === authority;
-					});
-					if (!provider) throw new Error(localize('sessions.environment.connectionUnavailable', 'The connected host is unavailable for this conversation.'));
-					await this.select(draft, provider);
-				},
-			})));
+		if (items.length > 0 && (this.remoteHosts.isAvailable || remote.length || disconnected.length || offlineTunnels.length)) {
+			items.push({ kind: ActionListItemKind.Separator, label: '' });
 		}
-		if (this.remoteHosts.isAvailable) {
-			items.push({ kind: ActionListItemKind.Separator, label: '' }, {
-				kind: ActionListItemKind.Action, label: localize('sessions.environment.newRemote', 'New Remote Environment'),
-				item: async () => {
-					const saved = await this.commands.executeCommand<boolean>('sessions.action.newRemoteEnvironment');
-					if (saved && this.isCurrent(draft)) this.showPicker();
-				},
+		items.push(...remote.map(provider => ({
+			...providerItem(provider),
+			badge: provider.connectionStatus?.get() === 'connected' ? localize('sessions.environment.connectedStatus', 'Connected')
+				: provider.connectionStatus?.get() === 'connecting' ? localize('sessions.environment.connectingStatus', 'Connecting')
+					: provider.connectionStatus?.get() === 'disconnected' ? localize('sessions.environment.disconnectedStatus', 'Disconnected') : undefined,
+		})), ...disconnected.map(target => ({
+			kind: ActionListItemKind.Action,
+			label: target.name,
+			group: { title: '', icon: Lxicon.remote },
+			badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
+			detail: target.host,
+			checked: false,
+			item: () => this.connect(draft, target),
+		})));
+		items.push(...offlineTunnels.map(endpoint => ({
+			kind: ActionListItemKind.Action,
+			label: tunnelEnvironmentLabel(endpoint),
+			group: { title: '', icon: Lxicon.remote },
+			badge: localize('sessions.environment.disconnectedStatus', 'Disconnected'),
+			checked: false,
+			item: async () => {
+				if (!this.isCurrent(draft)) return;
+				const authority = await this.commands.executeCommand<string | undefined>('sessions.action.connectTunnelAgentHost', endpoint);
+				if (!authority || !this.isCurrent(draft)) return;
+				const provider = this.providers.getProviders().find(candidate => {
+					const workspace = candidate.currentWorkspace();
+					return workspace.type === 'remote' && workspace.authority === authority;
+				});
+				if (!provider) throw new Error(localize('sessions.environment.connectionUnavailable', 'The connected host is unavailable for this conversation.'));
+				await this.select(draft, provider);
+			},
+		})));
+		for (const key of this.storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
+			if (!key.startsWith('sessions.environment.profile.')) continue;
+			const saved = readEnvironment(this.storage.get(key, StorageScope.PROFILE));
+			if (!saved) continue;
+			const provider = this.providers.getProvider(saved.providerId);
+			items.push({
+				kind: ActionListItemKind.Action, label: saved.environment.name,
+				disabled: !provider || provider.connectionStatus?.get() === 'disconnected',
+				checked: draft.environment?.id === saved.environment.id && draft.providerId === saved.providerId,
+				item: () => this.applyEnvironment(draft, saved.providerId, saved.environment),
 			});
 		}
-		const providerId = draft.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID;
-		items.push({ kind: ActionListItemKind.Separator, label: '' }, {
-			kind: ActionListItemKind.Action,
-			label: localize('sessions.environment.sandboxSettings', 'Sandbox Settings'),
-			item: async () => {
-				if (!this.isCurrent(draft) || this.scopes.getScope().providerId !== providerId) return;
-				await this.commands.executeCommand('workbench.action.openSettings', { section: 'environment', query: '' });
-			},
+		if (this.remoteHosts.isAvailable) {
+			const connect = async (transport: 'ssh' | 'tunnel') => {
+				const saved = await this.commands.executeCommand<boolean>('sessions.action.newRemoteEnvironment', transport);
+				if (saved && this.isCurrent(draft)) this.showPicker();
+			};
+			items.push({
+				kind: ActionListItemKind.Action, label: localize('sessions.environment.remote', 'Remote'),
+				group: { title: '', icon: Lxicon.remote },
+				submenu: [
+					{
+						kind: ActionListItemKind.Action, label: localize('sessions.environment.ssh', 'SSH'),
+						disabled: !this.connections.available, item: () => connect('ssh'),
+					},
+					{
+						kind: ActionListItemKind.Action, label: localize('sessions.environment.tunnel', 'Ash Tunnel'),
+						item: () => connect('tunnel'),
+					},
+				],
+			});
+		}
+		items.push({
+			kind: ActionListItemKind.Action, label: localize('sessions.environment.cloud', 'Cloud'),
+			group: { title: '', icon: Lxicon.cloud }, disabled: true,
+		}, { kind: ActionListItemKind.Separator, label: '' }, {
+			kind: ActionListItemKind.Action, label: localize('sessions.environment.newEnvironment', 'New Environment'),
+			group: { title: '', icon: Lxicon.add },
+			item: () => this.showNewEnvironment(draft, distros, disconnected),
 		});
 		return items;
 	}
 
-	private async readSandboxStatus(providerId: string): Promise<string> {
-		const unavailable = localize('sessions.environment.sandboxUnavailable', 'Sandbox status unavailable');
-		try {
-			const scope = this.scopes.getProviderScope(providerId);
-			scope.assertCurrent();
-			const service = scope.services.host.agentCapabilities;
-			if (!service.isAvailable) return unavailable;
-			const { sandboxPolicy } = await service.read();
-			scope.assertCurrent();
-			if (!sandboxPolicy) return unavailable;
-			const files = {
-				readOnly: localize('sessions.environment.sandboxReadOnly', 'Read only'),
-				directoryWrite: localize('sessions.environment.sandboxDirectoryWrite', 'Authorized directories writable'),
-				fullAccess: localize('sessions.environment.sandboxFullAccess', 'Full file access profile'),
-			};
-			const network = {
-				denied: localize('sessions.environment.sandboxNetworkDenied', 'Network blocked'),
-				managed: localize('sessions.environment.sandboxNetworkManaged', 'Network checked by proxy'),
-				allowed: localize('sessions.environment.sandboxNetworkAllowed', 'Network allowed'),
-			};
-			return localize('sessions.environment.sandboxStatus', 'Sandbox: {0} · {1}', files[sandboxPolicy.fileSystem], network[sandboxPolicy.network]);
-		} catch {
-			return unavailable;
+	private async applyEnvironment(draft: IUntitledChatSession, providerId: string, environment: SessionEnvironmentSelection): Promise<void> {
+		if (!this.isCurrent(draft)) return;
+		await this.persistDraft();
+		if (!this.isCurrent(draft) || !this.providers.getProvider(providerId)) return;
+		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, environment.folders[0], { providerId, environment });
+	}
+
+	private async showNewEnvironment(draft: IUntitledChatSession, distros: readonly string[], saved: readonly RemoteConnectionDefinition[]): Promise<void> {
+		if (this.newEnvironment.value || !this.isCurrent(draft)) return;
+		const sourceOf = (provider: ISessionsProvider) => {
+			const workspace = provider.currentWorkspace();
+			return { providerId: provider.id, source: workspace.type === 'current' || workspace.type === 'multiple' ? undefined : workspace };
+		};
+		const hosts: { id: string; label: string; group: 'local' | 'remote'; needsWorkspace?: boolean; resolve: (workspace: string) => Promise<ReturnType<typeof sourceOf> | undefined>; }[] = [];
+		for (const provider of this.providers.getProviders()) {
+			if (provider.connectionStatus?.get() === 'disconnected') continue;
+			const workspace = provider.currentWorkspace();
+			const isWSL = workspace.type === 'remote' && workspace.authority.startsWith('wsl+');
+			hosts.push({
+				id: provider.id,
+				label: isWSL ? localize('sessions.environment.wslDistro', 'WSL: {0}', provider.label) : this.label(provider.id, provider.label),
+				group: isWSL || provider.id === LOCAL_AGENT_HOST_PROVIDER_ID ? 'local' : 'remote',
+				resolve: async () => this.providers.getProvider(provider.id) === provider ? sourceOf(provider) : undefined,
+			});
+		}
+		const controller = new AbortController();
+		for (const distro of distros) {
+			const label = localize('sessions.environment.wslDistro', 'WSL: {0}', distro);
+			if (this.providers.getProviders().some(provider => {
+				const workspace = provider.currentWorkspace();
+				return workspace.type === 'remote' && workspace.authority.startsWith('wsl+') && provider.label === distro;
+			})) continue;
+			hosts.push({
+				id: '', label, group: 'local', needsWorkspace: true,
+				resolve: async workspace => {
+					const { connection } = await this.remoteHosts.connect({ type: 'wsl', name: distro, distro, workspace }, controller.signal);
+					if (!connection) return;
+					const authority = remoteAgentHostRoot(connection).authority;
+					const provider = this.providers.getProviders().find(candidate => {
+						const workspace = candidate.currentWorkspace();
+						return workspace.type === 'remote' && workspace.authority === authority && workspace.root === connection.workspace;
+					});
+					return provider && sourceOf(provider);
+				},
+			});
+		}
+		for (const target of saved) {
+			hosts.push({
+				id: '', label: target.name, group: 'remote',
+				resolve: async () => {
+					await this.remoteHosts.connect(target, controller.signal);
+					const provider = this.findSSHProvider(target);
+					return provider && sourceOf(provider);
+				},
+			});
+		}
+		const selected = Math.max(0, hosts.findIndex(host => host.id === draft.providerId));
+		const workspace = draft.workspace;
+		const initial = hosts[selected]?.id === draft.providerId && workspace.type !== 'current' && workspace.type !== 'multiple' ? workspace : undefined;
+		const accepts = (candidate: SessionExecutionTarget, source?: SessionExecutionTarget) =>
+			buildAgentHostSessionWorkspace(candidate)?.authorityId === (buildAgentHostSessionWorkspace(source)?.authorityId ?? 'local');
+		const dialog = new NewEnvironmentDialog(this.layout.activeContainer, {
+			hosts, selected, initial,
+			browse: async source => {
+				const defaultUri = source && sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!);
+				const resources = await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true, defaultUri });
+				return (resources ?? []).map(selectionFromResource).filter(target => accepts(target, source));
+			},
+			recent: async source => (await this.workspaces.getRecentlyOpened()).workspaces.flatMap(entry => {
+				if (!('folderUri' in entry)) return [];
+				try {
+					const target = selectionFromResource(entry.folderUri);
+					return accepts(target, source) ? [target] : [];
+				} catch { return []; }
+			}),
+			worktrees: async (providerId, target) => await this.providers.getProvider(providerId)?.getWorktrees?.(target, CancellationToken.None) ?? [],
+			create: async (name, providerId, folders, variables) => {
+				const key = 'sessions.environment.profile.' + createUuid();
+				const parsed = parseSessionEnvironment(variables);
+				const environment = { id: key, name, folders, hasVariables: 'variables' in parsed && Object.keys(parsed.variables).length > 0 };
+				if (environment.hasVariables && 'variables' in parsed) {
+					const session = this.localHost.session;
+					if (!session.saveEnvironmentProfile) {
+						throw new Error(localize('sessions.environment.variablesMissing', 'The saved environment variables are unavailable.'));
+					}
+					await session.saveEnvironmentProfile(key, parsed.variables);
+				}
+				this.storage.store(key, JSON.stringify({ providerId, environment }), StorageScope.PROFILE, StorageTarget.MACHINE);
+				if (!controller.signal.aborted) await this.applyEnvironment(draft, providerId, environment);
+			},
+		});
+		this.newEnvironment.value = dialog;
+		try { await dialog.show(); }
+		finally {
+			controller.abort();
+			this.newEnvironment.clear();
+			if (!this.isDisposed && this.draft?.untitledSessionId === draft.untitledSessionId) this.dropdown.focus();
 		}
 	}
 
 	private isCurrent(draft: IUntitledChatSession): boolean {
 		const current = this.draft;
-		return !this.isDisposed && this.button.enabled && current?.untitledSessionId === draft.untitledSessionId
-			&& current.providerId === draft.providerId;
+		return !this.isDisposed && !this.dropdown.element.disabled && current?.untitledSessionId === draft.untitledSessionId
+			&& current.providerId === draft.providerId && current.environment === draft.environment;
 	}
 
 	private findSSHProvider(target: RemoteConnectionDefinition, providers = this.providers.getProviders()): ISessionsProvider | undefined {
@@ -281,10 +382,10 @@ export class SessionEnvironmentPicker extends Disposable {
 	}
 
 	private async select(draft: IUntitledChatSession, provider: ISessionsProvider): Promise<void> {
-		if (provider.id === draft.providerId || !this.isCurrent(draft)) return;
+		if ((provider.id === draft.providerId && !draft.environment) || !this.isCurrent(draft)) return;
 		await this.persistDraft();
 		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider || provider.connectionStatus?.get() === 'disconnected') return;
-		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, undefined, { providerId: provider.id });
+		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, undefined, { providerId: provider.id, clearEnvironment: true });
 	}
 
 	private async connect(draft: IUntitledChatSession, target: RemoteConnectionDefinition): Promise<void> {
@@ -292,7 +393,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		const controller = new AbortController();
 		const pending = toDisposable(() => controller.abort());
 		this.connecting.value = pending;
-		this.button.domNode.setAttribute('aria-busy', 'true');
+		this.dropdown.element.setAttribute('aria-busy', 'true');
 		try {
 			await this.remoteHosts.connect(target, controller.signal);
 			if (controller.signal.aborted || !this.isCurrent(draft)) return;
@@ -304,9 +405,19 @@ export class SessionEnvironmentPicker extends Disposable {
 		} finally {
 			if (this.connecting.value === pending) {
 				this.connecting.clear();
-				this.button.domNode.removeAttribute('aria-busy');
+				this.dropdown.element.removeAttribute('aria-busy');
 			}
 		}
 	}
 
+}
+
+
+function readEnvironment(raw: string | undefined): { providerId: string; environment: SessionEnvironmentSelection; } | undefined {
+	if (!raw) return;
+	try {
+		const entry = JSON.parse(raw);
+		if (typeof entry?.providerId !== 'string' || !isSessionEnvironmentSelection(entry.environment)) return;
+		return { providerId: entry.providerId, environment: entry.environment };
+	} catch { return; }
 }

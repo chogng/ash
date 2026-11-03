@@ -1,5 +1,6 @@
 .ash-action-widget,
-.ash-action-widget-surface {
+.ash-action-widget-surface,
+.ash-context-view-menu:has(> .ash-action-widget-submenu) {
 	--ash-action-widget-divider: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
 	box-sizing: border-box;
@@ -63,7 +64,11 @@
 [data-color-scheme="hcDark"] .ash-action-widget,
 [data-color-scheme="hcLight"] .ash-action-widget,
 [data-color-scheme="hcDark"] .ash-action-widget-surface,
-[data-color-scheme="hcLight"] .ash-action-widget-surface {
+[data-color-scheme="hcLight"] .ash-action-widget-surface,
+[data-color-scheme="hcDark"]
+	.ash-context-view-menu:has(> .ash-action-widget-submenu),
+[data-color-scheme="hcLight"]
+	.ash-context-view-menu:has(> .ash-action-widget-submenu) {
 	border-color: var(--ash-contrastBorder);
 }
 

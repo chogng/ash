@@ -308,7 +308,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				actionRunner: this.actionRunner,
 				context: this.actionContext,
 				ariaLabel: cleanMnemonic(this.action.label),
-				className: undefined,
+				className: this.options.submenuOptions?.submenuClassName,
 				openSubmenusImmediatelyOnHover: undefined,
 				submenuIds: new Set([...(this.options.submenuOptions?.submenuIds ?? []), this.action.id]),
 				onDidSelect: () => {
@@ -324,11 +324,18 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		}
 		this.showScheduler.cancel();
 		if (!this.contextView.visible) {
+			// A popup can be rendered before it mounts. Use its overlay host once the anchor is attached.
+			const overlayHost = this.button.domNode.closest('.ash-context-view')?.parentNode;
+			if (!this.contextViewContainer && overlayHost && this.contextView.element.parentNode !== overlayHost) {
+				overlayHost.appendChild(this.contextView.element);
+			}
 			this.onWillOpenSubmenu?.(this);
+			const content = this.menu.getContainer();
 			const shown = this.contextView.show({
 				anchor: this.button.domNode,
-				content: this.menu.getContainer(),
+				content,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				alignTopTo: content.querySelector(':scope > .ash-action-view-item > .ash-button') ?? undefined,
 				// Nested menus align to the parent row; vertical direction positions the MenuBar popup.
 				anchorAlignment: AnchorAlignment.Left,
 				anchorPosition: (this.options.submenuOptions?.expandDirection?.horizontal ??
@@ -433,6 +440,7 @@ export interface IMenuOptions {
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly expandDirection?: IMenuDirection;
 	readonly submenuIds?: Set<string>;
+	readonly submenuClassName?: string;
 	readonly buttonStyles?: IButtonStyles;
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
@@ -618,9 +626,9 @@ export class Menu extends ActionBar {
 	}
 
 	/** Menu focus and action focus are separate so opening need not highlight a row. */
-	public override focus(selectFirst?: boolean): void;
+	public override focus(selectFirst?: boolean, options?: FocusOptions): void;
 	public override focus(index?: number): void;
-	public override focus(target: boolean | number = true): void {
+	public override focus(target: boolean | number = true, options?: FocusOptions): void {
 		if (typeof target === 'number') {
 			const entry = this.entries[target];
 			if (entry?.action.enabled) {
@@ -632,7 +640,7 @@ export class Menu extends ActionBar {
 			return;
 		}
 		this.setFocusedEntry(undefined);
-		this.domNode.focus({ preventScroll: true });
+		this.domNode.focus({ preventScroll: true, ...options });
 	}
 
 	focusFirst(): void {

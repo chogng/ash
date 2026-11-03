@@ -1,9 +1,12 @@
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Action } from '../../../../../base/common/actions.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { localize } from '../../../../../nls.js';
 import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { RemoteAgentHostSessionsProvider, remoteAgentHostProviderId } from './remoteAgentHostSessionsProvider.js';
 import { createAgentHostSessionScope } from '../../agentHost/browser/agentHostSessionScope.js';
@@ -75,6 +78,61 @@ export class RemoteAgentHostContribution extends Disposable {
 			selectWorkspace: async () => undefined,
 		}));
 		resources.add(this.providers.registerProvider(provider));
+		void this.checkWindowsSandbox(info, resources);
+	}
+
+	private async checkWindowsSandbox(info: IAgentHostConnectionInfo, resources: DisposableStore): Promise<void> {
+		const capabilities = info.connection!.agentCapabilities;
+		if (!capabilities.isAvailable) return;
+		const read = async () => {
+			const snapshot = await capabilities.read();
+			const network = snapshot.sandboxPolicy?.network;
+			return snapshot.sandboxDiagnostics.filter(diagnostic => diagnostic.network === network);
+		};
+		const diagnostics = await read().catch(() => undefined);
+		if (resources.isDisposed || !diagnostics
+			|| diagnostics.some(diagnostic => diagnostic.readiness.type === 'ready')
+			|| !diagnostics.some(diagnostic => diagnostic.backend === 'mxc' && diagnostic.readiness.type === 'unsupported')
+			|| !diagnostics.some(diagnostic => diagnostic.backend === 'windows' && diagnostic.readiness.type === 'unavailable')) return;
+
+		const warning = localize('sessions.remoteSandbox.required', 'The Windows account sandbox on {0} needs administrator setup before Agent commands can run.', info.name);
+		const pending = resources.add(new DisposableStore());
+		const instructions = pending.add(new Action('sessions.remoteSandbox.instructions', localize('sessions.remoteSandbox.instructions', 'Setup Instructions'), '', true, () =>
+			this.instantiation.invokeFunction(accessor => accessor.get(IDialogService)).info(
+				warning,
+				localize('sessions.remoteSandbox.steps', 'On the Windows host, open PowerShell as administrator under the same Windows account used by this connection. In the Ash Remote package’s bin folder, review the service installation plan and install the service. Then review and apply the account setup plan. Return here and select Refresh Status.')
+				+ '\n\n$service = .\\ash-windows-sandbox-service.exe plan install | ConvertFrom-Json'
+				+ '\n$service'
+				+ '\n.\\ash-windows-sandbox-service.exe install --approve $service.sha256'
+				+ '\n$accounts = .\\ash-windows-sandbox.exe plan setup --slots 1 | ConvertFrom-Json'
+				+ '\n$accounts'
+				+ '\n.\\ash-windows-sandbox.exe setup --slots 1 --approve $accounts.sha256',
+			)));
+		const refresh = pending.add(new Action('sessions.remoteSandbox.refresh', localize('sessions.remoteSandbox.refresh', 'Refresh Status'), '', true, async () => {
+			if (pending.isDisposed || !refresh.enabled) return;
+			refresh.enabled = false;
+			const updated = await read().catch(() => undefined);
+			if (pending.isDisposed) return;
+			if (updated?.some(diagnostic => diagnostic.readiness.type === 'ready')) {
+				notification.close();
+				this.notifications.info(localize('sessions.remoteSandbox.ready', 'The command sandbox on {0} is ready.', info.name));
+			} else {
+				refresh.enabled = true;
+				notification.updateMessage(updated?.length
+					? localize('sessions.remoteSandbox.pending', 'The command sandbox on {0} is still unavailable. Finish setup on the Windows host and refresh again.', info.name)
+					: localize('sessions.remoteSandbox.readFailed', 'Could not check the command sandbox on {0}. Check the connection and refresh again.', info.name));
+			}
+		}));
+		const notification = this.notifications.notify({
+			severity: Severity.Warning,
+			message: warning,
+			sticky: true,
+			actions: { primary: [instructions, refresh] },
+		});
+		pending.add(toDisposable(() => notification.close()));
+		pending.add(notification.onDidClose(() => {
+			if (resources.delete(pending)) pending.dispose();
+		}));
 	}
 }
 

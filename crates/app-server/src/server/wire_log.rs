@@ -70,6 +70,31 @@ fn missing() -> RpcError {
     RpcError::new(-32004, AppServerErrorName::ResourceNotFound)
 }
 
+// Read responses can arrive without a paired request (for example when capture
+// begins mid-request). Redact the profile result shape independently of pairing.
+fn redact_environment_variables(envelope: &Value) -> Option<String> {
+    let params = envelope.get("params");
+    let location = if params.is_some_and(|value| value.get("environmentVariables").is_some()) {
+        ("params", "environmentVariables")
+    } else if envelope.get("method").and_then(Value::as_str)
+        == Some("session/environmentProfile/save")
+        && params.is_some_and(|value| value.get("variables").is_some())
+    {
+        ("params", "variables")
+    } else if envelope
+        .get("result")
+        .and_then(Value::as_object)
+        .is_some_and(|value| value.len() == 1 && value.contains_key("variables"))
+    {
+        ("result", "variables")
+    } else {
+        return None;
+    };
+    let mut redacted = envelope.clone();
+    redacted[location.0][location.1] = Value::String("[REDACTED]".into());
+    Some(redacted.to_string())
+}
+
 impl WireLog {
     pub(super) fn start(&mut self, params: &WireLogParams) -> Result<(), RpcError> {
         if self.closed {
@@ -261,8 +286,10 @@ impl WireLog {
                 WireLogFrameKind::Notification => {}
             }
         }
-        let mut end = raw.len().min(MAX_FRAME_BYTES);
-        while !raw.is_char_boundary(end) {
+        let redacted = redact_environment_variables(envelope);
+        let captured = redacted.as_deref().unwrap_or(raw);
+        let mut end = captured.len().min(MAX_FRAME_BYTES);
+        while !captured.is_char_boundary(end) {
             end -= 1;
         }
         let frame = WireLogFrame {
@@ -279,8 +306,8 @@ impl WireLog {
             elapsed_ms,
             is_error: envelope.get("error").is_some(),
             byte_length: raw.len() as u32,
-            truncated: end < raw.len(),
-            raw: raw[..end].to_owned(),
+            truncated: end < captured.len(),
+            raw: captured[..end].to_owned(),
         };
         capture.bytes += frame.raw.len();
         capture.frames.push_back(frame);

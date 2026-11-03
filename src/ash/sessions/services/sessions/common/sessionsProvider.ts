@@ -9,6 +9,8 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 export interface ISessionCreateOptions {
 	readonly devContainer?: boolean;
 	readonly branchName?: string;
+	readonly environmentVariables?: Readonly<Record<string, string>>;
+	readonly additionalFolders?: readonly SessionExecutionTarget[];
 	readonly token: CancellationToken;
 }
 

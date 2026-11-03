@@ -396,9 +396,11 @@ pub(super) fn run(path: &Path) -> Result<()> {
     if request.account == request.owner {
         return Err("the worker must use a dedicated account".into());
     }
+    let station = super::desktop::window_station_name()?;
     let desktop_suffix = request
         .desktop
-        .strip_prefix("Winsta0\\AshExecution-")
+        .strip_prefix(station.as_str())
+        .and_then(|name| name.strip_prefix("\\AshExecution-"))
         .ok_or("invalid execution desktop")?;
     if desktop_suffix.len() != 32
         || !desktop_suffix

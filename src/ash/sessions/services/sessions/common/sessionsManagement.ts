@@ -1,7 +1,7 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
+import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
@@ -37,7 +37,7 @@ export interface ISessionsManagementService {
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
-	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; }): void;
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
 	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;

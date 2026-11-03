@@ -2194,6 +2194,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .ok_or_else(|| core_error(core_api::CoreError::NotFound(session_id.to_string())))?;
         let agent_tree = view.agent_tree;
         Ok(ash_app_server_protocol::protocol::session::SessionResult {
+            environment_applied: None,
             session,
             agent_tree,
         })

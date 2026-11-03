@@ -151,9 +151,10 @@ test('Workspace picker limits unfiltered recents and finds older folders while s
 	const defaultLabels = ['Folder', ...recents.slice(0, 10).map(action => action.label)];
 	const load = async () => [...f.choices, ...recents];
 
+	f.control.focus();
 	f.control.showPicker(f.choices, load);
 	f.filter('Recent folder 11');
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(visibleLabels(), ['Recent folder 11']);
 	f.filter('  ');
 	assert.deepEqual(visibleLabels(), defaultLabels);
@@ -163,6 +164,6 @@ test('Workspace picker limits unfiltered recents and finds older folders while s
 	f.actionWidget.hide();
 	assert.equal(f.button.ownerDocument.activeElement, f.button);
 	f.control.showPicker(f.choices, load);
-	await Promise.resolve();
+	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(visibleLabels(), defaultLabels);
 });

@@ -48,6 +48,7 @@ fn executor_preserves_powershell_module_search_paths() {
                 arguments: vec!["/d".into(), "/c".into(), "echo %PSModulePath%".into()],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -174,6 +175,7 @@ fn assert_managed_command(backend: impl SandboxBackend) {
                 arguments: vec!["-c".into(), script],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -353,6 +355,7 @@ fn executor_uses_the_selected_backend_to_classify_the_actual_process_result() {
                 arguments: Vec::new(),
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -388,6 +391,7 @@ fn managed_network_rejects_an_unrestricted_backend_before_spawn() {
             arguments: Vec::new(),
             working_directory: ".".into(),
             input: CommandInput::Closed,
+            environment: Default::default(),
         },
         CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
             FileSystemAccess::ReadOnly,
@@ -463,6 +467,7 @@ fn command_session_keeps_one_process_for_later_input_and_output_reads() {
         ],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     };
     #[cfg(unix)]
     let request = CommandRequest {
@@ -470,6 +475,7 @@ fn command_session_keeps_one_process_for_later_input_and_output_reads() {
         arguments: vec!["-c".into(), "read line; printf 'got:%s' \"$line\"".into()],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     };
 
     let started = executor
@@ -555,6 +561,7 @@ fn command_session_wait_budget_does_not_terminate_the_process() {
         ],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     };
     #[cfg(unix)]
     let request = CommandRequest {
@@ -562,6 +569,7 @@ fn command_session_wait_budget_does_not_terminate_the_process() {
         arguments: vec!["-c".into(), "sleep 5".into()],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     };
 
     let CommandSessionStart::Running(initial) = executor
@@ -617,6 +625,7 @@ fn executor_spawns_only_the_command_prepared_by_the_sandbox_backend() {
                 arguments: Vec::new(),
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -649,6 +658,7 @@ fn missing_sandbox_launcher_is_safe_to_retry_because_the_action_never_started() 
                 arguments: Vec::new(),
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,
@@ -692,6 +702,7 @@ fn executor_returns_bounded_output_with_explicit_truncation_markers() {
                 arguments: vec!["-c".into(), "printf 123456789; printf abc >&2".into()],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -720,6 +731,7 @@ fn executor_writes_explicit_bytes_to_child_stdin() {
                 arguments: vec!["-c".into(), "cat".into()],
                 working_directory: ".".into(),
                 input: CommandInput::Bytes(b"ash-hook-payload".to_vec()),
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -748,6 +760,7 @@ fn executor_preserves_early_exit_status_when_child_closes_stdin() {
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Bytes(vec![b'x'; 1024 * 1024]),
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -774,6 +787,7 @@ fn executor_terminates_a_running_process_when_cancelled() {
                 arguments: vec!["10".into()],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &token,
@@ -808,6 +822,7 @@ fn executor_kills_background_descendants_before_returning() {
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),
@@ -871,6 +886,7 @@ fn command_wait_ignores_output_and_preserves_process_on_expiry_and_cancellation(
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Open,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &process.token(),
@@ -987,6 +1003,7 @@ fn approval_rejection_never_reaches_process_preparation() {
             arguments: vec![],
             working_directory: dir.path.clone(),
             input: CommandInput::Closed,
+            environment: Default::default(),
         };
         let authority = CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
             FileSystemAccess::ReadOnly,

@@ -274,9 +274,10 @@ impl SandboxScope {
         self.path_rules.is_empty() && self.has_single_host_grant()
     }
 
+    /// Whether this scope imposes no restrictions beyond a fully permissive process policy.
     /// Preparation snapshots with no matches impose no additional path restriction.
     /// Continuous rules still require enforcement even before a matching file exists.
-    pub(crate) fn can_run_unrestricted(&self) -> Result<bool, SandboxError> {
+    pub fn can_run_unrestricted(&self) -> Result<bool, SandboxError> {
         if !self.has_single_host_grant() {
             return Ok(false);
         }

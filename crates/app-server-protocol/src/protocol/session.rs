@@ -67,6 +67,39 @@ pub struct SessionCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub branch_name: Option<String>,
+    /// Environment overrides supplied by the user for processes in this Session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub environment_variables: Option<SessionEnvironmentVariables>,
+}
+
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(transparent)]
+pub struct SessionEnvironmentVariables(pub std::collections::BTreeMap<String, String>);
+
+impl std::fmt::Debug for SessionEnvironmentVariables {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SessionEnvironmentVariables([REDACTED])")
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileReadParams {
+    pub environment_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileReadResult {
+    pub variables: Option<SessionEnvironmentVariables>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileSaveParams {
+    pub environment_id: String,
+    pub variables: SessionEnvironmentVariables,
 }
 
 fn deserialize_execution_target<'de, D>(
@@ -446,6 +479,10 @@ pub struct SessionThreadUnsubscribeParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionResult {
+    /// Acknowledges that the execution host persisted the requested overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub environment_applied: Option<bool>,
     pub session: Session,
     pub agent_tree: AgentTreeProjection,
 }

@@ -226,7 +226,26 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 		create: (params) => appServerRequest(connection, 'session/create', {
 			...params,
 			executionTarget: toBackendExecutionTarget(params.executionTarget, remoteHost)
-		}).then(result => toSessionResult(result, remoteHost)),
+		}).then(result => {
+			if (params.environmentVariables && result.environmentApplied !== true) {
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'sessions.environment.variablesRuntimeUnavailable' }, 'This execution host cannot apply environment variables to a session.'));
+			}
+			return toSessionResult(result, remoteHost);
+		}),
+		async saveEnvironmentProfile(environmentId, variables) {
+			await appServerRequest(connection, 'session/environmentProfile/save', { environmentId, variables });
+		},
+		async readEnvironmentProfile(environmentId) {
+			const result = await appServerRequest(connection, 'session/environmentProfile/read', { environmentId });
+			return result.variables ?? undefined;
+		},
+		async addWorkspaceFolder(sessionId, path) {
+			const current = await appServerRequest(connection, 'session/dirs/list', { sessionId });
+			if (current.dirs.some(folder => folder.path === path)) return;
+			await appServerRequest(connection, 'session/dirs/add', {
+				sessionId, path, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'browseFiles', 'searchFiles', 'inspectRepository'],
+			});
+		},
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
 		async readRoleCatalog() {
 			const catalog = await appServerRequest(connection, 'agent/roles/catalog', {});

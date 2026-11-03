@@ -352,6 +352,7 @@ pub struct AppServer {
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
     extension_state: Option<Arc<ash_state::SqliteExtensionStateStore>>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
     extension_secrets: Option<Arc<dyn ash_secrets::SecretStore>>,
     pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
     plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
@@ -1355,6 +1356,7 @@ impl AppServer {
             plugins: None,
             extension_hosts: None,
             extension_state: None,
+            session_environments: Arc::default(),
             extension_secrets: None,
             built_in_editor_extensions:
                 extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
@@ -2581,6 +2583,7 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.session_environments.bind(store.clone());
         self.extension_secrets = Some(store.clone());
         if let Some(runtime) = &self.extension_hosts {
             runtime.bind_secrets(store.clone());
@@ -3443,6 +3446,26 @@ impl AppServer {
             Some(ClientMethod::IssueReporterSubmit) => self
                 .issue_reporter_processor()
                 .issue_reporter_submit(&request.params),
+            Some(ClientMethod::SessionEnvironmentProfileSave) => (|| {
+                let params: ash_app_server_protocol::protocol::session::SessionEnvironmentProfileSaveParams = decode(&request.params)?;
+                self.session_environments
+                    .save_profile(&params.environment_id, &params.variables.0)
+                    .map_err(core_error)?;
+                result(&())
+            })(),
+            Some(ClientMethod::SessionEnvironmentProfileRead) => (|| {
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentProfileReadParams;
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentProfileReadResult;
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentVariables;
+                let params: SessionEnvironmentProfileReadParams = decode(&request.params)?;
+                let variables = self
+                    .session_environments
+                    .read_profile(&params.environment_id)
+                    .map_err(core_error)?;
+                result(&SessionEnvironmentProfileReadResult {
+                    variables: variables.map(SessionEnvironmentVariables),
+                })
+            })(),
             Some(ClientMethod::SessionCreate) => self
                 .session_processor()
                 .session_create(connection, &request.params),

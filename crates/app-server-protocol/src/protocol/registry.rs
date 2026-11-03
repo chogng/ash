@@ -2264,6 +2264,14 @@ use crate::protocol::session::SessionChanged;
 use crate::protocol::session::SessionCreateParams;
 use crate::protocol::session::SessionDeleted;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileSaveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentVariables;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionReadParams;
@@ -4006,6 +4014,16 @@ client_methods! {
         params: DocumentCollaborationPresenceReadParams,
         response: DocumentCollaborationPresenceSnapshot,
         serialization: GlobalSharedRead,
+    },
+    SessionEnvironmentProfileRead => "session/environmentProfile/read" {
+        params: SessionEnvironmentProfileReadParams,
+        response: SessionEnvironmentProfileReadResult,
+        serialization: GlobalSharedRead,
+    },
+    SessionEnvironmentProfileSave => "session/environmentProfile/save" {
+        params: SessionEnvironmentProfileSaveParams,
+        response: (),
+        serialization: GlobalExclusive,
     },
     SessionCreate => "session/create" {
         params: SessionCreateParams,
@@ -7081,6 +7099,10 @@ typescript_bindings! {
     ApprovalMode,
     SessionCreateParams,
     ComparisonForkParams,
+    SessionEnvironmentVariables,
+    SessionEnvironmentProfileReadParams,
+    SessionEnvironmentProfileReadResult,
+    SessionEnvironmentProfileSaveParams,
     SessionRuntimeParams,
     SessionRuntimeCancelParams,
     SessionRuntimeResult,

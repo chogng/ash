@@ -55,10 +55,15 @@ impl std::error::Error for ShellCommandToolError {}
 
 /// Executes one approved local process with an explicit program, arguments, and dir path.
 ///
+type EnvironmentResolver = dyn Fn(&ash_tools::ToolExecutionContext) -> Result<ash_tool_executor::CommandEnvironment, String>
+    + Send
+    + Sync;
+
 /// The selected environment ID must match the immutable ID configured at construction. The
 /// executor never starts a shell implicitly: callers must choose the program they intend to run.
 pub struct ShellCommandTool<P, B> {
     environment_id: ash_tools::EnvId,
+    environment: Option<std::sync::Arc<EnvironmentResolver>>,
     executor: CommandExecutor<P, B>,
     definition: ToolDefinition,
 }
@@ -73,6 +78,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
     ) -> Result<Self, ShellCommandToolError> {
         Ok(Self {
             environment_id,
+            environment: None,
             executor: CommandExecutor::new(dir, backend, approval_policy, limits),
             definition: shell_command_definition()?,
         })
@@ -90,6 +96,20 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
     ) -> Result<Self, ShellCommandToolError> {
         self.definition = shell_command_definition_with_guidance(guidance)?;
         Ok(self)
+    }
+
+    /// Resolves host-owned overrides from the admitted invocation's Session.
+    pub fn with_session_environment(
+        mut self,
+        resolve: impl Fn(
+            &ash_tools::ToolExecutionContext,
+        ) -> Result<ash_tool_executor::CommandEnvironment, String>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.environment = Some(std::sync::Arc::new(resolve));
+        self
     }
 
     /// Executes one already materialized request under authority selected by the host.
@@ -129,6 +149,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
                 arguments: request.arguments,
                 working_directory: request.working_directory,
                 input: CommandInput::Closed,
+                environment: request.environment,
             },
             authority,
             cancellation,
@@ -154,6 +175,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
                 arguments: request.arguments,
                 working_directory: request.working_directory,
                 input: CommandInput::Open,
+                environment: request.environment,
             },
             authority,
             cancellation,
@@ -246,6 +268,14 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             Err(error) => return returned_error(error.to_string()),
         };
 
+        let input = if let Some(resolve) = &self.environment {
+            match resolve(invocation.context()) {
+                Ok(environment) => input.with_environment(environment),
+                Err(error) => return not_started(error),
+            }
+        } else {
+            input
+        };
         match self.execute_authorized_with_network(
             input,
             authority,
@@ -327,9 +357,17 @@ pub struct ShellCommandRequest {
     working_directory: PathBuf,
     #[serde(default)]
     dir_root: Option<PathBuf>,
+    #[serde(skip)]
+    environment: ash_tool_executor::CommandEnvironment,
 }
 
 impl ShellCommandRequest {
+    /// Attaches trusted host overrides after decoding model-supplied tool arguments.
+    pub fn with_environment(mut self, environment: ash_tool_executor::CommandEnvironment) -> Self {
+        self.environment = environment;
+        self
+    }
+
     /// Supplies transcript facts from the same decoded request used for execution.
     pub fn activity(&self) -> ash_tools::ToolActivity {
         ash_tools::ToolActivity::Command {
@@ -355,6 +393,7 @@ impl ShellCommandRequest {
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
             dir_root: None,
+            environment: Default::default(),
         })
     }
 
@@ -437,6 +476,7 @@ impl ShellCommandRequest {
             arguments,
             working_directory: self.working_directory,
             dir_root: self.dir_root,
+            environment: self.environment,
         }
     }
 }

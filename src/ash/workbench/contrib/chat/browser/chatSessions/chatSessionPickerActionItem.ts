@@ -33,6 +33,8 @@ export class ChatSessionPickerActionItem extends ChatInputPickerActionViewItem {
 				},
 			},
 			listOptions,
+			focusItemOnPointerOpen: false,
+			tabLeavesPopup: true,
 		}, instantiationService);
 	}
 

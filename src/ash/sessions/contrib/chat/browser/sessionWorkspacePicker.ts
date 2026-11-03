@@ -1,3 +1,4 @@
+import { trackChatInputPickerFocus } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem.js';
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { SessionsRecentWorkspacesService } from '../../../services/sessions/browser/sessionsRecentWorkspacesService.js';
 import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
@@ -24,10 +25,8 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
 import { buildAgentHostSessionWorkspace, selectionFromResource, selectionFromWorkspace } from '../../../common/agentHostSessionWorkspace.js';
@@ -95,7 +94,7 @@ export class SessionWorkspacePicker extends Disposable {
 					get label() { return owner.label; },
 					get tooltip() { return owner.tooltip; },
 					get enabled() { return owner.enabled; },
-					run: () => this.showPicker(),
+					run: () => this.openPicker(),
 				},
 				onDidChange: this.presentationChanged.event,
 				placeholder: localize('sessions.workspace.searchFolders', 'Search folders'),
@@ -114,7 +113,7 @@ export class SessionWorkspacePicker extends Disposable {
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
-		if (!visible) { this.pending.clear(); this.picker.hide({ restoreFocus: false }); }
+		if (!visible) { this.pending.clear(); this.picker.hide(); }
 	}
 
 	private render(): void {
@@ -136,16 +135,21 @@ export class SessionWorkspacePicker extends Disposable {
 		this.enabled = !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
 		if (!this.enabled || this.pendingDraftId && this.pendingDraftId !== draft?.untitledSessionId) { this.pending.clear(); }
 		if (this.pickerDraft && (this.pickerDraft.untitledSessionId !== draft?.untitledSessionId || this.pickerDraft.workspace !== draft?.workspace)) {
-			this.picker.hide({ restoreFocus: false });
+			this.picker.hide();
 		}
 		this.presentationChanged.fire();
 	}
 
 	public showPicker(): void {
+		if (!this.visible) { return; }
+		this.picker.focus();
+		this.openPicker();
+	}
+
+	private openPicker(): void {
 		const draft = this.draft;
 		if (!draft || !this.enabled || !this.visible) { return; }
 		this.pending.clear();
-		this.picker.focus();
 		this.pickerDraft = draft;
 		const selected = draft.workspace.type === 'current' ? selectionFromWorkspace(this.workspace.getWorkspace()) : draft.workspace;
 		const source = selected.type === 'local' || selected.type === 'ssh' || selected.type === 'remote' ? selected : undefined;
@@ -395,7 +399,6 @@ export class WorkspacePicker extends Disposable {
 		folderUri: undefined, origin: WorkspaceSelectionOrigin.None, state: 'none', historyState: 'loading',
 	});
 
-	private button!: Button;
 	private hover!: IManagedHover;
 	private dropdown: ActionWidgetDropdown | undefined;
 
@@ -408,14 +411,11 @@ export class WorkspacePicker extends Disposable {
 
 	public render(container: HTMLElement): void {
 		const trigger = this.options.trigger!;
-		this.button = this._register(new Button(container, {
-			...defaultButtonStyles,
-			label: trigger.action.label, icon: trigger.action.icon, size: 'small',
-		}));
-		this.button.domNode.classList.add('ash-sessions-workspace-picker');
-		this.dropdown = this._register(new ActionWidgetDropdown(container, {
+		const dropdown = this.dropdown = this._register(new ActionWidgetDropdown(container, {
 			label: trigger.action.label, ariaLabel: trigger.action.tooltip,
-			trigger: { button: this.button, open: () => { trigger.action.run(); } },
+			buttonOptions: { icon: trigger.action.icon, presentation: 'quiet', size: 'small' },
+			onOpen: () => { trigger.action.run(); },
+			tabLeavesPopup: true,
 			onError: error => this.reportError(error),
 			listOptions: {
 				className: 'ash-action-widget-accent-checks',
@@ -425,20 +425,21 @@ export class WorkspacePicker extends Disposable {
 				ariaLabel: trigger.placeholder,
 			},
 		}, trigger.actionWidget));
-		this.hover = this._register(getHoverDelegate().setupHover({ target: this.button.domNode, content: trigger.action.tooltip }));
+		dropdown.element.classList.add('ash-sessions-workspace-picker');
+		this._register(trackChatInputPickerFocus(container));
+		this.hover = this._register(getHoverDelegate().setupHover({ target: dropdown.element, content: trigger.action.tooltip }));
 		const update = (): void => {
-			this.button.label = trigger.action.label;
-			this.button.enabled = trigger.action.enabled;
-			this.button.domNode.setAttribute('aria-label', trigger.action.tooltip);
+			dropdown.setLabel(trigger.action.label);
+			dropdown.setEnabled(trigger.action.enabled);
+			dropdown.element.tabIndex = trigger.action.enabled ? 0 : -1;
+			dropdown.element.setAttribute('aria-label', trigger.action.tooltip);
 			this.hover.update(trigger.action.tooltip);
-			this.button.domNode.tabIndex = trigger.action.enabled ? 0 : -1;
-			if (!trigger.action.enabled) { this.hide({ restoreFocus: false }); }
 		};
 		this._register(trigger.onDidChange(update));
 		update();
 	}
 	public focus(): void {
-		if (!this.isDisposed && this.options.trigger!.action.enabled) { this.button.focus(); }
+		this.dropdown?.focus();
 	}
 
 	/** Show immediate choices while loading provider capabilities within this popup's cancellation scope. */
@@ -462,10 +463,8 @@ export class WorkspacePicker extends Disposable {
 		});
 	}
 
-	public hide(options?: { readonly restoreFocus: boolean; }): void {
-		const wasOpen = this.button?.domNode.getAttribute('aria-expanded') === 'true';
+	public hide(): void {
 		this.dropdown?.hide();
-		if (wasOpen && options?.restoreFocus !== false && !this.isDisposed && this.button.domNode.isConnected) { this.focus(); }
 	}
 
 	private reportError(error: unknown): void {
