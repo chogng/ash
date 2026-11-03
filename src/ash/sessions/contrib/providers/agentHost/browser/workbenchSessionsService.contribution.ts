@@ -33,8 +33,17 @@ class WorkbenchSessionsManagementService extends SessionsManagementService {
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);
-		super(provider, providers);
-		this._register(providers.registerProvider(provider));
+		let registration;
+		try {
+			registration = providers.registerProvider(provider);
+			super(provider.id, providers);
+		} catch (error) {
+			registration?.dispose();
+			provider.dispose();
+			throw error;
+		}
+		this._register(provider);
+		this._register(registration);
 	}
 }
 

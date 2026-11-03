@@ -47,7 +47,7 @@ import { registerTestExtensionService } from '../../../workbench/test/common/tes
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
-import { observableValue } from '../../../base/common/observable.js';
+import { autorun, observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -131,6 +131,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async initialize() { },
 		async refresh() { },
 		async listAgents() { return []; },
+		async prepareThread() { },
 		async openThread() { },
 		selectThread() { },
 		async interruptThread() { },
@@ -376,18 +377,14 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
-		sessionService,
-		notifications,
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
-	const updatePart = (): void => {
-		const selection = viewService.getSelection();
-		part.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
-	};
-	using partListener = viewService.onDidChange(updatePart);
-	updatePart();
+	using partListener = autorun(reader => {
+		const { visibleSelections, activeSelection } = viewService.getSelection(reader);
+		part.updateVisibleSessions(visibleSelections, activeSelection);
+	});
 
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.dataset.part, 'sessions');

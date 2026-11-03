@@ -73,7 +73,7 @@ test('independent conversation drafts create their own root worktree only on mat
 });
 
 test('changing a conversation folder clears its pending worktree branch and invalid stored choices are rejected', async () => {
-	const { isUntitledSession } = await import('../../browser/sessionsService.js');
+	const { isUntitledSession } = await import('../../browser/sessionGridState.js');
 	using management = createManagement(sessionHost([]));
 	const draft = management.createUntitledSession('First', { type: 'local', root: '/project' });
 	management.setUntitledSessionWorkspace(draft.untitledSessionId, draft.workspace, { branchName: 'review/topic' });

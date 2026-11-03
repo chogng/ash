@@ -11,7 +11,7 @@ import { ChatAuxiliaryWindow } from '../../workbench/contrib/chat/browser/widget
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { isRecord } from '../../base/common/types.js';
-import { isUntitledSession } from '../services/sessions/browser/sessionsService.js';
+import { isUntitledSession } from '../services/sessions/browser/sessionGridState.js';
 import { setDisposableOwner, toDisposable } from '../../base/common/lifecycle.js';
 import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';

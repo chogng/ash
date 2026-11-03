@@ -77,8 +77,8 @@ test('Sessions layout commands update menu state from their owners and release w
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { historyIndex = 0; changed.fire(); },
-		navigateForward() { historyIndex = 1; changed.fire(); },
+		async openPreviousSession() { historyIndex = 0; changed.fire(); },
+		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);

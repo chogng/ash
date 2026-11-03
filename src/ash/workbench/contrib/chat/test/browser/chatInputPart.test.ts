@@ -1,4 +1,5 @@
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
+import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputMode.js';
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ChatContextService, IChatContextService } from '../../browser/contextContrib/chatContextService.js';
@@ -368,7 +369,7 @@ test('All context kinds insert at the cursor without an attachment bar; tool con
 	assert.equal((await part.captureDraft())?.draft.contexts.length, 1);
 });
 
-test('Chat input sends attachments without text and rejects duplicate submissions while pending', async () => {
+for (const layout of [undefined, 'compact'] as const) test(`Chat input sends attachments without text and rejects duplicate submissions while pending (${layout ?? 'default'})`, async () => {
 	let complete!: () => void;
 	const sent: string[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'debug', {
@@ -378,7 +379,7 @@ test('Chat input sends attachments without text and rejects duplicate submission
 			assert.equal(contexts?.[0]?.name, 'file.ts');
 			await new Promise<void>(resolve => { complete = resolve; });
 		},
-	});
+	}, undefined, undefined, undefined, layout);
 	part.render({ mode: 'debug', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
 	part.addContext({ id: 'file', kind: 'file', name: 'file.ts', resolve: async () => ({ name: 'file.ts', content: 'let value = 1;' }) });
 	assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
@@ -777,7 +778,7 @@ for (const locale of ['en', 'zh-CN']) for (const layout of [undefined, 'compact'
 		assert.deepEqual(sent, []);
 		assert.equal(microphone().getAttribute('aria-label'), locale === 'en' ? 'Dictate message' : '听写');
 		assert.ok(microphone().querySelector('.ash-icon-mic'));
-		if (layout === 'compact') assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.equal(part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.send"] button')?.disabled, false);
 		part.element.querySelector('textarea')!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await new Promise(resolve => setTimeout(resolve, 0));
 		assert.deepEqual(sent, ['Recognized words']);
@@ -951,6 +952,7 @@ test('Input construction rejects a missing window dictation service', () => {
 test('Input construction requires the window attachment resolver', () => {
 	using services = new InstantiationService();
 	services.registerInstance(IChatSpeechToTextService, {} as IChatSpeechToTextService);
+	services.registerInstance(IVoiceInputModeService, {} as IVoiceInputModeService);
 	services.registerInstance(IDictationOnboardingService, {} as IDictationOnboardingService);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
 	services.registerInstance(IMenuService, {} as IMenuService);
@@ -2110,7 +2112,7 @@ suite('chatInput browser component', () => {
 		})).toEqual({ text, contexts });
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }] });
 		await expect(input).toBeFocused();
-		await expect(page.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		await expect(page.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(text ? 1 : 0);
 		if (text) {
 			await input.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }, { text }] });
@@ -2149,7 +2151,7 @@ suite('chatInput browser component', () => {
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ writes: [], submissions: [] });
 		await expect(input).toBeEditable();
 		await expect(input).toBeFocused();
-		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeDisabled();
 		await input.press('Enter');
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ writes: [], submissions: [] });
 		await page.evaluate(() => window.ashChatInputIntegration.setInputBlocked(false));
@@ -2176,7 +2178,7 @@ suite('chatInput browser component', () => {
 		await expect(microphone).toBeEnabled();
 		await page.evaluate(() => window.ashChatInputIntegration.emitDictation('Still recognizing', false));
 		await expect(page.locator('.ash-chat-dictation-preview')).toHaveText('Still recognizing');
-		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(0);
+		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(outcome === 'failure' ? 1 : 0);
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
 		await input.press('Enter');

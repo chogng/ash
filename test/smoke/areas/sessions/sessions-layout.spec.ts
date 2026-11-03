@@ -260,6 +260,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 
 test('Sessions migrates nested editor geometry into its conversation grid and restores drafts after reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await page.setViewportSize({ width: 1900, height: 950 });
 	const references: { kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }[] = [];
 	for (let index = 0; index < 3; index++) {
@@ -314,6 +315,7 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 	await expectRestored();
 	const saved = JSON.parse((await readStorageEntries(application, page, identity))['sessions.gridState'].value);
 	expect(saved.version).toBe(3);
-	expect(saved.layout.children[1].orientation).toBe('vertical');
+	// Version 3 stores the Grid orientation enum, where Vertical is 0.
+	expect(saved.layout.children[1].orientation).toBe(0);
 	expect([saved.layout.children[0].data.id, ...saved.layout.children[1].children.map((leaf: { data: { id: string; }; }) => leaf.data.id)]).toEqual(references.map(reference => `untitled:${reference.session.untitledSessionId}`));
 });

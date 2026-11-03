@@ -72,8 +72,8 @@ export function registerLayoutActions(
 			}
 		}),
 	);
-	disposables.add(CommandsRegistry.register('ash.sessions.back', () => sessions.navigateBack()));
-	disposables.add(CommandsRegistry.register('ash.sessions.forward', () => sessions.navigateForward()));
+	disposables.add(CommandsRegistry.register('ash.sessions.back', () => sessions.openPreviousSession()));
+	disposables.add(CommandsRegistry.register('ash.sessions.forward', () => sessions.openNextSession()));
 	disposables.add(
 		registerAction2(
 			class extends Action2 {

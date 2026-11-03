@@ -24,6 +24,8 @@ export interface ISessionsManagementService {
 	/** Hydrates current catalog directories without changing foreground selection. */
 	whenDirectoriesReady(signal?: AbortSignal): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
+	/** Hydrates a thread. The Agents window commits its own foreground choice after hydration. */
+	prepareThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;

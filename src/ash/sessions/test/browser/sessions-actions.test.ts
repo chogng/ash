@@ -87,8 +87,8 @@ test('Sessions owns its New Session command and routes explicit provider choices
 		},
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { },
-		navigateForward() { },
+		async openPreviousSession() { },
+		async openNextSession() { },
 	};
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);

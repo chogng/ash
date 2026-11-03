@@ -93,7 +93,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
 			async initialize() { }, async openThread() { }, openSession() { }, openUntitledSession() { },
 			openNewSession(): never { throw new Error('This test selects durable conversations'); },
-			activateSelection() { }, closeVisibleSelection() { }, navigateBack() { }, navigateForward() { },
+			activateSelection() { }, closeVisibleSelection() { }, async openPreviousSession() { }, async openNextSession() { },
 		};
 		const old = new DeferredPromise<{ changeSets: TurnChangesReadResult['summary'][]; }>();
 		const details = changes('current');

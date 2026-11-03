@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
@@ -16,7 +16,8 @@ class Provider extends Disposable implements ISessionsProvider {
 	readonly label: string;
 	private readonly catalog = this._register(new Emitter<void>());
 	readonly onDidChangeCatalog = this.catalog.event;
-	readonly onDidChangeSession = Event.None;
+	readonly sessionChanges = this._register(new Emitter<{ readonly sessionId: string; readonly detailChanged: boolean; }>());
+	readonly onDidChangeSession = this.sessionChanges.event;
 	items: ISession[] = [{ sessionId: 'same', title: 'Same ID', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], agentTree: [] }];
 	readonly calls: string[] = [];
 	pending: DeferredPromise<readonly ISession[]> | undefined;
@@ -42,11 +43,11 @@ class Provider extends Disposable implements ISessionsProvider {
 
 test('equal backend Session and Thread IDs retain separate owners for selection and mutations', async () => {
 	using registry = new SessionsProvidersService();
-	const primary = new Provider('primary');
+	using primary = new Provider('primary');
 	using remote = new Provider('remote');
 	using primaryRegistration = registry.registerProvider(primary);
 	using remoteRegistration = registry.registerProvider(remote);
-	using management = new SessionsManagementService(primary, registry);
+	using management = new SessionsManagementService(primary.id, registry);
 	await management.initialize();
 	const remoteId = sessionIdentity(remote.id, 'same', primary.id);
 	const remoteThread = sessionIdentity(remote.id, 'thread', primary.id);
@@ -63,10 +64,11 @@ test('equal backend Session and Thread IDs retain separate owners for selection 
 
 test('a remote draft retains its provider through materialization after another host is selected', async () => {
 	using registry = new SessionsProvidersService();
-	const primary = new Provider('primary');
+	using primary = new Provider('primary');
+	using primaryRegistration = registry.registerProvider(primary);
 	using remote = new Provider('remote');
 	using registration = registry.registerProvider(remote);
-	using management = new SessionsManagementService(primary, registry);
+	using management = new SessionsManagementService(primary.id, registry);
 	await management.initialize();
 	const remoteDraft = management.createUntitledSession('Remote draft', undefined, remote.id);
 	management.createUntitledSession('Local draft', undefined, primary.id);
@@ -78,10 +80,11 @@ test('a remote draft retains its provider through materialization after another 
 
 test('unregistering a host rejects its old identity and cannot expose an equal local Session', async () => {
 	using registry = new SessionsProvidersService();
-	const primary = new Provider('primary');
+	using primary = new Provider('primary');
+	using primaryRegistration = registry.registerProvider(primary);
 	using remote = new Provider('remote');
 	using registration = registry.registerProvider(remote);
-	using management = new SessionsManagementService(primary, registry);
+	using management = new SessionsManagementService(primary.id, registry);
 	await management.initialize();
 	const remoteId = sessionIdentity(remote.id, 'same', primary.id);
 	registration.dispose();
@@ -94,11 +97,12 @@ test('unregistering a host rejects its old identity and cannot expose an equal l
 
 test('a late catalog from a removed provider cannot reinsert its Sessions', async () => {
 	using registry = new SessionsProvidersService();
-	const primary = new Provider('primary');
+	using primary = new Provider('primary');
+	using primaryRegistration = registry.registerProvider(primary);
 	using remote = new Provider('remote');
 	remote.pending = new DeferredPromise<readonly ISession[]>();
 	using registration = registry.registerProvider(remote);
-	using management = new SessionsManagementService(primary, registry);
+	using management = new SessionsManagementService(primary.id, registry);
 	const loading = management.initialize();
 	registration.dispose();
 	await remote.pending.complete(remote.items);
@@ -111,4 +115,27 @@ test('qualified identity round-trips opaque backend IDs and rejects noncanonical
 	const id = sessionIdentity('ssh:host/one', 'opaque:/会话%id', 'primary');
 	assert.deepEqual(parseSessionIdentity(id, 'primary'), { providerId: 'ssh:host/one', backendSessionId: 'opaque:/会话%id' });
 	assert.throws(() => parseSessionIdentity('ash-session:%72emote/same', 'primary'));
+});
+
+test('removing the default provider retires bare IDs and keeps the remaining provider qualified', async () => {
+	using registry = new SessionsProvidersService();
+	using primary = new Provider('primary');
+	using remote = new Provider('remote');
+	using primaryRegistration = registry.registerProvider(primary);
+	using remoteRegistration = registry.registerProvider(remote);
+	using management = new SessionsManagementService(primary.id, registry);
+	await management.initialize();
+	primary.pending = new DeferredPromise<readonly ISession[]>();
+	const refreshing = management.refresh();
+	primary.sessionChanges.fire({ sessionId: 'same', detailChanged: true });
+
+	primaryRegistration.dispose();
+	await management.initialize();
+	await primary.pending.complete(primary.items);
+	await refreshing;
+	assert.equal(management.state, 'ready');
+	const remoteId = sessionIdentity(remote.id, 'same', primary.id);
+	assert.deepEqual(management.sessions.map(session => session.sessionId), [remoteId]);
+	await assert.rejects(management.openThread('same', 'thread'), /unavailable: primary/);
+	assert.ok(!primary.calls.includes('read:same'));
 });

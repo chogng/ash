@@ -78,8 +78,8 @@ test('Sessions titlebar initializes localized actions and closes the application
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { },
-		navigateForward() { },
+		async openPreviousSession() { },
+		async openNextSession() { },
 	};
 	using configuration = new TestConfigurationService();
 	using contextViews = new BrowserContextViewService(browser.window.document.body);

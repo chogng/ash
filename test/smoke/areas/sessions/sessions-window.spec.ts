@@ -1139,7 +1139,7 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 		'Review operations automatically; ask you when uncertain',
 	);
 	await expect(permissionMenu.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
-	await expect(permissionMenu.getByRole('menuitem')).toHaveCount(0);
+	await expect(permissionMenu.getByRole('menuitem', { name: /Prepare review environment/u })).toBeVisible();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/press 1, 2, or 3/u);
 	await page.keyboard.press('Escape');
@@ -1203,12 +1203,8 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 		);
 	});
 	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
-	await editor.waitForEditorContents(
-		contents =>
-			contents.includes('context.ts') &&
-			contents.includes('Keep the attached draft') &&
-			contents.includes('clipboard.png'),
-	);
+	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
+	await editor.waitForEditorContents(contents => contents.includes('Keep the attached draft'));
 	const imageDraft = (await editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
 	await composer.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)').evaluate(element => {
 		const transfer = new DataTransfer();
@@ -1226,7 +1222,8 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await editor.input.focus();
 	await editor.input.press('End');
 	await editor.input.press('Backspace');
-	await editor.waitForEditorContents(contents => contents.endsWith('dropped.md'));
+	await editor.waitForEditorContents(contents => contents.endsWith('\uFFFC'));
+	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts', 'dropped.md']);
 	await editor.input.press('Backspace');
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
 	await editor.waitForEditorContents(contents => contents === imageDraft);
@@ -1240,9 +1237,6 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
 	await expect(composer.getByRole('button', { name: 'Remove clipboard.png', exact: true })).toBeVisible();
 	await expect(composer.locator(':is(.ash-chat-input-tip,.ash-cowork-input-tip)')).toHaveCount(0);
-	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await returnFromSessions(page, application);
-	await closed;
 });
 
 test('Sessions composer configuration leaves Workbench input defaults unchanged', async ({
@@ -3232,10 +3226,12 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 });
 
 test('Sessions replace a conversation in their own grid and restore its draft through history', async ({
+	application,
 	target,
 	workbench,
 }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const host = page.locator('[data-part="sessions"]');
 	const editor = new Editor(host.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep the replaced conversation draft');
@@ -3256,6 +3252,10 @@ test('Sessions replace a conversation in their own grid and restore its draft th
 	await expect(chat).toHaveAttribute('data-untitled-session-id', identity!);
 	await expect(host.locator('.ash-sessions-chat-slot')).toHaveCount(1);
 	await grid!.dispose();
+	const reopened = await workbench.reopenAgentsWindow(application, page);
+	const restoredSlot = reopened.locator('[data-part="sessions"] .ash-sessions-chat-slot.active:visible');
+	await expect(restoredSlot.locator(':is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', identity!);
+	await new Editor(restoredSlot).waitForEditorContents(text => text === 'Keep the replaced conversation draft');
 });
 
 emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the same session, draft, attachments and history', async ({
@@ -3301,7 +3301,10 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 		page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }),
 	).toHaveAttribute('aria-pressed', 'true');
 	await expect(navigation.locator('[aria-current="page"]')).toHaveCount(1);
-	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
+	const codeDetails = page.locator('[data-part="editor"] .ash-desktop-auxiliarybar');
+	await expect(codeDetails).toBeHidden();
+	await new QuickAccess(page).runCommand('ash.sessions.toggleDetails');
+	await expect(codeDetails).toBeVisible();
 	await expectDraft('Keep this draft');
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(false);
 	await editor.input.focus();
@@ -3311,7 +3314,7 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	await page.keyboard.insertText('Edited from Code');
 	await navigation.getByRole('button', { name: 'More', exact: true }).press('Space');
 	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).press('Enter');
-	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
+	await expect(codeDetails).toBeHidden();
 	await expectDraft('Edited from Code');
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(true);
 	await expect(page.locator('[data-view-container-id="ash.collaboration"]')).toBeVisible();

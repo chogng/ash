@@ -525,15 +525,15 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(IAppServerSkillApi, options.api.skills);
 		primaryHostServices.registerSingleton(IPromptsService, () => primaryHostServices.createInstance(PromptsService));
-		const provider = primaryHostServices.createInstance(AppServerSessionsProvider, {
+		const provider = this._register(primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: async folders => {
 				using selection = services.createInstance(WorkspacePicker, {});
 				return await selection.pick(folders);
 			},
-		} satisfies AppServerSessionsProviderHost);
-		const sessions = this._register(services.createInstance(SessionsManagementService, provider));
+		} satisfies AppServerSessionsProviderHost));
 		this._register(services.get(ISessionsProvidersService).registerProvider(provider));
+		const sessions = this._register(services.createInstance(SessionsManagementService, provider.id));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		services.registerInstance(ISessionsManagementService, sessions);
@@ -846,8 +846,6 @@ export abstract class Workbench extends Disposable {
 		const cowork = this._register(services.createInstance(CoworkPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(
 			services.createInstance(SessionsPart, this.domNode, {
-				sessionService: sessions,
-				notifications: notificationService,
 				createCoworkPane: (container, panelId, selection) =>
 					cowork.createPane(container, panelId, selection, () => {
 						view.openNewSession();
@@ -859,12 +857,11 @@ export abstract class Workbench extends Disposable {
 			} satisfies SessionsPartOptions),
 		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
-		const updateSessionsPart = (): void => {
-			const selection = view.getSelection();
-			sessionsPart?.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
-		};
-		this._register(view.onDidChange(updateSessionsPart));
-		updateSessionsPart();
+		const part = sessionsPart;
+		this._register(autorun(reader => {
+			const { visibleSelections, activeSelection } = view.getSelection(reader);
+			part.updateVisibleSessions(visibleSelections, activeSelection);
+		}));
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		const focusConversation = (sessionId: string, threadId: string): void => {
 			const selected = view.activeSelection;

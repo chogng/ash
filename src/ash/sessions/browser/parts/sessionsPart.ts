@@ -11,10 +11,10 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import './media/sessionsPart.css';
 import { Dimension, h } from '../../../base/browser/dom.js';
-import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
-import { sessionViewSelectionKey } from '../../services/sessions/browser/sessionsService.js';
+import { sessionViewSelectionKey } from '../../services/sessions/browser/visibleSessions.js';
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
@@ -25,7 +25,7 @@ import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
-import type { INotificationService } from '../../../platform/notification/common/notification.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../platform/native/common/nativeHost.js';
 import {
 	IAuxiliaryWindowService,
@@ -39,8 +39,6 @@ import type {
 } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
-	readonly sessionService: ISessionsManagementService;
-	readonly notifications: INotificationService;
 	readonly createCoworkPane: (
 		container: HTMLElement,
 		panelId: string,
@@ -80,6 +78,8 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IStorageService storageService: IStorageService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super(container, 'sessions', themeService, storageService);
 		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
@@ -121,7 +121,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this._register(
 			storageService.onDidChangeValue(event => {
 				if (event.scope === StorageScope.PROFILE && event.key === WELCOME_COMPLETE_KEY)
-					this.empty.update(options.sessionService.state, options.sessionService.error);
+					this.empty.update(sessionService.state, sessionService.error);
 			}),
 		);
 		this._register(
@@ -132,7 +132,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				this.entries.clear();
 			}),
 		);
-		this.updateVisibleSelections([], undefined);
+		this.updateVisibleSessions([], undefined);
 	}
 
 	setConversationKind(kind: SessionsConversationKind): Promise<void> {
@@ -220,7 +220,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 						view.setVisible(this.visible);
 						void view
 							.setConversationKind(this.kind)
-							.catch(error => this.options.notifications.error(String(error)));
+							.catch(error => this.notifications.error(String(error)));
 						if (this.visible && this.activeView === view) view.focus();
 					}
 					window.dispose();
@@ -299,7 +299,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		if (this.visible) this.activeView.focus();
 	}
 
-	updateVisibleSelections(
+	updateVisibleSessions(
 		selections: readonly SessionsViewSelection[],
 		active: SessionsViewSelection | undefined,
 	): void {
@@ -307,7 +307,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		for (const [key, view] of [...this.entries]) {
 			const selection = view.currentSelection;
 			if (selection.kind === 'session') continue;
-			const materialized = this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId);
+			const materialized = this.sessionService.materializedSessions.get().get(selection.session.untitledSessionId);
 			const id = view.activeChat.sessionId ?? materialized?.sessionId;
 			const target = selection.session.forkSource
 				? selections.find(candidate => candidate.kind === 'session' && candidate.active.session.sessionId === id && candidate.active.threadId === materialized?.threadId)
@@ -318,7 +318,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			this.entries.set(destination, view);
 		}
 		this.content.classList.toggle('single-chat', selections.length === 1);
-		this.empty.update(this.options.sessionService.state, this.options.sessionService.error);
+		this.empty.update(this.sessionService.state, this.sessionService.error);
 		this.mainKeys = selections.map(sessionViewSelectionKey);
 		const desired = new Set(this.mainKeys);
 		const removed: SessionView[] = [];
@@ -329,11 +329,11 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				const id =
 					view.activeChat.sessionId ??
 					(current.kind === 'untitled'
-						? this.options.sessionService.materializedSessions.get().get(current.session.untitledSessionId)
+						? this.sessionService.materializedSessions.get().get(current.session.untitledSessionId)
 							?.sessionId
 						: undefined);
 				const session = id
-					? this.options.sessionService.sessions.find(
+					? this.sessionService.sessions.find(
 						session => session.sessionId === id && session.status === 'active',
 					)
 					: undefined;
@@ -358,7 +358,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				if (
 					!id &&
 					selection.kind === 'untitled' &&
-					this.options.sessionService.untitledSessions.some(
+					this.sessionService.untitledSessions.some(
 						session => session.untitledSessionId === selection.session.untitledSessionId,
 					)
 				)

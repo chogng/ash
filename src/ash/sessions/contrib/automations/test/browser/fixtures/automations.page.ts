@@ -431,8 +431,8 @@ window.ashAutomations = {
 	async retryHistory() { historyUnavailable = false; await services.get(IAutomationService).refresh(); },
 	deferRun() { deferNextRun = true; },
 	async failRun() { run = { ...run, status: 'failed', message: 'Could not create session' }; await services.get(IAutomationService).refresh(); },
-	back() { sessions.navigateBack(); },
-	forward() { sessions.navigateForward(); },
+	back() { return sessions.openPreviousSession(); },
+	forward() { return sessions.openNextSession(); },
 	openDraft() { sessions.openNewSession('New draft'); },
 	selectedTitle() { return sessions.activeSelection?.kind === 'untitled' ? sessions.activeSelection.session.title : sessions.activeSelection?.active.session.title; },
 	async remoteEdit() {
