@@ -171,7 +171,7 @@ exports.activate = context => {
 		if (!await details.getByRole('switch').isChecked()) { await details.getByRole('switch').focus(); await details.getByRole('switch').press('Space'); }
 		await expect(details.getByRole('switch')).toBeChecked();
 		await workbench.quickaccess.runCommand('workbench.action.chat.open');
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		const newChatMenu = () => page.locator('.ash-chat-title-actions [data-action-id="submenu.ChatNewMenu"] .ash-split-action-dropdown button').click();
 		const menus = new Menus(page);
 		expect((await menus.inspect(application, newChatMenu)).map(item => item.label)).not.toContain('Canvas');

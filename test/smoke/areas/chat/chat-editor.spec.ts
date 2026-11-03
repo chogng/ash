@@ -9,7 +9,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat main canvas (
 	test('moves the original composer beside a document and restores its draft after restart', { tag: ['@electron-app-server'] }, async ({ workbench, reloadWorkbench, testWorkspace }, testInfo) => {
 		test.setTimeout(120_000);
 		let page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		let chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 		await expect(chat).toBeVisible();
 		const draftId = await chat.getAttribute('data-untitled-session-id');

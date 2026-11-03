@@ -83,7 +83,7 @@ test('Attachment resource gestures reach the Workbench file, editor and clipboar
 
 test('Restored session references use the window widget factory through removal, undo and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	await input.focus();
@@ -145,7 +145,7 @@ test('Code copied before Chat opens can be pasted as a snapshot after its source
 		return transfer.types.map(type => [type, transfer.getData(type)]);
 	});
 	await editor.input.pressSequentially('changed after code copy');
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	await input.pressSequentially('Explain ');
@@ -184,7 +184,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 	await editor.waitForEditorFocus();
 	const text = 'ash_attachment_unsaved_snapshot_fixture';
 	await editor.waitForTypeInEditor(text);
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toBeVisible();
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
@@ -280,7 +280,7 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 
 test('Terminal attachment controls retain a frozen snapshot through preview, removal, undo and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	await input.focus();
@@ -337,7 +337,7 @@ test('Terminal attachment controls retain a frozen snapshot through preview, rem
 
 test('Other captured contexts use native controls and retain readonly content after removal and copy-paste', async ({ workbench }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	await input.focus();
@@ -395,7 +395,7 @@ test('Other captured contexts use native controls and retain readonly content af
 
 for (const kind of ['browserElement', 'scmHistoryItemChange']) test(`${kind} dedicated controls keep captured content and source identity through clipboard, undo and readonly opening`, async ({ workbench }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.chat.new');
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 	const name = kind === 'browserElement' ? 'Captured element' : 'src/captured.ts';

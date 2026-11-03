@@ -10,10 +10,15 @@ import { IClipboardService } from '../../../../../../platform/clipboard/common/c
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IChatResponseResourceFileSystemProvider } from '../../../common/widget/chatResponseResourceFileSystemProvider.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { reviveChatTreeData } from '../../../common/chatService/chatService.js';
+import { ChatTreeContentPart } from './chatTreeContentPart.js';
+import type { IChatFileTreeInfo } from '../../chat.js';
 
 type Artifact = Extract<ChatContentPart, { readonly type: 'artifact'; }>['artifact'];
 
 class ResourceRow extends Disposable {
+	public tree: ChatTreeContentPart | undefined;
 	public readonly lifetime = this._register(new MutableDisposable<DisposableStore>());
 	public identity = '';
 	constructor(public readonly node: HTMLDetailsElement, public readonly summary: HTMLElement) {
@@ -22,11 +27,12 @@ class ResourceRow extends Disposable {
 	}
 }
 
-/** Displays only inert tool data. Resource URIs are labels; editors read the associated response bytes. */
+/** Displays inert tool snapshots; opening a tree leaf uses the original file access boundary. */
 export class ChatResourceGroupWidget extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly rows = this._register(new DisposableMap<number, ResourceRow>());
 	private readonly changedHeight = this._register(new Emitter<void>());
+	private lastFocusedTree: number | undefined;
 	public readonly onDidChangeHeight = this.changedHeight.event;
 
 	constructor(document: Document,
@@ -35,6 +41,7 @@ export class ChatResourceGroupWidget extends Disposable {
 		@IEditorService private readonly editors: IEditorService,
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		this.domNode = h(document, 'div');
@@ -62,6 +69,17 @@ export class ChatResourceGroupWidget extends Disposable {
 		for (const [index] of this.rows) if (!indices.has(index)) this.rows.deleteAndDispose(index);
 	}
 
+	public getFileTreeInfos(): readonly IChatFileTreeInfo[] {
+		return [...this.rows].flatMap(([, row]) => row.tree ? [{ tree: row.tree, identity: row.identity }] : []).map(({ tree, identity }, treeIndex) => ({
+			treeDataId: identity, treeIndex, focus: () => tree.focus(),
+		}));
+	}
+
+	public getLastFocusedFileTree(): IChatFileTreeInfo | undefined {
+		const focused = this.lastFocusedTree === undefined ? undefined : this.rows.get(this.lastFocusedTree);
+		return focused?.tree ? this.getFileTreeInfos().find(info => info.treeDataId === focused.identity) : undefined;
+	}
+
 	private renderResource(artifact: Artifact, identity: string, coordinate?: AgentAttachmentSource & { readonly contentIndex: number; }, previous?: ResourceRow): ResourceRow {
 		const document = this.domNode.ownerDocument;
 		const row = previous ?? new ResourceRow(h(document, 'details'), h(document, 'summary'));
@@ -79,6 +97,14 @@ export class ChatResourceGroupWidget extends Disposable {
 		metadata.textContent = artifact.truncated ? localize('chat.resource.truncated', '{0} · Truncated content', artifact.mimeType) : artifact.source.type === 'resourceLink' ? localize('chat.resource.linked', '{0} · Linked resource', artifact.mimeType) : artifact.mimeType;
 		const body = h(document, 'pre');
 		const text = artifact.data.type === 'text' ? artifact.data.text : artifact.data.type === 'json' ? artifact.data.json : undefined;
+		const treeData = !artifact.truncated && artifact.source.type !== 'resourceLink' && artifact.data.type === 'json' ? reviveChatTreeData(artifact.data.json) : undefined;
+		row.tree = treeData ? lifetime.add(this.instantiation.createInstance(ChatTreeContentPart, document, treeData)) : undefined;
+		if (row.tree) {
+			const tree = row.tree;
+			lifetime.add(tree.onDidFocus(() => { this.lastFocusedTree = [...this.rows].find(([, candidate]) => candidate === row)?.[0]; }));
+			lifetime.add(tree.onDidChangeHeight(() => this.changedHeight.fire()));
+			lifetime.add(toDisposable(() => { if (row.tree === tree) row.tree = undefined; }));
+		}
 		body.tabIndex = 0;
 		body.setAttribute('aria-label', summary.textContent);
 		body.textContent = text === undefined ? localize('chat.resource.binary', 'Binary resource ({0} bytes)', artifact.data.type === 'bytes' ? artifact.data.bytes.length : 0) : artifact.data.type === 'json' ? JSON.stringify(JSON.parse(text), null, 2) : text;
@@ -108,6 +134,7 @@ export class ChatResourceGroupWidget extends Disposable {
 			}).finally(() => { opening = false; open.removeAttribute('aria-busy'); });
 		}));
 		node.replaceChildren(summary, metadata, open);
+		if (row.tree) node.append(row.tree.domNode);
 		if (text !== undefined) {
 			const copy = h(document, 'button');
 			copy.type = 'button';

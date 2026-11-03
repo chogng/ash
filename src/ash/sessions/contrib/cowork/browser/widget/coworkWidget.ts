@@ -272,6 +272,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	public focusCodeBlock(reverse = false): void { this.listWidget.focusCodeBlock(reverse); }
 	public focusInput(): void { this.input.focus(); }
 	public getFocus(): IChatListItem | undefined { return this.listWidget.getFocus(); }
+	public getFileTreeInfosForResponse(item: IChatListItem) { return this.listWidget.getFileTreeInfosForResponse(item); }
+	public getLastFocusedFileTreeForResponse(item: IChatListItem) { return this.listWidget.getLastFocusedFileTreeForResponse(item); }
 	public getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined { return this.listWidget.getSibling(item, type); }
 	public reveal(item: IChatListItem): void { this.listWidget.reveal(item); }
 	get visible(): boolean { return !this.element.hidden; }

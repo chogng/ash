@@ -1,4 +1,5 @@
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import type { IChatWidgetService } from '../../../browser/chat.js';
 import { type IChatContextPickService } from '../../../browser/attachments/chatContextPickService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
@@ -66,7 +67,8 @@ for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
 		}, quickInput, { items: [] } as unknown as IChatContextPickService, instantiation,
 			{ getWorkspace: () => ({ folders: [] }) } as unknown as IWorkspaceContextService,
 			{ groups: [] } as unknown as IEditorGroupsService,
-			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService));
+			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService,
+			{ getAllWidgets: () => [] } as unknown as IChatWidgetService));
 		anchor.focus();
 		const running = action.run(anchor);
 		await Promise.race([shown.p, running.then(() => { throw new Error(`Picker did not open: ${notifications.model.getNotifications().map(item => item.message).join('; ')}`); })]);
@@ -122,7 +124,8 @@ suite('Attachment source discovery lifetime', () => {
 			container, target: { attachFiles: async () => { }, acquireContext: async () => [] }, focusInput: () => input.focus(), supportsImages: () => false,
 		}, quickInput, { items: [{ id: 'slow', label: 'Slow', isEnabled: () => { checks++; void checking.complete(); return checks === 1 ? availability.p : false; } }] } as unknown as IChatContextPickService, instantiation,
 			{ getWorkspace: () => ({ folders: [] }) } as unknown as IWorkspaceContextService, { groups: [] } as unknown as IEditorGroupsService,
-			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService));
+			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService,
+			{ getAllWidgets: () => [] } as unknown as IChatWidgetService));
 		const first = action.run(anchor);
 		await checking.p;
 		await action.run(anchor);

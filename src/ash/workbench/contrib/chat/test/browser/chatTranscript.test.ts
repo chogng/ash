@@ -132,6 +132,8 @@ suite('chatTranscript browser component', () => {
 			const block = page.locator('.ash-chat-code-block');
 			const copy = block.getByRole('button', { name: locale === 'en' ? 'Copy' : '复制', exact: true });
 			const insert = block.getByRole('button', { name: locale === 'en' ? 'Insert at cursor' : '插入到光标处', exact: true });
+			const apply = block.getByRole('button', { name: locale === 'en' ? 'Apply to editor' : '应用到编辑器', exact: true });
+			await expect(apply).toBeVisible();
 			const newFile = block.getByRole('button', { name: locale === 'en' ? 'Open in new file' : '在新文件中打开', exact: true });
 			await expect(block).toBeVisible();
 			await expect(block.locator('img')).toHaveCount(0);
@@ -140,6 +142,8 @@ suite('chatTranscript browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe('const code = "<safe>";\nsecond line');
 			await expect(copy).toBeFocused();
 			await copy.press('ArrowRight');
+			await expect(apply).toBeFocused();
+			await apply.press('ArrowRight');
 			await expect(insert).toBeFocused();
 			await insert.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().file)).toBe('before const code = "<safe>";\nsecond lineafter');

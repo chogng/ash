@@ -32,6 +32,7 @@ import { IChatInputNoticeHubService } from '../widget/input/notices/chatInputNot
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 
 export const CHAT_SETUP_ACTION_ID = 'workbench.action.chat.triggerSetup';
+export const CHAT_CATEGORY = localize2('chat.category', 'Chat');
 
 export function registerChatActions(): void {
 	registerAction2(class FocusNoticeAction extends Action2 {

@@ -10,6 +10,9 @@ import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExt
 import { ChatContentMarkdownRenderer } from '../chatContentMarkdownRenderer.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { CodeBlockPart } from './codeBlockPart.js';
+import type { ICodeBlockActionContext } from './codeBlockPart.js';
+import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 
 interface RenderedBlock {
 	node: ChildNode;
@@ -31,6 +34,7 @@ interface MarkdownFragment {
 }
 
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
+	readonly getChatItem?: () => IChatListItem | undefined;
 	readonly ownerDocument: Document;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
@@ -53,6 +57,11 @@ export class ChatMarkdownContentPart extends Disposable {
 	private markdown: IMarkdownString | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
 	private readonly codeElement: IMarkdownString;
+	private readonly getCodeActionContext = (): Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'> => {
+		const item = this.options.getChatItem?.();
+		const source = item?.feedbackSource;
+		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
+	};
 	private visible: boolean;
 	private viewportVisible = true;
 	private hasDeferredCodeBlocks = false;
@@ -329,7 +338,7 @@ export class ChatMarkdownContentPart extends Disposable {
 					}
 				}
 				part.setVisible(this.visible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
-				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
+				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
 				else data.placeholder.replaceWith(part.element);
@@ -365,7 +374,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		this.codeBlocks.get(fragment.codeStart)!.render({
 			text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
 			languageId: fragment.fence.languageId, codeBlockIndex: fragment.codeStart,
-			element: this.codeElement, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 },
+			element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 },
 		}, this.domNode.clientWidth);
 		return true;
 	}

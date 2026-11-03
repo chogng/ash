@@ -968,7 +968,7 @@ for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (c
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Workbench history picker loads its styles, layers its menu and selects a branch by keyboard in ${locale}`, async ({ page }) => {
+	test(`Workbench history picker uses shared styles, layers its menu and selects a branch by keyboard in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto(`/chatTranscript.html?locale=${locale}`);
@@ -977,14 +977,14 @@ for (const locale of ['en', 'zh-CN']) {
 			.catch(error => { errors.push(String(error)); });
 		const picker = page.locator('.ash-quick-pick');
 		await expect(picker).toBeVisible();
-		const rows = picker.locator('.ash-chat-history-item');
+		const rows = picker.getByRole('option').locator('.ash-quick-pick-row-content');
 		await expect(rows).toHaveCount(2);
 		await page.mouse.move(0, 0);
 		const backgroundActions = rows.last().locator('.ash-quick-pick-row-actions');
-		await expect(backgroundActions).toHaveCSS('visibility', 'hidden');
+		await expect(backgroundActions.getByRole('button').first()).toHaveCSS('opacity', '0');
 		await rows.last().hover();
-		await expect(backgroundActions).toHaveCSS('visibility', 'visible');
-		await expect(backgroundActions).toHaveCSS('pointer-events', 'auto');
+		await expect(backgroundActions.getByRole('button').first()).toHaveCSS('opacity', '1');
+		await expect(rows.last().locator('.ash-quick-pick-row-detail')).toBeVisible();
 		await rows.first().hover();
 		await rows.first().getByRole('button').last().click();
 		await expect(page.getByRole('menu')).toBeVisible();

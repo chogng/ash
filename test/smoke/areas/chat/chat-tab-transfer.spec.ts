@@ -5,14 +5,14 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat tab transfers
 
 	test('individual Chat tabs move between the side bar and editor with their original drafts', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench, application }, testInfo) => {
 		const page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		const sidebar = page.locator('[data-part="auxiliarybar"]');
 		const first = sidebar.locator('.ash-chat:visible');
 		const firstId = await first.getAttribute('id');
 		const original = await first.locator('.stanza-editor-input').elementHandle();
 		await first.locator('.stanza-editor-input').focus();
 		await page.keyboard.insertText('First independent Chat draft');
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		const second = sidebar.locator('.ash-chat:visible');
 		const secondId = await second.getAttribute('id');
 		await second.locator('.stanza-editor-input').focus();
@@ -70,7 +70,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat tab transfers
 
 	test('independent draft editor tabs restore beside the remaining sidebar conversation', { tag: ['@electron-ui'] }, async ({ workbench, application, reloadWorkbench }) => {
 		let page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		const draft = page.locator('[data-part="auxiliarybar"] .ash-chat:visible');
 		const draftId = await draft.getAttribute('data-untitled-session-id');
 		await draft.locator('.stanza-editor-input').focus();
@@ -78,7 +78,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`Chat tab transfers
 		await workbench.menus.select(application, () => page.locator('[data-part="auxiliarybar"] .ash-tab.checked [role="tab"]').press('Shift+F10'),
 			[locale === 'en' ? 'Move Chat to Editor Area' : '将聊天移至编辑器区域']);
 		await expect(page.locator('.ash-chat-editor')).toContainText('Restore this independent draft');
-		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 		await page.locator('[data-part="auxiliarybar"] .ash-chat:visible .stanza-editor-input').focus();
 		await page.keyboard.insertText('Restore this sidebar draft');
 		({ workbench } = await reloadWorkbench());

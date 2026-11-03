@@ -21,7 +21,7 @@ import { IChatSpeechToTextService, ChatSpeechToTextInProgress } from '../speechT
 // Command admission while local model discovery is pending; capture state belongs to the speech service.
 const preparations = new WeakMap<IChatSpeechToTextService, { readonly widget: IChatWidget; readonly cancel: () => void; }>();
 
-registerAction2(class ShowDictationIntroductionAction extends Action2 {
+class ShowDictationIntroductionAction extends Action2 {
 	constructor() {
 		super({
 			id: SHOW_DICTATION_ONBOARDING_COMMAND,
@@ -30,14 +30,14 @@ registerAction2(class ShowDictationIntroductionAction extends Action2 {
 		});
 	}
 	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).show(); }
-});
-registerAction2(class ResetDictationIntroductionAction extends Action2 {
+}
+class ResetDictationIntroductionAction extends Action2 {
 	constructor() {
 		super({ id: RESET_DICTATION_ONBOARDING_COMMAND, title: localize2('dictation.resetIntroduction', 'Dictation: Reset introduction'), f1: true });
 	}
 	public override run(accessor: ServicesAccessor): void { accessor.get(IDictationOnboardingService).reset(); }
-});
-registerAction2(class CancelDictationAction extends Action2 {
+}
+class CancelDictationAction extends Action2 {
 	constructor() {
 		super({
 			id: 'workbench.action.chat.cancelSpeechToText',
@@ -52,7 +52,7 @@ registerAction2(class CancelDictationAction extends Action2 {
 		cancelDictation();
 		return service.cancel();
 	}
-});
+}
 
 async function toggle(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 	const widgets = accessor.get(IChatWidgetService);
@@ -127,11 +127,13 @@ async function record(accessor: ServicesAccessor, widget: IChatWidget, released?
 	}
 }
 
-registerAction2(class ToggleDictationAction extends Action2 {
-	constructor() { super({ id: 'workbench.action.chat.toggleSpeechToText', title: localize2('chat.input.dictate', 'Dictate message'), f1: true }); }
+export class ToggleChatSpeechToTextAction extends Action2 {
+	public static readonly ID = 'workbench.action.chat.toggleSpeechToText';
+
+	constructor() { super({ id: ToggleChatSpeechToTextAction.ID, title: localize2('chat.input.dictate', 'Dictate message'), f1: true }); }
 	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> { return toggle(accessor, context); }
-});
-registerAction2(class HoldDictationAction extends Action2 {
+}
+class HoldDictationAction extends Action2 {
 	constructor() { super({ id: 'workbench.action.chat.holdToSpeechToText', title: localize2('dictation.hold', 'Dictation: Hold to record'), f1: true }); }
 	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		if (isDictating()) return;
@@ -140,8 +142,8 @@ registerAction2(class HoldDictationAction extends Action2 {
 		const released = accessor.get(IKeybindingService).enableKeybindingHoldMode(this.desc.id);
 		if (released) await record(accessor, widget, released);
 	}
-});
-registerAction2(class SelectDictationMicrophoneAction extends Action2 {
+}
+class SelectDictationMicrophoneAction extends Action2 {
 	constructor() { super({ id: SELECT_MICROPHONE_COMMAND, title: localize2('dictation.selectMicrophone', 'Select microphone'), f1: true }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const editor = activeDictationEditor() ?? accessor.get(IChatWidgetService).lastFocusedWidget?.inputEditor;
@@ -174,4 +176,20 @@ registerAction2(class SelectDictationMicrophoneAction extends Action2 {
 			picker.show();
 		}).finally(() => lifetime.dispose());
 	}
-});
+}
+
+export function registerChatSpeechToTextActions(): DisposableStore {
+	const store = new DisposableStore();
+	try {
+		store.add(registerAction2(ShowDictationIntroductionAction));
+		store.add(registerAction2(ResetDictationIntroductionAction));
+		store.add(registerAction2(CancelDictationAction));
+		store.add(registerAction2(ToggleChatSpeechToTextAction));
+		store.add(registerAction2(HoldDictationAction));
+		store.add(registerAction2(SelectDictationMicrophoneAction));
+		return store;
+	} catch (error) {
+		store.dispose();
+		throw error;
+	}
+}

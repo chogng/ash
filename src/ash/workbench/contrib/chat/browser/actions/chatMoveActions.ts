@@ -44,7 +44,7 @@ export function registerMoveActions(): void {
 				AgentSessionsPresentationContext.isEqualTo(AgentSessionsPresentation.Tabs), ActiveEditorContext.isEqualTo(ChatEditorInput.EditorID),
 			));
 			super({
-				id: 'workbench.action.chat.moveToSideBar',
+				id: 'workbench.action.chat.openInSidebar',
 				title: localize2('chat.moveToSidebar', 'Move Chat to Side Bar'),
 				precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), when),
 				f1: true,

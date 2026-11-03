@@ -10,7 +10,7 @@ import { IChatWidgetService, type IChatWidget, type IChatFindController } from '
 import { ChatFindCommandId } from '../widget/chatFind/chatFindCommandIds.js';
 
 export function resolveFocusedChatWidget(widgets: readonly IChatWidget[], lastFocusedWidget: IChatWidget | undefined, isFocusAncestor: (element: HTMLElement) => boolean): IChatWidget | undefined {
-	return widgets.find(widget => widget.visible && isFocusAncestor(widget.domNode)) ?? (lastFocusedWidget?.visible ? lastFocusedWidget : undefined);
+	return widgets.find(widget => widget.visible && widget.getFindController() && isFocusAncestor(widget.domNode)) ?? (lastFocusedWidget?.visible ? lastFocusedWidget : undefined);
 }
 
 export function getFocusedFindController(accessor: ServicesAccessor): IChatFindController | undefined {
@@ -37,10 +37,16 @@ export function registerChatFindActions(): void {
 			let seed: string | undefined;
 			if (editor && widget.domNode.contains(editor.getContainerDomNode())) {
 				const selection = editor.getSelection();
-				if (selection && !selection.isEmpty()) { seed = editor.getModel()?.getValueInRange(selection); }
+				if (selection && !selection.isEmpty()) {
+					const text = editor.getModel()?.getValueInRange(selection);
+					if (text?.trim()) seed = text;
+				}
 			}
 			const selection = widget.domNode.ownerDocument.getSelection();
-			if (!seed && selection?.anchorNode && widget.domNode.contains(selection.anchorNode)) { seed = selection.toString() || undefined; }
+			if (!seed && selection?.anchorNode && widget.domNode.contains(selection.anchorNode)) {
+				const text = selection.toString();
+				if (text.trim()) seed = text;
+			}
 			widget.getFindController()?.show(seed);
 		}
 	});

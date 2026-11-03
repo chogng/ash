@@ -61,7 +61,15 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
 
-添加上下文的已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查和选择均随原输入取消。
+`actions/chatContext.ts` 的 `ChatContextContributions` 随共享窗口入口注册剪贴板图片、截图、会话与工具四个内置来源，并在释放时撤销登记；来源类保持模块私有。Tools 和 Sessions 通过 picker 契约向同一个选择界面提供选项，读取发起操作的输入和会话，不借用最近聚焦的另一份草稿。工具选择保留在原输入的附件模型，图片来源借用 `IChatInputPart.supportsImages()` 判断当前模型的接收能力；窗口注册不持有这些状态。已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查、选择和结果读取均随原输入取消。
+
+新建 Chat 使用共享注册的 `workbench.action.chat.newChat`；菜单、`/new` 与宿主调用共用 `NEW_CHAT_COMMAND_ID`。创建、显示及输入焦点均由窗口导航 owner 负责：IDE 打开原 Chat ViewPane，现代 Agent 委派已有 `sessions.newSession`，沿用当前产品模式及提供方选择策略。移动 Chat 的命令分别为 `workbench.action.chat.openInEditor`、`workbench.action.chat.openInNewWindow` 和 `workbench.action.chat.openInSidebar`，继续由原 host 保存草稿并完成移动。`workbench.action.chat.openWorkspacePicker` 打开最近聚焦输入已有的工作区选择器；选择仍归 Welcome host，隐藏、提交或禁用 AI 时不会打开选择器。
+
+Find 入口优先选择当前聚焦且具有 Find controller 的可见 Chat，再回到最近聚焦的可见 Chat。选区只有包含非空白文本时才作为查询初值，纯空白选区保留已有查询；查找控件、结果和焦点恢复继续由原 `ChatFindWidget` 拥有。
+
+`actions/chatDeveloperActions.ts` 在共享入口注册三个只读诊断命令：`workbench.action.chat.logInputHistory` 分页读取原 Profile 历史，将已提交的 Chat 输入写入窗口日志；`workbench.action.chat.logChatIndex` 刷新原窗口目录后记录 Session、子 Thread 及归档／置顶投影；`workbench.action.chat.inspectChatModel` 从原连接读取聚焦对话的完整 `ThreadRead` 快照，在标准 untitled JSON 编辑器中查看。快照不替代实时模型或保存为会话；连接退役、切换对话或禁用 AI 后，迟到的读取不会打开编辑器。命令不提交草稿、不改变导航或原历史。Trusted CA、Copilot 订阅和模型引用诊断尚无对应领域契约。
+
+`actions/chatPluginActions.ts` 的 `workbench.action.chat.managePlugins` 使用既有 Extensions 打开契约和 `@plugins` 查询，在同一窗口聚焦已安装插件的搜索框。筛选、目录、详情、权限和启用状态继续归 Extensions 及原插件管理服务；重复打开会清除旧查询，Chat 草稿仍由原输入保存。该入口使用 Ash 已确认的插件生态，安装来源和 marketplace 配置尚未接入上游 Chat plugin 契约。
 
 `attachments/chatAttachmentWidgetRegistry.ts` 只拥有窗口内的控件工厂登记。`chatReferenceAttachmentWidget.contribution.ts` 为现有会话引用注册 `ChatReferenceAttachmentWidget`，Code 和 Sessions 在恢复输入前共用这一入口。内联承载层借用工厂创建的 DOM，负责原有模型坐标和文字替换投影，并随引用移除或输入释放销毁控件；工厂不持有草稿或快照。会话控件通过原 `ChatSessionNavigationService` 打开已捕获的 Session／Thread 标识，不重新读取附件内容。Tab 可到达打开和移除按钮，Alt+Enter 在引用处打开会话，按钮上的 Delete／Backspace 和中键触发原模型删除；撤销恢复同一快照。按钮激活不会提交草稿，释放后迟到的打开失败不会复活控件或报告旧错误。其他来源保留各自已有操作。
 
@@ -129,6 +137,8 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 ## 设置、进程归因与窗口邀请
 
+“Chat: Give Model Feedback”使用当前所选模型或聚焦回复的实际模型，打开原问题报告草稿；可检查和编辑内容后再手动提交。已有问题草稿不会被覆盖，不自动附加聊天原文，不记录 Copilot 调查或投票。
+
 `chat.disableAIFeatures` 是 TypeScript UI 的 WINDOW scope boolean 偏好，默认 false，唯一资源是 profile `settings.json`。配置 → `ChatContextKeys.enabled`／model input state → `ChatService` → adapter 共用一条链。禁用阻止 start、queue、steer、Advisor、compaction 和提交说明生成，异步权限读取后再次检查；关闭本窗口活动或待连接 Voice。历史、草稿、停止与已存在 Turn 交互仍归原 owner，重新启用恢复草稿，不改 Rust 权限或停止共享 App Server。底层 Workspace／Folder 支持见 [Configuration](preferences-and-settings.md#configuration-的存储与配置层)，不沿用旧对齐记录中的未迁移状态。
 
 `services/chat/common/chatEntitlementService.ts` 只从该配置投影 `sentiment.hidden`，不保存账号或模型就绪状态。共享的 `browser/chatSetup/chatSetupContributions.ts` 在 Code、Agents 和主题预览中统一更新 `ChatContextKeys.Setup.hidden`／`enabled`；命令面板和模型目录错误提示通过 `workbench.action.chat.triggerSetup` 进入现有模型连接或账号管理。取消、禁用 AI 或关闭窗口释放设置选择器，保留草稿。上游 Copilot 扩展安装、套餐、Microsoft 探测和增长会话没有对应的 Ash 生产调用链，不加入这条配置流程。
@@ -140,6 +150,10 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 邀请 action 捕获精确对话坐标，通过原 openAgentsWindow handoff／ack；成功确认后才清捕获草稿，失败保留重试。选择改变、失焦、AI 禁用、连接退休、reload／关闭、等待审批／输入／capability 均撤回提示。再次邀请同时要求五个新对话与一天；三十天内最近三次 Agents 使用抑制提示，缺日期的旧三次记录也保持抑制。流式 delta 不查询活动，durable invalidation 合并刷新。
 
 ## Speech、听写与朗读
+
+在命令面板运行“Chat: Configure Voice Mode Instructions”或“Chat: Configure Dictation Instructions”，可编辑实际语音后端 Profile 的 `voice.md`／`dictation.md`。两者是 UTF-8 Markdown，最大 64 KiB，使用原编辑器的保存、撤销和冲突处理；外部变更仅在 working copy 存活时观察。新语音会话保留原系统规则并追加 voice.md；听写仅向支持的提供方发送原生识别上下文，当前为 OpenAI 实时转写，不调用额外文字模型。SSH 工作区的现有语音端口由本机后端拥有，因此这里编辑本机语音 Profile。未提供语音端口的宿主隐藏入口。
+
+`chat.shared.contribution.ts` 通过 `registerChatSpeechToTextActions()` 为 Code 和 Sessions 注册听写命令；直接导入 action 模块不注册命令，返回的 store 同时释放这组注册。输入按钮与命令共用 `ToggleChatSpeechToTextAction.ID`，录音准备、会话与文本写回仍沿原听写 owner。
 
 内置语音有两条产品链：听写将麦克风音频交给 ASR，按配置使用本地、云端或订阅后端，只把转写写入当前输入，不自动发送；语音模式将音频交给实时语音大模型并播放回复，需要执行任务时通过原 Chat 模型交给 Core。标准扩展 Speech provider 是可选的听写／朗读后端，语音模式不依赖该扩展。上游 VoiceClient 的私有 transport 兼容不作为这两条内置产品链的前置条件。
 

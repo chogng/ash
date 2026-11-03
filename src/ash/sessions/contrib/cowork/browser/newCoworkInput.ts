@@ -5,6 +5,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IImageEditorService } from '../../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
@@ -76,6 +77,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
 		@ICommandService commands: ICommandService,
+		@IImageEditorService imageEditors: IImageEditorService,
 	) {
 		super(container, {
 			...delegate,
@@ -98,7 +100,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
-		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
+		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');

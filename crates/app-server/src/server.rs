@@ -269,6 +269,9 @@ mod terminal_operations;
 #[path = "server/request_processors/testing.rs"]
 mod testing_operations;
 
+mod speech_instructions;
+#[cfg(test)]
+mod speech_instructions_tests;
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
@@ -3611,6 +3614,18 @@ impl AppServer {
                 cancellation,
             ),
             Some(ClientMethod::NetworkRead) => self.network_processor().network_read(),
+            Some(ClientMethod::SpeechInstructionsRead) => speech_instructions::request(
+                self.home.as_deref(),
+                connection,
+                speech_instructions::Operation::Read,
+                &request.params,
+            ),
+            Some(ClientMethod::SpeechInstructionsWrite) => speech_instructions::request(
+                self.home.as_deref(),
+                connection,
+                speech_instructions::Operation::Write,
+                &request.params,
+            ),
             Some(ClientMethod::NetworkHttpConfigure) => self
                 .network_processor()
                 .network_http_configure(&request.params),

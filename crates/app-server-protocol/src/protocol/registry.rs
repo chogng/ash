@@ -2414,6 +2414,16 @@ use crate::protocol::syntax::SyntaxUpdateParams;
 use ash_protocol::ModelCatalogFreshness;
 
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsDocument;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsWriteResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::SnapshotInfo;
@@ -3881,6 +3891,8 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     VoiceOptions => "voice/options" { params: EmptyParams, response: VoiceOptions, serialization: GlobalSharedRead, },
+    SpeechInstructionsRead => "speech/instructions/read" { params: SpeechInstructionsReadParams, response: SpeechInstructionsDocument, serialization: GlobalSharedRead, },
+    SpeechInstructionsWrite => "speech/instructions/write" { params: SpeechInstructionsWriteParams, response: SpeechInstructionsWriteResult, serialization: GlobalExclusive, },
     VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
     VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
     VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
@@ -6687,6 +6699,11 @@ typescript_bindings! {
     TextDocumentReleaseParams,
     ServerInfo,
     ServerOperatingSystem,
+    SpeechInstructionKind,
+    SpeechInstructionsReadParams,
+    SpeechInstructionsDocument,
+    SpeechInstructionsWriteParams,
+    SpeechInstructionsWriteResult,
     VoiceStartParams,
     VoiceInputControl,
     VoiceInputMode,

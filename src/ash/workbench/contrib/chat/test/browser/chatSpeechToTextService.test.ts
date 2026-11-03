@@ -8,7 +8,6 @@ import { readDictationPreparation, readDictationOptions } from '../../browser/sp
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import '../../browser/chat.shared.contribution.js';
-import '../../browser/actions/chatSpeechToTextActions.js';
 import '../../../speech/browser/speech.contribution.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';

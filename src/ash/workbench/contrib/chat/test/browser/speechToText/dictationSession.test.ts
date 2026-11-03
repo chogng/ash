@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { suite, test, teardown } from 'mocha';
+import { suite, test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { isCancellationError } from '../../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
@@ -13,7 +13,7 @@ import { Selection } from '../../../../../../editor/common/core/selection.js';
 import { NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { ChatSpeechToTextState, IChatSpeechToTextService, type IChatDictationTranscript, type IDictationAccuracyMeasurement, type ChatDictationSurface } from '../../../browser/speechToText/chatSpeechToTextService.js';
 import { activeDictationEditor, cancelDictation, isDictating, notifyDictationSubmitted, onDidChangeDictationEditor, startDictation, stopDictation, stopDictationForEditor } from '../../../browser/speechToText/dictationSession.js';
-import '../../../browser/actions/chatSpeechToTextActions.js';
+import { registerChatSpeechToTextActions } from '../../../browser/actions/chatSpeechToTextActions.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -25,6 +25,9 @@ import { ISpeechService } from '../../../../speech/common/speechService.js';
 import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
 import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
 import { ChatWidgetService } from '../../../browser/widget/chatWidgetService.js';
+
+const commandRegistration = registerChatSpeechToTextActions();
+suiteTeardown(() => commandRegistration.dispose());
 
 class Recognition extends Disposable implements IChatSpeechToTextService {
 	readonly _serviceBrand = undefined;
@@ -240,6 +243,7 @@ function commandFixture() {
 		getSibling: () => undefined,
 		focus: () => { },
 		reveal: () => { },
+		getFileTreeInfosForResponse: () => [], getLastFocusedFileTreeForResponse: () => undefined,
 		focusResponseItem: () => { },
 		startEditing: () => { throw new Error('Unexpected queue editor'); },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },

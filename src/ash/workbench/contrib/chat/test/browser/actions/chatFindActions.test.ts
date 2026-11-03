@@ -16,11 +16,13 @@ registerChatFindActions();
 
 suite('Chat Find commands', () => {
 	test('the focused visible conversation takes precedence over the remembered widget', () => {
-		const first = { visible: true, domNode: {} } as IChatWidget;
-		const second = { visible: true, domNode: {} } as IChatWidget;
+		const first = { visible: true, domNode: {}, getFindController: () => ({}) } as IChatWidget;
+		const second = { visible: true, domNode: {}, getFindController: () => ({}) } as IChatWidget;
 		assert.equal(resolveFocusedChatWidget([first, second], first, root => root === second.domNode), second);
 		assert.equal(resolveFocusedChatWidget([first, second], first, () => false), first);
 		assert.equal(resolveFocusedChatWidget([{ ...first, visible: false }], undefined, () => true), undefined);
+		const unsupported = { ...second, getFindController: () => undefined };
+		assert.equal(resolveFocusedChatWidget([unsupported, first], first, root => root === unsupported.domNode), first);
 	});
 
 	test('Find seeds only a selection belonging to its conversation and dispatches navigation to the same owner', async () => {

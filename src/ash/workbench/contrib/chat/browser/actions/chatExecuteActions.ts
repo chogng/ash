@@ -96,6 +96,26 @@ export class OpenPermissionPickerAction extends Action2 {
 	}
 }
 
+export class OpenWorkspacePickerAction extends Action2 {
+	public static readonly ID = 'workbench.action.chat.openWorkspacePicker';
+
+	constructor() {
+		super({
+			id: OpenWorkspacePickerAction.ID,
+			title: localize2('chat.execute.workspacePicker', 'Chat: Open Workspace Picker'),
+			f1: true,
+			precondition: ChatContextKeys.enabled.isEqualTo(true),
+		});
+	}
+
+	public override run(accessor: ServicesAccessor): void {
+		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+		if (widget?.visible) {
+			widget.input.openWorkspacePicker();
+		}
+	}
+}
+
 export class CancelAction extends Action2 {
 	public static readonly ID = CancelChatActionId;
 	constructor() {
@@ -129,6 +149,7 @@ export function registerChatExecuteActions(): DisposableStore {
 	store.add(registerAction2(OpenModelPickerAction));
 	store.add(registerAction2(OpenModePickerAction));
 	store.add(registerAction2(OpenPermissionPickerAction));
+	store.add(registerAction2(OpenWorkspacePickerAction));
 	store.add(registerAction2(class ResendRequestAction extends Action2 {
 		constructor() {
 			super({ id: 'workbench.action.chat.resendRequest', title: localize2('chat.edit.command', 'Send Edited Request') });

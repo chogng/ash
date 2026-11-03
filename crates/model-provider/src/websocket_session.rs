@@ -44,6 +44,7 @@ impl ModelProviderRuntime {
         connector: &WebSocketConnector,
         limits: WebSocketSessionConfig,
         language: Option<&str>,
+        prompt: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<TranscriptionSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
@@ -72,6 +73,7 @@ impl ModelProviderRuntime {
             model.model.as_str(),
             limits,
             language,
+            prompt,
             cancellation,
         )
         .await

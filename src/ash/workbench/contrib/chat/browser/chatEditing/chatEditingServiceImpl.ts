@@ -8,6 +8,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit, type IBulkEditResult, ResourceEdit, WorkspaceEditConflictError } from '../../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../../editor/common/languages.js';
+import { EditSources } from '../../../../../editor/common/textModelEditSource.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../../nls.js';
 import { IChatEditingService, type IChatEditReviewSession, type IModifiedFileEntry, type IModifiedFileEntryChangeHunk } from '../../common/editing/chatEditingService.js';
@@ -159,7 +160,11 @@ export class ChatEditingService extends Disposable implements IChatEditingServic
 					}
 				}
 			}
-			const result = await this.bulkEdits.apply(edit, { token: signal, showPreview: false });
+			const reason = source.codeBlockSuggestionId ? EditSources.chatApplyEdits({
+				codeBlockSuggestionId: source.codeBlockSuggestionId, sessionId: source.sessionId, requestId: source.turnId,
+				languageId: source.languageId ?? 'plaintext', modelId: undefined, mode: undefined, extensionId: undefined,
+			}) : undefined;
+			const result = await this.bulkEdits.apply(edit, { token: signal, showPreview: false, reason });
 			if (result.isApplied && atomic) {
 				for (const entry of documents) { entry.endAgentEdit(); }
 				documents.clear();

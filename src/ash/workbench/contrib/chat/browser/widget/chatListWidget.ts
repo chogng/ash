@@ -124,6 +124,9 @@ export class ChatListWidget extends DomWidget {
 		return this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId)?.item : undefined;
 	}
 
+	public getFileTreeInfosForResponse(item: IChatListItem) { return this.renderedItems.get(item.id)?.getFileTreeInfos() ?? []; }
+	public getLastFocusedFileTreeForResponse(item: IChatListItem) { return this.renderedItems.get(item.id)?.getLastFocusedFileTree(); }
+
 	public getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined {
 		if (!item) { return type === 'next' ? this.items[0] : this.items.at(-1); }
 		const index = this.items.findIndex(candidate => candidate.id === item.id);

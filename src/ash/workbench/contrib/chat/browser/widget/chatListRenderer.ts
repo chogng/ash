@@ -29,6 +29,7 @@ import { IStorageService, StorageScope } from '../../../../../platform/storage/c
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
+import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
 
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
@@ -52,6 +53,8 @@ const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress
 
 /** Owns one message's DOM, incremental content, actions and disposable resources. */
 export class ChatListItemRenderer extends Disposable {
+	public getFileTreeInfos() { return this.toolPart?.getFileTreeInfos() ?? this.resources.value?.getFileTreeInfos() ?? []; }
+	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	private editButton: Button | undefined;
@@ -261,7 +264,7 @@ export class ChatListItemRenderer extends Disposable {
 			pending = true;
 			status.textContent = '';
 			update();
-			void this.commands.executeCommand<boolean>('workbench.action.chat.markHelpful', target).then(changed => {
+			void this.commands.executeCommand<boolean>(MarkHelpfulActionId, target).then(changed => {
 				if (this.isDisposed || this.item.feedbackSource !== target || !changed) return;
 				status.textContent = localize('chat.response.helpfulSaved', 'Marked helpful in Ash.');
 				const kind = this.configurationService.getValue<ChatUpvoteAnimation>(ChatUpvoteAnimationSettingId) ?? 'floatingThumbs';
@@ -482,6 +485,7 @@ export class ChatListItemRenderer extends Disposable {
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
+				getChatItem: () => this.item,
 				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },

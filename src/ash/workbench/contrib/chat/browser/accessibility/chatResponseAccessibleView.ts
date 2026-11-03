@@ -7,6 +7,7 @@ import type { IAccessibleViewImplementation } from '../../../../../platform/acce
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
+import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
 
 interface ChatResponseSource {
@@ -113,6 +114,16 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 						body = localize('chat.resource.binary', 'Binary resource ({0} bytes)', artifact.data.bytes.length);
 					} else {
 						body = artifact.data.type === 'text' ? artifact.data.text : artifact.data.json;
+						const tree = !artifact.truncated && artifact.source.type !== 'resourceLink'
+							&& artifact.source.type !== 'mcpApp' && artifact.source.type !== 'viewMetadata'
+							&& artifact.data.type === 'json' ? reviveChatTreeData(artifact.data.json) : undefined;
+						if (tree) {
+							const lines = (entry: IChatResponseProgressFileTreeData, depth: number): string[] => [
+								`${'  '.repeat(depth)}${entry.label} · ${entry.uri.toString()}`,
+								...(entry.children ?? []).flatMap(child => lines(child, depth + 1)),
+							];
+							body = lines(tree.treeData, 0).join('\n');
+						}
 					}
 					const metadata = artifact.truncated ? localize('chat.resource.truncated', '{0} · Truncated content', artifact.mimeType) : artifact.mimeType;
 					return [metadata, 'uri' in artifact.source ? artifact.source.uri : '', body].filter(Boolean).join('\n');

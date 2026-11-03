@@ -33,8 +33,9 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		@IViewsService private readonly views: IViewsService,
 	) { }
 
-	createNewConversation(): void {
+	async createNewConversation(): Promise<void> {
 		this.sessions.createUntitledSession();
+		await this.views.focusView(CHAT_VIEW_ID);
 	}
 
 	get revision(): number { return this.sessions.navigationRevision; }

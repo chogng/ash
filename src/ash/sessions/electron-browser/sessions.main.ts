@@ -207,6 +207,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.mediaPreviewStatusBar',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
+					'workbench.contrib.chatSpeechInstructions',
 					'terminalAutoReplies',
 					'terminalTelemetry',
 					'workbench.contrib.settingsChangeRelauncher',

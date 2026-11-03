@@ -21,7 +21,8 @@ import type { ILifecycleService } from '../../../../../services/lifecycle/common
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
-import { ScreenshotContextValuePick } from '../../actions/chatContext.js';
+import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
+import { convertBufferToScreenshotVariable } from '../../attachments/chatScreenshotContext.js';
 import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
@@ -71,6 +72,7 @@ import type { IContextViewService } from '../../../../../../platform/contextview
 import type { ModelCatalogEntry } from '../../../../../services/chat/common/chatService.js';
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
 import { AttachContextAction } from '../../actions/chatContextActions.js';
+import { OpenWorkspacePickerAction } from '../../actions/chatExecuteActions.js';
 import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
@@ -187,6 +189,9 @@ export interface IChatInputPart extends IDisposable {
 	openModelPicker(): void;
 	openModePicker(): void;
 	openPermissionPicker(): void;
+	openWorkspacePicker(): void;
+	/** Current model admission shared with registered image context sources. */
+	supportsImages(): boolean;
 	acceptActiveToolConfirmation(): Promise<void>;
 	skipActiveToolConfirmation(): Promise<void>;
 	acceptElicitation(): void;
@@ -212,7 +217,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly noticeRegistration = this._register(new MutableDisposable());
 	private readonly dictationOnboardingContainer: HTMLElement;
 	private readonly voiceOnboardingContainer: HTMLElement;
-	private readonly screenshotContext: ScreenshotContextValuePick;
 	readonly element: HTMLElement;
 	private readonly history: ChatHistoryNavigator<InputHistoryDraft>;
 	private readonly historySearch = this._register(new MutableDisposable<DisposableStore>());
@@ -234,10 +238,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		run: () => {
 			// The command creates the picker owner only when this composer opens it.
 			this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
-				container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(), getDisabledTools: async () => {
-					const selection = this.contexts.find(attachment => attachment.kind === 'toolSelection');
-					return selection ? JSON.parse((await selection.resolve()).content) as string[] : [];
-				}
+				container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(),
 			});
 			return this.attachContext.value.run(this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button') ?? undefined);
 		},
@@ -328,11 +329,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IChatWidgetService private readonly chatWidgets: IChatWidgetService,
 		@ICommandService private readonly commands: ICommandService,
 		@IChatSlashCommandService private readonly clientCommands: IChatSlashCommandService,
+		@IImageEditorService private readonly imageEditors: IImageEditorService,
 	) {
 		super();
 		// Client commands have their own host-neutral handlers; product and server commands belong to Code.
 		this.slashCommands = new SlashCommandCatalog(delegate.executeServerCommand ? DesktopSlashCommands : [], []);
-		this.screenshotContext = instantiationService.createInstance(ScreenshotContextValuePick);
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
 		this.slashCommands.setClientCommands(clientCommands.getCommands());
@@ -888,9 +889,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const lifecycle = this.inputLifecycle.signal;
 		try {
 			if (!capture && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
-			const source = this.screenshotContext;
 			const attachments = await this.acquireContext(async signal => {
-				const selection = await source.asAttachment(undefined, signal, capture);
+				const image = await (capture ? capture(signal) : this.imageEditors.capture(signal));
+				const selection = image && !signal.aborted ? await convertBufferToScreenshotVariable(image) : undefined;
 				if (selection && !this.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 				return selection ? [selection] : [];
 			}, lifecycle);
@@ -1130,11 +1131,19 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 	}
 
+	public openWorkspacePicker(): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled || this.state.phase === 'submitting') {
+			return;
+		}
+		this.workspaceWidget?.focus();
+		this.workspaceWidget?.show();
+	}
+
 	/** Compose product help inside this provider so registry priority cannot hide it. */
 	protected getAccessibilityHelpContent(): string {
 		return [
-			getChatInputAccessibilityHelp(this.screenshotContext.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand),
-			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
+			getChatInputAccessibilityHelp(this.imageEditors.accessibilityHelp, !!this.secondaryToolbarContainer, !!this.delegate.executeServerCommand || this.clientCommands.getCommands().length > 0),
+			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
 		].filter(Boolean).join('\n');
 	}
@@ -1342,12 +1351,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return draft?.mode;
 	}
 
+	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private parseInput(text: string): SlashCommandInput {
 		const input = parseSlashCommandInput(text, this.slashCommands);
 		return this.delegate.executeServerCommand || input.kind === 'command' && input.binding.origin === 'client' ? input : { kind: 'message', text };
 	}
 
-	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private commandText(text = this.input.value, contexts = this.contexts): string {
 		for (const context of [...contexts].reverse()) {
 			if (context.kind === 'toolSelection' && context.reference) text = text.slice(0, context.reference.start) + text.slice(context.reference.end);
@@ -1519,7 +1528,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.pickerResponsiveLayout.layout();
 	}
 
-	protected supportsImages(): boolean {
+	public supportsImages(): boolean {
 		if (this.state.isAutomaticModel) return true;
 		const selected = this.state.models.find(entry => entry.model.provider === this.state.selectedModel?.provider && entry.model.model === this.state.selectedModel?.model);
 		return selected?.inputModalities == null || selected.inputModalities.includes('image');
@@ -1704,10 +1713,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (delegate) {
 				const owner = this;
 				const picker = this.instantiationService.createInstance(WorkspacePickerActionItem, {
-					id: 'workbench.action.chat.openWorkspacePicker', label: localize('chat.workspace.label', 'Workspace'),
+					id: OpenWorkspacePickerAction.ID, label: localize('chat.workspace.label', 'Workspace'),
 					tooltip: localize('chat.workspace.choose', 'Choose a workspace'), icon: Lxicon.folder,
 					get enabled() { return !owner.state.aiDisabled && owner.state.phase !== 'submitting'; },
-					run: () => picker.show(),
+					run: () => this.openWorkspacePicker(),
 				}, delegate, this.footerChanged.event);
 				this.workspacePresentation.value = this.workspaceWidget = picker;
 				picker.render(this.workspaceHost);

@@ -111,6 +111,8 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 - [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。
 
+- [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。Actions 的移动命令、工作区选择入口及四个内置 context 来源已完成本地迁移，128 项上下文界面回归、36 项最终定向测试和 macOS Electron 键盘流程通过。后续听写显式注册、New Chat／Helpful 命令契约与 Find 行为已通过本地定向测试，新的 New Chat ID 及附件键盘流程也通过 macOS Electron 自托管。 本轮三个诊断命令、Agent 窗口目录服务装配及日志导出共享入口已通过 IDE／Agent Window 两个 Electron/App Server 场景。本轮插件管理入口及 New Chat 的共享注册／窗口焦点委派通过 89 项定向测试和两个 Desktop 场景。只读 VS Code 源码的测试产物已由其原编译工具补齐，官方 Chromium runner 的 105 项 actions／插件入口测试通过；上游真实桌面的 Plugins 查询、重复打开、搜索焦点及未发送草稿四项语义也已补验。其内置 GitHub／Emmet／Git 扩展产物仍不齐，这组通过结果不覆盖插件安装、授权或 marketplace。仍需对 `chatMoveActions`、`chatExecuteActions`、`chatContext`、`chatNewActions`、`chatTitleActions`、`chatFindActions`、`chatSpeechToTextActions`、`chatDeveloperActions` 的完整界面场景复核输入、焦点／选区、换行和主题；完整上游 API／UI 对齐验收仍未完成。
+
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
 
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。

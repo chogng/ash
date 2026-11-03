@@ -10,11 +10,13 @@ import { IChatSideChatService, ChatSideChatService } from '../../../src/ash/work
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
 import { ChatQueuePickerRendering } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatQueuePickerActionItem.js';
-import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
+import { ChatContextContributions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
@@ -155,6 +157,7 @@ declare global {
 		voiceInputState(): { starts: number; stops: number; muted: boolean; dictationCancelled: number; };
 		isDictationReady(): boolean;
 		setVoiceAvailable(available: boolean): void;
+		openWorkspace(): Promise<unknown>;
 		showIntroduction(): void;
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
@@ -832,13 +835,25 @@ let inlineEditor: ChatInputEditor | undefined;
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;
 const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
 
+const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefined>());
+let selectedWorkspace: IWorkspacePickerItem | undefined;
+const workspaceChoices = [{ uri: URI.file('/fixture/workspace'), label: 'Fixture workspace', isFolder: true }];
 let part!: ChatInputPart;
 part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
+	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
+		getWorkspaces: () => workspaceChoices,
+		getSelectedWorkspace: () => selectedWorkspace,
+		setSelectedWorkspace: (workspace: IWorkspacePickerItem | undefined) => { selectedWorkspace = workspace; workspaceChanged.fire(workspace); },
+		onDidChangeSelectedWorkspace: workspaceChanged.event,
+		onDidChangeWorkspaces: Event.None,
+		openFolderCommand: 'workbench.action.files.openFolder',
+	} : undefined,
 }));
+resources.add(services.createInstance(ChatContextContributions));
 if (new URLSearchParams(location.search).has('notices')) {
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
@@ -1029,6 +1044,7 @@ window.ashChatInputIntegration = {
 	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
 	hostCompletionRequests: () => [...hostCompletionRequests],
 	setInputReadOnly: readOnly => inlineEditor!.setReadOnly(readOnly),
+	openWorkspace: async () => services.invokeFunction(CommandsRegistry.getCommand(OpenWorkspacePickerAction.ID)!),
 	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
 	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
 	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),

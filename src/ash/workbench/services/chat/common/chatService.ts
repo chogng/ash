@@ -1,4 +1,5 @@
 import { URI } from '../../../../base/common/uri.js';
+import type { EditSuggestionId } from '../../../../editor/common/textModelEditSource.js';
 import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
@@ -67,6 +68,9 @@ export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../
 export interface ChatEditSource {
 	readonly threadId: ThreadId;
 	readonly turnId: string;
+	readonly sessionId?: SessionId;
+	readonly codeBlockSuggestionId?: EditSuggestionId;
+	readonly languageId?: string;
 }
 
 export type ChatEditOutcome = 'completed' | 'failed' | 'interrupted';

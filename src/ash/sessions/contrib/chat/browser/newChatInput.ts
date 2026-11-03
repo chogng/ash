@@ -4,6 +4,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IImageEditorService } from '../../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
@@ -64,6 +65,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IActionViewItemService presentations: IActionViewItemService,
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
+		@IImageEditorService imageEditors: IImageEditorService,
 		@ICommandService commands: ICommandService,
 		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
@@ -74,7 +76,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),
-		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
+		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors);
 		const footer = this.inputFooter!;
 		const owner = this;
 		const permissionHost = h(container.ownerDocument, 'div');

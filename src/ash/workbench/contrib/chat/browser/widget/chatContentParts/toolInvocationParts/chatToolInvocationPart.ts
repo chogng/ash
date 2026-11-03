@@ -17,6 +17,8 @@ import { ChatCollapsibleInputOutputContentPart } from '../chatToolInputOutputCon
 
 /** A view of one backend call; it never starts a tool or infers success from a closed Turn. */
 export class ChatToolInvocationPart extends Disposable {
+	public getFileTreeInfos() { return this.resources.value?.getFileTreeInfos() ?? []; }
+	public getLastFocusedFileTree() { return this.resources.value?.getLastFocusedFileTree(); }
 	public readonly domNode: HTMLElement;
 	public readonly toolCallId: string;
 	private readonly details: HTMLDetailsElement;

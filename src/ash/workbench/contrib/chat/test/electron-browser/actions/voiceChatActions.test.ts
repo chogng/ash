@@ -145,6 +145,7 @@ suite('Desktop built-in Voice Mode command', () => {
 			getSibling: () => undefined,
 			focus: () => { },
 			reveal: () => { },
+			getFileTreeInfosForResponse: () => [], getLastFocusedFileTreeForResponse: () => undefined,
 			focusResponseItem: () => { },
 			startEditing: () => { throw new Error('Unexpected queue editor'); },
 			startVoiceConversation: async () => { starts++; },

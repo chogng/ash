@@ -11,12 +11,21 @@ import { Editor } from '../../../automation/editor.js';
 // The same renderer interaction is exercised in Browser, Electron UI and connected Electron.
 test('Workbench context picker uploads, previews and removes attachments with the keyboard', async ({ workbench }) => {
 	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.chat.newChat');
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	const add = chat.getByRole('button', { name: 'Add context', exact: true });
 	await add.press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Search attachments', exact: true })).toBeVisible();
+	for (const name of ['Image from Clipboard', 'Screenshot…', 'Sessions…']) {
+		await expect(page.getByRole('dialog').getByRole('option', { name, exact: true })).toBeVisible();
+	}
+	await page.getByRole('dialog').getByRole('combobox').fill('Sessions');
+	await page.getByRole('dialog').getByRole('combobox').press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Select a session', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: 'Search attachments', exact: true })).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();

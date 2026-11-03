@@ -2,8 +2,9 @@ import { ISymphonyBackendService } from '../../platform/symphony/common/symphony
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
-import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
+import { IAgentSessionActionsService, IAgentSessionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
+import { ChatHistoryModel } from './chatHistoryModel.js';
 import { Menus } from './menus.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { StatusbarService } from '../../workbench/browser/parts/statusbar/statusbarPart.js';
@@ -136,13 +137,12 @@ import { ICustomViewService } from '../services/customView/browser/customViewSer
 import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
 import { ISessionsProvidersService } from '../services/sessions/browser/sessionsProvidersService.js';
 import { IChatSessionNavigationService } from '../../workbench/services/chat/common/chatSessionNavigationService.js';
-import '../../workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import '../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/common/dictation.js';
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
-import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
+import { ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -294,6 +294,9 @@ import { PreferencesService } from '../../workbench/services/preferences/browser
 import '../../workbench/services/quickinput/browser/quickInputService.js';
 import { WorkbenchWindow } from '../../workbench/browser/window.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
+import { IIssueReporterService } from '../../platform/issue/common/issue.js';
+import { IIssueFormService } from '../../workbench/contrib/issue/common/issue.js';
+import { IssueFormService } from '../../workbench/contrib/issue/browser/issueFormService.js';
 import { IGitHubService } from '../../platform/github/common/githubService.js';
 import { GitHubConnectionService } from '../../workbench/services/accounts/browser/gitHubConnectionService.js';
 import { IGitHubConnectionService } from '../../workbench/services/accounts/common/gitHubConnectionService.js';
@@ -536,6 +539,7 @@ export abstract class Workbench extends Disposable {
 		const chat = this._register(primaryHostServices.createInstance(ChatService));
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
+		services.registerSingleton(IAgentSessionsService, () => services.createInstance(ChatHistoryModel));
 		const workspace = configurationService;
 		this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace, (next: IWorkspace) => workspace.updateWorkspace(next)));
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -588,6 +592,8 @@ export abstract class Workbench extends Disposable {
 		primaryHostServices.registerInstance(IChatService, chat);
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
+		services.registerInstance(IIssueReporterService, options.api.issueReporter);
+		services.registerSingleton(IIssueFormService, () => services.createInstance(IssueFormService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		primaryHostServices.registerInstance(ILanguageModelsService, this._register(primaryHostServices.createInstance(LanguageModelsService)));
 		services.registerInstance(IInstructionService, options.api.instructions);
@@ -858,7 +864,7 @@ export abstract class Workbench extends Disposable {
 		updateSessionsPart();
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		services.registerInstance(IChatSessionNavigationService, {
-			createNewConversation: async () => { await commandService.executeCommand(NewSessionsChatAction.ID); },
+			createNewConversation: async () => { await commandService.executeCommand('sessions.newSession'); },
 			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => {

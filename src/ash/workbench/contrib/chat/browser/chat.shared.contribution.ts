@@ -5,6 +5,18 @@ import { IChatSlashCommandService, ChatSlashCommandService } from '../common/par
 import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
 import { PanelChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
+import { registerChatSpeechToTextActions } from './actions/chatSpeechToTextActions.js';
+import { registerChatDeveloperActions } from './actions/chatDeveloperActions.js';
+import { registerChatPluginActions } from './actions/chatPluginActions.js';
+import { registerCreatePluginAction } from './actions/createPluginAction.js';
+import { registerLanguageModelActions } from './actions/chatLanguageModelActions.js';
+import { registerConfigureSpeechInstructionsActions } from './actions/configureVoiceInstructionsAction.js';
+import { registerChatModelFeedbackSurveyActions } from './actions/chatModelFeedbackSurveyActions.js';
+import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
+import { registerNewChatActions } from './actions/chatNewActions.js';
+import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ChatContextContributions } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -66,6 +78,8 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './chatManagement/chatManagement.contribution.js';
 import { IChatEditingService } from '../common/editing/chatEditingService.js';
+import './chatEditing/chatEditingEditorActions.js';
+import { CodeMapperService, ICodeMapperService } from '../common/editing/chatCodeMapperService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
 import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/notices/chatInputNoticeHub.js';
@@ -84,8 +98,9 @@ import { ChatEntitlementService, IChatEntitlementService } from '../../../servic
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
-// Both renderer hosts use these primitives; each host registers its own New and History actions.
+// Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
 registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
@@ -114,6 +129,16 @@ registerQuickChatActions();
 registerChatFindActions();
 registerChatPromptNavigationActions();
 registerChatExecuteActions();
+registerChatSpeechToTextActions();
+registerChatDeveloperActions();
+registerChatPluginActions();
+registerCreatePluginAction();
+registerLanguageModelActions();
+registerConfigureSpeechInstructionsActions();
+registerChatModelFeedbackSurveyActions();
+registerChatFileTreeActions();
+registerNewChatActions();
+registerAction2(ExportAgentHostDebugLogsAction);
 registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
@@ -183,6 +208,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 	},
 }]);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatContextContributions.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatContextContributions));
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentWidgetRegistry, ChatAttachmentWidgetRegistry, InstantiationType.Delayed);

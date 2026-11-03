@@ -768,7 +768,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		const newChat = async (): Promise<void> => {
 			const previous = await composer().getAttribute('data-untitled-session-id');
 			if (host === 'Sessions') { await page.locator('[data-action-id="sessions.newSession"] button').click(); }
-			else { await new QuickAccess(page).runCommand('workbench.action.chat.new'); }
+			else { await new QuickAccess(page).runCommand('workbench.action.chat.newChat'); }
 			await expect(composer()).toHaveAttribute('data-untitled-session-id', /.+/);
 			await expect(composer()).not.toHaveAttribute('data-untitled-session-id', previous!);
 		};

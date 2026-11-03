@@ -10,7 +10,7 @@ import { KeybindingsRegistry, KeybindingRuleKind } from '../../../../../../platf
 import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
 import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
-import { ChatSubmitAction, CancelAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
+import { ChatSubmitAction, CancelAction, OpenModelPickerAction, OpenModePickerAction, OpenPermissionPickerAction, OpenWorkspacePickerAction, registerChatExecuteActions } from '../../../browser/actions/chatExecuteActions.js';
 
 const registration = registerChatExecuteActions();
 suiteTeardown(() => registration.dispose());
@@ -63,14 +63,16 @@ suite('Chat execution commands', () => {
 		const widget = {
 			visible: true, input: {
 				openModelPicker: () => calls.push('model'), openModePicker: () => calls.push('mode'), openPermissionPicker: () => calls.push('permission'),
+				openWorkspacePicker: () => calls.push('workspace'),
 			}
 		} as unknown as IChatWidget;
 		services.registerInstance(IChatWidgetService, { lastFocusedWidget: widget } as unknown as IChatWidgetService);
-		for (const id of [OpenModelPickerAction.ID, OpenModePickerAction.ID, OpenPermissionPickerAction.ID]) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
-		assert.deepEqual(calls, ['model', 'mode', 'permission']);
+		const ids = [OpenModelPickerAction.ID, OpenModePickerAction.ID, OpenPermissionPickerAction.ID, OpenWorkspacePickerAction.ID];
+		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
+		assert.deepEqual(calls, ['model', 'mode', 'permission', 'workspace']);
 		Object.assign(widget, { visible: false });
-		for (const id of [OpenModelPickerAction.ID, OpenModePickerAction.ID, OpenPermissionPickerAction.ID]) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
-		assert.equal(calls.length, 3);
+		for (const id of ids) await services.invokeFunction(CommandsRegistry.getCommand(id)!);
+		assert.equal(calls.length, 4);
 	});
 
 	test('picker shortcuts apply only inside the Chat input', () => {

@@ -156,7 +156,6 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
-import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 
@@ -210,7 +209,6 @@ function createInputServices(
 	services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	registerTestDictationOnboarding(services);
 	// Command actions validate membership against the registry that owns this composer.
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));

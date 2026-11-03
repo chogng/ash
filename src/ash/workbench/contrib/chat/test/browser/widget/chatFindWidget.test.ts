@@ -15,6 +15,7 @@ import { IAccessibilityService } from '../../../../../../platform/accessibility/
 import { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import { ChatFindWidget, findMatchRangesInDom, type IChatFindHost } from '../../../browser/widget/chatFind/chatFindWidget.js';
+import { ChatFindCommandId } from '../../../browser/widget/chatFind/chatFindCommandIds.js';
 
 suite('ChatFindWidget', () => {
 	function fixture(resources: DisposableStore) {
@@ -211,6 +212,29 @@ suite('ChatFindWidget', () => {
 
 suite('Chat Find browser presentation', () => {
 	const browserTests = useBrowserTests();
+
+	test('opening Find on whitespace preserves its previous query and returns focus to the search input', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.renderItems([
+				{ id: 'query-source', type: 'agentMessage', text: 'needle    other', transient: false },
+			]);
+			window.ashChatTranscriptIntegration.showFind('needle');
+		});
+		await page.locator('.ash-chat-find input').press('Escape');
+		await page.locator('[data-item-id="query-source"] p').evaluate(element => {
+			const range = element.ownerDocument.createRange();
+			range.setStart(element.firstChild!, 6);
+			range.setEnd(element.firstChild!, 10);
+			const selection = element.ownerDocument.getSelection()!;
+			selection.removeAllRanges();
+			selection.addRange(range);
+		});
+		await page.evaluate(command => window.ashChatTranscriptIntegration.runNavigationCommand(command), ChatFindCommandId.Find);
+		await expect(page.locator('.ash-chat-find input')).toHaveValue('needle');
+		await expect(page.locator('.ash-chat-find input')).toBeFocused();
+	});
 
 	test('highlights rendered text across formatting, excludes link destinations and preserves message DOM', async () => {
 		const { page } = browserTests;

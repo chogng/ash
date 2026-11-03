@@ -42,6 +42,8 @@ export function createTestDictationBackend(owner: DisposableStore, capture: Test
 	const sessions = new Map<string, { handle: Promise<TestDictationSession>; text?: string; cancelling?: Promise<void>; }>();
 	return {
 		isConnected: true, onDidChangeConnection: Event.None, onDidTranscribe: transcript.event, onDidEnd: ended.event,
+		readInstructions: async () => { throw new Error('This recording fixture does not provide Profile instructions'); },
+		writeInstructions: async () => { throw new Error('This recording fixture does not provide Profile instructions'); },
 		getOptions: capture.getOptions ?? (async () => ({ inputDevices: [], languages: [] })),
 		start: async (resourceId, options) => {
 			const entry = {

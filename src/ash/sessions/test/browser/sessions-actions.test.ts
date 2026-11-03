@@ -13,7 +13,6 @@ import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from '../../brow
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ISessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../sessions/services/sessions/common/session.js';
@@ -138,6 +137,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	using services = new InstantiationService();
 	const created: Array<string | undefined> = [];
 	const opened: string[] = [];
+	const focus: string[] = [];
 	const input = new TestQuickInputService(['Remote']);
 	services.registerInstance(IQuickInputService, input);
 	services.registerInstance(ISessionsProvidersService, {
@@ -151,16 +151,20 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
-	let focused = false;
-	services.registerInstance(IViewsService, { focusView: async () => { focused = true; return true; } } as unknown as IViewsService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as unknown as ISessionsLayoutService);
+	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
+	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IChatSessionNavigationService, {
-		createNewConversation: async () => { await commands.executeCommand(NewSessionsChatAction.ID); },
+		createNewConversation: async () => { await commands.executeCommand('sessions.newSession'); },
 		showConversationHistory: () => commands.executeCommand(ShowSessionsChatHistoryAction.ID),
 	} as unknown as IChatSessionNavigationService);
-	assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), true);
+	assert.equal(NEW_CHAT_COMMAND_ID, 'workbench.action.chat.newChat');
+	assert.equal(await commands.executeCommand('workbench.action.chat.newChat'), true);
 	assert.deepEqual(created, ['remote']);
-	assert.equal(focused, true);
+	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);
 	input.picker!.acceptFirst();

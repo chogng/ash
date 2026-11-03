@@ -44,6 +44,8 @@ export interface IChatWidgetViewOptions {
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
+	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
 	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
@@ -72,6 +74,12 @@ export interface IChatWidget {
 	startVoiceConversation(): Promise<void>;
 	/** Prepares references within this composer’s draft lifetime and admission rules. */
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+}
+
+export interface IChatFileTreeInfo {
+	readonly treeDataId: string;
+	readonly treeIndex: number;
+	focus(): void;
 }
 
 export interface IChatFindController {

@@ -1,0 +1,11 @@
+.ash-chat-file-tree {
+	min-width: 0;
+	margin-block: var(--ash-spacing-size40);
+}
+
+.ash-chat-file-tree-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

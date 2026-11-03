@@ -58,6 +58,8 @@ pub struct CloudDictationRequest {
     pub connector: WebSocketConnector,
     pub input_device: Option<String>,
     pub language: Option<String>,
+    /// Native recognition context, captured from the Profile before opening the audio session.
+    pub prompt: Option<String>,
 }
 
 /// Subscription authority is admitted before capture and rechecked before upload and delivery.

@@ -1,4 +1,4 @@
-import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { isChatResponseFeedbackTarget, markResponseHelpful } from '../../common/chatResponseFeedback.js';
@@ -7,10 +7,12 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { IChatWidgetService } from '../chat.js';
 
-export function registerChatTitleActions(): IDisposable {
+export const MarkHelpfulActionId = 'workbench.action.chat.markHelpful';
+
+export function registerChatTitleActions(): DisposableStore {
 	const registrations = new DisposableStore();
 	registrations.add(registerAction2(class MarkHelpfulAction extends Action2 {
-		constructor() { super({ id: 'workbench.action.chat.markHelpful', title: localize2('chat.response.helpful', 'Helpful') }); }
+		constructor() { super({ id: MarkHelpfulActionId, title: localize2('chat.response.helpful', 'Helpful') }); }
 		override run(accessor: ServicesAccessor, target?: unknown): boolean {
 			if (!isChatResponseFeedbackTarget(target)) throw new TypeError(localize('chat.response.feedbackInvalid', 'A completed Chat response is required.'));
 			return markResponseHelpful(accessor.get(IStorageService), target);

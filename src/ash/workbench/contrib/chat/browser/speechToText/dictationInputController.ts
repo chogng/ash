@@ -25,6 +25,7 @@ import { ISpeechService } from '../../../speech/common/speechService.js';
 import { localize } from '../../../../../nls.js';
 
 import { readDictationPreparation } from './dictationInput.js';
+import { ToggleChatSpeechToTextAction } from '../actions/chatSpeechToTextActions.js';
 /** The target editor owns text and undo history; interim recognition stays outside its model. */
 interface DictationTarget { readonly codeEditor?: ICodeEditor; insertText(text: string): void; focus(): void; }
 
@@ -47,7 +48,7 @@ export class DictationInput extends Disposable {
 		const active = this.isActive;
 		const label = active ? localize('chat.input.dictationStop', 'Stop dictation') : localize('chat.input.dictate', 'Dictate message');
 		return new DictationInputAction({
-			id: 'workbench.action.chat.toggleSpeechToText', title: label, icon: active ? Lxicon.stopCircle : Lxicon.mic,
+			id: ToggleChatSpeechToTextAction.ID, title: label, icon: active ? Lxicon.stopCircle : Lxicon.mic,
 			tooltip: active || this.isAvailable ? label : localize('chat.input.dictationUnavailable', 'Dictation is unavailable'),
 			precondition: this.isAvailable && (!this.service.isBusy || active) && !this.isStarting && this.service.state !== ChatSpeechToTextState.Transcribing ? ContextKeyExpr.true() : ContextKeyExpr.false(),
 			toggled: active && this.service.state === ChatSpeechToTextState.Recording ? ContextKeyExpr.true() : ContextKeyExpr.false(),

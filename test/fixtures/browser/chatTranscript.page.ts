@@ -1,6 +1,6 @@
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
-import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -104,7 +104,6 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
-import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -212,6 +211,8 @@ if (builtinBackend) {
 	};
 	const cancel = async (resourceId: string) => { retiredBuiltinResource = resourceId; builtinOperations.push('cancel'); };
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, {
+		readInstructions: async () => { throw new Error('This transcript fixture does not provide Profile instructions'); },
+		writeInstructions: async () => { throw new Error('This transcript fixture does not provide Profile instructions'); },
 		isConnected: true, onDidChangeConnection: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None,
 		getOptions: async () => ({ inputDevices: [], languages: [] }), start, stop, cancel,
 		pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${atob(audio).length}`); },
@@ -825,14 +826,15 @@ window.ashChatTranscriptIntegration = {
 	runNavigationCommand: async command => {
 		const widget = {
 			visible: true, domNode: list.element,
+			getFindController: (): ReturnType<IChatWidget['getFindController']> => list.getFindController(),
 			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
 			focusCodeBlock: (reverse?: boolean) => list.focusCodeBlock(reverse),
 			getFocus: () => list.getFocus(),
-			getSibling: (item, type) => list.getSibling(item, type),
-			focus: item => list.focus(item),
-			reveal: item => list.reveal(item),
-		} as IChatWidget;
-		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget } as IChatWidgetService]));
+			getSibling: (item: IChatListItem | undefined, type: 'next' | 'previous') => list.getSibling(item, type),
+			focus: (item: IChatListItem) => list.focus(item),
+			reveal: (item: IChatListItem) => list.reveal(item),
+		} as unknown as IChatWidget;
+		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget, getAllWidgets: () => [widget] } as unknown as IChatWidgetService]));
 		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },

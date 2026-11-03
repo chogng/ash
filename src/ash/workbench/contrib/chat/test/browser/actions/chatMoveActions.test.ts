@@ -26,6 +26,8 @@ test('Workbench move commands invoke the registered host without a Sessions impl
 	services.registerInstance(IViewsService, {
 		openView: async (id: string) => { assert.equal(id, CHAT_VIEW_ID); return host; },
 	} as unknown as IViewsService);
+	assert.equal(MOVE_CHAT_TO_EDITOR_COMMAND_ID, 'workbench.action.chat.openInEditor');
+	assert.equal(MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, 'workbench.action.chat.openInNewWindow');
 	await services.invokeFunction(CommandsRegistry.getCommand(MOVE_CHAT_TO_EDITOR_COMMAND_ID)!);
 	await services.invokeFunction(CommandsRegistry.getCommand(MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID)!);
 	assert.deepEqual(calls, ['editor', 'window']);
@@ -49,7 +51,7 @@ test('Returning Chat to the sidebar captures the draft and cancels when navigati
 	services.registerInstance(IViewsService, {
 		focusView: async (id: string) => { assert.equal(id, CHAT_VIEW_ID); calls.push('focus'); },
 	} as unknown as IViewsService);
-	const command = CommandsRegistry.getCommand('workbench.action.chat.moveToSideBar')!;
+	const command = CommandsRegistry.getCommand('workbench.action.chat.openInSidebar')!;
 	const moving = services.invokeFunction(command);
 	revision++;
 	await pending.complete();

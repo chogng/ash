@@ -204,6 +204,18 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	return part;
 }
 
+test('An explicit empty screenshot capture never opens the manual image editor or changes the draft', async () => {
+	using notifications = new TestNotificationService();
+	using part = inputPart(notifications);
+	part.appendToDraft('Keep the screenshot draft');
+	let captures = 0;
+	await part.captureScreenshot(async () => { captures++; return undefined; });
+	assert.equal(captures, 1);
+	assert.equal(part.attachmentModel.size, 0);
+	assert.equal((await part.captureDraft())?.draft.text, 'Keep the screenshot draft');
+	assert.deepEqual(notifications.model.getNotifications(), []);
+});
+
 test('Chat working logo follows the current input state without replacing the status text or mark', () => {
 	using part = inputPart(sharedNotifications);
 	const ready: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };

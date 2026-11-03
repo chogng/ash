@@ -32,6 +32,7 @@ impl TranscriptionSession {
         model: &str,
         limits: WebSocketSessionConfig,
         language: Option<&str>,
+        prompt: Option<&str>,
         cancellation: &CancellationToken,
     ) -> Result<Self, ApiError> {
         if model != "gpt-live-transcribe" {
@@ -40,7 +41,7 @@ impl TranscriptionSession {
             ));
         }
         let mut url = crate::websocket::bound_url(target, "realtime")?;
-        url.query_pairs_mut().append_pair("model", model);
+        url.query_pairs_mut().append_pair("intent", "transcription");
         let request = WebSocketRequest::new(
             url.as_str(),
             ash_client::merge_headers(target.headers().to_vec(), Vec::new())?,
@@ -61,6 +62,9 @@ impl TranscriptionSession {
         let mut transcription = json!({ "model": model });
         if let Some(language) = language {
             transcription["languages"] = json!([language]);
+        }
+        if let Some(prompt) = prompt {
+            transcription["prompt"] = json!(prompt);
         }
         socket
             .send(
