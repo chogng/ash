@@ -111,6 +111,9 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Sessions · TODO
 
+- [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
+- [ ] **New Environment · Windows SSH 变量验收** · Windows 11 23H2 实机已验证账户沙箱管理员初始化和同一 Remote 连接重新读取就绪状态。窗口站修复版已原生构建。计划任务与真实 SSH 均复现账户沙箱 logon worker 在接通标准流前以 `0xC0000142` 退出，配置环境的会话未能启动 PowerShell。临时账户、服务和安装目录已清理。需修复非交互窗口站下的 worker 启动，再重跑两个会话的变量对照。实机日志在 `.build/windows-remote/env-acceptance/windows-account-sandbox-e2e-ssh-shell.log`。
+
 ### Artifact Integrations
 
 - [ ] **Artifact Integrations** · 对照 VS Code `0dc300b2c77` 的 `src/vs/platform/artifactIntegrations`。Changes 直接创建的 GitHub PR 已记录为会话产物。Sessions 从存储投影通用记录，按 provider／Session／产物／集成绑定操作，经显式选择调用 GitHub 合并或 GitHub 托管的自动合并。Agent 可记录 PR 产物，App Server 保存来源 Thread／Turn 和一次性的记录身份。PR Autopilot 的 CI 修复由既有 Automations owner 保存授权与运行历史，移除产物后旧身份失效。仍需通用集成注册与 provider 生命周期、手动原生动作的持久运行与结果对账、通用详情和 prompt 动作，以及真实 GitHub 测试仓库的写入与重连验收。
