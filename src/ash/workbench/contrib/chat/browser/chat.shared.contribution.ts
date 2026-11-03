@@ -237,12 +237,13 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Con
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
+registerWorkbenchContribution(ChatStatusBarEntry.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(ChatStatusBarEntry));
+
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.AutoExpandToolFailures,
 	defaultValue: true,
 	scope: ConfigurationScope.WINDOW,
-registerWorkbenchContribution(ChatStatusBarEntry.ID, WorkbenchPhase.BlockRestore,
-	accessor => accessor.get(IInstantiationService).createInstance(ChatStatusBarEntry));
 	schema: { type: 'boolean' },
 	parse(value: unknown): boolean {
 		if (typeof value === 'boolean') { return value; }
