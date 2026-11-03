@@ -4533,7 +4533,7 @@ test('Audio history identifies the sender and recording duration', () => {
 	assert.equal(list.element.querySelector('.ash-chat-item-label')!.textContent, 'You');
 	assert.equal(list.element.querySelector('figcaption')!.textContent, 'Audio (2 seconds)');
 	assert.equal(list.element.querySelector('audio')!.controls, true);
-	assert.equal(list.element.querySelector('button')!.textContent, 'Load audio');
+	assert.equal(list.element.querySelector('.ash-chat-item button')!.textContent, 'Load audio');
 	dom.window.close();
 });
 

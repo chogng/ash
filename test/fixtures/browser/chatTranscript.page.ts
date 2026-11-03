@@ -344,7 +344,12 @@ let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
-const listOptions = { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
+const listOptions = {
+	promptTimelineFiles: new URLSearchParams(location.search).has('promptTimeline')
+		? (prompt: IChatListItem) => prompt.id === 'second' ? [{
+			id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
+		}] : [] : undefined,
+	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));
 list.setVisible(true);
@@ -630,6 +635,7 @@ declare global {
 			setCodeLineHeight(height: number): Promise<void>;
 			setAutoExpandToolFailures(value: boolean): Promise<void>;
 			setTypography(values: Readonly<Record<string, string | number | undefined>>): Promise<void>;
+			setPromptTimeline(value: 'off' | 'gutter' | 'ruler'): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
 			showHistoryPagination(fail?: boolean): void;
@@ -823,6 +829,7 @@ window.ashChatTranscriptIntegration = {
 	setTypography: async values => {
 		for (const [key, value] of Object.entries(values)) await services.get(IConfigurationService).updateValue(key, value);
 	},
+	setPromptTimeline: value => services.get(IConfigurationService).updateValue('sessions.chatTimeline.display', value),
 	setTheme: value => {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : value === 'hcLight' ? highContrastLightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);

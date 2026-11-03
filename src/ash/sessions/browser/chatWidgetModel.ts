@@ -1,3 +1,4 @@
+import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
 import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../base/common/async.js';
@@ -346,6 +347,16 @@ export class ChatWidgetModel extends Disposable {
 
 	turnChangeDetails(changeSetId: string): TurnChangeDetails | undefined {
 		return this.changeDetails.get(changeSetId);
+	}
+
+	async createPromptChangeReview(summary: TurnChangeSetSummary, path: string) {
+		const active = this.activeSession;
+		if (!active || active.session.sessionId !== summary.sessionId || active.threadId !== summary.threadId) return undefined;
+		const operation = this.captureOperation();
+		const input = await createTurnMultiDiffEditorInput(this.chatService, active, 'currentTurn', [summary.changeSetId]);
+		this.requireCurrentOperation(operation);
+		const item = input.items.find(item => item.modified.resource.path === `/${summary.changeSetId}/${path}`);
+		return item ? { input, item } : undefined;
 	}
 
 	async generateChangeMessage(changeSet: TurnChangeSetSummary): Promise<void> {

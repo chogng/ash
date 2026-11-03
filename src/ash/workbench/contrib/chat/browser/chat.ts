@@ -1,3 +1,4 @@
+import type { PromptFileDiff } from './promptTimeline/promptTimelineModel.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
@@ -48,6 +49,7 @@ export interface IWorkspacePickerDelegate {
 
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
+	readonly promptTimelineFiles?: (prompt: IChatListItem) => readonly PromptFileDiff[];
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }

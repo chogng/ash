@@ -1,3 +1,4 @@
+import './promptTimeline/promptTimeline.contribution.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
 import './contextContrib/chatContext.contribution.js';
 import { ChatSideChatProvider } from './chatSideChat.js';

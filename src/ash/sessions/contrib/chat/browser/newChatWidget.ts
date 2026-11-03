@@ -1,3 +1,5 @@
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { h } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -45,6 +47,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IEditorService editors: IEditorService,
 	) {
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
@@ -70,7 +73,30 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 						throw error;
 					}
 				},
-			}, model), undefined, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+			}, model), {
+			promptTimelineFiles: prompt => {
+				const source = prompt.requestSource;
+				if (!source || source.sessionId !== model.sessionId || source.threadId !== model.threadId) return [];
+				return model.changeSets.filter(summary => summary.turnId === source.turnId && summary.captureState !== 'discarded')
+					.flatMap(summary => model.turnChangeDetails(summary.changeSetId)?.files.map(file => ({
+						id: JSON.stringify([summary.changeSetId, file.path]),
+						path: file.path,
+						review: async () => {
+							try {
+								const review = await model.createPromptChangeReview(summary, file.path);
+								if (!review) return;
+								await editors.openEditor(review.input, {
+									pinned: true, viewState: {
+										revealData: { resource: { original: review.item.original.resource, modified: review.item.modified.resource } },
+									}
+								});
+							} catch (error) {
+								if (!isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
+							}
+						},
+					})) ?? []);
+			},
+		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;

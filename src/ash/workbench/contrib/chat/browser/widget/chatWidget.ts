@@ -218,6 +218,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}));
 		}
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			promptTimelineFiles: this.viewOptions?.promptTimelineFiles,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			getHistoryState: () => this.model.olderHistory,
 			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
