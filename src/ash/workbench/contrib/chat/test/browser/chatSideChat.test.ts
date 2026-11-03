@@ -11,7 +11,8 @@ import { IAgentThreadService } from '../../../../../platform/agentHost/common/ag
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IChatWidgetService, type IChatWidget } from '../../browser/chat.js';
-import { ChatSideChatProvider, captureSideChatSelection } from '../../browser/chatSideChat.js';
+import { captureSideChatSelection } from '../../browser/chatSideChat.js';
+import { ChatSideChatProvider } from '../../browser/chatSideChatProvider.js';
 import { BtwSlashCommandContribution } from '../../browser/btwSlashCommand.js';
 import { IChatSideChatService, ChatSideChatService, type IChatSideChatOrigin, type IChatSideChatProvider } from '../../common/chatSideChatService.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
@@ -81,6 +82,67 @@ test('Side Chat origin is read from the backend model, including on a restored b
 	assert.equal(origin.sourceTitle, 'Source title');
 	assert.equal(origin.sourceTurnId, 'turn-source');
 	assert.deepEqual(origin.selection, { text: 'original selection' });
+});
+
+function addSideChat(f: ReturnType<typeof fixture>, sourceTurnId: string): void {
+	const source = f.widget.model!;
+	f.widgets.push({
+		...f.widget,
+		threadId: 'side',
+		model: {
+			...source,
+			thread: {
+				...source.thread!,
+				origin: {
+					type: 'sideChat',
+					parentThreadId: 'source',
+					parentSequence: 4,
+					sourceTurnId,
+					contextThreadId: 'context',
+					contextSequence: 1,
+				},
+			},
+		},
+	});
+}
+
+test('Side Chat return loads the source request from earlier history and reveals it', async () => {
+	using f = fixture();
+	const side = LocalChatSessionUri.forSession('session', 'side');
+	addSideChat(f, 'older');
+	const request = { id: 'older-request', type: 'userMessage', text: 'Original question', transient: false, requestSource: { sessionId: 'session', threadId: 'source', turnId: 'older', itemId: 'original' } };
+	const revealed: string[] = [];
+	let pages = 0;
+	f.widget.reveal = item => { revealed.push(item.id); };
+	Object.assign(f.model, {
+		olderHistory: { loading: false },
+		loadOlderHistory: async () => {
+			pages++;
+			f.model.thread.turns.unshift({ turnId: pages === 1 ? 'middle' : 'older', status: 'complete' });
+			if (pages === 2) Object.assign(f.model, { items: [request] });
+		},
+	});
+
+	await f.sideChats.revealSideChatSource(side);
+
+	assert.deepEqual(f.calls.navigate, [['session', 'source']]);
+	assert.equal(pages, 2);
+	assert.deepEqual(revealed, [request.id]);
+});
+
+test('Side Chat return stops when source history makes no progress', async () => {
+	using f = fixture();
+	addSideChat(f, 'older');
+	let pages = 0;
+	Object.assign(f.model, {
+		olderHistory: { loading: false },
+		loadOlderHistory: async () => { pages++; },
+	});
+	f.widget.reveal = () => assert.fail('No source request was loaded');
+
+	await f.sideChats.revealSideChatSource(LocalChatSessionUri.forSession('session', 'side'));
+
+	assert.equal(pages, 1);
 });
 
 test('Side Chat selection accepts only text owned by its transcript, including Cowork', () => {

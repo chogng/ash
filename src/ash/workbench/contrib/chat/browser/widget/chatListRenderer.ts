@@ -1,3 +1,4 @@
+import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
@@ -533,22 +534,13 @@ export class ChatListItemRenderer extends Disposable {
 		}
 		const attachments = h(article.ownerDocument, 'div');
 		body.append(attachments);
-		if (item.detail) {
-			const detail = h(this.element.ownerDocument, 'p');
+		if (item.type === 'turnError') {
+			disposables.add(new ChatErrorContentPart(article, item, this.options.classPrefix, this.options.onDidRequestErrorAction));
+		} else if (item.detail) {
+			const detail = h(article.ownerDocument, 'p');
 			detail.className = `${this.options.classPrefix}-turn-error-detail`;
 			detail.textContent = item.detail;
 			body.append(detail);
-		}
-		if (item.action) {
-			const action = item.action;
-			const button = disposables.add(new Button(article, {
-				...defaultButtonStyles,
-				label: action.label,
-				presentation: 'secondary',
-				size: 'small',
-				onClick: () => this.options.onDidRequestErrorAction?.(action),
-			}));
-			button.domNode.classList.add(`${this.options.classPrefix}-turn-error-action`);
 		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;

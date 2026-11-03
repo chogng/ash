@@ -3,8 +3,7 @@
 	display: none;
 }
 
-.ash-chat-input-notice:focus-visible,
-.ash-chat-input-tip:focus-visible {
+.ash-chat-input-notice:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }

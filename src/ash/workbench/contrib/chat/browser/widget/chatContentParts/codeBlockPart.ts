@@ -1,3 +1,4 @@
+import './media/codeBlockPart.css';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';

@@ -1,3 +1,4 @@
+import { applyAgentHostCompletionAction } from '../../../workbench/contrib/chat/browser/agentHostCompletionAction.js';
 import { ISessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
@@ -51,16 +52,10 @@ for (const definition of approvalModeDefinitions) {
 
 		override async run(accessor: ServicesAccessor, model: IChatWidgetModel): Promise<void> {
 			const generation = model.composerGeneration;
-			if (definition.requiresConfirmation) {
-				const result = await accessor.get(IDialogService).confirm({
-					message: localize('sessions.chat.permission.fullWarning', 'Skip most permission approvals?'),
-					detail: localize('sessions.chat.permission.fullDetail', 'Commands may change or delete files and perform external actions without asking. File and network access limits still apply. Plan and Ask remain analysis modes.'),
-					primaryButton: localize(definition.label.key, definition.label.text),
-				});
-				if (!result.confirmed) { return; }
-			}
 			// The menu carries its own composer model, including when another pane is active.
-			if (generation === model.composerGeneration && !model.inputState.aiDisabled) model.selectApprovalMode(mode);
+			await applyAgentHostCompletionAction(mode, confirmation => accessor.get(IDialogService).confirm(confirmation),
+				() => generation === model.composerGeneration && !model.inputState.aiDisabled,
+				selected => model.selectApprovalMode(selected));
 		}
 	});
 }

@@ -928,7 +928,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	for (const chatPane of chatPanes) {
 		assert.equal(chatPane.classList.contains('empty'), true);
 		assert.equal(chatPane.classList.contains('has-conversation'), false);
-		assert.equal(chatPane.querySelector<HTMLElement>(':scope > .ash-chat-goal')?.hidden, true);
+		assert.equal(chatPane.querySelector<HTMLElement>(':scope > .ash-chat-goal-banner')?.hidden, true);
 		assert.ok(chatPane.querySelector(':scope > .ash-chat-list-widget'));
 		assert.ok(chatPane.querySelector(':scope > .ash-chat-input-part'));
 		const inputToolbar = chatPane.querySelector<HTMLElement>('.ash-chat-input-toolbars');
@@ -4909,7 +4909,7 @@ for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as c
 			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
 			: new CoworkWidget(document.body, 'goal-banner', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
 		widget.setVisible(true);
-		const banner = widget.domNode.querySelector<HTMLDivElement>(kind === 'Code' ? '.ash-chat-goal' : '.ash-cowork-goal')!;
+		const banner = widget.domNode.querySelector<HTMLDivElement>('.ash-chat-goal-banner')!;
 		assert.ok(banner);
 		assert.equal(banner.hidden, true);
 		const labels: Readonly<Record<ThreadGoal['status'], readonly [string, string]>> = {

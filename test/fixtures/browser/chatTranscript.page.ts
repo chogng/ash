@@ -187,12 +187,14 @@ services.registerInstance(IDialogsModel, dialogs.model);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 resources.add(bindTestColorTheme(theme, document.body));
 let clipboardText = '';
+let clipboardImage: number[] = [];
 let clipboardReady = Promise.resolve();
 let releaseClipboard!: () => void;
 let clipboardFailure = false;
 class Clipboard extends BrowserClipboardService {
 	constructor() { super(undefined); }
 	public override async writeText(text: string): Promise<void> { await clipboardReady; if (clipboardFailure) throw new Error('clipboard rejected'); clipboardText = text; }
+	public override async writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void> { clipboardImage = [...await data]; }
 }
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
@@ -623,7 +625,7 @@ declare global {
 			dictationState(): { starts: number; cancels: number; busy: boolean; widgets: number; focused: boolean; file: string; };
 			holdClipboard(fail?: boolean): void;
 			releaseClipboard(): void;
-			state(): { copied: string; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
+			state(): { copied: string; copiedImage: readonly number[]; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
 			openSkill(): Promise<void>;
 			referenceReady(line: number, column: number): boolean;
 			openReference(line: number, column: number): Promise<void>;
@@ -804,7 +806,7 @@ window.ashChatTranscriptIntegration = {
 	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
 	releaseClipboard: () => releaseClipboard(),
 	state: () => ({
-		copied: clipboardText, file: file.getModel()!.getValue(), resource: activeResource.toString(),
+		copied: clipboardText, copiedImage: clipboardImage, file: file.getModel()!.getValue(), resource: activeResource.toString(),
 		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
 		codeModelCount: services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).length,
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),

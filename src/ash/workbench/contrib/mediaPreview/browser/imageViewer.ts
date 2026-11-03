@@ -9,9 +9,8 @@ import { IClipboardService } from '../../../../platform/clipboard/common/clipboa
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ImagePreviewConfiguration } from '../common/mediaPreview.js';
-import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
 import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
-import type { ImageEncoderWorker } from './imageEncoderWorker.js';
+import { encodeImageAsPng } from './imageEncoder.js';
 
 export type ImageViewerScale = number | 'fit';
 
@@ -235,24 +234,5 @@ export class ImageViewer extends Disposable {
 
 	private defaultScale(): ImageViewerScale {
 		return this.configuration.getValue<'fit' | 'actualSize'>(ImagePreviewConfiguration.defaultZoom) === 'actualSize' ? 1 : 'fit';
-	}
-}
-
-/** Keep each copy independent of tab changes, and terminate its Worker when encoding settles. */
-async function encodeImageAsPng(image: HTMLImageElement, workers: IWebWorkerService): Promise<Uint8Array> {
-	try {
-		await image.decode();
-		const bitmap = await getWindow(image).createImageBitmap(image);
-		try {
-			using worker = workers.createWorkerClient<ImageEncoderWorker>(new WebWorkerDescriptor({
-				label: 'ash-image-encoder',
-				createWorker: () => new Worker(new URL('./imageEncoderWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-image-encoder' }),
-			}));
-			return new Uint8Array(await worker.proxy.$encodePng(bitmap));
-		} finally {
-			bitmap.close();
-		}
-	} catch (error) {
-		throw new Error(localize('media.image.encodingFailed', 'Could not encode the image as PNG: {0}', error instanceof Error ? error.message : String(error)), { cause: error });
 	}
 }
