@@ -944,7 +944,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 
 	private acceptFileChange(change: FileInvalidation): void {
 		// File events retire earlier observations without discarding facts held by open documents.
-		const folders = [...this.directories(), ...this.resolvedDirectories.values()];
+		// A discovered root can also appear in the current workspace. It is still
+		// one filesystem scope when routing a notification without a directory ID.
+		const folders = [...new Map([...this.resolvedDirectories.values(), ...this.directories()].map(folder => [folder.uri.toString(), folder])).values()];
 		const matches = (folder: IFileSystemDirectory): boolean => folder.target.type === 'environment' && folder.target.dirId === change.dirId;
 		const knownRoot = folders.some(matches);
 		for (const state of this.pathIdentities.values()) {
@@ -953,15 +955,15 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 				state.requests.clear();
 			}
 		}
-		if (change.type === 'rescanRequired') {
-			this.fileChanges.fire(Object.freeze({ resources: undefined }));
-			return;
-		}
 		const folder = change.dirId
 			? folders.find(matches)
 			: folders.length === 1 ? folders[0] : undefined;
 		if (!folder) {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
+			return;
+		}
+		if (change.type === 'rescanRequired') {
+			this.fileChanges.fire(Object.freeze({ resources: Object.freeze([folder.uri]) }));
 			return;
 		}
 		const resources = change.paths.map(path => workspaceResourceFromPath(folder.uri, path));

@@ -4808,6 +4808,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
     ),
     translation("Queue", "キュー", "队列", "File"),
     translation(
+        "Skip (optional)",
+        "スキップ（任意）",
+        "跳过（可选）",
+        "Ignorer (facultatif)",
+    ),
+    translation(
+        "Leave this question unanswered",
+        "この質問には回答しない",
+        "不回答此问题",
+        "Laisser cette question sans réponse",
+    ),
+    translation(
         "Type your own answer",
         "自分で入力",
         "自己输入",

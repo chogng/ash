@@ -117,7 +117,7 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -1527,6 +1527,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
+	editorServices.registerSingleton(IVoiceInputModeService, () => editorServices.createInstance(VoiceInputModeService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
@@ -4872,6 +4873,48 @@ test('Chat context usage refresh ignores an estimate from an older connection', 
 	await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
 	await nextTask();
 	assert.equal(contextUsage()?.estimatedTokens, 400);
+});
+
+for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as const) test(`${kind} goal banner localizes every status and retains raw objectives in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const activeSession = session('session-1', 'thread-1');
+		const fake = fakeApi({ sessions: [activeSession] });
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		using contextView = new BrowserContextViewService(document.body);
+		const services = createInputServices(contextView, chat);
+		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+		using widget = kind === 'Code'
+			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
+			: new CoworkWidget(document.body, 'goal-banner', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		widget.setVisible(true);
+		const banner = widget.domNode.querySelector<HTMLDivElement>(kind === 'Code' ? '.ash-chat-goal' : '.ash-cowork-goal')!;
+		assert.ok(banner);
+		assert.equal(banner.hidden, true);
+		const labels: Readonly<Record<ThreadGoal['status'], readonly [string, string]>> = {
+			active: ['Active', '进行中'], paused: ['Paused', '已暂停'], blocked: ['Blocked', '受阻'],
+			usageLimited: ['Usage limit reached', '已达用量上限'], budgetLimited: ['Budget limit reached', '已达预算上限'], complete: ['Complete', '已完成'],
+		};
+		const objective = 'Keep 中文 & <code>literal</code>\n  spacing  ';
+		for (const status of Object.keys(labels) as ThreadGoal['status'][]) {
+			for (const tokenBudget of [undefined, null, 0, 30_000]) {
+				const goal: ThreadGoal = { threadId: 'thread-1', goalId: 'goal', objective, status, tokensUsed: 1234, tokenBudget };
+				fake.emit({ method: 'thread/goal/updated', params: { threadId: 'thread-1', goal } });
+				const usage = tokenBudget === undefined || tokenBudget === null ? '1,234' : tokenBudget === 0 ? '1,234/0' : '1,234/30,000';
+				assert.equal(banner.hidden, false);
+				assert.equal(banner.textContent, locale === 'en'
+					? `Goal · ${labels[status][0]} · ${usage} tokens · ${objective}`
+					: `目标 · ${labels[status][1]} · ${usage} 个 token · ${objective}`);
+				assert.equal(banner.querySelector('code'), null, 'the user objective remains text');
+			}
+		}
+		fake.emit({ method: 'thread/goal/cleared', params: { threadId: 'thread-1' } });
+		assert.equal(banner.hidden, true);
+		assert.equal(banner.textContent, '');
+	} finally { resetNlsResolver(); }
 });
 
 for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inline snapshots in text order despite reversed reads`, async () => {

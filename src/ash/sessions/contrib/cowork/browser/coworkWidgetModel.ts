@@ -515,6 +515,7 @@ export class CoworkWidgetModel extends Disposable {
 
 		} catch (error) {
 			if (isCurrent()) this.setError(error);
+			throw error;
 		}
 	}
 

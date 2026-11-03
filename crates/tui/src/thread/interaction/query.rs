@@ -46,8 +46,17 @@ pub(crate) struct QueryQuestion {
     pub(crate) id: String,
     pub(crate) header: String,
     pub(crate) prompt: String,
+    pub(crate) required: bool,
     pub(crate) choices: Vec<QueryChoice>,
     pub(crate) custom_answer: QueryCustomAnswer,
+}
+
+impl QueryQuestion {
+    fn option_count(&self) -> usize {
+        usize::from(!self.required)
+            + self.choices.len()
+            + usize::from(self.custom_answer == QueryCustomAnswer::Allowed)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,6 +99,7 @@ impl Query {
                 id: question.id,
                 header: question.header,
                 prompt: question.question,
+                required: question.required,
                 choices: question
                     .options
                     .into_iter()
@@ -134,6 +144,7 @@ impl Query {
                     id: format!("directory:{directory_index}:{permission_index}"),
                     header: directory.path.clone(),
                     prompt: name,
+                    required: true,
                     choices: choices(),
                     custom_answer: QueryCustomAnswer::Unavailable,
                 });
@@ -144,6 +155,7 @@ impl Query {
                 id: format!("network:{index}"),
                 header: host.clone(),
                 prompt: "Access network".into(),
+                required: true,
                 choices: choices(),
                 custom_answer: QueryCustomAnswer::Unavailable,
             });
@@ -162,6 +174,7 @@ impl Query {
             id: "duration".into(),
             header: "Permissions".into(),
             prompt: "Permission duration".into(),
+            required: true,
             choices: durations,
             custom_answer: QueryCustomAnswer::Unavailable,
         });
@@ -188,7 +201,9 @@ impl Query {
             return Err("a query requires at least one question".into());
         }
         if questions.iter().any(|question| {
-            question.choices.is_empty() && question.custom_answer == QueryCustomAnswer::Unavailable
+            question.required
+                && question.choices.is_empty()
+                && question.custom_answer == QueryCustomAnswer::Unavailable
         }) {
             return Err("every query question requires a choice or a custom answer".into());
         }
@@ -233,7 +248,10 @@ impl Query {
                     custom_answer.pop();
                     QueryOutcome::Consumed
                 }
-                _ if bindings::ANSWER.matches(key) && !custom_answer.trim().is_empty() => {
+                _ if bindings::ANSWER.matches(key)
+                    && (!self.questions[self.current].required
+                        || !custom_answer.trim().is_empty()) =>
+                {
                     let value = self
                         .custom_answer
                         .take()
@@ -344,6 +362,13 @@ impl Query {
         }
         let answers = answers
             .into_iter()
+            .filter(|answer| {
+                !answer.value.is_empty()
+                    || self
+                        .questions
+                        .iter()
+                        .any(|question| question.id == answer.question_id && question.required)
+            })
             .map(|answer| {
                 (
                     answer.question_id,
@@ -390,6 +415,10 @@ impl Query {
 
     fn activate_at(&mut self, index: usize) -> QueryOutcome {
         let question = &self.questions[self.current];
+        if !question.required && index == 0 {
+            return self.advance(String::new());
+        }
+        let index = index - usize::from(!question.required);
         if index < question.choices.len() {
             let value = question.choices[index].label.clone();
             return self.advance(value);
@@ -413,8 +442,7 @@ impl Query {
     }
 
     fn option_count(&self) -> usize {
-        let question = &self.questions[self.current];
-        question.choices.len() + usize::from(question.custom_answer == QueryCustomAnswer::Allowed)
+        self.questions[self.current].option_count()
     }
 }
 
@@ -431,8 +459,7 @@ pub(crate) struct QueryView<'a> {
 }
 
 pub(crate) fn desired_height(view: QueryView<'_>) -> u16 {
-    let choice_count = view.question.choices.len()
-        + usize::from(view.question.custom_answer == QueryCustomAnswer::Allowed);
+    let choice_count = view.question.option_count();
     let content_rows = 2usize
         .saturating_add(usize::from(view.permission_request.is_some()) * 2)
         .saturating_add(choice_count.min(MAX_CHOICE_ROWS))
@@ -449,11 +476,8 @@ pub(crate) fn draw(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let choice_count = view.question.choices.len()
-        + usize::from(
-            view.question.custom_answer == QueryCustomAnswer::Allowed
-                && view.question.choices.len() < MAX_CHOICE_ROWS,
-        );
+    let choice_count = view.question.option_count().min(MAX_CHOICE_ROWS);
+    let skip_count = usize::from(!view.question.required);
     let states = (0..choice_count)
         .map(|index| choice_state(index, view.selected, hovered, pressed))
         .collect::<Vec<_>>();
@@ -476,28 +500,41 @@ pub(crate) fn draw(
         },
         Style::default().add_modifier(Modifier::BOLD),
     ));
+    if !view.question.required {
+        lines.push(choice_line(
+            &context.localize("Skip (optional)"),
+            &context.localize("Leave this question unanswered"),
+            states[0],
+            context,
+        ));
+    }
     lines.extend(
         view.question
             .choices
             .iter()
             .enumerate()
-            .take(MAX_CHOICE_ROWS)
+            .take(MAX_CHOICE_ROWS - skip_count)
             .map(|(index, choice)| {
                 let label = if view.permission_request.is_some() {
                     context.localize(&choice.label).into_owned()
                 } else {
                     choice.label.clone()
                 };
-                choice_line(&label, &choice.description, states[index], context)
+                choice_line(
+                    &label,
+                    &choice.description,
+                    states[index + skip_count],
+                    context,
+                )
             }),
     );
     if view.question.custom_answer == QueryCustomAnswer::Allowed
-        && view.question.choices.len() < MAX_CHOICE_ROWS
+        && view.question.choices.len() + skip_count < MAX_CHOICE_ROWS
     {
         lines.push(choice_line(
             &context.localize("Type your own answer"),
             &context.localize("Answer in the input below"),
-            states[view.question.choices.len()],
+            states[view.question.choices.len() + skip_count],
             context,
         ));
     }
@@ -560,11 +597,7 @@ pub(crate) fn choice_at(
     if view.submitting || view.custom_answer.is_some() {
         return None;
     }
-    let count = view.question.choices.len().min(MAX_CHOICE_ROWS)
-        + usize::from(
-            view.question.custom_answer == QueryCustomAnswer::Allowed
-                && view.question.choices.len() < MAX_CHOICE_ROWS,
-        );
+    let count = view.question.option_count().min(MAX_CHOICE_ROWS);
     (0..count).find(|index| {
         Rect::new(
             area.x.saturating_add(1),

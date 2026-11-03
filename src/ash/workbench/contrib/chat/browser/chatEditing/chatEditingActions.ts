@@ -31,9 +31,10 @@ export function registerChatEditingActions(): void {
 			const navigation = accessor.get(IChatSessionNavigationService);
 			const source = navigation.getActiveConversation();
 			if (!source) { return; }
+			const revision = navigation.revision;
 			const viewingSource = (): boolean => {
 				const current = navigation.getActiveConversation();
-				return current?.sessionId === source.sessionId && current.threadId === source.threadId;
+				return navigation.revision === revision && current?.sessionId === source.sessionId && current.threadId === source.threadId;
 			};
 			const chat = accessor.get(IChatService);
 			const checkpoints = await chat.readCheckpoints(source.sessionId, source.threadId);
@@ -91,12 +92,16 @@ export function registerChatEditingActions(): void {
 				const navigation = accessor.get(IChatSessionNavigationService);
 				const source = navigation.getActiveConversation();
 				if (!source) { return; }
+				const revision = navigation.revision;
+				const viewingSource = (): boolean => {
+					const current = navigation.getActiveConversation();
+					return navigation.revision === revision && current?.sessionId === source.sessionId && current.threadId === source.threadId;
+				};
 				const chat = accessor.get(IChatService);
 				const notifications = accessor.get(INotificationService);
 				try {
 					const [history, read] = await Promise.all([chat.readHistoryState(source.sessionId, source.threadId), chat.readThread(source.sessionId, source.threadId)]);
-					const current = navigation.getActiveConversation();
-					if (current?.sessionId !== source.sessionId || current.threadId !== source.threadId) { return; }
+					if (!viewingSource()) { return; }
 					if (!(direction === 'undo' ? history.canUndo : history.canRedo)) {
 						notifications.info(localize('chatEditing.history.unavailable', 'No request is available for this history action. Wait for the current request to finish.'));
 						return;
@@ -109,12 +114,14 @@ export function registerChatEditingActions(): void {
 					}
 					await chat.moveHistory({ ...source, expectedSequence: history.sequence, direction });
 				} catch (error) {
+					if (!viewingSource()) { return; }
 					if (error instanceof ChatHistoryConflictError) {
 						notifications.error(localize('chatEditing.history.conflict', 'Files changed after the recorded checkpoint. Their changes were kept. Review them before changing this chat history.'));
 						return;
 					}
 					throw error;
 				}
+				if (!viewingSource()) { return; }
 				status(direction === 'undo' ? localize('chatEditing.history.undone', 'The last request and its file changes were undone.') : localize('chatEditing.history.redone', 'The request and its file changes were restored.'));
 			}
 		});

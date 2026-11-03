@@ -26,7 +26,7 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { formatChatGoal, type ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../../workbench/services/chat/common/modelCatalog.js';
@@ -263,7 +263,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	get domNode(): HTMLElement { return this.element; }
 	public cancelTranscriptProgress(): boolean {
 		if (this.isDisposed || !this.visible || !this.model.inputState.canInterrupt) { return false; }
-		void this.model.interrupt().catch(error => { if (!this.isDisposed && !isCancellationError(error)) { this.notifications.error(error); } });
+		const generation = this.model.composerGeneration;
+		void this.model.interrupt().catch(error => { if (!this.isDisposed && this.visible && generation === this.model.composerGeneration && !isCancellationError(error)) { this.notifications.error(error); } });
 		return true;
 	}
 	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
@@ -403,10 +404,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			return;
 		}
 		this.goalElement.hidden = false;
-		const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
-			? `${formatNumber(goal.tokensUsed)} tokens`
-			: `${formatNumber(goal.tokensUsed)}/${formatNumber(goal.tokenBudget)} tokens`;
-		this.goalElement.textContent = `Goal · ${goal.status} · ${usage} · ${goal.objective}`;
+		this.goalElement.textContent = formatChatGoal(goal);
 	}
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
@@ -479,5 +477,3 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	}
 	return undefined;
 }
-
-function formatNumber(value: number): string { return new Intl.NumberFormat('en-US').format(value); }

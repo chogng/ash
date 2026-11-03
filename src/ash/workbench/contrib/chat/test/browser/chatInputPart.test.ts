@@ -4645,6 +4645,47 @@ for (const queue of [ChatRequestQueueKind.Queued, ChatRequestQueueKind.Steering]
 	});
 }
 
+for (const layout of [undefined, 'compact'] as const) test(`Stop and Send preserves its draft and attachments when interruption fails (${layout ?? 'default'})`, async () => {
+	const failure = new Error('Synthetic interruption failure');
+	const calls: string[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		interrupt: async () => { calls.push('interrupt'); throw failure; },
+		send: async () => { calls.push('send'); },
+	}, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Keep this unsent draft');
+	part.addContext({ id: 'stop-note', kind: 'file', name: 'note.txt', resolve: async () => ({ name: 'note.txt', content: 'Captured context' }) });
+	const captured = await part.captureDraft();
+	await assert.rejects(part.acceptInput(undefined, { cancelCurrentRequest: true }), error => error === failure);
+	assert.deepEqual(calls, ['interrupt']);
+	assert.deepEqual((await part.captureDraft())?.draft, captured?.draft);
+});
+
+for (const layout of [undefined, 'compact'] as const) test(`Stop task reports a current failure and retires late errors with its input (${layout ?? 'default'})`, async () => {
+	using notifications = new TestNotificationService();
+	let pending = new DeferredPromise<void>();
+	let started = new DeferredPromise<void>();
+	using part = inputPart(notifications, undefined, 'agent', {
+		interrupt: async () => { started.complete(); await pending.p; },
+	}, undefined, undefined, undefined, layout);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: true, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	const stop = part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.interrupt"] button')!;
+	assert.ok(stop);
+	stop.click();
+	await started.p;
+	await pending.error(new Error('Synthetic stop failure'));
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(notifications.model.getNotifications().map(notification => notification.message), ['Synthetic stop failure']);
+	pending = new DeferredPromise<void>();
+	started = new DeferredPromise<void>();
+	stop.click();
+	await started.p;
+	part.invalidatePendingInput();
+	await pending.error(new Error('Retired stop failure'));
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(notifications.model.getNotifications().map(notification => notification.message), ['Synthetic stop failure']);
+});
+
 test('Stop and Send waits for interruption and restores draft and attachments on failure', async () => {
 	const started = new DeferredPromise<void>();
 	const stopped = new DeferredPromise<void>();
@@ -4706,12 +4747,52 @@ test('Explicit queue intent cannot execute a slash command or change a hidden dr
 });
 
 
+for (const locale of ['en', 'zh-CN']) test(`MCP questions retain required fields and allow unanswered optional values in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const responses: unknown[] = [];
+		using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+		part.render({
+			mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+			interaction: {
+				requestId: 'mcp-fields', request: {
+					type: 'userInput', request: {
+						questions: [
+							{ id: 'name', header: 'Name', question: 'Required name', required: true, allowFreeForm: true },
+							{ id: 'note', header: 'Note', question: 'Optional note', required: false, allowFreeForm: true },
+							{ id: 'visibility', header: 'Visibility', question: 'Optional visibility', required: false, allowFreeForm: false, options: [{ label: 'private', description: '' }, { label: 'team', description: '' }] },
+							{ id: 'notify', header: 'Notify', question: 'Optional notification', required: false, allowFreeForm: false, options: [{ label: 'true', description: '' }, { label: 'false', description: '' }] },
+						]
+					}
+				}
+			},
+		});
+		const form = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;
+		const name = form.querySelector<HTMLInputElement>('[name="name"]')!;
+		const visibility = form.querySelector<HTMLSelectElement>('[name="visibility"]')!;
+		const notify = form.querySelector<HTMLSelectElement>('[name="notify"]')!;
+		assert.equal(name.required, true);
+		assert.equal(form.checkValidity(), false);
+		assert.equal(visibility.required, false);
+		assert.equal(visibility.value, '');
+		assert.equal(notify.value, '');
+		assert.equal(visibility.options[0].text, locale === 'en' ? 'No answer' : '不作答');
+		name.value = 'Planning';
+		assert.equal(form.checkValidity(), true);
+		form.requestSubmit();
+		assert.deepEqual(responses, [{ type: 'userInput', response: { answers: { name: { value: 'Planning' } } } }]);
+		notify.value = 'false';
+		form.requestSubmit();
+		assert.deepEqual(responses[1], { type: 'userInput', response: { answers: { name: { value: 'Planning' }, notify: { value: 'false' } } } });
+	} finally { initializeTestLocalization('en'); }
+});
+
 test('Retired answer forms cannot resolve a replacement interaction or hidden composer', async () => {
 	const replies: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { replies.push(response); } });
 	const state: ChatInputState = {
 		mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
-		interaction: { requestId: 'first', request: { type: 'userInput', request: { questions: [{ id: 'answer', header: 'Answer', question: 'Question', allowFreeForm: true }] } } }
+		interaction: { requestId: 'first', request: { type: 'userInput', request: { questions: [{ id: 'answer', header: 'Answer', question: 'Question', required: true, allowFreeForm: true }] } } }
 	};
 	part.render(state);
 	const old = part.element.querySelector<HTMLFormElement>('.ash-chat-interaction form')!;

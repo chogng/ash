@@ -49,7 +49,7 @@ export class ChatResourceGroupWidget extends Disposable {
 			if (part.type !== 'artifact' || part.artifact.source.type === 'mcpApp' || part.artifact.source.type === 'viewMetadata') continue;
 			indices.add(index);
 			const artifact = part.artifact;
-			const identity = JSON.stringify([source, index, artifact.source, artifact.mimeType, artifact.contentDigest, artifact.data.type, artifact.truncated]);
+			const identity = JSON.stringify([source, coordinate?.sessionId, coordinate?.threadId, coordinate?.itemId, index, artifact.source, artifact.mimeType, artifact.contentDigest, artifact.data.type, artifact.truncated]);
 			const location = coordinate ? { sessionId: coordinate.sessionId, threadId: coordinate.threadId, itemId: coordinate.itemId, contentIndex: index } : undefined;
 			let row = this.rows.get(index);
 			if (!row) row = this.rows.set(index, this.renderResource(artifact, identity, location));

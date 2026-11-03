@@ -148,6 +148,71 @@ suite('Menu browser behavior', () => {
 		await expect(browser.page.getByRole('menuitem', { name: 'Файл', exact: true })).toBeFocused();
 	});
 
+	for (const phase of ['window capture', 'document capture', 'document bubble'] as const) test(`consumed Control+Alt shortcuts preserve their destination focus in ${phase}`, async () => {
+		await browser.page.goto('/src/ash/base/test/browser/fixtures/menu.html');
+		await browser.page.evaluate(phase => {
+			const destination = document.createElement('button');
+			destination.id = 'shortcut-destination';
+			destination.textContent = 'Shortcut destination';
+			document.body.append(destination);
+			const shortcut = (event: KeyboardEvent): void => {
+				if (event.key !== 'PageDown' || !event.ctrlKey || !event.altKey) return;
+				event.preventDefault();
+				event.stopPropagation();
+				destination.focus();
+			};
+			if (phase === 'window capture') window.addEventListener('keydown', shortcut, true);
+			else document.addEventListener('keydown', shortcut, phase === 'document capture');
+			window.ashMenuTest.mount('menubar');
+		}, phase);
+		await browser.page.locator('#outside').focus();
+		await browser.page.keyboard.press('Control+Alt+PageDown');
+		await expect(browser.page.locator('#shortcut-destination')).toBeFocused();
+		await expect(browser.page.locator('[role="menubar"]')).not.toContainText('Save');
+	});
+
+	for (const order of [['Control', 'Alt'], ['Alt', 'Control']] as const) test(`a modifier-only ${order.join('+')} combination does not activate the menubar`, async () => {
+		await open('menubar');
+		await browser.page.locator('#outside').focus();
+		for (const key of order) await browser.page.keyboard.down(key);
+		for (const key of [...order].reverse()) await browser.page.keyboard.up(key);
+		await expect(browser.page.locator('#outside')).toBeFocused();
+	});
+
+	test('bare Alt including repeated keydown toggles menu focus and returns to its origin', async () => {
+		await open('menubar');
+		await browser.page.locator('#outside').focus();
+		await browser.page.keyboard.down('Alt');
+		await browser.page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Alt', altKey: true, repeat: true, bubbles: true })));
+		await browser.page.keyboard.up('Alt');
+		await expect(browser.page.getByRole('menuitem', { name: 'File', exact: true })).toBeFocused();
+		await browser.page.keyboard.press('Alt');
+		await expect(browser.page.locator('#outside')).toBeFocused();
+	});
+
+	for (const composing of ['keydown', 'compositionstart'] as const) test(`composition ${composing} retires an Alt-only candidate`, async () => {
+		await open('menubar');
+		await browser.page.locator('#outside').focus();
+		await browser.page.keyboard.down('Alt');
+		await browser.page.evaluate(composing => {
+			const target = document.activeElement!;
+			target.dispatchEvent(composing === 'keydown'
+				? new KeyboardEvent('keydown', { key: 'Process', altKey: true, isComposing: true, bubbles: true })
+				: new CompositionEvent('compositionstart', { bubbles: true }));
+		}, composing);
+		await browser.page.keyboard.up('Alt');
+		await expect(browser.page.locator('#outside')).toBeFocused();
+	});
+
+	test('Control+Alt letters do not trigger menu access keys while Alt letters still do', async () => {
+		await open('menubar');
+		await browser.page.locator('#outside').focus();
+		await browser.page.keyboard.press('Control+Alt+f');
+		await expect(browser.page.locator('#outside')).toBeFocused();
+		await browser.page.keyboard.press('Alt+f');
+		await expect(browser.page.getByRole('menuitem', { name: 'Save', exact: true })).toBeFocused();
+	});
+
 	test('refreshes compact and overflow categories and localizes the compact trigger', async () => {
 		await open('compact');
 		await browser.page.evaluate(() => window.ashMenuTest.locale('zh-cn'));

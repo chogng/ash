@@ -39,6 +39,27 @@ for (const kind of ['approval', 'userInput'] as const) {
 	});
 }
 
+for (const required of [undefined, false, true]) {
+	test(`owner-directed user input preserves required=${String(required)} through the real decoder and domain adapter`, async () => {
+		const transport = new InteractionTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		const api = createAppServerAgentThreadService(client);
+		const offers: AgentInteractionOffer[] = [];
+		using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+		await client.connect();
+		const question = { id: 'answer', header: 'Answer', question: 'A form answer', allowFreeForm: true, ...(required === undefined ? {} : { required }) };
+		transport.frame({ method: 'agent/request', params: { ...identity, interaction: { ...interaction, request: { type: 'userInput', request: { questions: [question] } } } } });
+		assert.equal(client.state, 'ready');
+		assert.equal(offers.length, 1);
+		assert.deepEqual({ sessionId: offers[0].sessionId, threadId: offers[0].threadId, turnId: offers[0].turnId, connectionGeneration: offers[0].connectionGeneration }, { ...identity, connectionGeneration: 1 });
+		const request = offers[0].interaction.request;
+		assert.equal(request.type, 'userInput');
+		if (request.type !== 'userInput') throw new Error('Missing user input offer');
+		assert.deepEqual(request.request.questions, [{ ...question, required: required ?? true, options: undefined }]);
+	});
+}
+
 test('committed interaction history never grants delivery ownership', async () => {
 	const transport = new InteractionTransport();
 	const client = new AppServerProtocolClient(transport);

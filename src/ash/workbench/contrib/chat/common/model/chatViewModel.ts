@@ -1,6 +1,23 @@
-import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
-import { localize } from '../../../../../nls.js';
+import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
+import { getNLSLanguage, localize } from '../../../../../nls.js';
 import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
+
+/** Both Chat presentations describe the same backend-owned goal without translating user content. */
+export function formatChatGoal(goal: ThreadGoal): string {
+	const status: Record<ThreadGoal['status'], string> = {
+		active: localize('chat.goal.active', 'Active'),
+		paused: localize('chat.goal.paused', 'Paused'),
+		blocked: localize('chat.goal.blocked', 'Blocked'),
+		usageLimited: localize('chat.goal.usageLimited', 'Usage limit reached'),
+		budgetLimited: localize('chat.goal.budgetLimited', 'Budget limit reached'),
+		complete: localize('chat.goal.complete', 'Complete'),
+	};
+	const numbers = new Intl.NumberFormat(getNLSLanguage());
+	const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
+		? localize('chat.goal.tokensUsed', '{0} tokens', numbers.format(goal.tokensUsed))
+		: localize('chat.goal.tokenBudget', '{0}/{1} tokens', numbers.format(goal.tokensUsed), numbers.format(goal.tokenBudget));
+	return localize('chat.goal.summary', 'Goal · {0} · {1} · {2}', status[goal.status], usage, goal.objective);
+}
 
 export type ChatTurnErrorAction =
 	| { readonly type: 'retry'; readonly label: string; readonly turnId: string; }

@@ -732,6 +732,10 @@ struct RuntimeClientHost {
 }
 
 impl McpClientHost for RuntimeClientHost {
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        self.downstream.capture_request_context()
+    }
+
     fn on_event(&self, event: McpClientEvent) {
         if matches!(event, McpClientEvent::ToolListChanged) {
             self.catalog_stale.store(true, Ordering::Release);

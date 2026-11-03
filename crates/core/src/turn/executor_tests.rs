@@ -3873,6 +3873,7 @@ impl ToolService for InteractiveTool {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let outcome = interactions.request_user_input(RequestUserInput {
             questions: vec![UserInputQuestion {
+                required: true,
                 id: "city".into(),
                 header: "City".into(),
                 question: "Which city?".into(),

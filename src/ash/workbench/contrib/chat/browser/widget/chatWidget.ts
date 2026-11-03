@@ -22,7 +22,7 @@ import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, Sessio
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
-import type { ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
+import { formatChatGoal, type ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
@@ -74,6 +74,7 @@ export interface IChatWidgetModel extends IDisposable {
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
 	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
+	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
 	refreshChanges(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
@@ -349,7 +350,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	get domNode(): HTMLElement { return this.element; }
 	public cancelTranscriptProgress(): boolean {
 		if (this.isDisposed || !this.visible || !this.model.inputState.canInterrupt) { return false; }
-		void this.model.interrupt().catch(error => { if (!this.isDisposed && !isCancellationError(error)) { this.notifications.error(error); } });
+		const generation = this.model.composerGeneration;
+		void this.model.interrupt().catch(error => { if (!this.isDisposed && this.visible && generation === this.model.composerGeneration && !isCancellationError(error)) { this.notifications.error(error); } });
 		return true;
 	}
 	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
@@ -599,10 +601,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			return;
 		}
 		this.goalElement.hidden = false;
-		const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
-			? `${formatNumber(goal.tokensUsed)} tokens`
-			: `${formatNumber(goal.tokensUsed)}/${formatNumber(goal.tokenBudget)} tokens`;
-		this.goalElement.textContent = `Goal · ${goal.status} · ${usage} · ${goal.objective}`;
+		this.goalElement.textContent = formatChatGoal(goal);
 	}
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
@@ -679,5 +678,3 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	}
 	return undefined;
 }
-
-function formatNumber(value: number): string { return new Intl.NumberFormat('en-US').format(value); }

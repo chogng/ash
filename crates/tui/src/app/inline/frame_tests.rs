@@ -68,6 +68,7 @@ fn open_help(app: &mut App) {
 
 fn pending_query() -> Query {
     Query::new(vec![QueryQuestion {
+        required: true,
         id: "next".into(),
         header: "Next step".into(),
         prompt: "How should the work continue?".into(),

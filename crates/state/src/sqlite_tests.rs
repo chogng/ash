@@ -1253,6 +1253,7 @@ fn sqlite_session_catalog_follows_waiting_turn_model_migration_and_reopen() {
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
                         questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
                             id: "continue".into(),
                             header: "Continue".into(),
                             question: "Continue the task?".into(),
@@ -2086,6 +2087,7 @@ fn history_window_retains_live_interactions_outside_an_older_page() {
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
                         questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
                             id: "continue".into(),
                             header: "Continue".into(),
                             question: "Continue?".into(),

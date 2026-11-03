@@ -516,7 +516,30 @@ test('AgentHostFileSystemProvider maps App Server invalidations to workspace res
 	changes.fire({ type: 'pathsChanged', paths: ['src/main.ts', 'src/main.ts', 'README.md'] });
 	changes.fire({ type: 'rescanRequired' });
 
-	assert.deepEqual(observed, [[URI.parse('file:///C:/project/src/main.ts'), URI.parse('file:///C:/project/README.md')], undefined]);
+	assert.deepEqual(observed, [[URI.parse('file:///C:/project/src/main.ts'), URI.parse('file:///C:/project/README.md')], [root]]);
+});
+
+test('Filesystem invalidations keep a discovered workspace root scoped after it becomes active', async () => {
+	const root = URI.parse('file:///C:/project');
+	const directory: IFileSystemDirectory = { uri: root, target: { type: 'environment', dirId: 'project' } };
+	let directories: IFileSystemDirectory[] = [];
+	using changes = new Emitter<FileInvalidation>();
+	using service = new AgentHostFileSystemProvider({
+		directories: () => directories,
+		resourceApi: unavailableResourceApi(),
+		api: { ...unavailableFileApi(), resolvePath: async () => directory, getMetadata: async () => ({ fileType: 'file', sizeBytes: 0, readonly: false, modifiedAtMillis: null }) },
+		onDidChange: changes.event,
+	});
+	await service.stat(root.joinPathSegment('main.ts'));
+	directories = [directory];
+	const observed: (readonly URI[] | undefined)[] = [];
+	using listener = service.onDidChangeFiles(event => observed.push(event.resources));
+	changes.fire({ type: 'pathsChanged', paths: ['main.ts'] });
+	changes.fire({ type: 'rescanRequired' });
+	directories.push({ uri: URI.parse('file:///C:/other'), target: { type: 'environment', dirId: 'other' } });
+	changes.fire({ type: 'rescanRequired', dirId: 'project' });
+	changes.fire({ type: 'rescanRequired', dirId: 'unknown' });
+	assert.deepEqual(observed, [[root.joinPathSegment('main.ts')], [root], [root], undefined]);
 });
 
 test('AgentHostFileSystemProvider routes nested multi-root resources by Workspace folder id', async () => {

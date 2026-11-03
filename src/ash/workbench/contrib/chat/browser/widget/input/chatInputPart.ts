@@ -27,6 +27,7 @@ import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
+import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
@@ -1487,7 +1488,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		if (this.toolbarState.canInterrupt) {
 			const label = localize('chat.input.stopTask', 'Stop task');
-			trailingActions.push(new ChatInputAction('ash.chat.input.interrupt', label, label, this.inlineActionsToolbar ? Lxicon.stopCircle : Lxicon.close, true, this.inlineActionsToolbar ? 'mic' : 'interrupt', () => void this.delegate.interrupt()));
+			trailingActions.push(new ChatInputAction('ash.chat.input.interrupt', label, label, this.inlineActionsToolbar ? Lxicon.stopCircle : Lxicon.close, true, this.inlineActionsToolbar ? 'mic' : 'interrupt', () => void this.interrupt()));
 		}
 		if (this.delegate.voiceConversation?.isActive) {
 			if (this.inlineActionsToolbar) {
@@ -1733,6 +1734,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.footerChanged.fire();
 	}
 
+	private async interrupt(): Promise<void> {
+		const lifecycle = this.inputLifecycle.signal;
+		try {
+			await this.delegate.interrupt();
+		} catch (error) {
+			if (!this.isDisposed && !lifecycle.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+		}
+	}
+
 	private async runSecondaryAction(run: () => Promise<void>): Promise<void> {
 		try {
 			await run();
@@ -1948,8 +1958,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				for (const question of request.request.questions) {
 					const label = h(this.element.ownerDocument, 'label');
 					label.textContent = question.question;
-					const input = question.options && !question.allowFreeForm ? this.questionSelect(question.options) : h(this.element.ownerDocument, 'input');
-					input.required = true;
+					const required = question.required;
+					const input = question.options && !question.allowFreeForm ? this.questionSelect(question.options, required) : h(this.element.ownerDocument, 'input');
+					input.required = required;
 					input.name = question.id;
 					label.append(input);
 					form.append(label);
@@ -1962,7 +1973,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.interactionListeners.add(addDisposableListener(form, 'submit', (event) => {
 					event.preventDefault();
 					const answers: Record<string, { value: string; }> = {};
-					for (const [id, input] of inputs) answers[id] = { value: input.value };
+					for (const [id, input] of inputs) {
+						if (input.required || input.value !== '') answers[id] = { value: input.value };
+					}
 					void resolve({
 						type: 'userInput',
 						response: { answers },
@@ -1984,8 +1997,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return button;
 	}
 
-	private questionSelect(options: readonly { readonly label: string; }[]): HTMLSelectElement {
+	private questionSelect(options: readonly { readonly label: string; }[], required = true): HTMLSelectElement {
 		const select = h(this.element.ownerDocument, 'select');
+		if (!required) {
+			const unanswered = h(this.element.ownerDocument, 'option');
+			unanswered.value = '';
+			unanswered.textContent = localize('chat.interaction.unanswered', 'No answer');
+			select.append(unanswered);
+		}
 		for (const option of options) {
 			const element = h(this.element.ownerDocument, 'option');
 			element.value = option.label;

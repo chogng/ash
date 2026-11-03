@@ -171,6 +171,7 @@ impl FormField {
             id: self.id.clone(),
             header: self.title.clone(),
             question: format!("{message}\n\n{}", self.description),
+            required: self.required,
             options: self.kind.options(),
             allow_free_form: self.kind.allows_free_form(),
         }

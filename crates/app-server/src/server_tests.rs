@@ -6043,6 +6043,7 @@ impl ToolService for AppServerInteractiveTool {
     ) -> Result<ToolExecutionOutput, CoreError> {
         match interactions.request_user_input(RequestUserInput {
             questions: vec![ash_protocol::UserInputQuestion {
+                required: true,
                 id: "city".into(),
                 header: "City".into(),
                 question: "Which city?".into(),

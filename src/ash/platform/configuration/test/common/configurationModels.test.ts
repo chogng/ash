@@ -1,7 +1,53 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ConfigurationModel } from '../../common/configurationModels.js';
+import { ConfigurationModel, UserSettings } from '../../common/configurationModels.js';
 import { NullLoggerService } from '../../../log/common/log.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { extUri } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { IFileChangeEvent, IFileService } from '../../../files/common/files.js';
+
+test('settings coalesce watcher bursts without losing a change during publication', async () => {
+	using changes = new Emitter<IFileChangeEvent>();
+	const resource = URI.parse('file:///project/settings.json');
+	const reads: DeferredPromise<{ content: string; }>[] = [];
+	const reread = new DeferredPromise<void>();
+	const files = {
+		watch: () => Disposable.None,
+		onDidChangeFiles: changes.event,
+		readFile: () => {
+			const read = new DeferredPromise<{ content: string; }>();
+			reads.push(read);
+			if (reads.length === 2) reread.complete();
+			return read.p;
+		},
+	} as unknown as IFileService;
+	using settings = new UserSettings(resource, {}, extUri, files, new NullLoggerService());
+	let publications = 0;
+	using listener = settings.onDidChange(() => {
+		publications++;
+		if (publications === 2) changes.fire({ resources: [resource] });
+	});
+	for (let index = 0; index < 64; index++) changes.fire({ resources: [resource] });
+	const loaded = settings.loadConfiguration();
+	assert.equal(reads.length, 1);
+	reads[0].complete({ content: '{"test.value": 1}' });
+	await reread.p;
+	reads[1].complete({ content: '{"test.value": 2}' });
+	assert.equal((await loaded).getValue('test.value'), 2);
+	assert.equal(publications, 1);
+	changes.fire({ resources: [resource] });
+	const next = settings.loadConfiguration();
+	reads[2].complete({ content: '{"test.value": 3}' });
+	await next;
+	assert.equal(reads.length, 4);
+	const latest = settings.loadConfiguration();
+	reads[3].complete({ content: '{"test.value": 4}' });
+	assert.equal((await latest).getValue('test.value'), 4);
+	assert.equal(publications, 3);
+});
 
 test('configuration model combines structured values and replaces arrays without changing its inputs', () => {
 	const contents = { editor: { options: Object.freeze({ colors: { foreground: 'gray', background: 'black' }, rulers: [80] }) } };

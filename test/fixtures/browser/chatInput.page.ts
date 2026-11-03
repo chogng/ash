@@ -1164,8 +1164,8 @@ window.ashChatInputIntegration = {
 			requestId: 'questions', request: {
 				type: 'userInput', request: {
 					questions: [
-						{ id: 'text', header: 'Answer', question: 'Your answer', allowFreeForm: true },
-						{ id: 'choice', header: 'Choice', question: 'Your choice', allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
+						{ id: 'text', header: 'Answer', question: 'Your answer', required: true, allowFreeForm: true },
+						{ id: 'choice', header: 'Choice', question: 'Your choice', required: true, allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
 					]
 				}
 			},

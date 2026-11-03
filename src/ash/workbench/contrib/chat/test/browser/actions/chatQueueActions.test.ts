@@ -23,6 +23,7 @@ import { TestNotificationService } from '../../../../../services/notification/te
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Emitter } from '../../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 registerChatQueueActions();
 const executeActions = registerChatExecuteActions();
@@ -184,6 +185,41 @@ test('A queue picker closes when its captured conversation changes without modif
 	assert.deepEqual(f.calls, []);
 });
 
+
+for (const command of [ChatEditPendingRequestAction.ID, ChatRemovePendingRequestAction.ID, ChatSendPendingImmediatelyAction.ID]) test(`Queue command ${command} retires a delayed A-B-A read`, async () => {
+	using f = queueFixture();
+	const model = { composerGeneration: 0 };
+	Object.assign(f.widget, { model, startEditing: async (commandId: string) => { f.calls.push(['edit', commandId]); } });
+	const pending = new DeferredPromise<readonly QueuedMessage[]>();
+	f.chat.getPendingRequests = () => pending.p;
+	const operation = f.services.invokeFunction(CommandsRegistry.getCommand(command)!, f.target) as Promise<void>;
+	Object.assign(f.widget, { threadId: 'successor' }); model.composerGeneration++; f.changed.fire();
+	Object.assign(f.widget, { threadId: 'thread' }); model.composerGeneration++; f.changed.fire();
+	await pending.complete([f.original]);
+	await operation;
+	assert.deepEqual(f.calls, []);
+	assert.equal(f.quickInput.currentQuickInput, undefined);
+});
+
+test('Queue picker retires when its composer changes without changing the conversation IDs', async () => {
+	using f = queueFixture();
+	const model = { composerGeneration: 0 };
+	Object.assign(f.widget, { model });
+	const operation = f.services.invokeFunction(CommandsRegistry.getCommand(ChatRemovePendingRequestAction.ID)!) as Promise<void>;
+	await ready(() => !!f.quickInput.currentQuickInput);
+	const picker = f.quickInput.currentQuickInput!;
+	let hidden = false;
+	using listener = picker.onDidHide(() => { hidden = true; });
+	try {
+		model.composerGeneration++;
+		f.changed.fire();
+		assert.equal(hidden, true);
+	} finally {
+		picker.hide();
+		await operation;
+	}
+	assert.deepEqual(f.calls, []);
+});
 
 test('Remove All captures queue revisions and reports partial failures without cancelling new arrivals', async () => {
 	using f = queueFixture();

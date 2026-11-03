@@ -434,6 +434,7 @@ fn failed_interaction_resume_keeps_the_answer_and_records_terminal_failure() {
                 request: AgentRequest::UserInput {
                     request: RequestUserInput {
                         questions: vec![UserInputQuestion {
+                            required: true,
                             id: "choice".into(),
                             header: "Choice".into(),
                             question: "Which one?".into(),

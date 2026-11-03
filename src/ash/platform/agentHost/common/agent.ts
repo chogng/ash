@@ -620,6 +620,8 @@ export interface UserInputQuestion {
 	readonly id: string;
 	readonly header: string;
 	readonly question: string;
+	/** Legacy wire questions default to required at the adapter boundary. */
+	readonly required: boolean;
 	readonly options?: readonly UserInputOption[];
 	readonly allowFreeForm: boolean;
 }

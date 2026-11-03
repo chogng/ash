@@ -287,6 +287,7 @@ fn user_input_interaction() -> AgentRequest {
     AgentRequest::UserInput {
         request: RequestUserInput {
             questions: vec![UserInputQuestion {
+                required: true,
                 id: "answer".into(),
                 header: "Answer".into(),
                 question: "Continue?".into(),

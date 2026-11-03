@@ -746,7 +746,7 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 			: request.type === 'permissions'
 				? { type: 'permissions', request: structuredClone(request.request) }
 				: request.type === 'userInput'
-					? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, options: question.options?.map(option => ({ ...option })) })) } }
+					? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
 					: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
 	};
 }

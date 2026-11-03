@@ -855,6 +855,31 @@ fn interaction_request_is_durable_without_connection_ownership() {
 }
 
 #[test]
+fn user_input_required_defaults_preserve_older_pending_requests() {
+    let legacy = json!({
+        "id": "name",
+        "header": "Name",
+        "question": "Your name?",
+        "allowFreeForm": true
+    });
+    let question: UserInputQuestion = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(question.required);
+    assert_eq!(serde_json::to_value(&question).unwrap()["required"], true);
+
+    let mut optional = legacy.clone();
+    optional["required"] = json!(false);
+    let optional: UserInputQuestion = serde_json::from_value(optional).unwrap();
+    assert!(!optional.required);
+    assert_eq!(serde_json::to_value(&optional).unwrap()["required"], false);
+
+    for invalid in [json!(null), json!("false"), json!(0)] {
+        let mut malformed = legacy.clone();
+        malformed["required"] = invalid;
+        assert!(serde_json::from_value::<UserInputQuestion>(malformed).is_err());
+    }
+}
+
+#[test]
 fn readable_wait_state_excludes_the_owner_directed_request_payload() {
     let interaction = TurnInteraction {
         request_id: RequestId::new("request_1").expect("test ID is non-empty"),
@@ -862,6 +887,7 @@ fn readable_wait_state_excludes_the_owner_directed_request_payload() {
         request: AgentRequest::UserInput {
             request: RequestUserInput {
                 questions: vec![UserInputQuestion {
+                    required: true,
                     id: "secret-question".into(),
                     header: "Secret".into(),
                     question: "Do not broadcast this payload".into(),

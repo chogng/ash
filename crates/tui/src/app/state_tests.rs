@@ -258,6 +258,7 @@ fn query_paste_uses_its_own_editor_without_changing_the_chat_draft() {
     app.insert_text("draft");
     app.update(ThreadEvent::QueryRequested(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "answer".into(),
             header: "Answer".into(),
             prompt: "What next?".into(),
@@ -2829,6 +2830,7 @@ fn fixed_requests_do_not_capture_mouse_for_a_hidden_completion() {
         } else {
             app.update(ThreadEvent::QueryRequested(
                 Query::new(vec![QueryQuestion {
+                    required: true,
                     id: "answer".into(),
                     header: "Answer".into(),
                     prompt: "What next?".into(),
@@ -3356,6 +3358,7 @@ fn escape_interrupts_pending_requests_after_leaving_the_answer_editor() {
         ));
         app.update(ThreadEvent::QueryRequested(
             Query::new(vec![QueryQuestion {
+                required: true,
                 id: "answer".into(),
                 header: "Answer".into(),
                 prompt: "What next?".into(),

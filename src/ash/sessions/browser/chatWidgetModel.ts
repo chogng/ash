@@ -723,6 +723,7 @@ export class ChatWidgetModel extends Disposable {
 
 		} catch (error) {
 			if (isCurrent()) this.setError(error);
+			throw error;
 		}
 	}
 

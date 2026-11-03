@@ -60,6 +60,14 @@ export class MenuBar extends Disposable {
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(observeResize(container, () => this.update()));
 		const document = container.ownerDocument;
+		// Observe combinations before a host's document-level shortcut can stop
+		// propagation. Menu actions still respect consumption at the document.
+		const keyObserver = document.defaultView ?? document;
+		this._register(addDisposableListener(keyObserver, 'keydown', (event: KeyboardEvent) => {
+			if (event.key !== 'Alt' || event.ctrlKey || event.shiftKey || event.metaKey || event.isComposing || event.defaultPrevented) this.altOnly = false;
+			else if (!event.repeat) this.altOnly = true;
+		}, true));
+		this._register(addDisposableListener(keyObserver, 'compositionstart', () => { this.altOnly = false; }, true));
 		this._register(addDisposableListener(document, 'focusin', () => this.updateFocus(), true));
 		this._register(addDisposableListener(document, 'focusout', () => {
 			queueMicrotask(() => { if (!this.isDisposed) this.updateFocus(); });
@@ -68,12 +76,12 @@ export class MenuBar extends Disposable {
 		this._register(addDisposableListener(document, 'keydown', event => this.onKeyDown(event), true));
 		this._register(addDisposableListener(document, 'keyup', event => {
 			if (event.key === 'Alt') {
-				if (this.altOnly && !this.options.disableAltFocus) this.toggleFocus();
+				if (this.altOnly && !event.ctrlKey && !event.shiftKey && !event.metaKey && !event.isComposing && !event.defaultPrevented && !this.options.disableAltFocus) this.toggleFocus();
 				this.altOnly = false;
 			}
 			this.element.classList.toggle('show-mnemonics', this.options.alwaysOnMnemonics === true || event.altKey);
 		}, true));
-		if (document.defaultView) this._register(addDisposableListener(document.defaultView, 'blur', () => this.blur()));
+		if (document.defaultView) this._register(addDisposableListener(document.defaultView, 'blur', () => { this.altOnly = false; this.blur(); }));
 		this.render();
 	}
 
@@ -293,10 +301,9 @@ export class MenuBar extends Disposable {
 	}
 
 	private onKeyDown(event: KeyboardEvent): void {
-		if (event.isComposing || event.defaultPrevented) return;
-		this.altOnly = event.key === 'Alt';
+		if (event.isComposing || event.defaultPrevented) { this.altOnly = false; return; }
 		this.element.classList.toggle('show-mnemonics', this.options.alwaysOnMnemonics === true || event.altKey);
-		if (this.options.enableMnemonics && event.altKey && event.key.length === 1) {
+		if (this.options.enableMnemonics && event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) {
 			const index = this.menus.findIndex(menu => this.mnemonic(menu.label) === event.key.toLocaleLowerCase());
 			if (index >= 0) {
 				if (this.options.compactMode || this.overflowIndices.includes(index)) {

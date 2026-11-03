@@ -15,7 +15,7 @@ use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig
 use rmcp::transport::{IntoTransport, StreamableHttpClientTransport};
 
 use crate::error::RmcpClientError;
-use crate::handler::{ClientRuntimeHandler, McpClientHost, NoopMcpClientHost};
+use crate::handler::{ClientRuntimeHandler, McpClientHost, NoopMcpClientHost, SessionHost};
 use crate::transport::{HttpAuthorization, StdioServerCommand, StreamableHttpServer};
 
 /// Deadlines applied independently to initialize, normal requests, and shutdown.
@@ -115,6 +115,8 @@ pub struct RmcpClient {
     service: RunningService<RoleClient, ClientRuntimeHandler>,
     server_info: Arc<ServerInfo>,
     timeouts: RmcpTimeouts,
+    host: Arc<SessionHost>,
+    elicitation_calls: Option<tokio::sync::Mutex<()>>,
 }
 
 impl RmcpClient {
@@ -135,7 +137,13 @@ impl RmcpClient {
             host,
             timeouts,
         } = options;
-        let handler = ClientRuntimeHandler::new(client_info, host);
+        let elicitation_calls = client_info
+            .capabilities
+            .elicitation
+            .as_ref()
+            .map(|_| tokio::sync::Mutex::new(()));
+        let host = Arc::new(SessionHost::new(host));
+        let handler = ClientRuntimeHandler::new(client_info, host.clone());
         let initialize =
             handler.serve_with_lifecycle(transport, rmcp::service::ClientLifecycleMode::Initialize);
         let service = tokio::time::timeout(timeouts.initialize, initialize)
@@ -150,6 +158,8 @@ impl RmcpClient {
             service,
             server_info,
             timeouts,
+            host,
+            elicitation_calls,
         })
     }
 
@@ -335,13 +345,30 @@ impl RmcpClient {
     where
         F: Future<Output = String>,
     {
+        tokio::pin!(cancellation);
+        // MCP elicitation does not identify its originating client request. Keep
+        // one request per interactive server session so a callback cannot use another
+        // concurrent Turn's authority; different server sessions remain independent.
+        let call = if let Some(calls) = &self.elicitation_calls {
+            Some(tokio::select! {
+                biased;
+                reason = &mut cancellation => return Err(RmcpClientError::Cancelled { operation, reason }),
+                permit = tokio::time::timeout(self.timeouts.request, calls.lock()) => permit.map_err(|_| RmcpClientError::RequestTimeout { operation, duration: self.timeouts.request })?,
+            })
+        } else {
+            None
+        };
+        let _context = call
+            .as_ref()
+            .map(|_| self.host.bind(self.host.delegate.capture_request_context()));
         let handle = self
             .service
             .peer()
             .send_request_with_option(request, PeerRequestOptions::no_options())
             .await
             .map_err(|source| RmcpClientError::Request { operation, source })?;
-        self.await_request(operation, handle, cancellation).await
+        self.await_request(operation, handle, &mut cancellation)
+            .await
     }
 
     async fn await_request<F>(

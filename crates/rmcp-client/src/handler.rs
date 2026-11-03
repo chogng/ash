@@ -1,6 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use rmcp::ClientHandler;
 use rmcp::RoleClient;
@@ -40,6 +41,12 @@ pub enum McpClientEvent {
 pub trait McpClientHost: Send + Sync + 'static {
     fn on_event(&self, _event: McpClientEvent) {}
 
+    /// Capture the initiating tool call's host context before RMCP dispatches server requests
+    /// on its own tasks. The returned host must retain only that call's interaction authority.
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        None
+    }
+
     fn handle_elicitation(
         &self,
         _request: McpElicitation,
@@ -53,6 +60,52 @@ pub trait McpClientHost: Send + Sync + 'static {
 pub struct NoopMcpClientHost;
 
 impl McpClientHost for NoopMcpClientHost {}
+
+pub(crate) struct SessionHost {
+    pub(crate) delegate: Arc<dyn McpClientHost>,
+    active: Mutex<Option<Arc<dyn McpClientHost>>>,
+}
+
+impl SessionHost {
+    pub(crate) fn new(delegate: Arc<dyn McpClientHost>) -> Self {
+        Self {
+            delegate,
+            active: Mutex::new(None),
+        }
+    }
+
+    pub(crate) fn bind(&self, host: Option<Arc<dyn McpClientHost>>) -> RequestHostLease<'_> {
+        *self.active.lock().unwrap() = host;
+        RequestHostLease(self)
+    }
+}
+
+pub(crate) struct RequestHostLease<'a>(&'a SessionHost);
+
+impl Drop for RequestHostLease<'_> {
+    fn drop(&mut self) {
+        self.0.active.lock().unwrap().take();
+    }
+}
+
+impl McpClientHost for SessionHost {
+    fn on_event(&self, event: McpClientEvent) {
+        self.delegate.on_event(event);
+    }
+
+    fn handle_elicitation(
+        &self,
+        request: McpElicitation,
+    ) -> HostFuture<Result<ElicitResult, rmcp::ErrorData>> {
+        let host = self
+            .active
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| Arc::clone(&self.delegate));
+        host.handle_elicitation(request)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct ClientRuntimeHandler {

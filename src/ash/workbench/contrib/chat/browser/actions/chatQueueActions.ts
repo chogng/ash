@@ -110,8 +110,9 @@ async function selectMessage(accessor: ServicesAccessor, value?: unknown): Promi
 	const widget = registry.lastFocusedWidget;
 	if (!widget?.visible || !widget.sessionId || !widget.threadId) return;
 	const { sessionId, threadId } = widget;
+	const generation = widget.model?.composerGeneration;
 	if (target && (target.sessionId !== sessionId || target.threadId !== threadId)) throw new TypeError(localize('chat.queue.invalidTarget', 'Choose a queued message with a valid identity and revision.'));
-	const current = () => widget.visible && widget.sessionId === sessionId && widget.threadId === threadId && registry.getAllWidgets().includes(widget);
+	const current = () => widget.visible && widget.sessionId === sessionId && widget.threadId === threadId && widget.model?.composerGeneration === generation && registry.getAllWidgets().includes(widget);
 	const messages = await chat.getPendingRequests(sessionId, threadId);
 	if (!current()) return;
 	if (target) {

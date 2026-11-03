@@ -254,7 +254,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles));
 		this.progress.element.hidden = true;
 		this.overview = this._register(new ChatDebugOverviewView(this.domNode));
-		this._register(this.overview.onDidRevealSession(({ sessionId, threadId }) => { void this.navigation.openConversation(sessionId, threadId).catch(error => { if (!this.isDisposed) { this.statusDomNode.textContent = String(error); } }); }));
+		this._register(this.overview.onDidRevealSession(({ sessionId, threadId }) => {
+			const revision = this.revision;
+			void this.navigation.openConversation(sessionId, threadId).catch(error => { if (!this.isDisposed && revision === this.revision) { this.statusDomNode.textContent = String(error); } });
+		}));
 		this._register(addDisposableListener(this.overview.container, 'toggle', () => this.layout(this.dimension)));
 		this.bodyDomNode = h(document, 'div', { className: 'ash-agent-trace-body' });
 		this.navigationDomNode = h(document, 'div', { className: 'ash-agent-trace-navigation' });
@@ -390,8 +393,9 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	}
 
 	private async openResource(resource: import('../../../../../base/common/uri.js').URI): Promise<void> {
+		const revision = this.revision;
 		try { await this.editors.openEditor(createAgentTraceInput(resource), { pinned: true }); }
-		catch (error) { if (!this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+		catch (error) { if (!this.isDisposed && revision === this.revision) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
 	}
 
 	private showEventInLogs(id: string): void {

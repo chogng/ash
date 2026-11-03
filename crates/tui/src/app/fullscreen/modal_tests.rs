@@ -1650,6 +1650,7 @@ fn paste_targets_the_modal_and_home_instead_of_a_background_question() {
     let mut app = crate::app::App::new();
     app.update(crate::thread::Event::QueryRequested(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "question".into(),
             header: "Question".into(),
             prompt: "Choose an option".into(),

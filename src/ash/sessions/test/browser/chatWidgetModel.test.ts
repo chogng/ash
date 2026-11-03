@@ -520,17 +520,34 @@ test('queue and steering preserve the source-owned idempotency key', async () =>
 });
 
 for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} failed interruption rejects before a follow-up can be sent`, async () => {
+		const f = fixture(kind, undefined, true);
+		using resources = f.resources;
+		await f.model.initialize();
+		const failure = new Error('Synthetic interruption failure');
+		f.turnApi.interrupt = async () => { throw failure; };
+		await assert.rejects(async () => {
+			await f.model.interrupt();
+			await f.model.send('Keep this follow-up unsent');
+		}, error => error === failure);
+		assert.equal(f.model.error, failure.message);
+		assert.equal(f.model.inputState.canInterrupt, true);
+		assert.deepEqual({ starts: f.starts, queues: f.queues, steers: f.steers }, { starts: [], queues: [], steers: [] });
+	});
+
 	for (const failed of [false, true]) {
 		test(`${kind} interrupt ${failed ? 'error' : 'completion'} cannot rewrite a new A-B-A operation`, async () => {
 			const f = fixture(kind, undefined, true); using resources = f.resources; await f.model.initialize();
 			const pending = new DeferredPromise<{ sequence: number; }>();
 			const targets: Parameters<IAgentTurnService['interrupt']>[0][] = [];
 			f.turnApi.interrupt = input => { targets.push(input); return pending.p; };
-			const interrupting = f.model.interrupt();
+			const interrupting = f.model.interrupt().then(() => undefined, error => error);
 			await f.model.selectThread({ session: f.session, threadId: 'B' }); await f.model.selectThread({ session: f.session, threadId: 'A' });
 			f.offers.fire(approval('next-operation')); const state = f.model.state;
 			if (failed) await pending.error(new Error('Retired interrupt failed')); else await pending.complete({ sequence: 2 });
-			await interrupting; assert.equal(targets.length, 1); assert.equal(targets[0]!.threadId, 'A'); assert.equal(targets[0]!.turnId, 'turn-A');
+			const result = await interrupting;
+			if (failed) assert.match(result.message, /Retired interrupt failed/u); else assert.equal(result, undefined);
+			assert.equal(targets.length, 1); assert.equal(targets[0]!.threadId, 'A'); assert.equal(targets[0]!.turnId, 'turn-A');
 			assert.equal(f.model.interaction?.requestId, 'next-operation'); assert.equal(f.model.state, state); assert.equal(f.model.error, undefined);
 		});
 		test(`${kind} approval ${failed ? 'error' : 'completion'} retains a replacement request in the same Thread`, async () => {
@@ -606,7 +623,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			f.turnApi.resolveInteraction = async () => { calls++; return { sequence: 2 }; };
 			f.offers.fire(approval('owned'));
 			using listener = f.model.onDidChange(() => { if (!changed && f.model.state === 'submitting') { changed = true; navigation = f.model.selectThread({ session: f.session, threadId: 'B' }); } });
-			if (operation === 'interrupt') await f.model.interrupt();
+			if (operation === 'interrupt') await assert.rejects(f.model.interrupt(), isCancellationError);
 			else await f.model.resolveInteraction({ type: 'approval', response: { decision: 'decline' } }).catch(() => { });
 			await navigation;
 			assert.equal(calls, 0); assert.equal(f.model.threadId, 'B'); assert.equal(f.model.state, 'ready'); assert.equal(f.model.error, undefined);

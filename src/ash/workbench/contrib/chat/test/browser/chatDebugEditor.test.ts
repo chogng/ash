@@ -30,6 +30,60 @@ import { createAgentTraceResource } from '../../browser/chatDebug/chatDebugEdito
 
 suite('Execution Trace editor', () => {
 
+	for (const entry of ['Home', 'Reveal Chat Session'] as const) for (const navigate of [false, true]) {
+		test(`${entry} navigation failure ${navigate ? 'does not replace a later A-B-A input status' : 'remains visible in its current input'}`, async () => {
+			const dom = new JSDOM('<!doctype html><body></body>');
+			try {
+				using services = new InstantiationService();
+				using configuration = new InMemoryConfigurationService();
+				using context = new ContextKeyService();
+				const started = new DeferredPromise<void>();
+				const pending = new DeferredPromise<void>();
+				const open = async () => { void started.complete(); await pending.p; };
+				services.registerInstance(IConfigurationService, configuration);
+				services.registerInstance(IContextKeyService, context);
+				services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+				services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } as unknown as IContextMenuService);
+				services.registerInstance(IEditorService, { openEditor: open } as unknown as IEditorService);
+				services.registerInstance(IChatService, { onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidBecomeReady: Event.None } as unknown as IChatService);
+				services.registerInstance(IChatDebugService, {
+					onDidChangeAvailableSessionResources: Event.None,
+					getAvailableSessionResources: () => [], getHistoricalSessionTitle: () => undefined,
+					refreshAvailableSessions: async () => { },
+					readTrace: async (sessionId: string) => ({ trace: { formatVersion: 3, sessionId, threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false }),
+					readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 1, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, events: [] }, cursor: 0, hasMore: false }),
+					readSession: async (sessionId: string) => ({ sessionId, title: sessionId, manager: { status: 'idle' }, threads: [{ threadId: 'root' }] }),
+				} as unknown as IChatDebugService);
+				services.registerInstance(IChatSessionNavigationService, { openConversation: open } as unknown as IChatSessionNavigationService);
+				services.registerInstance(IDiffService, { createComputationService: () => { throw new Error('Diff computation must be explicitly requested'); } });
+				registerCodeEditorServices(services);
+				using pane = registerTestComponentServices(services).createInstance(ChatDebugEditor);
+				pane.create(dom.window.document.body);
+				measureTreeViewport(dom.window.document);
+				const resource = createAgentTraceResource('A');
+				await pane.setInput({ resource }, new AbortController().signal);
+				if (entry === 'Reveal Chat Session') {
+					[...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Overview')!.click();
+				}
+				await new Promise(resolve => setImmediate(resolve));
+				const button = [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === entry)!;
+				assert.ok(button && !button.hidden);
+				button.click();
+				await started.p;
+				if (navigate) {
+					await pane.setInput({ resource: createAgentTraceResource('B') }, new AbortController().signal);
+					await pane.setInput({ resource }, new AbortController().signal);
+				}
+				const status = dom.window.document.querySelector('.ash-agent-trace-status')!;
+				const previous = status.textContent;
+				await pending.error(new Error('Synthetic navigation failure'));
+				await new Promise(resolve => setImmediate(resolve));
+				if (navigate) assert.equal(status.textContent, previous);
+				else assert.match(status.textContent!, /Synthetic navigation failure/u);
+			} finally { dom.window.close(); }
+		});
+	}
+
 	test('refreshes a graph invalidated by durable events arriving during the graph read', async () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {

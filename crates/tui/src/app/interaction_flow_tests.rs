@@ -26,6 +26,7 @@ fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {
     app.insert_text("chat draft stays here");
     app.update(ThreadEvent::QueryRequested(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "next".into(),
             header: "Next step".into(),
             prompt: "How should the work continue?".into(),
@@ -116,6 +117,52 @@ fn approval_renders_submission_and_failure_while_preserving_the_chat_draft() {
         app.handle_key(key(KeyCode::Enter)),
         Some(AppCommand::Thread(ThreadCommand::ResolveRequest(response)))
     );
+}
+
+#[test]
+fn query_optional_fields_can_be_skipped_without_losing_the_chat_draft() {
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for (language, name) in [
+            (crate::nls::Language::English, "english"),
+            (crate::nls::Language::Chinese, "chinese"),
+        ] {
+            let mut app = App::new();
+            let mut settings = TerminalSettings::default();
+            settings.set_language(language);
+            settings.set_screen_mode(mode);
+            app.update(ConfigEvent::SettingsReceived(settings));
+            app.insert_text("Unsent draft");
+            app.update(ThreadEvent::QueryRequested(
+                Query::new(vec![QueryQuestion {
+                    required: false,
+                    id: "notify".into(),
+                    header: "Notifications".into(),
+                    prompt: "Send a notification?".into(),
+                    choices: ["true", "false"]
+                        .into_iter()
+                        .map(|value| QueryChoice {
+                            label: value.into(),
+                            description: String::new(),
+                        })
+                        .collect(),
+                    custom_answer: QueryCustomAnswer::Unavailable,
+                }])
+                .unwrap(),
+            ));
+            assert!(!app.query_view().unwrap().question.required);
+            crate::tui_assert_snapshot!(app = &app; format!("query_optional_{name}"), render(&app, 80, 20));
+            let Some(AppCommand::Thread(ThreadCommand::ResolveRequest(resolution))) =
+                app.handle_key(key(KeyCode::Enter))
+            else {
+                panic!("Skip must resolve the optional question");
+            };
+            let AgentResponse::UserInput { response } = resolution.response else {
+                panic!("the query must produce a user input response");
+            };
+            assert!(response.answers.is_empty());
+            assert_eq!(app.input(), "Unsent draft");
+        }
+    }
 }
 
 #[test]

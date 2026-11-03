@@ -172,6 +172,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				await page.screenshot({ path: testInfo.outputPath(`side-chat-${entry}.png`) });
 				await chat.locator('.ash-chat-side-chat-origin').getByRole('button').click();
 				await expect(chat).toHaveAttribute('data-thread-id', threadId);
+				await expect(chat.locator('.ash-chat-list-widget, .ash-cowork-list-widget')).toContainText('Controlled execution is running.');
 				await expect(composer.locator('.view-lines')).not.toContainText('side-question-fixture');
 			}
 

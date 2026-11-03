@@ -513,6 +513,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 request: protocol::AgentRequest::UserInput {
                     request: protocol::RequestUserInput {
                         questions: vec![protocol::UserInputQuestion {
+                            required: true,
                             id: "answer".into(),
                             header: "Choice".into(),
                             question: "Which target?".into(),
