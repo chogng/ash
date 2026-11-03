@@ -183,7 +183,6 @@ Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本�
 Desktop 只给已完成 Agent 回答提供 Read Aloud。`voiceChatActions.ts` 经 `renderAsPlaintext` → SpeechService／MainThreadSpeech 向原扩展逐段合成，每段遵守 Host 16384 UTF-16 上限且不拆代理对；RPC 接受不代表播放结束，必须等待 Stopped 后才能下一段。Error／取消／注册撤销拒绝等待并释放。来源文字改变、移除、隐藏、行 Escape 或窗口 StopReadAloud 取消本次 CTS，不停止其他窗口或其他 owner 的 TTS；旧 finally 不能清除同窗口新操作。Web 未装配 Desktop command 或 provider 撤销时隐藏按钮。
 `browser/chatStatus/chatStatusEntry.ts` 通过窗口级状态栏显示订阅账号状态，并使用 Quick Input 提供账号管理、模型连接和 Usage 入口。状态来自 `IAccountService`，账号事件淘汰迟到读取；禁用 AI 或释放窗口时撤回入口与选择器。上下文及累计 token 用量仍由原输入框和 Usage 页面拥有，不迁入状态栏，也不表示订阅剩余额度。订阅额度复用后端 `account/rateLimits/read`：窗口剩余百分比与重置时间、ChatGPT credits、xAI 账期和精确 USD 余额分别展示；未知字段不推断为不限量。按账号独立处理加载与失败，选择器内刷新可重试；账号事件、关闭、禁用 AI 和释放取消旧结果写回。未接入上游 Copilot 推广、套餐升级或扩展 Chat 状态项。
 
-
 标准 HasSpeechProvider／SpeechToTextInProgress／TextToSpeechInProgress context keys 由 SpeechService 的事实驱动，不另存录音状态。无障碍提示、语言偏好、焦点、控制可用性均使用同一窗口服务；fixture 也必须在 window 级注册一次配置、ContextKey、ExtensionService 和 SpeechService。
 
 普通 Chat 工具栏在听写与实时语音均可用时，由 `browser/voiceInputMode/` 显示分段按钮；连接后保留连接开关、麦克风静音与原语音回复打断入口。`VoiceInputModeService` 只拥有 profile UI 选择状态（`chat.voiceInputMode.selected`，默认 `voice`），通过 `IStorageService` 持久化并向 context key 投影；录音、媒体连接和草稿仍由原服务与输入持有。切换模式等待当前输入的另一条录音链退出，隐藏或换输入后不继续启动。common 的监听／静音键由现有 AgentsVoice contribution 从 `IAgentVoiceService` 投影，`agents.voice.showButton` 为 WINDOW scope 的 UI 设置。Compact 输入沿用原布局策略。上游开发演示和专用 VoiceClient transport 未在此链创建平行实现。
