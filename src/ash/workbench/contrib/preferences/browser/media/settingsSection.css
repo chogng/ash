@@ -16,6 +16,12 @@
 	color: var(--ash-description-foreground);
 }
 
+.ash-settings-card-section[data-settings-item-id="chat.subscriptionUsage"]
+	.ash-settings-section-status {
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+}
+
 .ash-settings-card > .ash-settings-section-status:empty {
 	display: none;
 }

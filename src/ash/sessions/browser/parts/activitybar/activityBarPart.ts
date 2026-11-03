@@ -3,13 +3,13 @@ import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../base/browser/ui/menu/menu.js';
 import { parse } from '../../../../base/common/json.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
-import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { AnchorAxisAlignment } from '../../../../base/common/layout.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -363,60 +363,25 @@ export class ActivityBar extends Disposable {
 	}
 }
 
-class MoreActionViewItem extends ActionViewItem {
-	private button!: Button;
-	private readonly menu = this._register(new MutableDisposable<CancellationTokenSource>());
-
-	constructor(action: IAction, private readonly contextMenus: IContextMenuService, private readonly getActions: () => readonly IAction[], private readonly pinAction: (id: string) => void) {
-		super(action);
-	}
-
-	override render(container: HTMLElement): void {
-		this.button = this._register(new Button(container, {
-			...defaultButtonStyles,
-			label: this.action.label,
-			icon: this.action.icon,
-			onClick: event => this.toggleMenu(event.detail === 0),
-		}));
-		this.button.domNode.classList.add('ash-sessions-activity-item');
-		this.button.domNode.setAttribute('aria-haspopup', 'menu');
-		this.button.domNode.setAttribute('aria-expanded', 'false');
-	}
-
-	private toggleMenu(autoSelectFirstItem: boolean): void {
-		if (this.menu.value) {
-			this.menu.value.cancel();
-			return;
-		}
-		const anchor = this.button.domNode;
-		const cancellation = new CancellationTokenSource();
-		this.menu.value = cancellation;
-		anchor.setAttribute('aria-expanded', 'true');
-		this.contextMenus.showContextMenu({
-			getAnchor: () => anchor,
-			getActions: this.getActions,
-			getActionViewItem: (action, options) => new PinnableMenuActionViewItem(action, options, () => {
-				cancellation.cancel();
-				this.pinAction(action.id);
+class MoreActionViewItem extends DropdownMenuActionViewItem {
+	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], pinAction: (id: string) => void) {
+		super(action, getActions, {
+			showContextMenu: delegate => contextMenus.showContextMenu({
+				...delegate,
+				getActionViewItem: (item, options) => new PinnableMenuActionViewItem(item, options, () => {
+					this.hide();
+					pinAction(item.id);
+				}),
+				getMenuClassName: () => 'ash-sessions-navigation-menu',
+				getCheckedActionsRepresentation: () => 'radio',
 			}),
-			getMenuClassName: () => 'ash-sessions-navigation-menu',
-			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-			autoSelectFirstItem,
-			getCheckedActionsRepresentation: () => 'radio',
-			cancellationToken: cancellation.token,
-			onHide: () => {
-				this.menu.clear();
-				anchor.setAttribute('aria-expanded', 'false');
-			},
-		});
+		}, { buttonStyles: defaultButtonStyles }, () => ({ anchorAxisAlignment: AnchorAxisAlignment.Horizontal }));
 	}
 
-	override focus(): void { this.button.focus(); }
-	override setTabbable(tabbable: boolean): void { this.button.domNode.tabIndex = tabbable ? 0 : -1; }
-
-	protected override disposeCore(): void {
-		this.menu.value?.cancel();
-		super.disposeCore();
+	protected override createButton(container: HTMLElement, options: IButtonOptions): Button {
+		const button = super.createButton(container, options);
+		button.domNode.classList.add('ash-sessions-activity-item', 'ash-sessions-activity-more');
+		return button;
 	}
 }
 

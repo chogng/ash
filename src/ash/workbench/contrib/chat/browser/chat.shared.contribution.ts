@@ -67,6 +67,7 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
+import { SubscriptionUsageSettingsModel } from './subscriptionUsageSettingsModel.js';
 import { ChatUsageSettingsModel } from './chatUsageSettingsModel.js';
 import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -133,6 +134,11 @@ registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, Instantiati
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 registerSingleton(IChatLayoutService, ChatLayoutService, InstantiationType.Delayed);
+registerSettingsSection({
+	id: 'chat.subscriptionUsage', categoryId: 'chat-usage', model: new SyncDescriptor(SubscriptionUsageSettingsModel),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatUsage,
+});
 registerSettingsSection({
 	id: 'chat.usage', categoryId: 'chat-usage', model: new SyncDescriptor(ChatUsageSettingsModel),
 	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
