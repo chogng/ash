@@ -720,21 +720,32 @@ suite('actionWidget browser component', () => {
 		await expect(page.getByRole('button', { name: 'Open actions' })).toBeFocused();
 	});
 
-	test('default action widgets retain the focus outline when opened by pointer', async function () {
+	test('action widgets show themed row focus after pointer opening and keyboard navigation', async function () {
 		const { page } = browserTests;
 		await page.goto('/actionWidget.html');
 		const trigger = page.getByRole('button', { name: 'Open actions' });
 		await trigger.evaluate(button => button.addEventListener('click', () => window.ashActionWidgetIntegration.show(['Run', 'Plan'])));
-		await trigger.click();
 		const run = page.getByRole('menuitemradio', { name: 'Run' });
-		await expect(run).toBeFocused();
-		await expect(run).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
-		await page.keyboard.press('ArrowDown');
 		const plan = page.getByRole('menuitemradio', { name: 'Plan' });
-		await expect(plan).toBeFocused();
-		await expect(plan).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
-		await page.keyboard.press('Escape');
-		await expect(trigger).toBeFocused();
+		for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(scheme => window.ashActionWidgetIntegration.theme(scheme), scheme);
+			await trigger.click();
+			await expect(run).toBeFocused();
+			const highlight = await run.evaluate(element => getComputedStyle(element).backgroundColor);
+			const outline = await run.evaluate(element => getComputedStyle(element).outlineColor);
+			if (scheme === 'light' || scheme === 'dark') {
+				expect(outline).toBe('rgba(0, 0, 0, 0)');
+			} else {
+				expect(outline).not.toBe('rgba(0, 0, 0, 0)');
+			}
+			await expect(plan).not.toHaveCSS('background-color', highlight);
+			await page.keyboard.press('ArrowDown');
+			await expect(plan).toBeFocused();
+			await expect(plan).toHaveCSS('background-color', highlight);
+			await expect(plan).toHaveCSS('outline-color', outline);
+			await page.keyboard.press('Escape');
+			await expect(trigger).toBeFocused();
+		}
 	});
 
 	test('switching tabs recomputes the menu width without replacing its owner', async function () {

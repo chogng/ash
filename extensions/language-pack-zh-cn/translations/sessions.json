@@ -129,6 +129,7 @@
     "sessions.environment.sandboxNetworkAllowed": "网络已允许",
     "sessions.environment.sandboxStatus": "沙箱：{0} · {1}",
     "sessions.environment.menu": "运行位置",
+    "sessions.environment.tooltip": "环境",
     "sessions.environment.cancel": "取消",
     "sessions.environment.ssh": "SSH",
     "sessions.environment.transportHelp": "保存 SSH 连接，或通过认证的 Ash 隧道 URL 连接。",

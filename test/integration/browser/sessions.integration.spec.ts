@@ -1062,6 +1062,52 @@ test('the environment menu offers WSL when discovery finds a distribution', asyn
 	await page.keyboard.press('Escape');
 });
 
+test('the new Session composer keeps its pickers and dictation in keyboard navigation', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost&locale=en&speechProvider');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	const picker = page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: /^Run on:/ });
+	await picker.press('ArrowDown');
+	const menu = page.locator('.ash-sessions-environment-menu');
+	await expect(menu).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(menu).toHaveCount(0);
+	await expect(picker).toBeFocused();
+	await expect(picker).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(picker).toHaveCSS('outline-style', 'solid');
+	const foreground = await picker.evaluate(button => getComputedStyle(button).color);
+	await expect(picker).toHaveCSS('outline-color', foreground);
+	await picker.click();
+	await expect(menu).toBeVisible();
+	await page.mouse.click(600, 200);
+	await expect(menu).toHaveCount(0);
+	await expect(picker).toBeFocused();
+	await expect(picker).toHaveCSS('outline-style', 'none');
+	await expect(picker).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+
+	const workspace = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');
+	await page.keyboard.press('Tab');
+	await expect(workspace).toBeFocused();
+	await expect(workspace).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const workspaceForeground = await workspace.evaluate(button => getComputedStyle(button).color);
+	await expect(workspace).toHaveCSS('outline-color', workspaceForeground);
+	await page.keyboard.press('Shift+Tab');
+	await expect(picker).toBeFocused();
+
+	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
+	await input.focus();
+	await page.keyboard.press('Tab');
+	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	await expect(dictation).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(picker).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(workspace).toBeFocused();
+	await page.keyboard.press('Tab');
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`new Session host chooser preserves keyboard selection and scope in ${locale}`, async ({ page }) => {
 		await page.setViewportSize({ width: 1179, height: 770 });
@@ -1076,12 +1122,27 @@ for (const locale of ['en', 'zh-CN']) {
 		const picker = active.getByRole('button', {
 			name: locale === 'en' ? /^Run on:/ : /^运行位置：/,
 		});
+		await picker.hover();
+		await expect(page.getByRole('tooltip')).toHaveText(locale === 'en' ? 'Environment' : '环境');
 		const pickerLabels = active.locator(
 			':is(.ash-sessions-environment-picker, .ash-sessions-workspace-picker) .ash-icon-label-text',
 		);
 		await expect.poll(() => pickerLabels.evaluateAll(labels => labels.map(label =>
 			label.clientWidth > 0 && label.scrollWidth === label.clientWidth,
 		))).toEqual([true, true]);
+		const footer = active.locator('.ash-sessions-chat-input-footer');
+		const controls = footer.locator(
+			'.ash-sessions-environment-picker, .ash-sessions-workspace-picker, .ash-chat-input-mode-action, .ash-chat-input-permission-picker',
+		);
+		await expect(controls).toHaveCount(4);
+		for (const control of await controls.all()) {
+			await expect(control).toHaveCSS('padding-inline-start', '4px');
+			await expect(control).toHaveCSS('padding-inline-end', '4px');
+		}
+		await expect.poll(() => controls.evaluateAll(buttons => {
+			const bounds = buttons.map(button => button.getBoundingClientRect());
+			return bounds.slice(1).map((bound, index) => bound.left - bounds[index]!.right);
+		})).toEqual([2, 2, 2]);
 		await expect(picker.locator('[data-ash-icon-id="local"]')).toBeVisible();
 		await active.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.type('Draft survives changing host');

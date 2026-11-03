@@ -50,6 +50,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		this._register(toDisposable(() => this.host.remove()));
 		this.button = this._register(new Button(this.host, {
 			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '',
+			title: localize('sessions.environment.tooltip', 'Environment'),
 		}));
 		this.button.domNode.classList.add('ash-sessions-environment-picker');
 		const sandboxStatus = h(container.ownerDocument, 'div');
@@ -111,7 +112,6 @@ export class SessionEnvironmentPicker extends Disposable {
 		}
 		if (this.button.label !== label) {
 			this.button.label = label;
-			this.button.setTitle(label);
 		}
 		this.button.domNode.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
 		this.button.enabled = this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';

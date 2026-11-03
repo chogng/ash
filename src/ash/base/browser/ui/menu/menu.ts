@@ -10,7 +10,6 @@ import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.
 import { getActionForAltMode, type IAction, type IActionRunner, Separator, SubmenuAction } from '../../../common/actions.js';
 import { RunOnceScheduler } from '../../../common/async.js';
 import { addDisposableListener, isNode, h, ModifierKeyEmitter, getActiveElement } from '../../dom.js';
-import { isModifierKey } from '../../keyboardEvent.js';
 import type { ResolvedKeybinding } from '../../../common/keybindings.js';
 import { MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { Scrollable } from '../../../common/scrollable.js';
@@ -534,14 +533,6 @@ export class Menu extends ActionBar {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
-		// Keyboard input may come from a sibling filter or an open submenu before focus returns here.
-		this._register(addDisposableListener(ownerDocument, 'keydown', event => {
-			if (event.isComposing || isModifierKey(event)) return;
-			element.classList.remove('pointer-navigation');
-		}, true));
-		this._register(addDisposableListener(element, 'pointerdown', () => {
-			element.classList.add('pointer-navigation');
-		}));
 		this._register(addDisposableListener(element, 'mouseover', (event) => {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 		}));
@@ -552,7 +543,6 @@ export class Menu extends ActionBar {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 			// Showing a menu under a resting pointer must not select an action.
 			if (!moved) return;
-			element.classList.add('pointer-navigation');
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 			// Only this parent's still-visible submenu keeps a cascade continuous.

@@ -131,8 +131,8 @@ export class ContextView
 			const shield = h(ownerDocument, 'div', { className: 'ash-context-view-pointer-shield' });
 			shield.setAttribute('aria-hidden', 'true');
 			this.element.prepend(shield);
-			// Keep focus in the menu and consume the full click before releasing the shield.
-			this.visibleListeners.add(addDisposableListener(shield, 'pointerdown', event => event.preventDefault()));
+			// Let pointerdown leave the menu input before restoring trigger focus on click.
+			// The shield still consumes the full click.
 			this.visibleListeners.add(addDisposableListener(shield, 'click', event => {
 				event.stopPropagation();
 				this.hide(ContextViewHideReason.OutsidePointer);

@@ -70,6 +70,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
 				placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
+				tabFocusMode: true,
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),

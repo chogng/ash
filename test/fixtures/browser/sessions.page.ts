@@ -4,6 +4,8 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { IRemoteAgentHostService, isSSHAgentHost, NullRemoteAgentHostService, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../src/ash/platform/agentHost/common/remoteAgentHostService.js';
 import { IRemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../src/ash/platform/remote/common/remoteConnectionService.js';
 import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
@@ -27,6 +29,18 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+if (new URL(location.href).searchParams.has('speechProvider')) {
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier<object>('test.speechProvider'),
+		dependencies: [ISpeechService],
+		install: context => context.register(context.container.get(ISpeechService).registerSpeechProvider('test', {
+			metadata: { extension: new ExtensionIdentifier('test.speech'), displayName: 'Test speech provider' },
+			createSpeechToTextSession: () => { throw new Error('Unexpected dictation start'); },
+			createTextToSpeechSession: () => { throw new Error('Unexpected speech synthesis'); },
+			createKeywordRecognitionSession: () => { throw new Error('Unexpected keyword recognition'); },
+		})),
+	});
+}
 const updateChanges = new Emitter<UpdateState>();
 let updateState: UpdateState = new URL(location.href).searchParams.get('update') === 'ready' ? 'ready' : 'idle';
 let updateInstallCount = 0;
