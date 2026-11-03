@@ -143,21 +143,30 @@ export class HoverService extends Disposable implements IHoverService {
 		let managed!: ManagedHover;
 		const viewLifetime = new DisposableStore();
 		const nestedView = viewLifetime.add(new MutableDisposable<ContextView>());
-		const nestedLayout = viewLifetime.add(new MutableDisposable<IDisposable>());
+		const nestedListeners = viewLifetime.add(new MutableDisposable<DisposableStore>());
 		const provider: IContextViewProvider = {
 			show: viewOptions => {
 				const parent = this.findContainingHover(options.target, managed);
 				managed.parent = parent;
-				if (!parent) { return this.contextViewService.show(viewOptions); }
+				const scope = parent ? undefined : ContextView.getHoverScope(options.target);
+				if (!parent && !scope) { return this.contextViewService.show(viewOptions); }
+				if (scope && !scope.contains(options.target)) { return false; }
 				for (const hover of this.managedHovers) {
-					if (hover !== managed && hover.parent === parent) { hover.hide(); }
+					if (hover !== managed && hover.parent === parent && (parent || hover.visible)) { hover.hide(); }
 				}
-				const container = parent.domNode!.parentElement!;
-				nestedView.value = new ContextView(container.parentElement!);
-				// Changing card height can move the child anchor without changing the anchor's size.
-				nestedLayout.value = observeResize(parent.domNode!, () => nestedView.value?.layout());
+				const listeners = nestedListeners.value = new DisposableStore();
+				if (scope) {
+					// A menu-owned hover must not replace the menu in the shared host.
+					nestedView.value = new ContextView(scope.element);
+					listeners.add(scope.onDidHide(() => managed.hide()));
+				} else {
+					const parentContent = parent!.domNode!;
+					nestedView.value = new ContextView(parentContent.parentElement!.parentElement!);
+					// Changing card height can move the child anchor without changing the anchor's size.
+					listeners.add(observeResize(parentContent, () => nestedView.value?.layout()));
+				}
 				let layer = 1;
-				for (let ancestor = parent.parent; ancestor; ancestor = ancestor.parent) { layer++; }
+				for (let ancestor = parent?.parent; ancestor; ancestor = ancestor.parent) { layer++; }
 				return nestedView.value.show({ ...viewOptions, layer });
 			},
 			hide: () => nestedView.value ? nestedView.value.hide() : this.contextViewService.hide(),
@@ -185,7 +194,7 @@ export class HoverService extends Disposable implements IHoverService {
 			groupId: options.groupId,
 			onDidShow: () => this.didShow(managed),
 			onDidHide: () => {
-				nestedLayout.clear();
+				nestedListeners.clear();
 				nestedView.clear();
 				this.didHide(managed);
 				options.onDidHide?.();

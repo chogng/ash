@@ -1,10 +1,11 @@
+import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
 import { URI } from '../../../../base/common/uri.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { WorkspaceSelectionOrigin, type IWorkspaceSelectionSnapshot } from '../../../common/workspaceSelection.js';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -50,6 +51,7 @@ interface IWorkspaceModeItem {
 /** Edits the owning draft; container startup remains part of first-send preparation. */
 export class SessionWorkspacePicker extends Disposable {
 	private readonly picker: WorkspacePicker;
+	private readonly host: HTMLElement;
 	private readonly workspaceFallback: SessionWorkspaceFallback;
 	private readonly presentationChanged = this._register(new Emitter<void>());
 	private label = '';
@@ -74,7 +76,7 @@ export class SessionWorkspacePicker extends Disposable {
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 	) {
 		super();
-		const host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
+		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
 		container.prepend(host);
 		this._register(toDisposable(() => host.remove()));
 		const owner = this;
@@ -111,6 +113,7 @@ export class SessionWorkspacePicker extends Disposable {
 
 	private render(): void {
 		const draft = this.draft;
+		this.host.hidden = !draft;
 		const session = this.sessions.sessions.find(session => session.sessionId === this.model.sessionId);
 		const selection = draft?.workspace;
 		const root = selection && 'root' in selection ? selection.root : session?.workspace?.root;
@@ -287,8 +290,7 @@ export class WorkspacePicker extends Disposable {
 
 	private button!: Button;
 	private hover!: IManagedHover;
-	private restoreFocus = true;
-	private readonly popup = this._register(new MutableDisposable<DisposableStore>());
+	private dropdown: ActionWidgetDropdown | undefined;
 
 	constructor(
 		private readonly options: { readonly trigger?: { readonly actionWidget: IActionWidgetService; readonly action: IAction; readonly onDidChange: Event<void>; readonly placeholder: string; }; },
@@ -302,21 +304,21 @@ export class WorkspacePicker extends Disposable {
 		this.button = this._register(new Button(container, {
 			...defaultButtonStyles,
 			label: trigger.action.label, icon: trigger.action.icon, size: 'small',
-			onClick: () => {
-				if (this.popup.value) { this.hide(); }
-				else { trigger.action.run(); }
-			},
 		}));
 		this.button.domNode.classList.add('ash-sessions-workspace-picker');
-		this.button.domNode.setAttribute('aria-haspopup', 'menu');
-		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this.dropdown = this._register(new ActionWidgetDropdown(container, {
+			label: trigger.action.label, ariaLabel: trigger.action.tooltip,
+			trigger: { button: this.button, open: () => { trigger.action.run(); } },
+			onError: error => this.reportError(error),
+			listOptions: {
+				className: 'ash-action-widget-accent-checks',
+				showFilter: true,
+				focusFilterOnOpen: true,
+				filterPlaceholder: trigger.placeholder,
+				ariaLabel: trigger.placeholder,
+			},
+		}, trigger.actionWidget));
 		this.hover = this._register(getHoverDelegate().setupHover({ target: this.button.domNode, content: trigger.action.tooltip }));
-		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
-			if (!event.isComposing && (event.key === 'ArrowDown' || event.key === 'ArrowUp') && trigger.action.enabled) {
-				stopEvent(event);
-				if (!this.popup.value) { trigger.action.run(); }
-			}
-		}));
 		const update = (): void => {
 			this.button.label = trigger.action.label;
 			this.button.enabled = trigger.action.enabled;
@@ -334,66 +336,29 @@ export class WorkspacePicker extends Disposable {
 
 	/** Show immediate choices while loading provider capabilities within this popup's cancellation scope. */
 	public showPicker(actions: readonly IWorkspacePickerAction[], loadActions?: (token: CancellationToken) => Promise<readonly IWorkspacePickerAction[]>): void {
-		if (this.isDisposed || !this.options.trigger!.action.enabled || this.popup.value) { return; }
-		const lifetime = new DisposableStore();
-		this.popup.value = lifetime;
-		const cancellation = new CancellationTokenSource();
-		lifetime.add(toDisposable(() => cancellation.dispose(true)));
-		const widget = this.options.trigger!.actionWidget;
-		let choices = actions;
-		let searching = false;
-		const toItems = (): IActionListItem<IAction>[] => {
-			let recentCount = 0;
-			return choices.filter(action => searching || !action.recent || ++recentCount <= MAX_NEW_PICKER_RECENT_WORKSPACES).map(action => ({
-				kind: ActionListItemKind.Action, id: action.id, label: action.label, description: action.tooltip,
-				disabled: !action.enabled, checked: action.checked, item: action,
-				group: action.icon ? { title: '', icon: action.icon } : undefined,
-			}));
-		};
-		const refresh = (): void => widget.updateItems(toItems(), { preserveScrollPosition: true });
-		this.button.domNode.setAttribute('aria-expanded', 'true');
-		lifetime.add(toDisposable(() => {
-			this.button.domNode.setAttribute('aria-expanded', 'false');
-			widget.hide();
-			if (this.restoreFocus && !this.isDisposed && this.button.domNode.isConnected) { this.focus(); }
+		if (this.isDisposed || !this.options.trigger!.action.enabled) { return; }
+		const toItems = (choices: readonly IWorkspacePickerAction[]): readonly IActionListItem<IWorkspacePickerAction>[] => choices.map(action => ({
+			kind: ActionListItemKind.Action, id: action.id, label: action.label, description: action.tooltip,
+			disabled: !action.enabled, checked: action.checked, item: action,
+			group: action.icon ? { title: '', icon: action.icon } : undefined,
 		}));
-		widget.show('sessionWorkspacePicker', false, toItems(), {
-			onHide: () => {
-				if (this.popup.value === lifetime) { this.hide(); }
+		this.dropdown?.showItems({
+			load: () => toItems(actions),
+			refresh: loadActions && (async token => toItems(await loadActions(token))),
+			filterItems: (items, query) => {
+				if (query.trim()) { return items; }
+				let recentCount = 0;
+				return items.filter(entry => !entry.item?.recent || ++recentCount <= MAX_NEW_PICKER_RECENT_WORKSPACES);
 			},
-			onSelect: async action => {
-				if (!action.enabled || cancellation.token.isCancellationRequested) { return; }
-				this.hide();
-				try { await action.run(); }
-				catch (error) { this.reportError(error); }
-			},
-		}, this.button.domNode, {
-			showFilter: true,
-			onDidChangeFilter: text => {
-				const nextSearching = text.trim().length > 0;
-				if (searching === nextSearching || cancellation.token.isCancellationRequested) { return; }
-				searching = nextSearching;
-				refresh();
-			},
-			focusFilterOnOpen: true,
-			filterPlaceholder: this.options.trigger!.placeholder,
-			ariaLabel: this.options.trigger!.placeholder,
+			select: action => action.run(),
+			restoreFocusOnSelect: true,
 		});
-		if (loadActions) {
-			void loadActions(cancellation.token).then(loaded => {
-				if (cancellation.token.isCancellationRequested) { return; }
-				choices = loaded;
-				refresh();
-			}).catch(error => {
-				if (!cancellation.token.isCancellationRequested) { this.reportError(error); }
-			});
-		}
 	}
 
 	public hide(options?: { readonly restoreFocus: boolean; }): void {
-		this.restoreFocus = options?.restoreFocus ?? true;
-		try { this.popup.clear(); }
-		finally { this.restoreFocus = true; }
+		const wasOpen = this.button?.domNode.getAttribute('aria-expanded') === 'true';
+		this.dropdown?.hide();
+		if (wasOpen && options?.restoreFocus !== false && !this.isDisposed && this.button.domNode.isConnected) { this.focus(); }
 	}
 
 	private reportError(error: unknown): void {

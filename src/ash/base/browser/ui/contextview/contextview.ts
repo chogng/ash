@@ -1,4 +1,5 @@
 import './contextview.css';
+import { findLast } from '../../../common/arraysFind.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from '../../../common/layout.js';
@@ -44,10 +45,13 @@ export interface ContextViewOptions {
 	readonly presentation?: ContextViewPresentation;
 	readonly focusRestore?: ContextViewFocusRestore;
 	readonly layer?: number;
+	/** Shield background controls from pointer interaction while the popup is open. */
+	readonly blockOutsidePointer?: boolean;
 	readonly isTargetWithin?: (target: Node) => boolean;
 	readonly onHide?: (reason: ContextViewHideReason) => void;
 }
 
+const popupRevisions = new WeakMap<Document, number>();
 const visibleContextViews = new WeakMap<Document, ContextView[]>();
 
 /**
@@ -89,6 +93,19 @@ export class ContextView
 		return this.options !== undefined;
 	}
 
+	static getPopupRevision(document: Document): number {
+		return popupRevisions.get(document) ?? 0;
+	}
+
+	static getHoverScope(target: HTMLElement): ContextView | undefined {
+		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
+			view.options?.blockOutsidePointer && !isTargetInAnotherModal(target, view.element));
+	}
+
+	contains(target: Node): boolean {
+		return this.element.contains(target) || this.options?.isTargetWithin?.(target) === true;
+	}
+
 	show(options: ContextViewOptions): boolean {
 		if (this.visible) {
 			this.hide(ContextViewHideReason.Replaced);
@@ -110,6 +127,18 @@ export class ContextView
 
 		this.options = options;
 		this.element.replaceChildren(options.content);
+		if (options.blockOutsidePointer) {
+			const shield = h(ownerDocument, 'div', { className: 'ash-context-view-pointer-shield' });
+			shield.setAttribute('aria-hidden', 'true');
+			this.element.prepend(shield);
+			// Keep focus in the menu and consume the full click before releasing the shield.
+			this.visibleListeners.add(addDisposableListener(shield, 'pointerdown', event => event.preventDefault()));
+			this.visibleListeners.add(addDisposableListener(shield, 'click', event => {
+				event.stopPropagation();
+				this.hide(ContextViewHideReason.OutsidePointer);
+			}));
+			this.visibleListeners.add(addDisposableListener(shield, 'contextmenu', event => event.preventDefault()));
+		}
 		this.element.className =
 			`ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
 		this.element.style.setProperty(
@@ -130,6 +159,9 @@ export class ContextView
 		if (!this.visible) return false;
 		this.element.style.visibility = '';
 		registerVisibleContextView(this);
+		if (options.presentation !== 'hover') {
+			popupRevisions.set(ownerDocument, ContextView.getPopupRevision(ownerDocument) + 1);
+		}
 
 		this.visibleListeners.add(addDisposableListener(
 			ownerDocument,

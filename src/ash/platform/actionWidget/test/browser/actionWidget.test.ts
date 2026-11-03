@@ -16,7 +16,7 @@ import { ServiceCollection } from '../../../instantiation/common/serviceCollecti
 import { getSingletonServiceDescriptors } from '../../../instantiation/common/extensions.js';
 import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
-import { ActionList, ActionListItemKind } from '../../browser/actionList.js';
+import { ActionList, ActionListItemKind, type IActionListItem } from '../../browser/actionList.js';
 import { TabbedActionListWidget } from '../../browser/tabbedActionListWidget.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -416,20 +416,65 @@ test('dropdown providers refresh choices and a dismissed request cannot reopen o
 		dropdown.show();
 		dropdown.hide();
 		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(service.isVisible, false);
+
+		pending = new DeferredPromise<readonly IAction[]>();
+		dropdown.show();
+		service.show('intervening', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Intervening' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
+		service.hide();
+		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(service.isVisible, false, 'A completed intervening menu invalidates a pending dropdown');
+
 		pending = new DeferredPromise<readonly IAction[]>();
 		dropdown.show();
 		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'First');
 		dropdown.hide();
 		pending = new DeferredPromise<readonly IAction[]>();
 		dropdown.show();
 		await pending.complete([{ ...choice, label: 'Updated' }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'Updated');
 		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
 		dropdown.dispose();
 		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
 		assert.deepEqual(visibility, [true, false, true, false]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('a dropdown cancels its refresh when a replacement menu takes over', async () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = createServices(dom.window.document, resources);
+		const service = services.get(IActionWidgetService);
+		const container = dom.window.document.querySelector<HTMLElement>('main')!;
+		const dropdown = resources.add(services.createInstance(ActionWidgetDropdown, container, {
+			label: 'Workspace', ariaLabel: 'Workspace', actions: [],
+		}));
+		const pending = new DeferredPromise<readonly IActionListItem<number>[]>();
+		let cancelled = false;
+		dropdown.showItems({
+			load: () => [{ kind: ActionListItemKind.Action, item: 1, label: 'Open Folder' }],
+			refresh: token => {
+				resources.add(token.onCancellationRequested(() => { cancelled = true; }));
+				return pending.p;
+			},
+			select: () => { },
+		});
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')?.textContent, 'Open Folder');
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 2, label: 'Replacement' }], {
+			onSelect: () => { }, onHide: () => { },
+		}, dropdown.element);
+		assert.equal(cancelled, true);
+		await pending.complete([{ kind: ActionListItemKind.Action, item: 3, label: 'Late workspace' }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')?.textContent, 'Replacement');
 	} finally {
 		dom.window.close();
 	}

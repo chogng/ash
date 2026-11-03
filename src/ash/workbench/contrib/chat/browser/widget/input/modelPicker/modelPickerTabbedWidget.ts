@@ -89,7 +89,6 @@ export class TabbedModelPicker extends Disposable {
 		error.hidden = true;
 		let automaticSwitch: Switch | undefined;
 		let popupRoot: HTMLElement | undefined;
-		anchor.setAttribute('aria-expanded', 'true');
 		this.widget.show<ModelCatalogEntry>({
 			user: pickerId, anchor, width: 240,
 			isBodyCollapsed: () => this.delegate.isAutomaticModel() && this.delegate.getModels().length > 0,
@@ -115,7 +114,7 @@ export class TabbedModelPicker extends Disposable {
 				return {
 					items: buildModelPickerItems(models, current),
 					listOptions: {
-						className: 'ash-chat-model-picker', presentation: 'details',
+						className: 'ash-chat-model-picker ash-action-widget-accent-checks', presentation: 'details',
 						ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
 						showFilter: true, filterVisible: models.length > 0 && !this.delegate.isAutomaticModel(),
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
@@ -142,7 +141,6 @@ export class TabbedModelPicker extends Disposable {
 				},
 				onHover: (entry, row) => { if (!this.widget.isShowingDetails) { this.preview?.show(entry, row); } },
 				onHide: () => {
-					anchor.setAttribute('aria-expanded', 'false');
 					this.activeCard = undefined;
 					this.detailsModel = undefined;
 					this.preview = undefined;

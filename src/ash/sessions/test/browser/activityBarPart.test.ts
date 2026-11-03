@@ -158,8 +158,8 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
-		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 0);
+		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
 		buttons[2]?.click();
 		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
@@ -171,7 +171,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
 		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'customize', 'chat']);
-		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
 		buttons[5]?.click();
 		await Promise.resolve();
 		assert.equal(accountAnchor, buttons[5]);
@@ -194,7 +194,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(accountHost.querySelector('button')!.classList.contains('icon-only'), false);
 		assert.equal(navigationHost.querySelector('button')!.classList.contains('icon-only'), false);
 		assert.equal(ownerDocument.activeElement, navigationHost.querySelector('button'), 'Changing placement retains navigation focus');
-		assert.equal(navigationHost.querySelector('button')!.getAttribute('aria-current'), 'page');
+		assert.equal(navigationHost.querySelector('button')!.getAttribute('aria-current'), null);
 		accountHost.querySelector<HTMLButtonElement>('button')!.click();
 		assert.equal(accountAnchor, accountHost.querySelector('button'));
 		bar.setLocation(ActivityBarPosition.HIDDEN, undefined);
@@ -313,7 +313,7 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize', 'Test action', 'Accounts']);
-	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
+	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), null);
 });
 
 test('navigation and ordering labels use the Chinese language catalog', async () => {

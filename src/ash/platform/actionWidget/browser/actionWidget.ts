@@ -101,11 +101,12 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 			gap: 4,
 			layer: contextViewLayer,
 			focusRestore: ContextViewFocusRestore.None,
+			blockOutsidePointer: true,
 			onHide: reason => {
 				const didCancel = this.cancelOnHide;
 				// ContextView detaches content before this callback, so remember the last focused node.
 				const restore = list.domNode.contains(focused) && isHTMLElement(source) && source.isConnected &&
-					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic);
+					(reason === ContextViewHideReason.Escape || reason === ContextViewHideReason.Programmatic || reason === ContextViewHideReason.OutsidePointer);
 				if (this.current.value === lifetime) {
 					this.current.clear();
 				}

@@ -1,4 +1,4 @@
-import { addDisposableListener, h, stopEvent } from '../../../base/browser/dom.js';
+import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { ContextViewFocusRestore, type ContextViewAnchor } from '../../../base/browser/ui/contextview/contextview.js';
 import { TabList, type TabListItem } from '../../../base/browser/ui/tablist/tabList.js';
@@ -204,9 +204,15 @@ export class TabbedActionListWidget extends Disposable {
 		const extra = options.renderWidget?.(root);
 		if (extra) { lifetime.add(extra); }
 		refresh();
+		const anchor = options.anchor;
+		if (isHTMLElement(anchor) && anchor.hasAttribute('aria-expanded')) {
+			anchor.setAttribute('aria-expanded', 'true');
+			lifetime.add(toDisposable(() => anchor.setAttribute('aria-expanded', 'false')));
+		}
 		const shown = this.contextViewService.show({
 			anchor: options.anchor, content: root, presentation: 'plain', gap: 4,
 			focusRestore: ContextViewFocusRestore.Previous,
+			blockOutsidePointer: true,
 			onHide: () => {
 				if (this.popup.value === lifetime) { this.popup.clear(); }
 				options.delegate.onHide();

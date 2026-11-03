@@ -1,3 +1,4 @@
+import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { listSavedTunnelEndpoints, tunnelEnvironmentLabel } from '../../../common/savedTunnelEnvironments.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
@@ -9,9 +10,9 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
@@ -23,12 +24,11 @@ import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browse
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
 
 export class SessionEnvironmentPicker extends Disposable {
-	private readonly popup = this._register(new MutableDisposable<CancellationTokenSource>());
+	private readonly dropdown: ActionWidgetDropdown;
 	private readonly connecting = this._register(new MutableDisposable());
 	private readonly host: HTMLElement;
 	private readonly button: Button;
 	private visible = true;
-	private menuOpen = false;
 
 	constructor(
 		container: HTMLElement,
@@ -36,7 +36,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		private readonly persistDraft: () => Promise<void>,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
-		@IActionWidgetService private readonly menus: IActionWidgetService,
+		@IActionWidgetService menus: IActionWidgetService,
 		@ICommandService private readonly commands: ICommandService,
 		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
@@ -50,21 +50,35 @@ export class SessionEnvironmentPicker extends Disposable {
 		this._register(toDisposable(() => this.host.remove()));
 		this.button = this._register(new Button(this.host, {
 			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '',
-			onClick: () => this.showPicker(),
 		}));
 		this.button.domNode.classList.add('ash-sessions-environment-picker');
-		this.button.domNode.setAttribute('aria-haspopup', 'menu');
-		this.button.domNode.setAttribute('aria-expanded', 'false');
-		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
-			if (!event.isComposing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-				stopEvent(event);
-				this.showPicker();
-			}
-		}));
+		const sandboxStatus = h(container.ownerDocument, 'div');
+		sandboxStatus.setAttribute('role', 'status');
+		this.dropdown = this._register(new ActionWidgetDropdown(this.host, {
+			label: '', ariaLabel: '',
+			trigger: { button: this.button, open: () => this.showPicker() },
+			onError: error => {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+			},
+			onShow: () => {
+				let current = true;
+				const draft = this.draft;
+				const providerId = draft?.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID;
+				sandboxStatus.textContent = localize('sessions.environment.sandboxLoading', 'Checking sandbox…');
+				void this.readSandboxStatus(providerId).then(status => {
+					if (current && draft && this.isCurrent(draft)) sandboxStatus.textContent = status;
+				});
+				return toDisposable(() => { current = false; });
+			},
+			listOptions: {
+				header: sandboxStatus,
+				className: 'ash-sessions-environment-menu ash-action-widget-accent-checks',
+				ariaLabel: localize('sessions.environment.menu', 'Run on'),
+			},
+		}, menus));
 		this._register(sessions.onDidChange(() => this.update()));
-		this._register(providers.onDidChangeProviders(() => { this.close(); this.update(); }));
+		this._register(providers.onDidChangeProviders(() => { this.dropdown.hide(); this.update(); }));
 		this._register(model.onDidChange(() => this.update()));
-		this._register(toDisposable(() => this.close()));
 		this.update();
 	}
 
@@ -101,36 +115,25 @@ export class SessionEnvironmentPicker extends Disposable {
 		}
 		this.button.domNode.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
 		this.button.enabled = this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
-		if (!this.button.enabled) this.close();
-	}
-
-	private close(): void {
-		if (this.menuOpen) this.menus.hide();
-		this.popup.value?.cancel();
-		this.popup.clear();
+		if (!this.button.enabled) this.dropdown.hide();
 	}
 
 	public showPicker(): void {
-		void this.show().catch(error => {
-			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+		const draft = this.draft;
+		if (!draft || !this.button.enabled) { return; }
+		this.dropdown.showItems({
+			requireIdle: true,
+			load: token => this.loadItems(draft, token),
+			select: run => run(),
 		});
 	}
 
-	private async show(): Promise<void> {
-		const draft = this.draft;
-		if (!draft || !this.button.enabled) return;
-		if (this.popup.value) { this.close(); return; }
-		if (this.menus.isVisible) return;
-		this.button.focus();
-		const popup = new CancellationTokenSource();
-		this.popup.value = popup;
+	private async loadItems(draft: IUntitledChatSession, token: CancellationToken): Promise<readonly IActionListItem<() => Promise<unknown>>[]> {
 		const [savedResult, wslResult] = await Promise.allSettled([
 			this.remoteHosts.isAvailable && this.connections.available ? this.connections.list() : [],
 			this.remoteHosts.isAvailable ? this.remoteHosts.listWSLDistros() : [],
 		]);
-		if (this.popup.value !== popup) return;
-		// Remote discovery can finish after another picker has taken the shared menu.
-		if (this.menus.isVisible || !this.isCurrent(draft)) { this.close(); return; }
+		if (token.isCancellationRequested || !this.isCurrent(draft)) { return []; }
 		const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
 		if (savedResult.status === 'rejected' && !isCancellationError(savedResult.reason)) {
 			this.notifications.error(savedResult.reason instanceof Error ? savedResult.reason : String(savedResult.reason));
@@ -222,14 +225,11 @@ export class SessionEnvironmentPicker extends Disposable {
 				kind: ActionListItemKind.Action, label: localize('sessions.environment.newRemote', 'New Remote Environment'),
 				item: async () => {
 					const saved = await this.commands.executeCommand<boolean>('sessions.action.newRemoteEnvironment');
-					if (saved && this.isCurrent(draft) && !this.popup.value) this.showPicker();
+					if (saved && this.isCurrent(draft)) this.showPicker();
 				},
 			});
 		}
-		const sandboxStatus = h(this.button.domNode.ownerDocument, 'div');
 		const providerId = draft.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID;
-		sandboxStatus.setAttribute('role', 'status');
-		sandboxStatus.textContent = localize('sessions.environment.sandboxLoading', 'Checking sandbox…');
 		items.push({ kind: ActionListItemKind.Separator, label: '' }, {
 			kind: ActionListItemKind.Action,
 			label: localize('sessions.environment.sandboxSettings', 'Sandbox Settings'),
@@ -238,29 +238,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				await this.commands.executeCommand('workbench.action.openSettings', { section: 'environment', query: '' });
 			},
 		});
-		this.menuOpen = true;
-		this.button.domNode.setAttribute('aria-expanded', 'true');
-		this.menus.show('sessionEnvironmentPicker', false, items, {
-			onSelect: async run => {
-				this.menus.hide(false);
-				try { await run(); }
-				catch (error) {
-					if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
-				}
-			},
-			onHide: () => {
-				this.menuOpen = false;
-				this.popup.clear();
-				this.button.domNode.setAttribute('aria-expanded', 'false');
-			},
-		}, this.button.domNode, {
-			className: 'ash-sessions-environment-menu',
-			ariaLabel: localize('sessions.environment.menu', 'Run on'),
-			header: sandboxStatus,
-		});
-		void this.readSandboxStatus(providerId).then(status => {
-			if (this.popup.value === popup && this.isCurrent(draft)) sandboxStatus.textContent = status;
-		});
+		return items;
 	}
 
 	private async readSandboxStatus(providerId: string): Promise<string> {

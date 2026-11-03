@@ -49,7 +49,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		updateItems: (choices: typeof items) => { items = choices; loaded.fire(); },
 		hide: () => { disposed = true; delegate = undefined; },
 	} as unknown as IActionWidgetService);
-	const model = { untitledSessionId: 'first', inputState: { phase: 'ready' }, onDidChange: updated.event };
+	const model = { untitledSessionId: 'first' as string | undefined, inputState: { phase: 'ready' }, onDidChange: updated.event };
 	const errors: unknown[] = [];
 	services.registerInstance(INotificationService, { error: (error: unknown) => { errors.push(error); } } as unknown as INotificationService);
 	services.registerInstance(ISessionsManagementService, {
@@ -94,6 +94,16 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		[Symbol.dispose]() { lifetime.dispose(); },
 	};
 }
+
+test('Workspace picker hides when the composer moves from a draft to a session', () => {
+	using f = fixture();
+	const host = f.button.parentElement!;
+	assert.equal(host.hidden, false);
+	f.model.untitledSessionId = undefined;
+	f.updated.fire();
+	assert.equal(host.hidden, true);
+	assert.equal(f.button.disabled, true);
+});
 
 test('Workspace picks an existing worktree for only its owning independent conversation', async () => {
 	using f = fixture();

@@ -148,10 +148,6 @@
 	display: none;
 }
 
-.ash-sessions-permission-picker {
-	flex: 0 0 auto;
-}
-
 .ash-sessions-environment-picker.ash-button,
 .ash-sessions-workspace-picker.ash-button {
 	min-width: 0;

@@ -50,6 +50,8 @@ export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
+	/** Disable row tooltips when the visible content already conveys the full description. */
+	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
 	readonly onDidChangeFilter?: (text: string) => void;
@@ -144,6 +146,7 @@ class ActionListAction extends ButtonActionViewItem {
 	}
 
 	protected override setupTooltip(): void {
+		if (this.options.showRowTooltips === false) { return; }
 		this.setupDelayedHover(this.button.domNode, [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 	}
 }

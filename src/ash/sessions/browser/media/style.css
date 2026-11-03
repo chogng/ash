@@ -144,10 +144,6 @@
 	min-width: 160px;
 }
 
-.ash-sessions-window .ash-chat-permission-menu .ash-action-widget-menu {
-	--ash-menu-padding: 0px;
-}
-
 /* Pointer opening can focus the current item before the menu receives pointer input. */
 .ash-sessions-window
 	.ash-action-widget-menu.ash-menu
@@ -183,16 +179,6 @@
 	.ash-context-view
 	.ash-menu:not(.ash-design-menu) {
 	--ash-menu-selectionBackground: var(--ash-menu-hoverBackground);
-}
-
-.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
-	.ash-sessions-window
-	.ash-chat-permission-menu
-	.ash-action-widget-menu {
-	--ash-menu-style-selection-background-color: var(
-		--ash-menu-selectionBackground
-	);
-	--ash-list-hoverBackground: var(--ash-menu-selectionBackground);
 }
 
 .ash-sessions-window .ash-menu .ash-button {

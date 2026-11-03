@@ -146,7 +146,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await installService(application);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
 			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-			await expect(page.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
+			await expect(page.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();
 			const editor = page.locator('.ash-chatgpt-widget'); await expect(editor).toBeVisible();
 			await expect(page.locator('.ash-chat2-editor, .ash-web-bridge')).toHaveCount(0);
 			const input = editor.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true });
@@ -266,7 +266,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			let restored = await workbench.reopenAgentsWindow(application, page);
 			await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
 			await expect(restored.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-			await expect(restored.locator('[data-action-id="sessions.newSession"] button')).toHaveAttribute('aria-current', 'page');
+			await expect(restored.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();
 			for (const entry of pages) {
 				await restored.locator(`[data-action-id="${entry.action}"] button`).click();
 				restored = await workbench.reopenAgentsWindow(application, restored);

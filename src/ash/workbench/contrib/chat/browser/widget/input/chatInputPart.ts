@@ -114,6 +114,7 @@ import { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voi
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
 import { PermissionPickerActionItem } from './permissionPickerActionItem.js';
+import type { IActionWidgetDropdownActionProvider } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { ModePickerActionItem, type ChatInputMode } from './modePickerActionItem.js';
 import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUsageWidget.js';
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
@@ -171,6 +172,12 @@ export interface ChatInputPartOptions {
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
 	readonly renderSecondaryToolbar?: boolean;
+	/** Host-owned permission policy presented immediately after the mode picker. */
+	readonly primaryPermissionPicker?: {
+		readonly action: IAction;
+		readonly onDidChange: Event<void>;
+		readonly actionProvider: IActionWidgetDropdownActionProvider;
+	};
 	/** Sessions composers already own persisted drafts; the regular input retains them in memory. */
 	readonly draftStorage?: 'input' | 'host';
 }
@@ -1145,6 +1152,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	invalidatePendingInput(): void {
 		this.modePickerActionItem?.hide();
+		this.permissionWidget?.hide();
 		this.modelPickerActionItem?.hide();
 		if (this.input.codeEditor) CopyPasteController.get(this.input.codeEditor)?.clearWidgets();
 		const previous = this.inputLifecycle;
@@ -1580,7 +1588,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Localized getters must be evaluated for each presentation; ActionBar retains identical action objects.
 		const additionalActions = this.additionalActions.filter(action => action.id !== 'ash.chat.input.attach').map(action => ({ ...action, run: (...args: readonly unknown[]) => action.run(...args) }));
 		if (!this.secondaryToolbarContainer && !this.attachmentToolbar) additionalActions.unshift(this.attachAction);
-		const modeActions = modeAction ? [modeAction] : [];
+		const modeActions: IAction[] = modeAction ? [modeAction] : [];
+		if (this.options.primaryPermissionPicker) modeActions.push(this.options.primaryPermissionPicker.action);
 		const dictationActions: IAction[] = [];
 		if (segmentedVoice) {
 			dictationActions.push(new ChatInputAction(
@@ -1835,6 +1844,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	private createToolbarViewItem(action: IAction, contextViewService: IContextViewService): ActionViewItem | undefined {
+		const permissions = this.options.primaryPermissionPicker;
+		if (permissions && action === permissions.action) {
+			return this.permissionWidget = this.instantiationService.createInstance(PermissionPickerActionItem, action, permissions.onDidChange, permissions.actionProvider);
+		}
 		if (action.id === 'workbench.action.chat.voiceInputMode') {
 			return this.instantiationService.createInstance(VoiceInputModeActionViewItem, action, {
 				toggleDictation: () => void this.runSecondaryAction(() => this.toggleInputDictation()),

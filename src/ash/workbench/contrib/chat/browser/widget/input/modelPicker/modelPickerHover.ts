@@ -1,4 +1,6 @@
 import { h } from '../../../../../../../base/browser/dom.js';
+import { getViewport } from '../../../../../../../base/browser/geometry.js';
+import { AnchorAxisAlignment, AnchorPosition, layout2d } from '../../../../../../../base/common/layout.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
@@ -19,7 +21,7 @@ export class ModelPickerDetailsMenu extends Disposable {
 	) {
 		super();
 		this.domNode = h(picker.ownerDocument, 'div');
-		this.domNode.className = 'ash-chat-model-picker-details-menu';
+		this.domNode.className = 'ash-chat-model-picker-details-menu ash-action-widget-surface';
 		this.domNode.hidden = true;
 		picker.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -49,11 +51,16 @@ export class ModelPickerDetailsMenu extends Disposable {
 		const pickerBounds = this.picker.getBoundingClientRect();
 		const rowBounds = row.getBoundingClientRect();
 		const detailsBounds = this.domNode.getBoundingClientRect();
-		const viewport = this.picker.ownerDocument.defaultView!;
-		const rightSpace = viewport.innerWidth - pickerBounds.right;
-		this.domNode.classList.toggle('is-left', pickerBounds.left >= detailsBounds.width + 4 || pickerBounds.left > rightSpace);
-		const bottom = viewport.innerHeight - pickerBounds.top - detailsBounds.height - 8;
-		this.domNode.style.top = `${Math.max(-pickerBounds.top + 8, Math.min(rowBounds.top - pickerBounds.top, bottom))}px`;
+		const viewport = getViewport(this.picker.ownerDocument.defaultView!);
+		const position = layout2d(viewport, detailsBounds, {
+			left: pickerBounds.left, top: rowBounds.top, width: pickerBounds.width, height: rowBounds.height,
+		}, {
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			anchorPosition: AnchorPosition.Above,
+			gap: 4,
+		});
+		this.domNode.style.left = `${position.left - pickerBounds.left}px`;
+		this.domNode.style.top = `${position.top - pickerBounds.top}px`;
 	}
 
 	public focus(): void {
