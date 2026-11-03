@@ -444,6 +444,7 @@
 		"--ash-select-style-select-foreground",
 		"--ash-select-style-select-list-background",
 		"--ash-sessions-inverse-zoom-factor",
+		"--ash-sessions-soft-shadow",
 		"--ash-sessions-titlebar-sidebar-width",
 		"--ash-shadow-lg",
 		"--ash-split-view-separator-border",

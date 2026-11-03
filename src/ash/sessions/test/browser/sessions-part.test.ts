@@ -76,6 +76,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { getWindowById, getWindowId } from '../../../base/browser/window.js';
 
@@ -338,6 +339,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
@@ -386,6 +388,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
+		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
 	using partListener = autorun(reader => {
@@ -408,7 +411,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	(part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement).focus();
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-slot.active'));
 	assert.equal(part.domNode.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
-	viewService.closeVisibleSelection(viewService.activeSelection!);
+	const closeButtons = part.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-chat-slot-close:not([hidden]) button');
+	assert.equal(closeButtons.length, 2);
+	closeButtons[1]!.click();
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-slot-close:not([hidden])'), null);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));

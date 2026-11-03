@@ -285,7 +285,7 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	editor.toggleMaximizeTool(terminalGroup.id);
 	assert.deepEqual(area.saveLayout(), before);
 	const filePane = fileGroup.activePane;
-	const otherGroups = editor.groups.filter(group => group !== fileGroup && group.id !== editor.pageGroupId);
+	const otherGroups = editor.groups.filter(group => group !== fileGroup && editor.isGroupVisible(group.id));
 	await editor.toggleFileEditors();
 	assert.equal(editor.isGroupVisible(fileGroup.id), false);
 	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
@@ -303,6 +303,27 @@ test('Code tools own independent EditorParts and tool movement and hiding retain
 	assert.ok(fileGroup.inputs.includes(mixed));
 	assert.ok(!terminalGroup.inputs.includes(mixed));
 	assert.ok(otherGroups.every(group => editor.isGroupVisible(group.id)));
+
+	// The right tool must grow past the default width when visible group minimums
+	// no longer fit, including after changing the orientation of a tool workspace.
+	const parts = createParts(browserEnvironment.window.document);
+	const oldEditor = parts.get('editor')!;
+	parts.set('editor', area);
+	try {
+		using layout = createLayout(browserEnvironment.window.document.body, parts, { initialDimension: new Dimension(1_245, 890) });
+		layout.showPart('editor');
+		layout.resizePart('editor', new Dimension(300, 800));
+		const extraTerminalGroup = editor.addGroup(terminalGroup.id, Direction.Right);
+		editor.setGroupVisible(extraTerminalGroup.id, true);
+		area.moveTool('terminal', 'changes', Direction.Right);
+		assert.ok(area.minimumWidth > 300);
+		assert.ok(layout.getPartSize('editor').width >= area.minimumWidth);
+		editor.hideTool(terminalGroup.id);
+		assert.equal(area.minimumWidth, 300);
+	} finally {
+		oldEditor.dispose();
+		for (const part of parts.values()) if (part !== area) part.dispose();
+	}
 });
 
 test('opening a Code tool keeps the hidden active tool hidden', async () => {

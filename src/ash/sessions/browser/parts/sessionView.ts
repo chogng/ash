@@ -1,5 +1,8 @@
 import './media/sessionView.css';
 import { addDisposableListener, h } from '../../../base/browser/dom.js';
+import { Button } from '../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import type { IView } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
@@ -32,6 +35,7 @@ interface ISessionViewOptions {
 	readonly kind: SessionsConversationKind;
 	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
+	readonly closeSelection: (selection: SessionsViewSelection) => void;
 }
 
 let nextChatPaneId = 0;
@@ -44,6 +48,7 @@ export class SessionView extends Disposable implements IView {
 	readonly minimumHeight = 240;
 	readonly maximumHeight = Number.POSITIVE_INFINITY;
 	private readonly panes = this._register(new DisposableMap<SessionsConversationKind, ISessionsConversationPane>());
+	private readonly closeAction: HTMLElement;
 	private selection: SessionsViewSelection;
 	private kind: SessionsConversationKind;
 	private visible = true;
@@ -56,6 +61,19 @@ export class SessionView extends Disposable implements IView {
 		this.element = h(container.ownerDocument, 'article');
 		this.element.className = 'ash-sessions-chat-slot';
 		this.attachPane(this.getOrCreatePane(this.kind));
+		this.closeAction = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-slot-close' });
+		this.closeAction.hidden = true;
+		this.element.append(this.closeAction);
+		const closeLabel = localize('sessions.closeSession', 'Close Session');
+		this._register(new Button(this.closeAction, {
+			...defaultButtonStyles,
+			presentation: 'quiet',
+			icon: Lxicon.close,
+			iconOnly: true,
+			label: closeLabel,
+			title: closeLabel,
+			onClick: () => options.closeSelection(this.selection),
+		}));
 		const activate = () => {
 			if (!this.element.classList.contains('active')) options.activateSelection(this.selection);
 		};
@@ -110,6 +128,8 @@ export class SessionView extends Disposable implements IView {
 		this.attachPane(next);
 		if (focused && this.visible) next.focus();
 	}
+
+	setCloseVisible(visible: boolean): void { this.closeAction.hidden = !visible; }
 
 	focus(): void { this.activeChat.focus(); }
 	layout(_bounds: Parameters<IView['layout']>[0]): void { }

@@ -59,7 +59,7 @@ suite('Desktop tool EditorParts', () => {
 		const pane = browser.activePane;
 		const split = hosts.editor.addGroup(files.id, Direction.Down);
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
-		assert.equal(hosts.editor.parts.length, 4);
+		assert.equal(hosts.editor.parts.length, 5);
 		assert.equal(hosts.editor.getEditorState().groups.length, hosts.editor.groups.length);
 		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id, split.id]);
 		assert.equal(hosts.tools.get('browser')!.groups.length, 1);
@@ -92,6 +92,26 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.tools.get('browser')!.activeInput?.resource.toString(), 'ash-browser:/fixture');
 		assert.equal(hosts.tools.get('browser')!.isGroupVisible(hosts.tools.get('browser')!.activeGroup.id), false);
 		assert.deepEqual(hosts.area.saveLayout(), saved.toolParts!.layout);
+	});
+
+	test('restores tool layouts saved before the Chat workspace was added', async () => {
+		using hosts = fixture();
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		const saved = hosts.editor.saveWorkingSet('before-side-chat');
+		const { chat, ...parts } = saved.toolParts!.parts;
+		const layout = saved.toolParts!.layout;
+		assert.ok(layout.type === 'branch');
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat');
+		assert.equal(children.length, layout.children.length - 1);
+		const legacy = {
+			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!)), toolParts: {
+				version: 1, parts, layout: children.length === 1 ? children[0] : { ...layout, children },
+			}
+		};
+		await hosts.editor.applyWorkingSet(legacy);
+		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'file:///fixture/a.txt');
+		assert.ok(hosts.tools.get('chat')!.groups.every(group => !hosts.editor.isGroupVisible(group.id)));
+		assert.deepEqual(hosts.area.saveLayout(), layout);
 	});
 
 	test('migrates a legacy mixed group to separate hosts while retaining all tabs', async () => {

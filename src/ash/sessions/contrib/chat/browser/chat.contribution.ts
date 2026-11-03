@@ -1,3 +1,7 @@
+import { registerEditorPane } from '../../../../workbench/browser/editor.js';
+import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
+import { SessionSideChatEditor } from './sessionSideChatEditor.js';
+import { SessionSideChatEditorInput } from './sessionSideChatEditorInput.js';
 import './agentHostDelegation.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -18,6 +22,13 @@ import { parseSessionIdentity } from '../../../services/sessions/common/sessionI
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+
+registerEditorPane({
+	id: SessionSideChatEditor.ID,
+	name: localize({ bundle: 'ash', key: 'sessions.layout.sideChat' }, 'Side Chat'),
+	canOpen: input => input instanceof SessionSideChatEditorInput ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => options.instantiationService!.createInstance(SessionSideChatEditor),
+});
 
 registerAction2(class NewChatInSessionAction extends Action2 {
 	constructor() {

@@ -9,8 +9,8 @@ import { WorkbenchPartView } from '../../../workbench/browser/workbenchPartView.
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
 import './media/desktopEditorArea.css';
 
-export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal';
-export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal'];
+export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal' | 'chat';
+export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal', 'chat'];
 
 class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISerializableView {
 	constructor(tool: DesktopEditorTool, part: EditorPart, private readonly container: HTMLElement) {
@@ -24,6 +24,8 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 /** Owns only the geometry of independent tool editor hosts, never their groups or documents. */
 export class DesktopEditorArea extends Part {
 	private readonly grid = this._register(new MutableDisposable<SerializableGrid<ToolPartView>>());
+	private readonly gridConstraints = this._register(new MutableDisposable());
+	private reportedMinimum = new Dimension(300, 120);
 	private readonly views = new Map<DesktopEditorTool, ToolPartView>();
 	private dimension: IDimension = new Dimension(0, 0);
 	private desired = new Set<DesktopEditorTool>();
@@ -36,8 +38,23 @@ export class DesktopEditorArea extends Part {
 		this.domNode.classList.add('ash-desktop-editor-area');
 	}
 
-	public override get minimumWidth(): number { return 300; }
-	public override get minimumHeight(): number { return 120; }
+	public override get minimumWidth(): number { return Math.max(300, this.grid.value?.minimumWidth ?? 0); }
+	public override get minimumHeight(): number { return Math.max(120, this.grid.value?.minimumHeight ?? 0); }
+
+	private setGrid(grid: SerializableGrid<ToolPartView>): void {
+		this.gridConstraints.clear();
+		this.grid.value = grid;
+		this.gridConstraints.value = grid.onDidChange(() => this.publishMinimumSize());
+		this.publishMinimumSize();
+	}
+
+	private publishMinimumSize(): void {
+		const minimum = new Dimension(this.minimumWidth, this.minimumHeight);
+		if (Dimension.equals(minimum, this.reportedMinimum)) return;
+		this.reportedMinimum = minimum;
+		// The window grid must reserve space for the visible tool groups and their frames.
+		this.notifyConstraintsChanged();
+	}
 
 	public addTool(tool: DesktopEditorTool, part: EditorPart, container: HTMLElement): void {
 		const view = new ToolPartView(tool, part, container);
@@ -46,7 +63,9 @@ export class DesktopEditorArea extends Part {
 		part.domNode.dataset.part = 'tool-editor';
 		this.views.set(tool, view);
 		if (!this.grid.value) {
-			this.grid.value = new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 });
+			this.setGrid(new SerializableGrid(this.contentDomNode, { type: 'leaf', view, size: 600 }));
+		} else if (tool === 'chat') {
+			this.restoreLayout(this.addChatToLayout(this.grid.value.serialize()));
 		} else {
 			this.grid.value.addView(view, Sizing.Invisible(300), [...this.views.values()][this.views.size - 2]!, Direction.Down);
 		}
@@ -110,7 +129,7 @@ export class DesktopEditorArea extends Part {
 
 	public saveLayout(): SerializedGridDescriptor { return this.maximized?.layout ?? this.grid.value!.serialize(); }
 
-	public validateLayout(layout: unknown): void {
+	public validateLayout(layout: unknown, allowMissingChat = false): void {
 		const seen = new Set<string>();
 		const validate = (node: unknown, depth: number, parentOrientation?: number): void => {
 			if (!isRecord(node) || depth > 32 || typeof node.size !== 'number'
@@ -130,15 +149,24 @@ export class DesktopEditorArea extends Part {
 			}
 		};
 		validate(layout, 0);
-		if (seen.size !== this.views.size) { throw new TypeError('Tool workspace layout is incomplete'); }
+		if (allowMissingChat ? seen.has('chat') || seen.size !== this.views.size - 1 : seen.size !== this.views.size) { throw new TypeError('Tool workspace layout is incomplete'); }
 	}
 
-	public restoreLayout(layout: unknown): void {
+	/** Older tool layouts predate the rightmost Chat workspace. */
+	public addChatToLayout(layout: SerializedGridDescriptor): SerializedGridDescriptor {
+		this.validateLayout(layout, true);
+		const chat = { type: 'leaf', data: 'chat', size: 300, priority: 0, visible: false } as const;
+		return layout.type === 'branch' && layout.orientation === 1
+			? { ...layout, children: [...layout.children, chat] }
+			: { type: 'branch', orientation: 1, size: layout.size, priority: 0, children: [layout, chat] };
+	}
+
+	public restoreLayout(layout: SerializedGridDescriptor): void {
 		this.validateLayout(layout);
 		this.maximized = undefined;
 		const previous = this.grid.value;
 		const next = SerializableGrid.deserialize(this.contentDomNode, layout, { fromJSON: data => this.views.get(data as DesktopEditorTool)! });
-		this.grid.value = next;
+		this.setGrid(next);
 		previous?.element.remove();
 		this.layout(this.dimension);
 	}

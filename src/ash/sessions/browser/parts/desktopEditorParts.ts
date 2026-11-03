@@ -1,3 +1,4 @@
+import { SessionSideChatEditorInput } from '../../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { Emitter } from '../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
@@ -33,6 +34,7 @@ export interface DesktopEditorWorkingSet extends EditorWorkingSet {
 }
 
 function editorTool(input: IResourceEditorInput): DesktopEditorTool {
+	if (input instanceof SessionSideChatEditorInput) { return 'chat'; }
 	if (input instanceof TerminalEditorInput) { return 'terminal'; }
 	if (input.resource.scheme === BrowserViewUri.scheme) { return 'browser'; }
 	if (input.resource.scheme === 'ash-session-changes') { return 'changes'; }
@@ -40,6 +42,7 @@ function editorTool(input: IResourceEditorInput): DesktopEditorTool {
 }
 
 function serializedTool(entry: EditorGroupWorkingSet['editors'][number]): DesktopEditorTool {
+	if (entry.input.typeId === SessionSideChatEditorInput.ID) { return 'chat'; }
 	if (entry.input.typeId === TerminalEditorInput.ID) { return 'terminal'; }
 	if (entry.input.typeId === 'workbench.editorInput.browser') { return 'browser'; }
 	if (entry.input.typeId === 'sessions.editorInput.changes') { return 'changes'; }
@@ -271,10 +274,12 @@ export class DesktopEditorParts extends EditorParts {
 		const metadata = (saved as DesktopEditorWorkingSet).toolParts;
 		if (metadata === undefined) { return undefined; }
 		if (!isRecord(metadata) || metadata.version !== 1 || !isRecord(metadata.parts)) { throw new TypeError('Invalid tool editor working set'); }
-		this.area.validateLayout(metadata.layout);
+		const legacyWithoutChat = metadata.parts.chat === undefined;
+		const layout = legacyWithoutChat ? this.area.addChatToLayout(metadata.layout) : metadata.layout;
+		this.area.validateLayout(layout);
 		const unassigned = new Set(saved.groups.map(group => group.id));
 		for (const tool of desktopEditorTools) {
-			const state = metadata.parts[tool];
+			const state = tool === 'chat' && legacyWithoutChat ? { groups: [] } : metadata.parts[tool];
 			if (!isRecord(state) || !Array.isArray(state.groups)) { throw new TypeError('Invalid tool editor membership'); }
 			for (const id of state.groups) {
 				if (!Number.isSafeInteger(id) || !unassigned.delete(id)) { throw new TypeError('Invalid tool editor group identity'); }
@@ -282,7 +287,7 @@ export class DesktopEditorParts extends EditorParts {
 			if (state.layout) { parseEditorWorkingSetLayout(state.layout, new Set(state.groups)); }
 		}
 		if (unassigned.size) { throw new TypeError('Unassigned tool editor group'); }
-		return metadata;
+		return legacyWithoutChat ? { ...metadata, layout, parts: { ...metadata.parts, chat: { groups: [] } } } : metadata;
 	}
 
 	public override async applyWorkingSet(saved: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
@@ -361,16 +366,16 @@ export class DesktopEditorParts extends EditorParts {
 
 	public withWorkingSetLayout(saved: EditorWorkingSet, geometry: EditorWorkingSet, activeId: number | undefined): DesktopEditorWorkingSet {
 		const current = saved as DesktopEditorWorkingSet;
-		const previous = geometry as DesktopEditorWorkingSet;
+		const previous = this.readParts(geometry);
 		const index = saved.groups.findIndex(group => group.id === activeId);
 		const activeGroupIndex = index < 0 ? saved.activeGroupIndex : index;
-		if (!current.toolParts || !previous.toolParts) { return { ...saved, layout: previous.layout ?? saved.layout, activeGroupIndex }; }
+		if (!current.toolParts || !previous) { return { ...saved, layout: geometry.layout ?? saved.layout, activeGroupIndex }; }
 		const parts = Object.fromEntries(desktopEditorTools.map(tool => {
 			const state = current.toolParts!.parts[tool];
-			const layout = previous.toolParts!.parts[tool].layout;
+			const layout = previous.parts[tool].layout;
 			return [tool, { ...state, layout: layout ? projectLayout(layout, new Set(state.groups)) : state.layout }];
 		})) as NonNullable<DesktopEditorWorkingSet['toolParts']>['parts'];
-		return { ...saved, activeGroupIndex, toolParts: { version: 1, layout: previous.toolParts.layout, parts } };
+		return { ...saved, activeGroupIndex, toolParts: { version: 1, layout: previous.layout, parts } };
 	}
 
 	public restoreLayout(layout: EditorWorkingSetLayout, groupIds: ReadonlyMap<number, number>): void {

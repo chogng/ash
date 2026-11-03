@@ -13,6 +13,8 @@
 	--ash-fontSize-label3: 10px;
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-menu-divider-gap: var(--ash-spacing-size40);
+	--ash-sessions-soft-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-sessions-inputShadow) 30%, transparent);
 	--ash-menu-divider-inset: var(--ash-spacing-size80);
 	--ash-menu-trailing-icon-size: var(--ash-lxiconFontSize-large);
 	--ash-menu-submenu-icon-size: var(--ash-lxiconFontSize);

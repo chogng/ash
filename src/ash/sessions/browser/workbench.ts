@@ -869,6 +869,11 @@ export abstract class Workbench extends Disposable {
 						view.openNewSession();
 					}),
 				activateSelection: selection => view.activateSelection(selection),
+				closeSelection: selection => {
+					if (view.activeSelection !== selection) view.activateSelection(selection);
+					void commandService.executeCommand('sessionsViewPane.closeSession')
+						.then(() => sessionsPart?.focus(), error => notificationService.error(getErrorMessage(error)));
+				},
 				createNewSession: () => {
 					view.openNewSession();
 				},
@@ -999,7 +1004,7 @@ export abstract class Workbench extends Disposable {
 		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, { ...editorOptions, contextKeyService: filesScope.context }));
 		filesScope.services.registerInstance(IEditorPart, filesEditor);
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-		for (const tool of ['changes', 'browser', 'terminal'] as const) {
+		for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
 			const scope = createToolScope(tool);
 			const part = this._register(scope.services.createInstance(DesktopToolEditorPart, scope.container, { ...editorOptions, contextKeyService: scope.context, hideTabs: tool === 'changes' }));
 			scope.services.registerInstance(IEditorPart, part);

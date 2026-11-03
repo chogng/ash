@@ -45,6 +45,7 @@ export interface SessionsPartOptions {
 		selection: SessionsViewSelection,
 	) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
+	readonly closeSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
 }
@@ -271,6 +272,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					}),
 				),
 			);
+			view.setCloseVisible(false);
 			this.reconcileGrid();
 			window.container.classList.add('ash-sessions-window');
 			shell.mount(view.element);
@@ -305,6 +307,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			const view = this.entries.get(id);
 			return view ? [{ id, view: this.popouts.get(view)?.placeholder ?? view }] : [];
 		});
+		const docked = entries.filter(entry => entry.view instanceof SessionView);
+		for (const { view } of docked) {
+			if (view instanceof SessionView) view.setCloseVisible(docked.length > 1);
+		}
 		const active = [...this.entries].find(([, view]) => view === this.activeView)?.[0] ?? 'empty';
 		this.splitActive.set(this.visible && entries.length > 1 && this.activeGridId !== undefined);
 		this.grid.reconcile(entries.length ? entries : [{ id: 'empty', view: this.empty }], active);
@@ -433,6 +439,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					createPane: (kind, container, panelId, selected) =>
 						this.createPane(kind, container, panelId, selected),
 					activateSelection: this.options.activateSelection,
+					closeSelection: this.options.closeSelection,
 				});
 				setDisposableOwner(view, this);
 				this.entries.set(id, view);

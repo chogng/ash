@@ -33,8 +33,7 @@
 
 .ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
 	> .ash-chat-input-container:is(:hover, .focused) {
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-chat-input-shadow) 30%, transparent);
+	box-shadow: var(--ash-sessions-soft-shadow);
 }
 
 .ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
