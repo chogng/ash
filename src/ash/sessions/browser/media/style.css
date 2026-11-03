@@ -255,12 +255,8 @@
 }
 
 .ash-sessions-window
-	:is(
-		.ash-button-quiet,
-		.ash-chat-input-picker-button,
-		.ash-chat-input-toolbars.ash-toolbar
-			.ash-chat-input-mode-selector
-			.ash-chat-input-action.ash-chat-input-mode-action
+	:is(.ash-button-quiet, .ash-chat-input-picker-button):where(
+		:not(.ash-sessions-chat-input .ash-chat-input-mode-action)
 	)[aria-haspopup]:is(:hover, [aria-expanded="true"]):not(
 		:disabled,
 		[aria-disabled="true"],

@@ -1,9 +1,6 @@
 import './media/chatSessionPickerActionItem.css';
-import { h } from '../../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import type { IDisposable } from '../../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { IActionListOptions } from '../../../../../platform/actionWidget/browser/actionList.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputPickerActionViewItem } from '../widget/input/chatInputPickerActionItem.js';
@@ -49,11 +46,6 @@ export class ChatSessionPickerActionItem extends ChatInputPickerActionViewItem {
 		element.classList.add('ash-chat-input-session-action');
 		element.querySelector('.ash-button-label')!.classList.add('ash-chat-input-session-action-label');
 		element.setAttribute('aria-label', this.action.tooltip);
-		const indicator = h(element.ownerDocument, 'span');
-		indicator.className = 'ash-dropdown-menu-indicator ash-chat-session-picker-indicator';
-		indicator.setAttribute('aria-hidden', 'true');
-		appendIcon(Lxicon.chevronDown, indicator);
-		element.append(indicator);
 		return label;
 	}
 }

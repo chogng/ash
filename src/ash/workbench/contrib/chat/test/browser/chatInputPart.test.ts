@@ -4694,19 +4694,18 @@ suite('chatInput browser component', () => {
 			await composer.evaluate(element => { element.style.width = '180px'; });
 			await expect(label).toBeHidden();
 			await expect(picker.locator('.ash-icon-label-icon')).toBeVisible();
-			await expect(picker.locator('.ash-chat-session-picker-indicator')).toBeVisible();
+			await expect(picker.locator('.ash-dropdown-menu-indicator')).toHaveCount(0);
 			await expect(picker).toHaveAttribute('aria-label', /^Mode: /);
 			const triggerBounds = await picker.evaluate(button => {
 				const icon = button.querySelector<HTMLElement>('.ash-icon-label-icon');
-				const indicator = button.querySelector<HTMLElement>('.ash-chat-session-picker-indicator');
-				if (!icon || !indicator) throw new Error('Agent mode trigger is incomplete');
+				if (!icon) throw new Error('Agent mode trigger is incomplete');
 				const buttonBounds = button.getBoundingClientRect();
 				return {
 					iconInside: icon.getBoundingClientRect().left >= buttonBounds.left,
-					indicatorInside: indicator.getBoundingClientRect().right <= buttonBounds.right,
+					iconRightInside: icon.getBoundingClientRect().right <= buttonBounds.right,
 				};
 			});
-			expect(triggerBounds).toEqual({ iconInside: true, indicatorInside: true });
+			expect(triggerBounds).toEqual({ iconInside: true, iconRightInside: true });
 			await picker.press('ArrowDown');
 			const menu = page.locator('.ash-chat-input-mode-menu');
 			await expect(menu).toBeVisible();
