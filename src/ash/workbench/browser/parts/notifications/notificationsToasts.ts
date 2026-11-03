@@ -80,8 +80,8 @@ export class NotificationsToasts extends Disposable {
 				previousFocus.focus();
 			}
 		}));
-		this._register(this.list.onDidRequestRemove(id => {
-			if (model.get(id)?.hasActiveProgress) return;
+		this._register(this.list.onDidRequestRemove(({ id, fromPrimaryAction }) => {
+			if (!fromPrimaryAction && model.get(id)?.hasActiveProgress) return;
 			const button = this.element.querySelector<HTMLButtonElement>(`[data-notification-close="${id}"]`);
 			const buttons = [...this.element.querySelectorAll<HTMLButtonElement>('[data-notification-close]')];
 			const focusedIndex = document.activeElement === button ? buttons.indexOf(button!) : -1;

@@ -52,9 +52,14 @@ export interface INotificationProgress {
 	done(): void;
 }
 
+export interface INotificationAction extends IAction {
+	/** Leaves dismissal to the producer after this action is invoked. */
+	readonly keepOpen?: boolean;
+}
+
 /** Primary actions are buttons; secondary actions appear in the notification menu. */
 export interface INotificationActions {
-	readonly primary?: readonly IAction[];
+	readonly primary?: readonly INotificationAction[];
 	readonly secondary?: readonly IAction[];
 }
 

@@ -198,7 +198,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			const notification = this.notifications.notify({
 				severity: Severity.Info,
 				message: localize('agentsWindowInvitation.message', 'Continue in the Agents Window to keep track of your agent conversations across projects.'),
-				actions: { primary: [{ tooltip: '', enabled: true, id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
+				actions: { primary: [{ tooltip: '', enabled: true, keepOpen: true, id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
 			});
 			const lifetime = new DisposableStore();
 			this.presentation = { invitation: claimed, notification, lifetime };

@@ -193,6 +193,52 @@ suite('notifications browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.actionRuns)).toBe(1);
 	});
 
+	test('notification message hover is limited to collapsed, truncated text and links open with the keyboard', async () => {
+		const { page } = browserTests;
+		await page.goto('/notifications.html');
+		const longMessage = 'Long notification '.repeat(35).trimEnd();
+		await page.evaluate(message => {
+			window.ashNotificationsIntegration.notifyOptions(message);
+			window.ashNotificationsIntegration.notifyOptions('Read [the guide](https://example.test/guide)');
+		}, longMessage);
+		const short = page.locator('.ash-notification .ash-notification-message').filter({ hasText: 'Read the guide' });
+		const long = page.locator('.ash-notification .ash-notification-message').filter({ hasText: longMessage });
+		await short.hover();
+		await expect(page.getByRole('tooltip')).toHaveCount(0);
+		await long.hover();
+		await expect(page.getByRole('tooltip')).toHaveText(longMessage);
+		const row = page.locator('.ash-notification').filter({ hasText: longMessage });
+		await row.getByRole('button', { name: 'Expand Notification', exact: true }).click();
+		await expect(row).toHaveClass(/expanded/);
+		await long.hover();
+		await expect(page.getByRole('tooltip').filter({ hasText: longMessage })).toHaveCount(0);
+		await short.getByRole('link', { name: 'the guide' }).focus();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.openedLinks())).toEqual(['https://example.test/guide']);
+	});
+
+	test('accessible view starts at the focused toast, navigates history and invokes its primary action in Chinese', async () => {
+		const { page } = browserTests;
+		await page.goto('/notifications.html?zh');
+		await page.evaluate(() => {
+			window.ashNotificationsIntegration.notifyOptions('旧通知');
+			window.ashNotificationsIntegration.notify('带操作的通知');
+		});
+		await page.locator('.ash-notification').filter({ hasText: '带操作的通知' }).focus();
+		expect(await page.evaluate(() => window.ashNotificationsIntegration.showAccessibleView())).toBe(true);
+		const view = page.locator('.ash-accessible-view-dialog');
+		const content = view.locator('textarea');
+		await expect(content).toHaveValue(/信息: 带操作的通知/);
+		await view.getByRole('button', { name: '下一项', exact: true }).click();
+		await expect(content).toHaveValue(/信息: 旧通知/);
+		await view.getByRole('button', { name: '上一项', exact: true }).click();
+		await view.getByRole('button', { name: 'Run action', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.actionRuns)).toBe(1);
+		await expect(content).toHaveValue(/信息: 旧通知/);
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('listitem').filter({ hasText: '旧通知' })).toBeFocused();
+	});
+
 	test('empty notification center shows its state only in the title and keeps read history visible', async function () {
 		const { page } = browserTests;
 		for (const language of ['', '?zh']) {
@@ -345,7 +391,6 @@ suite('notifications browser component', () => {
 		const row = page.locator(`.ash-notifications-row[data-notification-id="${id}"]`);
 		await row.getByRole('button', { name: 'Run action', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.actionRuns)).toBe(1);
-		await row.getByRole('button', { name: 'Remove notification', exact: true }).click();
 		await expect(row).toHaveCount(0);
 		await expect(page.locator('.ash-notifications-row')).toHaveCount(2);
 		await page.evaluate(() => window.ashNotificationsIntegration.clear());

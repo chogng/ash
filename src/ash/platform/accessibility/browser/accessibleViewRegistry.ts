@@ -8,7 +8,7 @@ export interface IAccessibleViewImplementation {
 	readonly priority: number;
 	readonly name: string;
 	readonly when?: ContextKeyExpression;
-	getProvider(accessor: ServicesAccessor): IAccessibleViewContentProvider | undefined;
+	getProvider(accessor: ServicesAccessor, target?: Element | null): IAccessibleViewContentProvider | undefined;
 }
 
 class AccessibleViewImplementationRegistry {

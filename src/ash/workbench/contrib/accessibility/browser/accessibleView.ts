@@ -1,8 +1,10 @@
 import { defaultDialogStyles, defaultButtonStyles, defaultCheckboxStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/accessibleView.css';
-import { h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h, getActiveDocument, getActiveElement } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleViewType, type IAccessibleViewContentProvider, type IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -53,7 +55,7 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 			.sort((left, right) => right.priority - left.priority);
 		let provider: IAccessibleViewContentProvider | undefined;
 		for (const implementation of implementations) {
-			provider = implementation.getProvider(this.accessor);
+			provider = implementation.getProvider(this.accessor, activeElement);
 			if (provider) {
 				break;
 			}
@@ -89,7 +91,37 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				if (hint) content.setAttribute('aria-description', hint);
 				else content.removeAttribute('aria-description');
 			};
+			const actionBar = h(document, 'div');
+			const actionLifetime = lifetime.add(new DisposableStore());
+			const previous = selectedProvider.providePreviousContent;
+			const next = selectedProvider.provideNextContent;
+			const addButton = (container: HTMLElement, label: string, run: () => void, resources: DisposableStore): Button =>
+				resources.add(new Button(container, { ...defaultButtonStyles, label, presentation: 'secondary', onClick: run }));
+			const bodyContent = h(document, 'div');
+			const controls = h(document, 'div');
+			if (previous) addButton(controls, localize('accessibility.previous', 'Previous'), () => previous.call(selectedProvider), lifetime);
+			if (next) addButton(controls, localize('accessibility.next', 'Next'), () => next.call(selectedProvider), lifetime);
+			let previousActions = selectedProvider.actions;
+			const updateActions = (): void => {
+				const focusedButton = actionBar.contains(document.activeElement) ? document.activeElement : undefined;
+				const focusedIndex = [...actionBar.children].indexOf(focusedButton as Element);
+				actionLifetime.clear();
+				actionBar.replaceChildren();
+				for (const action of selectedProvider.actions ?? []) {
+					const button = addButton(actionBar, action.label, () => { void Promise.resolve().then(() => action.run()).catch(onUnexpectedError); }, actionLifetime);
+					button.enabled = action.enabled;
+				}
+				if (focusedButton) {
+					const replacement = actionBar.children[focusedIndex] as HTMLElement | undefined;
+					(replacement?.matches(':enabled') ? replacement : content).focus();
+				}
+			};
+			updateActions();
 			const updateContent = (): void => {
+				if (previousActions !== selectedProvider.actions) {
+					previousActions = selectedProvider.actions;
+					updateActions();
+				}
 				const value = selectedProvider.provideContent();
 				const text = type === AccessibleViewType.Help
 					? resolveContentAndKeybindingItems(this.keybindings, value)?.content.value ?? ''
@@ -107,10 +139,28 @@ export class AccessibleViewService extends Disposable implements IAccessibleView
 				dialogStyles: defaultDialogStyles,
 				checkboxStyles: defaultCheckboxStyles,
 				inputBoxStyles: defaultInputBoxStyles,
-				renderBody: body => body.append(content),
+				renderBody: body => {
+					if (!previous && !next && selectedProvider.actions === undefined) {
+						body.append(content);
+						return;
+					}
+					bodyContent.append(content);
+					if (previous || next) bodyContent.append(controls);
+					if (selectedProvider.actions !== undefined) bodyContent.append(actionBar);
+					body.append(bodyContent);
+				},
 				extraClasses: ['ash-accessible-view-dialog'],
 				cancelId: 0,
 			}));
+			if (previous || next) {
+				lifetime.add(addDisposableListener(bodyContent, 'keydown', event => {
+					if (event.defaultPrevented || event.isComposing || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+					const navigate = event.code === 'BracketLeft' ? previous : event.code === 'BracketRight' ? next : undefined;
+					if (!navigate) return;
+					event.preventDefault();
+					navigate.call(selectedProvider);
+				}));
+			}
 			// Close child help before releasing the content dialog and its provider.
 			lifetime.add(toDisposable(() => this.help.clear()));
 			if (provider.onDidChangeContent) {

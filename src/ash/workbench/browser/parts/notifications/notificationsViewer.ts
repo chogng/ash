@@ -2,13 +2,15 @@ import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platf
 import './media/notificationsList.css';
 import '../../../../base/browser/ui/progressbar/progressbar.css';
 import './media/notificationsActions.css';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import '../../../../platform/opener/browser/link.css';
+import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
+import { parseLinkedText } from '../../../../base/common/linkedText.js';
 import { Separator, type IAction, type IActionRunner } from '../../../../base/common/actions.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -16,9 +18,10 @@ import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { INotificationService, NotificationsFilter, Severity } from '../../../../platform/notification/common/notification.js';
 import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationItem } from '../../../common/notifications.js';
-import { ConfigureNotificationAction } from './notificationsActions.js';
+import { ConfigureNotificationAction, runPrimaryNotificationAction } from './notificationsActions.js';
 
 /** Renders one immutable record for either notification surface. */
 export class NotificationTemplateRenderer extends Disposable {
@@ -29,10 +32,11 @@ export class NotificationTemplateRenderer extends Disposable {
 		item: NotificationItem,
 		presentation: 'toast' | 'center',
 		actionRunner: IActionRunner,
-		remove: (id: number) => void,
+		remove: (id: number, fromPrimaryAction?: boolean) => void,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@INotificationService notificationService: INotificationService,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IOpenerService openerService: IOpenerService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'article');
@@ -68,7 +72,9 @@ export class NotificationTemplateRenderer extends Disposable {
 		content.className = 'ash-notification-content';
 		const message = h(container.ownerDocument, 'div');
 		message.className = 'ash-notification-message';
-		message.textContent = item.message;
+		const messageResources = this._register(new DisposableStore());
+		const messageHover = this._register(getHoverDelegate().setupHover({ target: message, content: '' }));
+		let previousMessage: string | undefined;
 		content.append(message);
 		const progress = this._register(new ProgressBar(content, defaultProgressBarStyles));
 
@@ -117,7 +123,9 @@ export class NotificationTemplateRenderer extends Disposable {
 		const updateToolbar = (): void => {
 			const actions: IAction[] = [];
 			if (configure) actions.push(configure);
-			if (input.canCollapse && (input.expanded || input.source || message.scrollWidth > message.clientWidth)) {
+			const overflows = input.canCollapse && !input.expanded && message.scrollWidth > message.clientWidth;
+			messageHover.update(overflows ? message.textContent ?? '' : '');
+			if (input.canCollapse && (input.expanded || input.source || overflows)) {
 				const label = input.expanded ? localize('notifications.collapse', 'Collapse Notification') : localize('notifications.expand', 'Expand Notification');
 				const top = getNotificationsPosition(configurationService) === NotificationsPosition.TOP_RIGHT;
 				const icon = input.expanded === top ? Lxicon.chevronUp : Lxicon.chevronDown;
@@ -132,9 +140,9 @@ export class NotificationTemplateRenderer extends Disposable {
 			if (!input.hasActiveProgress) actions.push(close);
 			toolbar.setActions(actions);
 		};
-		this._register(getHoverDelegate().setupDelayedHover(message, () => ({ content: input.message })));
 		this._register(addDisposableListener(this.domNode, 'dblclick', event => {
 			if (event.target !== this.domNode && !message.contains(event.target as Node)) return;
+			if ((event.target as HTMLElement).closest?.('a')) return;
 			input.toggle();
 		}));
 		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
@@ -164,7 +172,31 @@ export class NotificationTemplateRenderer extends Disposable {
 			severity.setAttribute('aria-label', severityLabels[current.severity] ?? '');
 			severity.replaceChildren();
 			appendIcon(current.severity === Severity.Error ? Lxicon.error : current.severity === Severity.Warning ? Lxicon.warning : Lxicon.info, severity);
-			message.textContent = current.message;
+			if (previousMessage !== current.message) {
+				previousMessage = current.message;
+				messageResources.clear();
+				message.replaceChildren();
+				for (const node of parseLinkedText(current.message).nodes) {
+					if (typeof node === 'string') {
+						message.append(node);
+						continue;
+					}
+					const link = h(container.ownerDocument, 'a');
+					link.className = 'ash-link';
+					link.href = node.href;
+					link.textContent = node.label;
+					if (node.title) link.title = node.title;
+					messageResources.add(addDisposableListener(link, 'click', event => {
+						stopEvent(event);
+						void actionRunner.run({
+							id: 'notification.openLink', label: node.label, tooltip: '', enabled: true,
+							run: () => openerService.open(node.href, { fromUserGesture: true, allowCommands: true }),
+						});
+					}));
+					messageResources.add(addDisposableListener(link, 'auxclick', stopEvent));
+					message.append(link);
+				}
+			}
 			progress.element.hidden = !current.hasActiveProgress;
 			progress.element.setAttribute('aria-label', current.message);
 			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
@@ -182,13 +214,12 @@ export class NotificationTemplateRenderer extends Disposable {
 				primaryContainer = h(container.ownerDocument, 'div');
 				primaryContainer.className = 'ash-notification-actions';
 				for (const [index, action] of current.actions.primary.entries()) {
-					const runnable = runnableAction(action);
 					const button = primaryResources.add(new Button(primaryContainer, {
 						...defaultButtonStyles,
 						label: action.label,
 						title: action.tooltip || action.label,
 						presentation: index === 0 ? 'primary' : 'secondary',
-						onClick: () => { void Promise.resolve().then(() => actionRunner.run(runnable)); },
+						onClick: () => { void runPrimaryNotificationAction(action, actionRunner, () => remove(current.id, true)); },
 					}));
 					button.enabled = action.enabled;
 					button.domNode.classList.add('ash-notification-action');

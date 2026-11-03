@@ -5,6 +5,8 @@ import { JSDOM } from 'jsdom';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
 import { INotificationService, NotificationPriority, NotificationsFilter, Severity } from '../../../../../platform/notification/common/notification.js';
+import type { INotificationAction } from '../../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { IAction, IRunEvent } from '../../../../../base/common/actions.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -59,7 +61,7 @@ test('windows without a status bar keep toast actions and notification history w
 		let actionRuns = 0;
 		const removed: number[] = [];
 		service.model.onDidRemove(item => removed.push(item.id));
-		const handle = service.notify({ severity: Severity.Warning, message: 'Workspace needs attention', source: 'fixture', actions: { primary: [{ tooltip: '', enabled: true, id: 'open', label: 'Open', run: () => { actionRuns++; } }] } });
+		const handle = service.notify({ severity: Severity.Warning, message: 'Workspace needs attention', source: 'fixture', actions: { primary: [{ tooltip: '', enabled: true, keepOpen: true, id: 'open', label: 'Open', run: () => { actionRuns++; } }] } });
 		const handleItem = service.model.getNotifications().at(-1)!;
 		assert.equal(root.querySelector('.ash-notifications-toggle'), null);
 		assert.equal(root.querySelectorAll('.ash-notification').length, 1);
@@ -722,6 +724,7 @@ class NotificationsPresentation extends Disposable {
 		Object.defineProperty(window.Element.prototype, 'getClientRects', { configurable: true, value: () => [new window.DOMRect(0, 0, 100, 20)] });
 		this.services = this._register(new InstantiationService());
 		this.services.registerInstance(INotificationService, service);
+		this.services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 		const presentation = this;
 		this.services.registerInstance(IHostService, {
 			getWindows: async () => [],
@@ -1125,10 +1128,10 @@ for (const useCenter of [false, true]) {
 			using fixture = new NotificationsFixture(statusbar);
 			const { document, service, runner, center } = fixture;
 			let calls = 0;
-			const action: IAction = {
+			const action: INotificationAction = {
 				tooltip: '',
 				enabled: true,
-				id: 'failed', label: 'Try action', run(...args: unknown[]) {
+				id: 'failed', label: 'Try action', keepOpen: true, run(...args: unknown[]) {
 					assert.equal(this, action);
 					assert.deepEqual(args, []);
 					calls++;
@@ -1160,7 +1163,7 @@ for (const useCenter of [false, true]) {
 		const completion = new Promise<void>((_resolve, rejectCompletion) => { reject = rejectCompletion; });
 		let entered!: () => void;
 		const started = new Promise<void>(resolve => { entered = resolve; });
-		const original = fixture.service.notify({ severity: Severity.Info, message: 'Pending task', actions: { primary: [{ tooltip: '', enabled: true, id: 'pending', label: 'Start', run() { entered(); return completion; } }] } });
+		const original = fixture.service.notify({ severity: Severity.Info, message: 'Pending task', actions: { primary: [{ tooltip: '', enabled: true, id: 'pending', label: 'Start', keepOpen: true, run() { entered(); return completion; } }] } });
 		const originalItem = fixture.service.model.getNotifications().at(-1)!;
 		if (useCenter) fixture.center.show();
 		const completed = new Promise<void>(resolve => fixture.runner.onDidRun(() => resolve()));
@@ -1257,7 +1260,7 @@ test('a producer handle updates severity, message and actions on the existing ro
 	assert.equal(disabled.disabled, true);
 	disabled.click();
 	assert.equal(runs, 0);
-	handle.updateActions({ primary: [{ id: 'retry', label: 'Retry', tooltip: '', enabled: true, run() { runs++; } }] });
+	handle.updateActions({ primary: [{ id: 'retry', label: 'Retry', tooltip: '', enabled: true, keepOpen: true, run() { runs++; } }] });
 	row.querySelector<HTMLButtonElement>('.ash-notification-action')!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(runs, 1);
@@ -1297,12 +1300,12 @@ test('the accessible notification history observes handle updates through its Wo
 	services.registerInstance(INotificationsCenter, fixture.center);
 	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === 'notificationsView')!;
 	using provider = implementation.getProvider(services)!;
-	assert.equal(provider.provideContent(), 'info: Starting');
+	assert.equal(provider.provideContent(), 'Information: Starting');
 	let updates = 0;
 	using listener = provider.onDidChangeContent!(() => { updates++; });
 	handle.updateSeverity(Severity.Error);
 	handle.updateMessage('Failed');
-	assert.equal(provider.provideContent(), 'error: Failed');
+	assert.equal(provider.provideContent(), 'Error: Failed');
 	assert.equal(updates, 2);
 	handle.close();
 	assert.equal(provider.provideContent(), 'No notifications');
@@ -1555,7 +1558,7 @@ test('empty progress options do not block removal and active progress updates th
 	fixture.center.show();
 	assert.equal(fixture.panel.querySelectorAll('[data-notification-remove]').length, 1);
 	using provider = AccessibleViewRegistry.getImplementations().find(item => item.name === 'notificationsView')!.getProvider(fixture.presentation.services)!;
-	assert.equal(provider.provideContent(), 'info: Working');
+	assert.equal(provider.provideContent(), 'Information: Working');
 	handle.progress.infinite();
 	assert.equal(fixture.panel.querySelectorAll('[data-notification-remove]').length, 0);
 	assert.match(provider.provideContent(), /In progress/);
@@ -1563,7 +1566,7 @@ test('empty progress options do not block removal and active progress updates th
 	handle.progress.worked(1);
 	assert.match(provider.provideContent(), /25% complete/);
 	handle.progress.done();
-	assert.equal(provider.provideContent(), 'info: Working');
+	assert.equal(provider.provideContent(), 'Information: Working');
 });
 
 suite('notification review regressions', () => {

@@ -66,6 +66,7 @@ export class BrowserClipboardService extends BaseBrowserClipboardService {
 							tooltip: '',
 							enabled: true,
 							id: 'clipboard.learnMore',
+							keepOpen: true,
 							label: localize('clipboard.learnMore', 'Learn More'),
 							run: async () => {
 								await this.openerService.open('https://support.google.com/chrome/answer/114662', { openExternal: true });
