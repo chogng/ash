@@ -28,7 +28,6 @@ import { IProjectService, type Project } from '../../../../platform/projects/com
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { posix } from '../../../../base/common/path.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { Menus } from '../../menus.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -103,29 +102,35 @@ export class SessionsList extends DomWidget {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.')
 				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
 		}));
-		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
-		const more = this._register(new Button(this.domNode, {
-			...defaultButtonStyles, icon: Lxicon.ellipsis, iconOnly: true, presentation: 'quiet', size: 'small',
-			label: localize('sessions.list.moreActions', 'More Sessions Actions'),
-			onClick: () => {
-				more.domNode.setAttribute('aria-expanded', 'true');
-				this.contextMenus.showContextMenu({
-					getAnchor: () => more.domNode,
-					getActions: () => menu.getActions().filter(([group]) => group !== 'navigation').flatMap(([, actions]) => actions),
-					getMenuClassName: () => 'ash-sessions-list-menu',
-					autoSelectFirstItem: true,
-					onHide: () => more.domNode.setAttribute('aria-expanded', 'false'),
-				});
-			},
-		}));
-		this.domNode.insertBefore(more.domNode, this.list);
-		more.domNode.classList.add('ash-sessions-list-more');
-		more.domNode.setAttribute('aria-haspopup', 'menu');
-		more.domNode.setAttribute('aria-expanded', 'false');
+		if (mode === 'chat') {
+			const more = this._register(new Button(this.domNode, {
+				...defaultButtonStyles, icon: Lxicon.ellipsis, iconOnly: true, presentation: 'quiet', size: 'small',
+				label: localize('sessions.list.moreActions', 'More Sessions Actions'),
+				onClick: event => {
+					more.domNode.setAttribute('aria-expanded', 'true');
+					this.contextMenus.showContextMenu({
+						getAnchor: () => more.domNode,
+						getActions: () => menu.getActions().filter(([group]) => group !== 'navigation').flatMap(([, actions]) => actions),
+						getMenuClassName: () => 'ash-sessions-list-menu',
+						autoSelectFirstItem: event.detail === 0,
+						onHide: () => more.domNode.setAttribute('aria-expanded', 'false'),
+					});
+				},
+			}));
+			this.domNode.insertBefore(more.domNode, this.list);
+			more.domNode.classList.add('ash-sessions-list-more');
+			more.domNode.setAttribute('aria-haspopup', 'menu');
+			more.domNode.setAttribute('aria-expanded', 'false');
+			const updateMore = (): void => {
+				more.hidden = !menu.getActions().some(([group, actions]) => group !== 'navigation' && actions.length > 0);
+			};
+			this._register(menu.onDidChange(updateMore));
+			updateMore();
+		}
 		const updateNavigation = (): void => {
 			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
 			this.navigationActions.clear();
@@ -146,12 +151,12 @@ export class SessionsList extends DomWidget {
 			}
 			for (const id of this.navigationButtons.keys()) if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
 			this.navigation.hidden = actions.length === 0;
-			more.hidden = !menu.getActions().some(([group, actions]) => group !== 'navigation' && actions.length > 0);
 		};
 		this._register(menu.onDidChange(updateNavigation));
 		updateNavigation();
 		this._register(autorun(reader => { customViews.activeCustomView.read(reader); this.render(); }));
 		this.render();
+		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		void this.loadProjects();
 	}
 
@@ -231,9 +236,9 @@ export class SessionsList extends DomWidget {
 		const recent: HTMLElement[] = [];
 		const remaining = new Map<string, HTMLElement>();
 		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
-		const itemFor = (key: string): SessionListItem => {
+		const itemFor = (key: string, icon = this.mode === 'code' ? Lxicon.chat : undefined): SessionListItem => {
 			present.add(key);
-			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, this.mode === 'code' ? Lxicon.chat : undefined));
+			const item = this.items.get(key) ?? this.items.set(key, new SessionListItem(ownerDocument, icon));
 			item.domNode.dataset.item = key;
 			return item;
 		};
@@ -276,18 +281,9 @@ export class SessionsList extends DomWidget {
 		const projects: HTMLElement[] = [];
 		const chatGroups: HTMLElement[] = [];
 		for (const project of this.projects) {
-			if (this.mode === 'chat') {
-				const item = itemFor(`project:${project.id}`);
-				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
-				projects.push(item.domNode);
-			} else {
-				const members: HTMLElement[] = [];
-				for (const id of project.sessionIds) {
-					const item = remaining.get(id);
-					if (item) { members.push(item); remaining.delete(id); }
-				}
-				projects.push(sectionFor(`project:${project.id}`, project.name, members, true));
-			}
+			const item = itemFor(`project:${project.id}`, Lxicon.projects);
+			item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
+			projects.push(item.domNode);
 		}
 		if (this.projectsFailed) projects.push(this.projectError);
 		for (const group of this.groups.groups) {
@@ -298,22 +294,7 @@ export class SessionsList extends DomWidget {
 			}
 			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code'));
 		}
-		if (this.mode === 'code') {
-			const workspaces = new Map<string, { title: string; items: HTMLElement[]; }>();
-			for (const session of this.sessionService.sessions) {
-				const item = remaining.get(session.sessionId);
-				if (!item) continue;
-				const workspace = session.workspace;
-				const key = workspace ? JSON.stringify([workspace.authorityId, workspace.root]) : `provider:${session.providerId ?? ''}`;
-				let group = workspaces.get(key);
-				if (!group) {
-					const title = workspace ? posix.basename(workspace.root.replace(/\\/g, '/')) || workspace.root : session.providerLabel ?? localize('sessions.list.other', 'Other chats');
-					group = { title, items: [] }; workspaces.set(key, group);
-				}
-				group.items.push(item);
-			}
-			for (const [key, group] of workspaces) recent.push(sectionFor(`workspace:${key}`, group.title, group.items, true));
-		} else recent.push(...remaining.values());
+		recent.push(...remaining.values());
 		const showEmpty = recent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));

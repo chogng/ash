@@ -218,11 +218,11 @@ export class ButtonWithDropdown extends Disposable {
 			contentAlignment: 'groupCentered',
 			checked: undefined,
 			type: 'button',
-			onClick: () => {
+			onClick: event => {
 				if (this.menu.value) {
 					this.hideDropdown();
 				} else {
-					this.showDropdown();
+					this.showDropdown(event.detail === 0);
 				}
 			},
 		}));
@@ -237,7 +237,7 @@ export class ButtonWithDropdown extends Disposable {
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownButton.enabled) {
 				stopEvent(event);
-				this.showDropdown();
+				this.showDropdown(true);
 			} else if (event.key === 'ArrowRight' && event.target === this.primaryButton.domNode && this.dropdownButton.enabled) {
 				stopEvent(event);
 				this.dropdownButton.focus();
@@ -261,7 +261,7 @@ export class ButtonWithDropdown extends Disposable {
 		}
 	}
 
-	private showDropdown(): void {
+	private showDropdown(autoSelectFirstItem: boolean): void {
 		if (this.isDisposed || !this.dropdownButton.enabled || this.menu.value) {
 			return;
 		}
@@ -284,7 +284,7 @@ export class ButtonWithDropdown extends Disposable {
 				getAnchor: () => this.dropdownButton.domNode,
 				getActions: () => menuActions,
 				actionRunner: this.options.actionRunner,
-				autoSelectFirstItem: true,
+				autoSelectFirstItem,
 				cancellationToken: menu.token,
 				onHide: () => this.didHideMenu(menu),
 			});

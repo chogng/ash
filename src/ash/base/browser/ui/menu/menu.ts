@@ -129,7 +129,7 @@ abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
 }
 
 /** Runnable menu action with live checked, shortcut and alternative presentation. */
-class MenuActionViewItem extends MenuButtonActionViewItem {
+export class MenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly shortcut = this._register(new MutableDisposable<KeybindingLabel>());
 	private badge: HTMLElement | undefined;
 	private shortcutValue: ResolvedKeybinding | undefined;
@@ -284,8 +284,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.update();
 	}
 
-	override runAction(): void {
-		this.open(true);
+	override runAction(event?: MouseEvent | KeyboardEvent): void {
+		this.open((event?.detail ?? 0) === 0);
 	}
 
 	private openFromPointer(): void {

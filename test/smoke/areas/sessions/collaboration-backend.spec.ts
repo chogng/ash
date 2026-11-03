@@ -76,7 +76,8 @@ test('Persistent collaboration channels share across windows and enforce member 
 		await notes.fill('Channel notes survive restart');
 		const agents = await workbench.openAgentsWindow(target.kind);
 		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await agents.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true }).click();
+		await agents.locator('[data-action-id="sessions.activity.more"] button').click();
+		await agents.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 		await expect(agents.getByRole('treeitem', { name: 'engineering', exact: true })).toBeVisible();
 		await agents.getByRole('treeitem', { name: 'engineering', exact: true }).dblclick();
 		await expect(agents.locator('.stanza-document-collaboration-toolbar')).toHaveAttribute('data-state', 'connected');

@@ -414,7 +414,7 @@ for (const locale of ['en', 'zh-CN'])
 	});
 
 for (const locale of ['en', 'zh-CN'])
-	test(`Code workspace owns New, Automations, Collab, Agent Teams and Symphony navigation (${locale})`, async ({
+	test(`Code sidebar shows primary navigation and groups secondary actions in More (${locale})`, async ({
 		page,
 	}, testInfo) => {
 		await page.goto(`/sessions.html?automations=1&locale=${locale}`);
@@ -427,14 +427,14 @@ for (const locale of ['en', 'zh-CN'])
 			.or(modes.getByRole('button', { name: '聊天 / Agents', exact: true }));
 		const navigation = page.locator('.ash-sessions-navigation');
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(
-			chinese ? ['新建', '搜索', '项目', 'Creator'] : ['New', 'Search', 'Projects', 'Creator'],
+			chinese ? ['新建', '搜索', '项目', 'Artifacts', '自定义'] : ['New', 'Search', 'Projects', 'Artifacts', 'Customize'],
 		);
 		await expect(navigation.locator('[data-action-id="sessions.open.code"]')).toHaveCount(0);
 		await code.click();
 		await expect(page.locator('.ash-sessions-activity-content')).toHaveAttribute('data-workspace-mode', 'code');
 		const expected = chinese
-			? ['新建', '搜索', '自动化', 'Collab', 'Agent 团队', 'Symphony']
-			: ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony'];
+			? ['新建', '自动化', '自定义', '更多']
+			: ['New', 'Automations', 'Customize', 'More'];
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
 		await expect(page.locator('.ash-sessions-list[data-mode=code]')).toBeVisible();
 		await expect(page.locator('.ash-sessions-list:visible')).toHaveCount(1);
@@ -442,24 +442,15 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(code).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-input')).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`code-navigation-${locale}.png`) });
-		await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
-		await expect(navigation.getByRole('button', { name: 'Collab', exact: true })).toHaveAttribute(
-			'aria-current',
-			'page',
-		);
+		const more = navigation.getByRole('button', { name: chinese ? '更多' : 'More', exact: true });
+		await more.click();
+		await expect(page.getByRole('menuitem', { name: chinese ? '搜索' : 'Search', exact: true })).toHaveCount(0);
+		const collab = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
+		await collab.click();
 		await expect(code).toHaveAttribute('aria-pressed', 'true');
-		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
-		const teams = navigation.getByRole('button', { name: chinese ? 'Agent 团队' : 'Agent Teams', exact: true });
-		await teams.click();
-		await expect(page.locator('.ash-teams-panel')).toBeVisible();
-		await expect(teams).toHaveAttribute('aria-current', 'page');
-		await expect(code).toHaveAttribute('aria-pressed', 'true');
-		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
-		await expect(page.locator('.ash-teams-panel')).toBeVisible();
-		await expect(teams).toHaveAttribute('aria-current', 'page');
-		await expect(code).toHaveAttribute('aria-pressed', 'true');
-		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(expected);
-		await navigation.getByRole('button', { name: 'Symphony', exact: true }).click();
+		await more.click();
+		await expect(collab).toHaveAttribute('aria-checked', 'true');
+		await page.getByRole('menuitemradio', { name: 'Symphony', exact: true }).click();
 		await expect(page.locator('.ash-symphony-monitor')).toBeVisible();
 		await expect(code).toHaveAttribute('aria-pressed', 'true');
 		await navigation.getByRole('button', { name: chinese ? '自动化' : 'Automations', exact: true }).click();
@@ -476,8 +467,47 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(page.locator('[data-part="customview"]')).toBeHidden();
 		await expect(page.locator('.ash-sessions-list')).toBeVisible();
 		await expect(navigation.getByRole('button').locator('.ash-icon-label-text')).toHaveText(
-			chinese ? ['新建', '搜索', '项目', 'Creator'] : ['New', 'Search', 'Projects', 'Creator'],
+			chinese ? ['新建', '搜索', '项目', 'Artifacts', '自定义'] : ['New', 'Search', 'Projects', 'Artifacts', 'Customize'],
 		);
+		await code.click();
+		await more.click();
+		const collabPin = page.getByRole('menuitem', { name: chinese ? '将 Collab 固定到侧栏' : 'Pin Collab to Sidebar' });
+		await collab.hover();
+		await expect(collabPin).toHaveCSS('padding-inline-start', '0px');
+		await expect(collabPin).toHaveCSS('padding-inline-end', '0px');
+		await expect(collabPin.locator('.ash-icon-label-icon')).toHaveCSS('width', '18px');
+		const collabRow = collab.locator('..');
+		for (const target of [collab, collabPin]) {
+			await target.hover();
+			await expect(collabRow).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(collab).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(collabPin).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		}
+		await collabPin.click();
+		const pinnedCollab = navigation.getByRole('button', { name: 'Collab', exact: true });
+		await expect(pinnedCollab).toBeFocused();
+		await expect(page.locator('[data-view-container-id="ash.collaboration"]')).toBeHidden();
+
+		await more.click();
+		await expect(collab).toHaveCount(0);
+		const symphony = page.getByRole('menuitemradio', { name: 'Symphony', exact: true });
+		await symphony.press('ArrowRight');
+		const symphonyPin = page.getByRole('menuitem', { name: chinese ? '将 Symphony 固定到侧栏' : 'Pin Symphony to Sidebar' });
+		await expect(symphonyPin).toBeFocused();
+		await symphonyPin.press('Enter');
+		await expect(navigation.getByRole('button', { name: 'Symphony', exact: true })).toBeFocused();
+		await expect(more).toHaveCount(0);
+		await expect(page.locator('.ash-symphony-monitor')).toBeHidden();
+
+		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
+		await expect(pinnedCollab).toBeVisible();
+		await expect(navigation.getByRole('button', { name: 'Symphony', exact: true })).toBeVisible();
+		await pinnedCollab.press('Shift+F10');
+		await page.getByRole('menuitem', { name: chinese ? '从侧栏取消固定' : 'Unpin from Sidebar' }).click();
+		await expect(pinnedCollab).toHaveCount(0);
+		await expect(more).toBeFocused();
+		await more.click();
+		await expect(collab).toBeVisible();
 	});
 
 test('Sessions reports browser errors and rejected promises once without rethrowing', async ({ page }) => {
@@ -1127,21 +1157,27 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '最近使用'] : ['Pinned', 'Projects', 'Recents']);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
-		const project = projects.locator('.ash-sessions-list-subgroup');
-		const projectToggle = project.locator('h3 button');
-		await expect(projectToggle).toHaveAccessibleName('Search project fixture');
-		await expect(project.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
-		await expect(projectToggle.locator('[data-ash-icon-id=folder-open]')).toBeVisible();
+		await expect(list.locator('.ash-sessions-list-more')).toHaveCount(0);
+		const projectToggle = projects.locator(':scope > h3 button');
+		const projectChevron = projectToggle.locator('.ash-sessions-list-section-icon');
+		await expect(projectChevron).toHaveCSS('width', '16px');
+		await expect(projectChevron).toHaveCSS('height', '16px');
+		await expect(projectChevron).toHaveCSS('opacity', '0');
+		await projectToggle.hover();
+		await expect(projectChevron).toHaveCSS('opacity', '1');
+		await page.mouse.move(0, 0);
+		const project = projects.getByRole('button', { name: 'Search project fixture', exact: true });
+		const taskA = list.locator('[data-section=recent]').getByRole('button', { name: 'Task from Host A', exact: true });
+		await expect(taskA).toBeVisible();
+		await expect(project).toBeVisible();
 		await projectToggle.focus();
 		await projectToggle.press('ArrowLeft');
+		await expect(projectChevron).toHaveCSS('opacity', '1');
 		await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
-		await expect(projectToggle.locator('[data-ash-icon-id=folder]')).toBeVisible();
-		await expect(project.getByRole('button', { name: 'Task from Host A', exact: true })).toBeHidden();
-		await projectToggle.press('ArrowDown');
-		await expect(recent).toBeFocused();
+		await expect(project).toBeHidden();
+		await expect(taskA).toBeVisible();
 		await projectToggle.press('ArrowRight');
-		await expect(projectToggle).toHaveAttribute('aria-expanded', 'true');
-		const taskA = project.getByRole('button', { name: 'Task from Host A', exact: true });
+		await expect(project).toBeVisible();
 		await expect(taskA.locator(':scope > [data-ash-icon-id=chat]')).toBeVisible();
 		await taskA.click();
 		await expect
@@ -1157,7 +1193,7 @@ for (const locale of ['en', 'zh-CN'])
 		await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
 		const pinnedA = pinned.getByRole('button', { name: 'Task from Host A', exact: true });
 		await expect(pinnedA).toBeVisible();
-		await expect(project.locator('.ash-sessions-list-item')).toHaveCount(0);
+		await expect(taskA).toHaveCount(0);
 		await pinnedA.press('Shift+F10');
 		await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
 		await expect(taskA).toBeVisible();
@@ -1176,16 +1212,7 @@ for (const locale of ['en', 'zh-CN'])
 					);
 				}),
 			).toBe(true);
-			expect(
-				await taskA.locator(':scope > .ash-icon').evaluate(element => {
-					const bounds = element.getBoundingClientRect();
-					return (
-						bounds.width === 16 &&
-						bounds.height === 16 &&
-						getComputedStyle(element).fontFamily.includes('Ash UI Variable')
-					);
-				}),
-			).toBe(true);
+			await expect(taskA.locator(':scope > [data-ash-icon-id=chat]')).toBeVisible();
 		}
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
 		await page.screenshot({ path: testInfo.outputPath(`sidebar-code-groups-${locale}.png`) });
@@ -1202,9 +1229,32 @@ for (const locale of ['en', 'zh-CN'])
 		await recent.press('ArrowRight');
 		await expect(taskB).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`sidebar-chat-groups-${locale}.png`) });
-		await projects.getByRole('button', { name: 'Search project fixture', exact: true }).click();
+		await mode.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		const recentSection = list.locator('[data-section=recent]');
+		await expect(recentSection.locator('.ash-sessions-list-subgroup')).toHaveCount(0);
+		await expect(recentSection.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+		await expect(recentSection.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		await projectToggle.press('ArrowRight');
+		await project.click();
 		await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
 	});
+
+test('Accounts menu focuses the first item only on keyboard open', async ({ page }) => {
+	const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
+	await expect(accounts.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'account');
+	await accounts.click();
+	await expect(accounts).toHaveAttribute('aria-expanded', 'true');
+	const settings = page.getByRole('menuitem', { name: 'Settings', exact: true });
+	const menu = page.getByRole('menu').filter({ has: settings });
+	await expect(menu).toBeFocused();
+	await expect(menu.locator('.focused')).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(accounts).toBeFocused();
+	await accounts.press('Enter');
+	await expect(settings).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(accounts).toBeFocused();
+});
 
 test.describe('Sessions settings components', () => {
 	test.beforeEach(async ({ page }) => {

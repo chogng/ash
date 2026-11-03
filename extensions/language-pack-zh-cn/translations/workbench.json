@@ -2974,7 +2974,7 @@
     "browser.auth.signIn": "登录",
     "browser.auth.saveFailed": "无法安全保存凭据。本次登录将继续，但不会保存凭据。",
     "browser.auth.help": "HTTP 和代理身份验证会打开包含用户名和密码字段的对话框。按 Tab 在字段和按钮之间移动，按 Enter 登录，按 Escape 取消。记住凭据为可选操作，仅在系统加密可用的持久浏览器存储会话中提供。清除浏览器数据会删除此存储会话保存的凭据和认证缓存。隔离的 Agent 页面不会使用你保存的凭据。",
-    "agentHosts.help": "通过命令面板或“更多会话操作”中的“Agents：管理已连接宿主”打开远程环境。按 Tab 到达连接操作，按 Escape 关闭对话框。",
+    "agentHosts.help": "通过命令面板中的“Agents：管理已连接宿主”打开远程环境。按 Tab 到达连接操作，按 Escape 关闭对话框。",
     "agentHosts.conversationUnavailable": "此对话属于另一个 Agent 宿主。",
     "agentHosts.duplicateLease": "Agent 宿主连接租约已存在",
     "agentHosts.limit": "Agent 宿主连接数已达到上限",

@@ -363,7 +363,8 @@ for (const scenario of [
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session?.model).toEqual(rootModel);
 			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(childModel);
 			// Collab hosts the shared Cowork renderer; the Chat workspace opens ChatGPT.
-			await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
+			await page.locator('[data-action-id="sessions.activity.more"] button').click();
+			await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await new QuickAccess(page).runCommand('workbench.action.chat.showHistory');
 			await page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'No persisted model' }).click();
@@ -606,7 +607,8 @@ async function verifySubscriptionUpdates(
 	if (!(await codeAuto.isChecked())) await codeAuto.press('Space');
 	await expect(codeAuto).toBeChecked();
 	await cowork.keyboard.press('Escape');
-	await cowork.locator('[data-action-id="sessions.open.collaboration"] button').click();
+	await cowork.locator('[data-action-id="sessions.activity.more"] button').click();
+	await cowork.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await selectModel(source, sourceChat, initial);
 	await selectModel(cowork, coworkChat, initial);
 	await expect(sourceChat.locator('.ash-chat-input-configuration-action')).toHaveText('Medium');
@@ -628,7 +630,8 @@ async function verifySubscriptionUpdates(
 		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(codeAuto).toBeChecked();
 		await cowork.keyboard.press('Escape');
-		await cowork.locator('[data-action-id="sessions.open.collaboration"] button').click();
+		await cowork.locator('[data-action-id="sessions.activity.more"] button').click();
+		await cowork.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 		await expect(coworkChat.locator('.ash-chat-input-model-action')).toHaveText(updated);
 		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await picker(cowork).getByRole('combobox').fill('Synthetic catalog');

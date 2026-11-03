@@ -72,7 +72,7 @@ export class BreakpointEditorContribution extends Disposable {
 			this.cancelGesture(); this.setHint(undefined);
 			this.contextMenus.showContextMenu({
 				getAnchor: () => ({ x: event.event.clientX, y: event.event.clientY, targetWindow: editor.getDomNode()!.ownerDocument.defaultView! }),
-				getActions: () => actions, autoSelectFirstItem: true,
+				getActions: () => actions,
 				onHide: () => { if (!this.widget.value) editor.focus(); },
 			});
 		}));

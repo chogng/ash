@@ -27,7 +27,7 @@ const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
 test(
-	'Sessions sidebar groups switch between Chat and Code and retain expansion',
+	'Code sidebar retains Recents expansion with no projects',
 	{ tag: ['@electron-ui'] },
 	async ({ target, workbench }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
@@ -35,31 +35,16 @@ test(
 		const headings = list.locator(':scope > .ash-sessions-list-items > section > h3 button');
 		const recent = list.locator('[data-section=recent] > h3 button');
 		const modes = page.locator('.ash-window-mode-control');
-		await expect(list.getByRole('searchbox')).toHaveCount(0);
-		await expect(headings).toHaveText(['Projects', 'Chats']);
-		await expect(list.locator('[data-section=pinned]')).toHaveCount(0);
-		// The disconnected Desktop fixture keeps the project-load failure available for retry.
-		await expect(
-			list
-				.locator('[data-section=projects]')
-				.getByRole('button', { name: 'Could not load projects. Retry', exact: true }),
-		).toBeVisible();
-		await recent.focus();
-		await recent.press('ArrowLeft');
-		await expect(recent).toHaveAttribute('aria-expanded', 'false');
-		await expect(recent.locator('[data-ash-icon-id=chevron-right]')).toBeVisible();
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(headings).toHaveText(['Projects', 'Recents']);
+		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox').focus();
+		await page.keyboard.type('Sidebar fixture draft');
+		await expect(headings).toHaveText(['Recents']);
+		await expect(list.locator('.ash-sessions-list-more')).toHaveCount(0);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
-		await expect(list.locator('.ash-sessions-list-item > [data-ash-icon-id=chat]').first()).toBeVisible();
 		await recent.focus();
 		await recent.press('ArrowLeft');
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
 		await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-		await expect(recent).toHaveAttribute('aria-expanded', 'false');
-		await recent.press('ArrowRight');
-		await expect(list.locator('.ash-sessions-list-item').first()).toBeVisible();
-		await page.screenshot({ path: testInfo.outputPath('sidebar-chat-groups-desktop.png') });
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
 		await recent.press('ArrowRight');
@@ -325,7 +310,8 @@ async function openSessionsComposer(page: Page, presentation: 'Cowork' | 'Code')
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	if (presentation === 'Cowork') {
 		// Desktop's Chat mode opens ChatGPT; Collab hosts the shared Cowork composer.
-		await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
+		await page.locator('[data-action-id="sessions.activity.more"] button').click();
+		await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	}
 	const chat = page
 		.locator(`.ash-sessions-chat-slot .${presentation === 'Cowork' ? 'ash-cowork' : 'ash-chat'}:visible`)
@@ -1751,14 +1737,20 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
 		// Switch workspaces before exercising Code's Collab entry.
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		const collaboration = navigation.getByRole('button', { name: 'Collab', exact: true });
-		await expect(collaboration).toBeFocused();
-		await collaboration.press('Enter');
-		await expect(collaboration).toHaveAttribute('aria-current', 'page');
-		await expect(collaboration.locator('.ash-icon')).toHaveCSS('color', 'rgb(0, 0, 0)');
-		await expect(collaboration).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
-		await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
+		if (position === 'Default') {
+			await navigation.getByRole('button', { name: 'More', exact: true }).press('Enter');
+			const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
+			await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
+			await collaboration.press('Enter');
+		} else {
+			const collaboration = navigation.getByRole('button', { name: 'Collab', exact: true });
+			await collaboration.press('Enter');
+			await expect(collaboration).toHaveAttribute('aria-current', 'page');
+			await expect(collaboration.locator('.ash-icon')).toHaveCSS('color', 'rgb(0, 0, 0)');
+			await expect(collaboration).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+			await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
+			await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
+		}
 		await expect(chat).not.toHaveAttribute('aria-current');
 		await chat.press('Enter');
 		await expect(chat).toHaveAttribute('aria-current', 'page');
@@ -1950,12 +1942,11 @@ test(
 			const activityNavigation = page.locator('.ash-sessions-activity-content');
 			await expectActivityIconSize(activityNavigation, 16);
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-			const collaboration = page
-				.locator('.ash-sessions-activity-content')
-				.getByRole('button', { name: 'Collab' });
+			const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
 			const projects = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects' });
+			await activityNavigation.getByRole('button', { name: 'More', exact: true }).click();
+			await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
 			await collaboration.click();
-			await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
 			await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 			await page
 				.locator('.ash-window-mode-control')
@@ -3276,7 +3267,8 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	let navigation = page.locator('.ash-sessions-activity-content');
 	// Desktop starts in ChatGPT. Collab and Code exercise the two native conversation renderers.
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	let composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').first();
 	let editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep this draft');
@@ -3317,9 +3309,8 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 	await page.keyboard.press('ArrowLeft');
 	for (const _ of 'Keep this draft') await page.keyboard.press('Shift+ArrowRight');
 	await page.keyboard.insertText('Edited from Code');
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).focus();
-	await page.keyboard.press('Space');
-	await expect(navigation.getByRole('button', { name: 'Collab', exact: true })).toHaveAttribute('aria-current', 'page');
+	await navigation.getByRole('button', { name: 'More', exact: true }).press('Space');
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).press('Enter');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
 	await expectDraft('Edited from Code');
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(true);
@@ -3356,7 +3347,8 @@ emptyWorkspaceTest('Sessions Activity Bar changes layout while retaining the sam
 		'page',
 	);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await expectDraft('Edited from Code');
 	expect(await editor.input.evaluate((element, original) => element === original, restoredInput)).toBe(false);
 	await restoredInput?.dispose();

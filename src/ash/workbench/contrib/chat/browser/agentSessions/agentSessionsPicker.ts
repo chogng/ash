@@ -120,7 +120,7 @@ export class AgentSessionsPicker {
 				// The child menu must be above the Quick Input that owns it.
 				layer: 200,
 				getAnchor: () => button,
-				autoSelectFirstItem: true,
+				autoSelectFirstItem: event.fromKeyboard,
 				getActions: () => this.actions(event.item.session).map(action => action instanceof Separator ? action : {
 					...action,
 					run: () => runOperation(() => action.run(), false, action.keepPickerOpen),

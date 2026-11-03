@@ -47,7 +47,7 @@ export class StatusbarEntryItem extends Disposable {
 				return;
 			}
 			event.preventDefault();
-			this.entry?.run?.(this.labelDomNode);
+			this.entry?.run?.(this.labelDomNode, event);
 		}));
 		this._register(addDisposableListener(labelDomNode, 'keydown', (event) => {
 			if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -57,7 +57,7 @@ export class StatusbarEntryItem extends Disposable {
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			this.entry?.run?.(this.labelDomNode);
+			this.entry?.run?.(this.labelDomNode, event);
 		}));
 
 		this.update(entry);

@@ -26,7 +26,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 	private readonly labels: ResourceLabels;
 	private showIcons = true;
 	private readonly editorTypeButton: HTMLButtonElement;
-	private selectEditorType: ((anchor: HTMLElement) => void) | undefined;
+	private selectEditorType: ((anchor: HTMLElement, event: MouseEvent) => void) | undefined;
 	private input: IResourceEditorInput | undefined;
 	private symbols: readonly SymbolElement[] = [];
 	private filePath: BreadcrumbsPathMode = 'on';
@@ -63,7 +63,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.editorTypeButton.hidden = true;
 		this.editorTypeButton.setAttribute('aria-haspopup', 'menu');
 		this.domNode.append(this.editorTypeButton);
-		this._register(addDisposableListener(this.editorTypeButton, 'click', () => this.selectEditorType?.(this.editorTypeButton)));
+		this._register(addDisposableListener(this.editorTypeButton, 'click', event => this.selectEditorType?.(this.editorTypeButton, event)));
 		this._register(this.widget.onDidSelectItem(event => {
 			if (!(event.item instanceof EditorBreadcrumbItem)) {
 				return;
@@ -103,7 +103,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 		this.render();
 	}
 
-	setEditorType(label: string | undefined, select: ((anchor: HTMLElement) => void) | undefined): void {
+	setEditorType(label: string | undefined, select: ((anchor: HTMLElement, event: MouseEvent) => void) | undefined): void {
 		this.selectEditorType = select;
 		this.editorTypeButton.hidden = label === undefined;
 		this.editorTypeButton.textContent = label ?? '';

@@ -106,3 +106,40 @@
 	padding: 0 var(--ash-spacing-size120);
 	font-size: var(--ash-fontSize-body1);
 }
+
+.ash-menu .ash-sessions-navigation-menu-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-sessions-navigation-menu-pin {
+	justify-content: center;
+	padding: 0;
+	width: var(--ash-list-rowHeight);
+	opacity: 0;
+}
+
+.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused)
+	> .ash-sessions-navigation-menu-pin {
+	opacity: 1;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused) {
+	color: var(
+		--ash-menu-style-selection-foreground-color,
+		var(--ash-menu-selectionForeground)
+	);
+	background: var(
+		--ash-menu-style-selection-background-color,
+		var(--ash-menu-selectionBackground)
+	);
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused)
+	> .ash-button {
+	background: transparent;
+}

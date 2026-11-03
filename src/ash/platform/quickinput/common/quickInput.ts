@@ -145,7 +145,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	activeItems: readonly TItem[];
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidBlur: Event<void>;
-	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>;
+	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; readonly fromKeyboard?: boolean; }>;
 
 	items: readonly (TItem | IQuickPickSeparator)[];
 	/** Disable search sorting when the provider owns item order and grouping. */

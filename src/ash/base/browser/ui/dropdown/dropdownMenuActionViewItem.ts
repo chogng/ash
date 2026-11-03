@@ -53,11 +53,11 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			ariaLabel: this.action.label,
 			title: this.action.tooltip,
 			enabled: this.action.enabled,
-			onClick: () => {
+			onClick: event => {
 				if (this.visible) {
 					this.menuCancellation.value?.cancel();
 				} else {
-					this.show();
+					this.show(event.detail === 0);
 				}
 			},
 		});
@@ -72,7 +72,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		this._register(addDisposableListener(button.domNode, 'keydown', (event) => {
 			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 			stopEvent(event);
-			this.show();
+			this.show(true);
 		}));
 	}
 
@@ -84,7 +84,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		if (this.button) this.button.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 
-	show(): void {
+	show(autoSelectFirstItem = false): void {
 		const button = this.button;
 		if (this.isDisposed || !button?.enabled || this.visible) return;
 		const actions = typeof this.actions === 'function'
@@ -103,6 +103,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			getActions: () => actions,
 			getActionsContext: () => context,
 			actionRunner,
+			autoSelectFirstItem,
 			...this.getAnchorOptions?.(button.domNode),
 			cancellationToken: cancellation.token,
 			onHide: () => {

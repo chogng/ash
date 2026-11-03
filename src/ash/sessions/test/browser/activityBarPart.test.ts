@@ -342,6 +342,8 @@ test('navigation and ordering labels use the Chinese language catalog', async ()
 		assert.deepEqual({ navigation: bar.domNode.querySelector('.ash-sessions-navigation')!.getAttribute('aria-label'), moves: actions.slice(0, 2).map(action => action.label) }, {
 			navigation: '导航', moves: ['向前移动', '向后移动'],
 		});
+		services.get(IContextKeyService).setContext('sessions.workspaceMode', 'code');
+		assert.equal(bar.domNode.querySelector('[data-action-id="sessions.activity.more"] button')?.textContent, '更多');
 	} finally {
 		resetNlsResolver();
 	}
@@ -353,7 +355,8 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	using configuration = new WorkbenchConfigurationService();
 	using views = new BrowserContextViewService(document.body);
 	let shown: readonly IAction[] = [];
-	const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shown = delegate.getActions!(); }, hideContextMenu() { } };
+	let hideMenu: (() => void) | undefined;
+	const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu(delegate) { shown = delegate.getActions!(); hideMenu = () => delegate.onHide?.(true); }, hideContextMenu() { } };
 	using hovers = new HoverService(configuration, views, contextMenus);
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
@@ -370,17 +373,25 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Automations', 'Customize', 'More']);
+	const more = bar.domNode.querySelector<HTMLButtonElement>('[data-action-id="sessions.activity.more"] button')!;
+	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
+	assert.equal(more.querySelector('.ash-icon')?.getAttribute('data-ash-icon-id'), 'ellipsis');
+	more.click();
+	assert.equal(more.getAttribute('aria-expanded'), 'true');
+	assert.deepEqual(shown.map(action => action.label), ['Collab', 'Symphony']);
+	hideMenu?.();
+	assert.equal(more.getAttribute('aria-expanded'), 'false');
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
-	bar.domNode.querySelector('[data-action-id="sessions.open.collaboration"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
+	bar.domNode.querySelector('[data-action-id="sessions.open.customize"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Automations', 'More']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Customize', 'Automations', 'More']);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {

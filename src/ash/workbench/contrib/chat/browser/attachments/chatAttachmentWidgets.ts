@@ -494,7 +494,7 @@ class AttachmentResourceActions extends Disposable {
 				getAnchor: () => 'clientX' in event
 					? { x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! }
 					: anchor,
-				autoSelectFirstItem: true, cancellationToken: token,
+				autoSelectFirstItem: 'key' in event, cancellationToken: token,
 			});
 		};
 		this._register(addDisposableListener(element, 'contextmenu', showMenu));

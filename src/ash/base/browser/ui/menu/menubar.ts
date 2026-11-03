@@ -106,7 +106,7 @@ export class MenuBar extends Disposable {
 			...this.options.buttonStyles,
 			label: '', icon: Lxicon.menu, iconOnly: true,
 			ariaLabel: this.options.ariaLabel ?? localize('menuBar.applicationMenu', 'Application Menu'),
-			onClick: () => this.toggleMenu(MenuBar.OVERFLOW_INDEX),
+			onClick: event => this.toggleMenu(MenuBar.OVERFLOW_INDEX, event.detail === 0),
 		}));
 		button.setTitle(this.options.ariaLabel ?? localize('menuBar.applicationMenu', 'Application Menu'));
 		this.configureButton(button, MenuBar.OVERFLOW_INDEX);
@@ -188,7 +188,7 @@ export class MenuBar extends Disposable {
 				...this.options.buttonStyles,
 				label: readableLabel,
 				ariaLabel: readableLabel,
-				onClick: () => this.toggleMenu(index),
+				onClick: event => this.toggleMenu(index, event.detail === 0),
 			}));
 			this.configureButton(button, index);
 			const mnemonic = this.mnemonic(menu.label);
@@ -229,9 +229,9 @@ export class MenuBar extends Disposable {
 		}));
 	}
 
-	private toggleMenu(index: number): void {
+	private toggleMenu(index: number, selectFirst: boolean): void {
 		if (this.activeIndex === index) this.closeMenu(true);
-		else this.openMenu(index, true);
+		else this.openMenu(index, selectFirst);
 	}
 
 	private openMenu(index: number, selectFirst: boolean): void {

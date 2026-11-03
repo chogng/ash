@@ -220,7 +220,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 										anchorPosition: AnchorPosition.Below,
 										getMenuClassName: () => 'ash-projects-sort-menu',
 										getCheckedActionsRepresentation: () => 'radio',
-										autoSelectFirstItem: true,
 									}),
 							},
 							options,

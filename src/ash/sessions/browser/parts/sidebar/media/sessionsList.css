@@ -147,6 +147,12 @@
 	margin-top: var(--ash-spacing-size160);
 }
 
+/* The list gap contributes the remaining 4px between these sections. */
+.ash-sessions-list-section[data-section="projects"]
+	+ .ash-sessions-list-section[data-section="recent"] {
+	margin-top: var(--ash-spacing-size120);
+}
+
 .ash-sessions-list-section h3 {
 	margin: 0;
 	font: inherit;
@@ -184,18 +190,40 @@
 	outline-offset: -1px;
 }
 
+.ash-sessions-list-section:is(
+		[data-section="projects"],
+		[data-section="recent"]
+	)
+	> h3
+	> .ash-sessions-list-section-toggle
+	> .ash-sessions-list-section-icon {
+	--session-list-icon-size: var(--ash-lxiconFontSize);
+}
+
+@media (hover: hover) {
+	.ash-sessions-list-section:is(
+			[data-section="projects"],
+			[data-section="recent"]
+		)
+		> h3
+		> .ash-sessions-list-section-toggle:not(:hover, :focus-visible)
+		> .ash-sessions-list-section-icon {
+		opacity: 0;
+	}
+}
+
 .ash-sessions-list-section-icon,
 .ash-sessions-list-item > .ash-icon {
 	display: inline-flex;
 	align-items: center;
 	flex: 0 0 auto;
-	width: var(--ash-lxiconFontSize-large);
-	height: var(--ash-lxiconFontSize-large);
+	width: var(--session-list-icon-size, var(--ash-lxiconFontSize-large));
+	height: var(--session-list-icon-size, var(--ash-lxiconFontSize-large));
 }
 
 .ash-sessions-list-section-icon > .ash-icon,
 .ash-sessions-list-item > .ash-icon {
-	font-size: var(--ash-lxiconFontSize-large);
+	font-size: var(--session-list-icon-size, var(--ash-lxiconFontSize-large));
 }
 
 .ash-sessions-list-section-label {
@@ -208,7 +236,7 @@
 .ash-sessions-list-section-body {
 	display: flex;
 	flex-direction: column;
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size20);
 }
 
 .ash-sessions-list-subgroup > .ash-sessions-list-section-body {

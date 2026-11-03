@@ -133,8 +133,8 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			run: () => this.hide(),
 		};
 		this.clearButton = new NotificationCenterActionViewItem(clear, 'ash-notifications-clear');
-		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, button => this.showHeaderMenu(button, this.getDoNotDisturbActions()));
-		const position = new NotificationCenterActionViewItem(configurePosition, undefined, button => this.showHeaderMenu(button, positionMenu.getActions().flatMap(([, actions]) => actions)));
+		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, (button, selectFirst) => this.showHeaderMenu(button, this.getDoNotDisturbActions(), selectFirst));
+		const position = new NotificationCenterActionViewItem(configurePosition, undefined, (button, selectFirst) => this.showHeaderMenu(button, positionMenu.getActions().flatMap(([, actions]) => actions), selectFirst));
 		this.hideButton = new NotificationCenterActionViewItem(hide, 'ash-notifications-hide');
 		const items = new Map<IAction, NotificationCenterActionViewItem>([
 			[clear, this.clearButton],
@@ -295,13 +295,13 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		return actions;
 	}
 
-	private showHeaderMenu(button: Button, actions: readonly IAction[]): void {
+	private showHeaderMenu(button: Button, actions: readonly IAction[], autoSelectFirstItem: boolean): void {
 		this.cancelHeaderMenu();
 		const source = this.headerMenu = new CancellationTokenSource();
 		button.domNode.setAttribute('aria-expanded', 'true');
 		try {
 			this.contextMenuService.showContextMenu({
-				getAnchor: () => button.domNode, getActions: () => actions, actionRunner: this.actionRunner, autoSelectFirstItem: true, cancellationToken: source.token,
+				getAnchor: () => button.domNode, getActions: () => actions, actionRunner: this.actionRunner, autoSelectFirstItem, cancellationToken: source.token,
 				onHide: () => {
 					if (this.headerMenu === source) this.headerMenu = undefined;
 					source.dispose();
@@ -322,7 +322,7 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 	constructor(
 		action: IAction,
 		private readonly className?: string,
-		private readonly showMenu?: (button: Button) => void,
+		private readonly showMenu?: (button: Button, selectFirst: boolean) => void,
 	) {
 		super(action, { buttonStyles: defaultButtonStyles });
 	}
@@ -336,7 +336,7 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 			this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
 				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 				event.preventDefault();
-				this.showMenu?.(this.button);
+				this.showMenu?.(this.button, true);
 			}));
 		}
 	}
@@ -345,8 +345,8 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 	set checked(value: boolean) { this.button.checked = value; }
 	set icon(value: Button['icon']) { this.button.icon = value; }
 
-	protected override runAction(): unknown {
-		if (this.showMenu) return this.showMenu(this.button);
+	protected override runAction(event?: MouseEvent | KeyboardEvent): unknown {
+		if (this.showMenu) return this.showMenu(this.button, (event?.detail ?? 0) === 0);
 		return super.runAction();
 	}
 }

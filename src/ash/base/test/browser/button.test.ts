@@ -229,7 +229,10 @@ suite('Split button rendering', () => {
 			await dropdown.press('ArrowLeft');
 			await expect(primary).toBeFocused();
 			await dropdown.click();
-			await page.getByRole('menuitem', { name: 'Save as…', exact: true }).click();
+			const menu = page.getByRole('menu');
+			await expect(menu).toBeFocused();
+			await expect(menu.locator('.focused')).toHaveCount(0);
+			await save.click();
 			await expect(page.locator('output')).toHaveText('saveAs');
 			await dropdown.click();
 			await page.evaluate(() => window.ashButtonIntegration.disable());

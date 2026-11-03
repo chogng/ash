@@ -155,7 +155,7 @@ export class NotificationsList extends Disposable {
 				getActions: () => [this.copyAction],
 				getActionsContext: () => item,
 				cancellationToken: source.token,
-				autoSelectFirstItem: true,
+				autoSelectFirstItem: event.type === 'keydown',
 				onHide: () => {
 					if (this.copyMenu === source) this.copyMenu = undefined;
 					// Selection releases the menu without canceling the started clipboard write.

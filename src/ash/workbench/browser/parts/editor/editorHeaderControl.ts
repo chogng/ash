@@ -181,12 +181,12 @@ export class EditorHeaderControl extends Disposable {
 		const choices = this.editorTypes;
 		const select = this.selectEditorType;
 		this.breadcrumbs.setEditorType(this.showEditorType && choices.length > 1 ? current?.name : undefined,
-			this.actions && current && select ? anchor => {
+			this.actions && current && select ? (anchor, event) => {
 				this.actions!.contextMenuProvider.showContextMenu({
 					getAnchor: () => anchor,
 					getActions: () => createEditorTypeActions(choices, current.id, select),
 					getCheckedActionsRepresentation: () => 'radio',
-					autoSelectFirstItem: true,
+					autoSelectFirstItem: event.detail === 0,
 					onHide: () => anchor.focus(),
 				});
 			} : undefined);

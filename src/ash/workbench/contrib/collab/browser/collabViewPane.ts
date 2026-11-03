@@ -129,7 +129,7 @@ export class CollabViewPane extends ViewPane {
 		this._register(addDisposableListener(this.tree.element, 'contextmenu', event => {
 			const row = (event.target as HTMLElement).closest<HTMLElement>('[data-channel-id]');
 			const id = row?.dataset.channelId ?? this.tree.focus?.id;
-			if (id) { event.preventDefault(); this.showChannelMenu(id); }
+			if (id) { event.preventDefault(); this.showChannelMenu(id, false); }
 		}));
 		this._register(addDisposableListener(this.tree.element, 'dblclick', event => {
 			const id = (event.target as HTMLElement).closest<HTMLElement>('[data-channel-id]')?.dataset.channelId;
@@ -138,7 +138,7 @@ export class CollabViewPane extends ViewPane {
 		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
 			const id = this.tree.focus?.id;
 			if (id && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
-				event.preventDefault(); event.stopPropagation(); this.showChannelMenu(id);
+				event.preventDefault(); event.stopPropagation(); this.showChannelMenu(id, true);
 			} else if (id && event.key === 'Enter') {
 				event.preventDefault(); event.stopPropagation(); void this.openResource(id, 'notes');
 			} else if (id && event.key === 'F2') {
@@ -322,11 +322,11 @@ export class CollabViewPane extends ViewPane {
 		this.tree.expandTo(id); this.tree.setFocus(id); this.tree.reveal(id); this.tree.domFocus();
 	}
 
-	private showChannelMenu(id: string): void {
+	private showChannelMenu(id: string, autoSelectFirstItem: boolean): void {
 		this.selectedId = id; this.tree.setSelection([id]); this.tree.setFocus(id); this.updateActions();
 		const anchor = this.tree.element.querySelector<HTMLElement>(`[data-channel-id="${id}"]`) ?? this.tree.element;
 		this.menus.showContextMenu({
-			getAnchor: () => anchor, getActions: () => this.channelActions(id), autoSelectFirstItem: true,
+			getAnchor: () => anchor, getActions: () => this.channelActions(id), autoSelectFirstItem,
 			onHide: cancelled => { if (cancelled && !this.isDisposed) this.tree.domFocus(); }
 		});
 	}

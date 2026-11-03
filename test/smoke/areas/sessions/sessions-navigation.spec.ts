@@ -276,10 +276,10 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await navigation.getByRole('button', { name: 'New', exact: true }).focus();
 	await page.keyboard.press('End');
-	const symphony = navigation.getByRole('button', { name: 'Symphony', exact: true });
-	await expect(symphony).toBeFocused();
+	const more = navigation.getByRole('button', { name: 'More', exact: true });
+	await expect(more).toBeFocused();
 	await page.keyboard.press('Enter');
-	await expect(symphony).toHaveAttribute('aria-current', 'page');
+	await page.getByRole('menuitemradio', { name: 'Symphony', exact: true }).press('Enter');
 	await expect(page.locator('.ash-symphony-monitor')).toBeVisible();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();

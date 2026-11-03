@@ -125,6 +125,11 @@
 
 .ash-sessions-window .ash-menu .ash-button {
 	padding-inline: var(--ash-spacing-size120);
+}
+
+.ash-sessions-window
+	.ash-menu
+	:is(.ash-button, .ash-sessions-navigation-menu-row) {
 	border-radius: var(--ash-cornerRadius-large);
 }
 

@@ -9,9 +9,9 @@ test('Collab retains channel navigation while Agent settings are open', { tag: [
 	await expect(channels.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 
 	let page = await workbench.openAgentsWindow(target.kind);
-	let navigation = page.locator('.ash-sessions-activity-content');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	const collaboration = page.locator('[data-view-container-id="ash.collaboration"]');
 	await expect(collaboration.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 	await new QuickAccess(page).runCommand('workbench.action.openSettings');
@@ -19,14 +19,18 @@ test('Collab retains channel navigation while Agent settings are open', { tag: [
 	await settings.getByRole('button', { name: 'Agents', exact: true }).click();
 	await settings.getByRole('tab', { name: 'Teams', exact: true }).click();
 	await expect(settings.getByRole('button', { name: 'New Team', exact: true })).toBeVisible();
-	await expect(navigation.getByRole('button', { name: 'Collab', exact: true })).toHaveAttribute('aria-current', 'page');
 	await page.keyboard.press('Escape');
 	await expect(settings).toHaveCount(0);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).hover();
+	await page.getByRole('menuitem', { name: 'Pin Collab to Sidebar' }).click();
+	const pinnedCollab = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Collab', exact: true });
+	await expect(pinnedCollab).toBeFocused();
+	await pinnedCollab.click();
 	await expect(page.locator('[data-view-container-id="ash.collaboration"]').getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('collaboration-window.png') });
 	page = await workbench.reopenAgentsWindow(application, page);
-	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collab', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Collab', exact: true })).toBeVisible();
 	await expect(page.locator('[data-view-container-id="ash.collaboration"]').getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 });

@@ -10,7 +10,6 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const sessions = page.locator('[data-part="sessions"]');
 	const titlebar = page.locator('[data-part="titlebar"]');
-	const navigation = page.locator('.ash-sessions-activity-content');
 	await expect(card).toBeVisible();
 	await expect(card).toHaveAttribute('aria-hidden', 'true');
 	await expect(card).toHaveCSS('pointer-events', 'none');
@@ -54,7 +53,8 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
 	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
@@ -99,7 +99,8 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await page.keyboard.insertText('Retained Code draft');
 	const input = await editor.input.elementHandle();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();

@@ -15,7 +15,7 @@ export class SessionsAccountMenu {
 		@ICommandService private readonly commands: ICommandService,
 	) { }
 
-	public show(anchor: HTMLElement): void {
+	public show(anchor: HTMLElement, autoSelectFirstItem = false): void {
 		const settingsLabel = localize('workbench.manageSettings', 'Settings');
 		const accountLabel = localize('sessions.settings.account', 'Account');
 		const ideLabel = localize('sessions.menu.openIde', 'Open IDE');
@@ -31,6 +31,7 @@ export class SessionsAccountMenu {
 			getAnchor: () => anchor,
 			getActions: () => actions,
 			getMenuClassName: () => 'ash-sessions-account-menu',
+			autoSelectFirstItem,
 			onHide: () => anchor.setAttribute('aria-expanded', 'false'),
 		});
 	}

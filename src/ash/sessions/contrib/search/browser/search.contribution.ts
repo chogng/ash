@@ -29,7 +29,7 @@ registerAction2(
 				title: localize2('sessions.search.title', 'Search'),
 				icon: Lxicon.search,
 				f1: true,
-				menu: [Menus.ActivityBar, Menus.CodeActivityBar].map(id => ({ id, group: 'navigation', order: 15 })),
+				menu: { id: Menus.ActivityBar, group: 'navigation', order: 15 },
 			});
 		}
 		override run(accessor: ServicesAccessor): Promise<void> {
