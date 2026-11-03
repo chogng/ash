@@ -33,11 +33,6 @@ versions = ["0.8.2", "0.9.1"]
 reason = "Current upstream API families: 0.8.2 via ratatui; 0.9.1 via tokenizers. Review the introducing packages together before changing this set."
 
 [[multiple_versions]]
-name = "const-oid"
-versions = ["0.10.2", "0.9.6"]
-reason = "Current upstream API families: 0.10.2 via digest; 0.9.6 via der, digest. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
 name = "core-foundation"
 versions = ["0.10.1", "0.9.4"]
 reason = "Current upstream API families: 0.10.1 via ash-user-verification, rustls-platform-verifier, security-framework; 0.9.4 via core-graphics, core-graphics-types, security-framework and other importers. Review the introducing packages together before changing this set."
@@ -374,24 +369,14 @@ versions = ["0.5.1", "0.6.0"]
 reason = "Derive macros paired with asn1-rs 0.6 and 0.7 in the WebRTC certificate parser families."
 
 [[multiple_versions]]
-name = "chacha20"
-versions = ["0.10.2", "0.9.1"]
-reason = "0.9 through rtc-dtls -> chacha20poly1305; 0.10 through rtc's rand 0.10."
-
-[[multiple_versions]]
-name = "curve25519-dalek"
-versions = ["4.1.3", "5.0.0"]
-reason = "4.1 through rtc-dtls -> x25519-dalek 2; 5.0 through ed25519-dalek 3."
-
-[[multiple_versions]]
 name = "der-parser"
 versions = ["10.0.0", "9.0.0"]
 reason = "9.0 through rtc-dtls and x509-parser 0.16; 10.0 through rcgen -> x509-parser 0.18."
 
 [[multiple_versions]]
-name = "fiat-crypto"
-versions = ["0.2.9", "0.3.0"]
-reason = "0.2 through curve25519-dalek 4; 0.3 through curve25519-dalek 5."
+name = "hmac"
+versions = ["0.12.1", "0.13.0"]
+reason = "0.12 through LiveKit token signing and Secret Service HKDF; 0.13 through RFC 6979 deterministic ECDSA signing."
 
 [[multiple_versions]]
 name = "oid-registry"
@@ -406,7 +391,7 @@ reason = "3.0 through product-update -> tough; 4.0 through rtc-shared -> rcgen."
 [[multiple_versions]]
 name = "quinn-udp"
 versions = ["0.5.15", "0.6.2"]
-reason = "0.5 through quinn used by the existing product; 0.6 through webrtc-rs 0.20."
+reason = "0.5 through quinn used by the existing product; 0.6 through webrtc-rs 0.21."
 
 [[multiple_versions]]
 name = "x509-parser"
@@ -435,8 +420,8 @@ reason = "Both optional IO API families are retained by postcard 1.1.3, used by 
 
 [[multiple_versions]]
 name = "pulldown-cmark"
-versions = ["0.13.4", "0.9.6"]
-reason = "Ash's Markdown consumers use 0.13.4. Upstream rust-analyzer 0.0.358 and pulldown-cmark-to-cmark 10 retain the 0.9 event API inside the standalone analysis process."
+versions = ["0.13.6", "0.9.6"]
+reason = "Ash's Markdown consumers use 0.13.6. Upstream rust-analyzer 0.0.358 and pulldown-cmark-to-cmark 10 retain the 0.9 event API inside the standalone analysis process."
 
 [[multiple_versions]]
 name = "rustc-hash"
