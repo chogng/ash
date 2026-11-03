@@ -95,8 +95,8 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const calls: (readonly unknown[])[] = [];
 		using entry = CommandsRegistry.register(command, (_accessor, ...args) => { calls.push(args); });
-		await fixture.service.restore();
-		assert.deepEqual(calls, [['restore']]);
+		await fixture.service.restore(resolved => { calls.push([resolved]); });
+		assert.deepEqual(calls, [[command], ['restore']]);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
@@ -323,7 +323,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		using command = CommandsRegistry.register('sessions.open.code', async () => fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }));
 		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView), entryCommand: 'sessions.open.code' });
 		fixture.customViews.showCustomView('automations');
-		await fixture.service.restore();
+		await fixture.service.restore(() => assert.fail('The underlying entry is covered by the custom view'));
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
 		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
 		assert.equal(fixture.contextKeys.getValue('sessions.activity.codeSelected'), false);

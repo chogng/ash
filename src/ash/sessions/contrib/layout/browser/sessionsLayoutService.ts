@@ -281,7 +281,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	public async restore(): Promise<void> {
+	public async restore(onWillRestoreEntry?: (command: string) => void): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
 		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
@@ -304,7 +304,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		// Entry commands can disappear during development or when a contribution is
 		// removed. Discard stale navigation state without invoking an unknown command.
 		if (!available) { this.storage.remove(activeEntryKey, StorageScope.WORKSPACE); }
-		await this.commands.executeCommand(available ? requested : defaultEntry, 'restore');
+		const command = available ? requested : defaultEntry;
+		if (!this.customViews.activeCustomView.get()) onWillRestoreEntry?.(command);
+		await this.commands.executeCommand(command, 'restore');
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);

@@ -1,4 +1,5 @@
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
+import { showSessionsSplashForRestore } from '../contrib/splash/browser/sessionsSplash.js';
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
@@ -1161,7 +1162,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected, { source: 'restore' });
-		await entryLayout.restore();
+		await entryLayout.restore(command => showSessionsSplashForRestore(ownerWindow.document, command));
 		if (this.isDisposed) return;
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);

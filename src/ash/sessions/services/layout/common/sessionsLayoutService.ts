@@ -42,7 +42,8 @@ export interface ISessionsLayoutService extends IDisposable {
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
 	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore'; }): Promise<void>;
-	restore(): Promise<void>;
+	/** Notify startup of the resolved command before opening an uncovered entry. */
+	restore(onWillRestoreEntry?: (command: string) => void): Promise<void>;
 }
 
 export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>('sessionsLayoutService');

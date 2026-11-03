@@ -28,6 +28,8 @@ export interface IPartsSplash {
 		readonly height: number;
 		readonly partBounds: readonly (IPartsSplashPartBounds & {
 			readonly background: string;
+			readonly id?: string;
+			readonly skeleton?: IPartsSplashSkeleton;
 			/** Resolved linear-gradient paint; offsets are CSS pixels along the gradient line. */
 			readonly backgroundGradient?: {
 				readonly angle: number;
@@ -50,6 +52,29 @@ export interface IPartsSplashPartBounds {
 	readonly left: number;
 	readonly width: number;
 	readonly height: number;
+}
+
+export interface IPartsSplashSkeleton {
+	readonly grid?: true;
+	/** Placeholder bounds as fractions of the enclosing part. No content is cached. */
+	readonly shapes: readonly (IPartsSplashPartBounds & { readonly surface?: true; })[];
+}
+
+function validateSplashSkeleton(value: unknown): IPartsSplashSkeleton | undefined {
+	if (!isRecord(value) || (value.grid !== undefined && value.grid !== true)
+		|| !Array.isArray(value.shapes) || value.shapes.length > 32) return undefined;
+	const shapes: IPartsSplashSkeleton['shapes'][number][] = [];
+	for (const shape of value.shapes) {
+		if (!isRecord(shape) || !validOffset(shape.left) || !validOffset(shape.top)
+			|| !validSize(shape.width) || !validSize(shape.height)
+			|| shape.left + shape.width > 1.001 || shape.top + shape.height > 1.001
+			|| (shape.surface !== undefined && shape.surface !== true)) return undefined;
+		shapes.push({
+			left: shape.left, top: shape.top, width: shape.width, height: shape.height,
+			...(shape.surface ? { surface: true } : {}),
+		});
+	}
+	return { shapes, ...(value.grid ? { grid: true } : {}) };
 }
 
 /** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
@@ -79,6 +104,7 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				|| !validOffset(part.left) || !validOffset(part.top)
 				|| part.left + part.width > width + 1 || part.top + part.height > height + 1
 				|| !validSplashColor(part.background)
+				|| (part.id !== undefined && (typeof part.id !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(part.id)))
 				|| !Array.isArray(part.borderRadii) || part.borderRadii.length !== 4
 				|| !Array.isArray(part.borders) || part.borders.length !== 4) {
 				throw new TypeError('Invalid window splash part bounds');
@@ -113,9 +139,12 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				});
 				backgroundGradient = { angle: gradient.angle, stops };
 			}
+			const skeleton = validateSplashSkeleton(part.skeleton);
 			return {
 				top: part.top, left: part.left, width: part.width, height: part.height,
 				background: part.background, borderRadii, borders,
+				...(part.id !== undefined ? { id: part.id } : {}),
+				...(skeleton ? { skeleton } : {}),
 				...(backgroundGradient ? { backgroundGradient } : {}),
 			};
 		});

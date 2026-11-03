@@ -6,5 +6,5 @@ import { PartsSplash } from '../browser/partsSplash.js';
 registerWorkbenchContribution(
 	PartsSplash.ID,
 	WorkbenchPhase.BlockStartup,
-	accessor => accessor.get(IInstantiationService).createInstance(PartsSplash),
+	accessor => accessor.get(IInstantiationService).createInstance(PartsSplash, {}),
 );
