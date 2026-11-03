@@ -10,12 +10,11 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { validateOpenAgentsWindow } from '../../../../platform/native/common/nativeHost.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { IWorkspaceContextService, WorkbenchState, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspacesService, recentWorkspaceUri } from '../../../../platform/workspaces/common/workspaces.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -25,6 +24,7 @@ import { captureChatDraft } from '../../../services/chat/common/chatContextServi
 import { ILifecycleService, LifecyclePhase } from '../../../services/lifecycle/common/lifecycle.js';
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { takeTransferredChatDraft } from '../../chat/browser/actions/chatTransfer.js';
 import type { IWorkspacePickerDelegate, IWorkspacePickerItem, IQuickChatSession, IChatViewPane } from '../../chat/browser/chat.js';
 import { CHAT_VIEW_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../chat/common/chat.js';
 import { AgentSessionsWelcomeInput } from './agentSessionsWelcomeInput.js';
@@ -33,7 +33,6 @@ import './media/agentSessionsWelcome.css';
 /** Welcome owns target selection and handoff; the Chat view retains the model and unsent draft. */
 export class AgentSessionsWelcomePage extends EditorPane {
 	public static readonly ID = 'workbench.editor.agentSessionsWelcome';
-	public static readonly COMMAND_ID = 'workbench.action.openAgentSessionsWelcome';
 	public readonly id = AgentSessionsWelcomePage.ID;
 	private root!: HTMLElement;
 	private chatHost!: HTMLElement;
@@ -134,7 +133,7 @@ export class AgentSessionsWelcomePage extends EditorPane {
 				workspacePickerDelegate: delegate,
 				submitHandler: async (query, mode, contexts, submissionSignal) => {
 					const target = this.selectedWorkspace;
-					if (!target) { return false; }
+					if (!target || !(await this.trust.getUriTrustInfo(target.uri)).trusted) { return false; }
 					const draft = await captureChatDraft(query, mode, contexts);
 					if (this.isDisposed || submissionSignal?.aborted || this.selectedWorkspace !== target) { throw canceled(); }
 					const key = `chat.welcomeViewPrefill:${target.uri.toString()}`;
@@ -205,19 +204,8 @@ export class AgentSessionsWelcomePage extends EditorPane {
 
 	private async applyPrefill(): Promise<void> {
 		if (this.isDisposed) { return; }
-		const key = getAgentSessionsWelcomePrefillKey(this.workspace.getWorkspace());
-		if (!key) { return; }
-		const serialized = this.storage.get(key, StorageScope.APPLICATION);
-		if (!serialized) { return; }
-		this.storage.remove(key, StorageScope.APPLICATION);
-		await this.storage.flush();
-		try {
-			const value: unknown = JSON.parse(serialized);
-			if (!value || typeof value !== 'object' || !('timestamp' in value) || typeof value.timestamp !== 'number'
-				|| !Number.isFinite(value.timestamp) || value.timestamp > Date.now() || Date.now() - value.timestamp > 60_000 || !('payload' in value)) { return; }
-			const draft = validateOpenAgentsWindow(value.payload)?.draft;
-			if (draft && !this.isDisposed) { this.mount.value?.widget.restoreDraft(draft); }
-		} catch { /* A malformed or expired persisted handoff must never submit a message. */ }
+		const draft = await takeTransferredChatDraft(this.workspace.getWorkspace(), this.storage, this.trust);
+		if (draft && !this.isDisposed) { this.mount.value?.widget.restoreDraft(draft); }
 	}
 }
 
@@ -229,10 +217,4 @@ export class AgentSessionsWelcomeInputSerializer implements EditorInputSerialize
 		if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1) { throw new TypeError('Invalid Welcome editor input'); }
 		return new AgentSessionsWelcomeInput();
 	}
-}
-
-/** A handoff is addressed to one workspace identity, independently of other windows. */
-export function getAgentSessionsWelcomePrefillKey(workspace: IWorkspace): string | undefined {
-	const resource = workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]?.uri : undefined);
-	return resource ? `chat.welcomeViewPrefill:${resource.toString()}` : undefined;
 }

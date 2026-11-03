@@ -13,6 +13,8 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
@@ -24,10 +26,11 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IChatWidgetViewOptions, IQuickChatSession } from '../../../chat/browser/chat.js';
 import { ChatViewPane } from '../../../chat/browser/widgetHosts/viewPane/chatViewPane.js';
-import { AgentSessionsWelcomePage, AgentSessionsWelcomeInputSerializer, getAgentSessionsWelcomePrefillKey } from '../../browser/agentSessionsWelcome.js';
+import { getAgentSessionsWelcomePrefillKey, restoreTransferredChatConversation } from '../../../chat/browser/actions/chatTransfer.js';
+import { AgentSessionsWelcomePage, AgentSessionsWelcomeInputSerializer } from '../../browser/agentSessionsWelcome.js';
 import { AgentSessionsWelcomeInput } from '../../browser/agentSessionsWelcomeInput.js';
 
-function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle: Pick<ILifecycleService, 'phase' | 'when'> = { phase: LifecyclePhase.Restored, when: async () => { } }) {
+function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle: Pick<ILifecycleService, 'phase' | 'when'> = { phase: LifecyclePhase.Restored, when: async () => { } }, workspaceTrusted = true) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	resources.add(toDisposable(() => dom.window.close()));
@@ -42,6 +45,8 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	} as unknown as IWorkspacesService);
 	services.registerInstance(IWorkspaceTrustManagementService, {
 		onDidChangeTrustedFolders: Event.None,
+		workspaceTrustInitialized: Promise.resolve(),
+		isWorkspaceTrusted: () => workspaceTrusted,
 		getUriTrustInfo: async (uri: URI) => ({ trusted: uri.path === '/trusted', uri }),
 	} as unknown as IWorkspaceTrustManagementService);
 	const requests: unknown[] = [];
@@ -72,7 +77,7 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	page.create(dom.window.document.body);
 	page.setVisible(true);
 	return {
-		page, requests, draft, configuration, whenPrefilled: prefilled.p,
+		page, requests, draft, configuration, services, whenPrefilled: prefilled.p,
 		attachments: draft.contexts.map(context => ({ ...context, resolve: async () => ({ name: context.name, content: context.content }) })),
 		storage: services.get(IStorageService), get options() { assert.ok(options); return options; }, get restored() { return restored; }, get released() { return released; },
 		fail() { failOpen = true; },
@@ -103,6 +108,33 @@ test('Failed Welcome handoff rejects instead of falling through to a local send,
 	await assert.rejects(f.options.submitHandler!(f.draft.text, 'agent', f.attachments), /Cannot open target/);
 	assert.deepEqual(f.storage.keys(StorageScope.APPLICATION, StorageTarget.MACHINE).filter(key => key.startsWith('chat.welcomeViewPrefill:')), []);
 	assert.equal(f.draft.text, 'Review the selected project');
+});
+
+for (const trusted of [true, false]) {
+	test(`Conversation handoff opens the original conversation once when workspace trust is ${trusted}`, async () => {
+		const uri = URI.file('/target');
+		const workspace = { id: 'target', folders: [{ id: 'root', name: 'target', index: 0, uri }] };
+		using f = fixture(workspace, undefined, trusted);
+		const key = `chat.workspaceConversation:${uri.toString()}`;
+		const link = buildOpenSessionLinkUri('original-session', 'original-thread', 'local');
+		const opened: string[] = [];
+		f.services.registerInstance(IOpenerService, { open: async (target: URI) => { opened.push(target.toString()); return true; } } as unknown as IOpenerService);
+		f.storage.store(key, JSON.stringify({ link: link.toString(), expiresAt: Date.now() + 30_000 }), StorageScope.APPLICATION, StorageTarget.MACHINE);
+		await f.services.invokeFunction(restoreTransferredChatConversation);
+		await f.services.invokeFunction(restoreTransferredChatConversation);
+		assert.deepEqual(opened, trusted ? [link.toString()] : []);
+		assert.equal(f.storage.get(key, StorageScope.APPLICATION), undefined);
+	});
+}
+
+test('Destination Welcome discards a handoff if the workspace is untrusted', async () => {
+	const workspace = { id: 'target', folders: [{ id: 'root', name: 'untrusted', index: 0, uri: URI.file('/untrusted') }] };
+	using f = fixture(workspace, undefined, false);
+	const key = getAgentSessionsWelcomePrefillKey(workspace)!;
+	f.storage.store(key, JSON.stringify({ timestamp: Date.now(), payload: { draft: f.draft } }), StorageScope.APPLICATION, StorageTarget.MACHINE);
+	await f.open();
+	assert.equal(f.restored, undefined);
+	assert.equal(f.storage.get(key, StorageScope.APPLICATION), undefined);
 });
 
 test('Destination Welcome validates, consumes and prefills its own handoff without sending', async () => {
