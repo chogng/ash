@@ -2509,6 +2509,17 @@ impl AppServer {
     }
 
     pub(super) fn clear_session_dirs(&self, session_id: &SessionId) {
+        let executor = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .turn_executor
+            .clone();
+        executor.close_code_mode_session(session_id);
+        self.release_session_directory_resources(session_id);
+    }
+
+    pub(super) fn release_session_directory_resources(&self, session_id: &SessionId) {
         let _env_runtime = self
             .env_runtime_gate
             .lock()
@@ -2517,7 +2528,7 @@ impl AppServer {
             .env_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.turn_executor.close_code_mode_session(session_id);
+        runtime.turn_executor.close_directory_code_mode(session_id);
         runtime.dir_grants.clear_session(session_id);
         runtime
             .workspace

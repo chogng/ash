@@ -66,7 +66,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 		const paths = {
 			card: 'workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerCard.ts',
 			chat: 'workbench/contrib/chat/browser/widget/chatListWidget.ts',
-			sidebar: 'sessions/browser/parts/sidebar/sessionsList.ts',
+			sidebar: 'sessions/contrib/sessions/browser/views/sessionsList.ts',
 		};
 		const sources = await Promise.all(Object.entries(paths).map(async ([name, path]) => {
 			const file = resolve(desktopDirectory, 'src/ash', path);

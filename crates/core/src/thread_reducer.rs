@@ -388,6 +388,8 @@ pub struct ThreadCommandSnapshot {
 pub enum ThreadCommandResult {
     Renamed,
     HistoryMoved,
+    SessionMoved,
+    DirectoryChanged,
     AdvisorConfigured,
     TurnAccepted {
         turn_id: TurnId,
@@ -571,7 +573,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 CoreError::Journal("history movement requires a command receipt".into())
             })?;
             if envelope.schema_version < 26
-                || source.session_id != snapshot.session_id
+                || (source.session_id != snapshot.session_id
+                    && source.thread_id != snapshot.thread_id)
                 || source.thread_id != target.prefix.source_thread_id
                 || source.sequence != target.prefix.source_sequence
                 || previous.prefix.source_thread_id != snapshot.thread_id
@@ -724,6 +727,86 @@ pub(crate) fn reduce_thread_event_with_prefix(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::ThreadDirectoryChanged { root, .. } => {
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("directory change requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 30
+                || snapshot.thread_id.as_str() != snapshot.session_id.as_str()
+                || snapshot.status != ThreadStatus::Active
+                || !snapshot.origin.is_root()
+                || !root.is_absolute()
+                || matches!(
+                    snapshot.execution_target,
+                    Some(
+                        ash_protocol::SessionExecutionTarget::Ssh { .. }
+                            | ash_protocol::SessionExecutionTarget::Provider { .. }
+                    )
+                )
+                || receipt.command != (ThreadCommand::ChangeDirectory { root: root.clone() })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|entry| entry.receipt.command_id == receipt.command_id)
+                || snapshot.turns.iter().any(|turn| {
+                    !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+                })
+            {
+                return Err(CoreError::Journal(
+                    "Thread cannot change directories".into(),
+                ));
+            }
+            snapshot.execution_target =
+                Some(ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
+            snapshot.history_workspace = None;
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::DirectoryChanged,
+                response_sequence: envelope.sequence,
+            });
+        }
+        ThreadEvent::ThreadMovedToSession {
+            source_session_id,
+            destination_session_id,
+            ..
+        } => {
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("Thread move requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 29
+                || &snapshot.session_id != source_session_id
+                || source_session_id == destination_session_id
+                || snapshot.thread_id.as_str() == source_session_id.as_str()
+                || snapshot.status != ThreadStatus::Active
+                || !snapshot.origin.is_root()
+                || receipt.command
+                    != (ThreadCommand::MoveToSession {
+                        source_session_id: source_session_id.clone(),
+                        destination_session_id: destination_session_id.clone(),
+                    })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|entry| entry.receipt.command_id == receipt.command_id)
+                || snapshot.turns.iter().any(|turn| {
+                    !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+                })
+            {
+                return Err(CoreError::Journal("Thread cannot change Sessions".into()));
+            }
+            snapshot.session_id = destination_session_id.clone();
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::SessionMoved,
+                response_sequence: envelope.sequence,
+            });
         }
         ThreadEvent::ThreadArchived { thread_id, reason } => {
             require_no_command(envelope)?;

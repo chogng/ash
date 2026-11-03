@@ -128,6 +128,16 @@ pub enum ThreadEvent {
     ThreadRestored {
         thread_id: ThreadId,
     },
+    /// Changes product Session membership without changing the Thread or its history.
+    ThreadMovedToSession {
+        thread_id: ThreadId,
+        source_session_id: crate::SessionId,
+        destination_session_id: crate::SessionId,
+    },
+    ThreadDirectoryChanged {
+        thread_id: ThreadId,
+        root: std::path::PathBuf,
+    },
     /// Imports model-visible history from a retained original event prefix without copying it.
     HistoryPrefixBound {
         thread_id: ThreadId,
@@ -442,6 +452,8 @@ impl ThreadEvent {
             Self::ModelProvidersMigrated { .. } => "model.providers_migrated",
             Self::ThreadArchived { .. } => "thread.archived",
             Self::ThreadRestored { .. } => "thread.restored",
+            Self::ThreadMovedToSession { .. } => "thread.movedToSession",
+            Self::ThreadDirectoryChanged { .. } => "thread.directoryChanged",
             Self::GoalCreated { .. } => "thread.goal_created",
             Self::GoalUpdated { .. } => "thread.goal_updated",
             Self::GoalCleared { .. } => "thread.goal_cleared",
@@ -502,6 +514,8 @@ impl ThreadEvent {
             | Self::ThreadTitleChanged { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
             | Self::ThreadRestored { thread_id }
+            | Self::ThreadMovedToSession { thread_id, .. }
+            | Self::ThreadDirectoryChanged { thread_id, .. }
             | Self::GoalCreated { thread_id, .. }
             | Self::GoalUpdated { thread_id, .. }
             | Self::GoalCleared { thread_id, .. }

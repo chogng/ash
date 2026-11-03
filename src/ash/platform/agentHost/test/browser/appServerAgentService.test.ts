@@ -918,6 +918,40 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
 });
 
+test('A saved directory change uses the existing Session identity and typed request', async () => {
+	const requests: unknown[] = [];
+	const connection = {
+		capabilities: { contracts: { changeSessionDirectory: { version: 1 } } },
+		async request(definition: { method: string; }, params: unknown) {
+			requests.push({ method: definition.method, params });
+			return { type: 'session', value: { session: { sessionId: 'saved' } } };
+		},
+	} as unknown as AppServerProtocolClient;
+	const service = createAppServerAgentSessionService(connection);
+	assert.equal(service.canChangeDirectory?.(), true);
+	assert.equal(createAppServerAgentSessionService(connection, 'remote').canChangeDirectory?.(), false);
+	await service.changeDirectory!({ sessionId: 'saved', commandId: 'change', root: '/new' });
+	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } }]);
+});
+
+test('Moving a conversation checks both the destination and the original Thread identity', async () => {
+	const requests: unknown[] = [];
+	let threadId = 'original';
+	const service = createAppServerAgentThreadService({
+		capabilities: { contracts: { moveThreadToSession: { version: 1 } } },
+		async request(definition: { method: string; }, params: unknown) {
+			requests.push({ method: definition.method, params });
+			return { type: 'thread', value: { session: { sessionId: 'target' }, threadId } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const params = { sessionId: 'source', threadId: 'original', destinationSessionId: 'target', commandId: 'move' };
+	assert.equal(service.canMoveThreadToSession?.(), true);
+	await service.moveThreadToSession!(params);
+	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'source', commandId: 'move', request: { type: 'moveThreadToSession', threadId: 'original', destinationSessionId: 'target' } } }]);
+	threadId = 'replacement';
+	await assert.rejects(service.moveThreadToSession!(params), /different conversation/);
+});
+
 test('Queue adapters preserve durable identity and revision and map guarded mutations without transport objects', async () => {
 	const request = { sessionId: 'session', threadId: 'thread', commandId: 'queued', directory: '/workspace', mode: 'agent', approvalMode: 'manual', toolMode: 'direct', model: null, reasoningEffort: null, steerTurn: null, input: [{ type: 'text', text: 'Before\n' }, { type: 'context', name: 'note', content: 'Frozen' }, { type: 'text', text: 'After' }, { type: 'toolSelection', disabled: [], allowed: ['read_file'] }] };
 	const wire = { request, revision: 9, status: 'paused', turnId: null, error: null };

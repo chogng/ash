@@ -14,6 +14,7 @@ pub(super) struct ThreadDirs {
     pub(super) root: PathBuf,
     pub(super) id: DirId,
     pub(super) worktrees: WorktreeManager,
+    pub(super) switched_worktrees: WorktreeManager,
     pub(super) runtime: tokio::runtime::Runtime,
     pub(super) bindings: RwLock<BTreeMap<ThreadId, ManagedDirBinding>>,
     pub(super) file_access: Arc<DirGrants>,
@@ -31,6 +32,7 @@ impl ThreadDirs {
         file_access: Arc<DirGrants>,
         hooks: Arc<DeclarativeHookRuntime>,
         env_runtime: Weak<RwLock<EnvRuntime>>,
+        threads: &ash_core::ThreadController,
     ) -> Result<Arc<Self>, String> {
         let dir = Dir::open_local(dir_root).map_err(|error| error.to_string())?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -47,9 +49,15 @@ impl ThreadDirs {
         let settings = WorktreeSettings::from_desktop_config(profile_root, &desktop)
             .map_err(|error| format!("cannot resolve managed worktree settings: {error}"))?;
         let worktrees = WorktreeManager::new(settings);
-        let recovered = runtime
-            .block_on(worktrees.recover_threads(dir.canonical_path(), dir.id().as_str()))
-            .map_err(|error| format!("cannot recover Thread worktrees: {error}"))?;
+        let switched_worktrees = worktrees.for_session_directory(dir.id().as_str());
+        let mut recovered = Vec::new();
+        for manager in [&worktrees, &switched_worktrees] {
+            recovered.extend(
+                runtime
+                    .block_on(manager.recover_threads(dir.canonical_path(), dir.id().as_str()))
+                    .map_err(|error| format!("cannot recover Thread worktrees: {error}"))?,
+            );
+        }
         let bindings = recovered
             .into_iter()
             .map(|(thread_id, binding)| {
@@ -58,6 +66,24 @@ impl ThreadDirs {
                     .map_err(|error| error.to_string())
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let catalog = threads
+            .list_thread_catalog()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|thread| (thread.thread.thread_id, thread.execution_target))
+            .collect::<BTreeMap<_, _>>();
+        let mut bindings = bindings;
+        bindings.retain(|thread, binding| {
+            let switched = binding
+                .checkout_root()
+                .starts_with(&switched_worktrees.settings().root);
+            match catalog.get(thread) {
+                Some(Some(ash_protocol::SessionExecutionTarget::Local { root })) => {
+                    root == dir.canonical_path()
+                }
+                _ => !switched,
+            }
+        });
         for (thread_id, binding) in &bindings {
             let root = Dir::open_local(binding.dir()).map_err(|error| error.to_string())?;
             hooks
@@ -69,12 +95,24 @@ impl ThreadDirs {
             root: dir.canonical_path().to_path_buf(),
             id: dir.id(),
             worktrees,
+            switched_worktrees,
             runtime,
             bindings: RwLock::new(bindings),
             file_access,
             hooks,
             env_runtime,
         }))
+    }
+
+    pub(super) fn manager_for(&self, binding: &ManagedDirBinding) -> &WorktreeManager {
+        if binding
+            .checkout_root()
+            .starts_with(&self.switched_worktrees.settings().root)
+        {
+            &self.switched_worktrees
+        } else {
+            &self.worktrees
+        }
     }
 
     pub(super) fn release_search(&self, checkout_root: &Path) -> Result<(), String> {

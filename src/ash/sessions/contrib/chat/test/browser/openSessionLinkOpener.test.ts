@@ -43,6 +43,9 @@ suite('Sessions conversation link opener', () => {
 		const nested = page.getByRole('group', { name: 'Conversations in Task from Host A' });
 		const followUp = nested.getByRole('button', { name: 'Follow-up chat' });
 		await expect(followUp).toBeVisible();
+		await followUp.hover();
+		await expect(page.locator('.ash-hover').getByText('Follow-up chat', { exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
 		await page.getByRole('button', { name: 'Task from Host A', exact: true }).press('Enter');
 		await expect(followUp).toHaveAttribute('aria-current', 'false');
 		await followUp.press('Enter');

@@ -763,6 +763,13 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn change_session_directory_request(
+        &self,
+        mutation: super::operations::SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, super::RpcError> {
+        self.session_processor().change_directory(mutation, root)
+    }
     fn read_host_context(
         &self,
         owner: u64,

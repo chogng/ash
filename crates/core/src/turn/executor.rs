@@ -140,7 +140,7 @@ pub enum TurnExecutionOutcome {
 impl TurnExecutor {
     /// Releases process-local cells and stored values when a session is stopped or archived.
     pub fn close_code_mode_session(&self, session_id: &SessionId) {
-        self.code_mode.close_session(session_id);
+        self.close_directory_code_mode(session_id);
         if let Ok(mut models) = self.threads.turn_tool_models.lock() {
             models.retain(|thread, _| {
                 self.threads
@@ -156,6 +156,11 @@ impl TurnExecutor {
                     .is_ok_and(|snapshot| &snapshot.session_id != session_id)
             });
         }
+    }
+
+    /// Closes the cells in this directory runtime without changing shared Thread model state.
+    pub fn close_directory_code_mode(&self, session_id: &SessionId) {
+        self.code_mode.close_session(session_id);
     }
 
     /// Captures the model-neutral direct tool surface for a newly accepted Turn.

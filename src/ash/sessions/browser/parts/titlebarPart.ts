@@ -28,6 +28,7 @@ import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.j
 /** The window owns the titlebar host; the visible page owns its content and mount lifetime. */
 export interface ISessionsTitlebarService {
 	setPageContent(content: HTMLElement): IDisposable;
+	setSessionContent(content: HTMLElement): IDisposable;
 }
 
 export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitlebarService>('sessionsTitlebarService');
@@ -36,6 +37,7 @@ export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitleba
 export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarService {
 	private readonly activityActions: WorkbenchToolBar;
 	private readonly pageContent: HTMLElement;
+	private readonly sessionContent: HTMLElement;
 	private activityActionViewItemProvider: ActionViewItemProvider | undefined;
 	private sidebarMinimumWidth = 0;
 
@@ -116,7 +118,8 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		this._register(observeResize([this.contentDomNode, left, ...Array.from(left.children)], updateSidebarMinimumWidth, { box: 'border-box' }));
 		updateSidebarMinimumWidth();
 		this.pageContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-page-content' });
-		this.contentDomNode.append(this.pageContent);
+		this.sessionContent = h(container.ownerDocument, 'div', { className: 'ash-sessions-titlebar-session-content' });
+		this.contentDomNode.append(this.pageContent, this.sessionContent);
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);
@@ -140,6 +143,13 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		this.pageContent.replaceChildren(content);
 		return toDisposable(() => {
 			if (content.parentElement === this.pageContent) { content.remove(); }
+		});
+	}
+
+	public setSessionContent(content: HTMLElement): IDisposable {
+		this.sessionContent.replaceChildren(content);
+		return toDisposable(() => {
+			if (content.parentElement === this.sessionContent) { content.remove(); }
 		});
 	}
 

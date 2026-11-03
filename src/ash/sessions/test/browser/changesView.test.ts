@@ -88,6 +88,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 		let selection = selected('old');
 		const sessions: ISessionsService = {
 			navigationRevision: 0,
+			getLastViewedAt: () => undefined,
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false, recentSessions: [],
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },

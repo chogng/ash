@@ -39,6 +39,13 @@ pub enum ThreadCommand {
         #[ts(type = "number")]
         expected_sequence: u64,
     },
+    MoveToSession {
+        source_session_id: crate::SessionId,
+        destination_session_id: crate::SessionId,
+    },
+    ChangeDirectory {
+        root: std::path::PathBuf,
+    },
     StartTurn {
         /// Frozen in the command receipt; older journals use the summary policy.
         #[serde(

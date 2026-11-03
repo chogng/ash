@@ -11,7 +11,7 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
 import { sessionManagementLabel } from './sessionManagementLabels.js';
 
 /** Opaque catalog identity; opening always returns to the host's captured Session/Thread target. */
-function sessionResource(kind: 'draft' | 'session' | 'thread', id: string, threadId?: string): URI {
+export function sessionResource(kind: 'draft' | 'session' | 'thread', id: string, threadId?: string): URI {
 	return URI.from({ scheme: 'ash-agent-session', path: `/${kind}/${encodeURIComponent(id)}`, query: threadId === undefined ? '' : new URLSearchParams({ threadId }).toString() });
 }
 

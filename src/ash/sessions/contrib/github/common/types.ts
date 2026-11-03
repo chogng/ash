@@ -12,6 +12,7 @@ export interface IResolvedSessionPullRequest {
 	readonly repo: string;
 	readonly number: number;
 	readonly title: string;
+	readonly headCommit?: string;
 	readonly state: ChatPullRequestState | 'unavailable';
 	readonly status: IPullRequestIconStatus;
 	readonly icon: ThemeIcon;

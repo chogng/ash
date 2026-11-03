@@ -23,6 +23,9 @@ suite('Sessions Chat accessibility help', () => {
 			expect(text).toMatch(locale === 'en' ? /run Compare Agents from the Command Palette/ : /从命令面板运行“比较 Agent”/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
 			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Issue/ : /打开添加上下文（\+），选择 Issue/);
+			const worktreeHelp = locale === 'en' ? /Use Enter or Space on New worktree to toggle it/ : /在“新建工作树”上按 Enter 或空格可切换开关/;
+			expect(text).toMatch(worktreeHelp);
+			expect(text).toMatch(locale === 'en' ? /With focus in the Sessions sidebar, press Control\+F or Command\+F to search/ : /焦点位于会话侧栏时，按 Control\+F 或 Command\+F 搜索/);
 			expect(text).toMatch(locale === 'en' ? /Focus Workspace Picker or Focus Environment Picker/ : /聚焦工作区选择器.*聚焦环境选择器/);
 			expect(text.match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)).toHaveLength(1);
 			await page.keyboard.press('Escape');
@@ -33,6 +36,7 @@ suite('Sessions Chat accessibility help', () => {
 			await permissions.focus();
 			await page.keyboard.press('Alt+F1');
 			await expect(content).toHaveValue(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
+			await expect(content).toHaveValue(worktreeHelp);
 			await page.keyboard.press('Escape');
 			await expect(permissions).toBeFocused();
 		});

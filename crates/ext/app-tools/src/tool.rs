@@ -715,7 +715,7 @@ fn definitions() -> Vec<ToolDefinition> {
         ),
         definition(
             "list_sidebar_sections",
-            "Read custom sidebar sections and their task assignments in the calling Agents window.",
+            "Read the calling Agents window's sidebar. The tree contains the current mode, filters, sort order, and rendered sections with nested sessions and chats. Collapsed sections include their children. Custom section IDs and assignments are also returned for sidebar organization tools.",
             json!({}),
             &[],
         ),

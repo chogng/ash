@@ -176,10 +176,14 @@ impl AppServer {
         };
         capabilities.advertise_contracts();
         if capabilities.threads {
-            capabilities.contracts.insert(
-                "sideChats".into(),
-                ash_app_server_protocol::protocol::initialize::CapabilityContract { version: 1 },
-            );
+            for contract in ["sideChats", "moveThreadToSession", "changeSessionDirectory"] {
+                capabilities.contracts.insert(
+                    contract.into(),
+                    ash_app_server_protocol::protocol::initialize::CapabilityContract {
+                        version: 1,
+                    },
+                );
+            }
         }
         if self.plugins_manager.is_some() {
             capabilities.contracts.insert(

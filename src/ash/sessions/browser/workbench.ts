@@ -149,7 +149,8 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
-import { ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
+import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../contrib/sessions/browser/sessionsActions.js';
+import './actions/sessionsChatActions.js';
 import { NewChatInSessionsWindowAction } from '../contrib/chat/browser/newSessionAction.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
@@ -350,7 +351,8 @@ import type { PaneCompositePart } from '../../workbench/browser/parts/paneCompos
 import { PaneCompositePartService } from '../../workbench/browser/parts/paneCompositePartService.js';
 import { IPaneCompositePartService } from '../../workbench/services/panecomposite/browser/panecomposite.js';
 import { SessionsPart, type SessionsPartOptions } from './parts/sessionsPart.js';
-import { SidebarPart, registerSessionsNavigation } from './parts/sidebarPart.js';
+import { SidebarPart } from './parts/sidebarPart.js';
+import { registerSessionsNavigation } from '../contrib/sessions/browser/views/sessionsView.js';
 import { ISessionsTitlebarService, type TitlebarPart } from './parts/titlebarPart.js';
 
 export interface IWorkbenchOptions {
@@ -655,11 +657,6 @@ export abstract class Workbench extends Disposable {
 		}
 		const routedChat = this._register(services.createInstance(SessionsChatService));
 		services.registerInstance(IChatService, routedChat);
-		const listModel = services.get(ISessionsListModelService);
-		this._register(routedChat.onDidSubmitRequest(({ sessionId }) => {
-			const session = sessions.sessions.find(candidate => candidate.sessionId === sessionId);
-			if (session) listModel.recordAutomationSessionReply(session);
-		}));
 		services.registerInstance(IAgentThreadService, this._register(services.createInstance(SessionsAgentThreadService)));
 		services.registerInstance(IAgentSessionService, this._register(services.createInstance(SessionsAgentSessionService)));
 		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
@@ -938,7 +935,7 @@ export abstract class Workbench extends Disposable {
 				if (options?.focus) sessionsPart!.focus();
 				return true;
 			},
-			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
+			showConversationHistory: () => commandService.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID),
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => conversationLinks.captureConnection(sessionId),
 			prepareConversationLink: (sessionId, threadId) => conversationLinks.prepare(sessionId, threadId),

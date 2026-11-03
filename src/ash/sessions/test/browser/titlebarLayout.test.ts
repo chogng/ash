@@ -1,9 +1,76 @@
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
+import type { } from '../../../../../test/fixtures/browser/sessions.page.js';
 
 suite('Sessions native titlebar layout', () => {
 	const browser = useBrowserTests();
+
+	test('mouse side buttons traverse the Sessions navigation history', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(async () => {
+			const host = window.ashSessionsIntegration.multiHost!;
+			await host.open('Host A');
+			await host.open('Host B');
+		});
+		const selected = page.locator('.ash-sessions-list-item[aria-current="page"]');
+		await expect(selected).toContainText('Task from Host B');
+		await selected.focus();
+		await selected.dispatchEvent('mousedown', { button: 3, bubbles: true, cancelable: true });
+		await expect(selected).toContainText('Task from Host A');
+		await selected.focus();
+		await selected.dispatchEvent('mousedown', { button: 4, bubbles: true, cancelable: true });
+		await expect(selected).toContainText('Task from Host B');
+	});
+
+	test('ignoring an attention alert survives reloading the Sessions window', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&blockedTitlebar');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.showAttentionDraft());
+		const attention = page.getByRole('button', { name: '1 session requires attention' });
+		await attention.press('Enter');
+		await page.getByRole('button', { name: 'Ignore all current alerts' }).click();
+		await expect(attention).toHaveCount(0);
+		await page.reload();
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.showAttentionDraft());
+		await expect(page.locator('.ash-sessions-titlebar-widget button')).toHaveAccessibleName(/Show Session History/);
+	});
+
+	test('the attention list opens the blocked session on its host and clears the visible item', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&blockedTitlebar');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.showAttentionDraft());
+		const widget = page.locator('.ash-sessions-titlebar-widget');
+		const attention = widget.getByRole('button', { name: '1 session requires attention' });
+		await expect(attention).toBeVisible();
+		await attention.press('Enter');
+		const picker = page.locator('.ash-quick-input-host:visible');
+		await expect(picker.getByText('Task from Host B', { exact: true })).toBeVisible();
+		await expect(picker.getByText('Needs input', { exact: true })).toBeVisible();
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').filter({ hasText: 'Task from Host B' })).toBeVisible();
+		await expect(attention).toHaveCount(0);
+	});
+
+	test('the workspace button opens Session History from the keyboard in Chinese', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?multiHost&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const widget = page.locator('.ash-sessions-titlebar-widget');
+		const button = widget.getByRole('button', { name: '显示会话历史（无工作区）' });
+		await expect(button).toBeVisible();
+		await button.focus();
+		await button.press('Enter');
+		await expect(page.locator('.ash-quick-input-host:visible')).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await expect(page.locator('.ash-quick-input-host:visible')).toHaveCount(0);
+	});
 
 	for (const os of ['windows', 'mac']) {
 		test(`${os} sidebar minimum contains navigation and mode controls as native insets change`, async () => {

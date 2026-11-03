@@ -146,6 +146,11 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         expected_ide: Option<&str>,
     ) -> Result<core_api::TurnReceipt, core_api::CoreError>;
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
+    fn change_session_directory_request(
+        &self,
+        mutation: SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError>;
     fn archive_session_request(
         &self,
         mutation: super::operations::SessionMutation,
@@ -656,6 +661,39 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 self.updates.publish_session_changed(&mutation.session_id);
                 result(&SessionRequestResult::Thread(SessionThreadResult {
                     session: self.session_view(&mutation.session_id)?,
+                    thread_id,
+                }))
+            }
+            SessionRequest::ChangeDirectory { root } => {
+                if !connection.allows_product_host_capabilities() {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                result(&SessionRequestResult::Session(
+                    self.context
+                        .change_session_directory_request(mutation, root)?,
+                ))
+            }
+            SessionRequest::MoveThreadToSession {
+                thread_id,
+                destination_session_id,
+            } => {
+                self.session_view(&destination_session_id)?;
+                self.context
+                    .agent_runtime()
+                    .move_thread_to_session(
+                        &thread_id,
+                        &mutation.session_id,
+                        &destination_session_id,
+                        mutation.command_id,
+                    )
+                    .map_err(core_error)?;
+                self.updates.publish_thread_moved(
+                    &mutation.session_id,
+                    &destination_session_id,
+                    &thread_id,
+                );
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&destination_session_id)?,
                     thread_id,
                 }))
             }

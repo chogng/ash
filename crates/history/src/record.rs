@@ -10,11 +10,13 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 30 records durable execution directory changes.
+/// Version 29 adds durable Thread moves between Sessions.
 /// Version 28 adds durable user-created side-chat provenance.
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 28;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 30;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
 /// deterministic identity; current records must carry their explicitly allocated identity.

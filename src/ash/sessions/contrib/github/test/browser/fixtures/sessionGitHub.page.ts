@@ -47,7 +47,7 @@ import type { ISessionsManagementService } from '../../../../../services/session
 import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../../browser/githubService.js';
 import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
-import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
+import { SessionsList } from '../../../../sessions/browser/views/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
 import { chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot, refreshChatInputStack, setChatInputStackSlot } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';

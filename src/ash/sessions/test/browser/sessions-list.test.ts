@@ -28,7 +28,10 @@ import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
-import { SessionsList } from '../../browser/parts/sidebar/sessionsList.js';
+import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
+import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/browser/hoverService.js';
+import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
+import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 
 
@@ -195,17 +198,29 @@ test('SessionsList updates passive status without changing row identity or selec
 	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+	const summaries = new Map<HTMLElement, HoverContent>();
+	const hoverService = {
+		setupHover({ target, content }: HoverSetupOptions) {
+			summaries.set(target, content);
+			return Object.assign(toDisposable(() => { summaries.delete(target); }), {
+				update(content: HoverContent) { summaries.set(target, content); },
+			});
+		},
+	} as IHoverService;
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
 	items.scrollTop = 37;
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
+	assert.equal(button.hasAttribute('title'), false);
+	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
 
 	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
 	changes.fire();
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
+	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Needs input');
 	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');
@@ -233,7 +248,69 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(dom.window.document.activeElement, button);
 	menu!.onHide?.(false);
 	list.dispose();
+	assert.equal(summaries.size, 0);
 	dom.window.close();
+});
+
+test('The localized keyboard menu targets the saved Session folder and the original nested Thread', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'move-chat', flushInterval: 0 });
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using locale = toDisposable(resetNlsResolver);
+	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
+	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
+		sessionId, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
+	});
+	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
+	const destination = session('target', [chat('target', 'Target root')]);
+	const management = {
+		sessions: [source, destination], untitledSessions: [], state: 'ready', onDidChange: Event.None,
+		canChangeDirectory: (id: string) => id === 'target',
+		getChatMoveDestinations: (id: string, threadId: string) => id === 'source' && threadId === 'original' ? [destination] : [],
+	} as unknown as ISessionsManagementService;
+	const view = { onDidChange: Event.None, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
+	let menu: IContextMenuDelegate | undefined;
+	const invoked: unknown[][] = [];
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
+		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
+		emptyGroups, storage, emptyProjects, { executeCommand: async (...args: unknown[]) => { invoked.push(args); } } as ICommandService,
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
+	row.focus();
+	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	const action = menu?.getActions().find(action => action.id === 'agentSession.moveChatToSession');
+	assert.equal(action?.label, '将对话移到会话…');
+	await action?.run();
+	const target = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'target')!;
+	target.focus();
+	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	const change = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
+	assert.equal(change?.label, '更改会话文件夹…');
+	await change?.run();
+	assert.deepEqual(invoked, [
+		['agentSession.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
+		['agentSession.changeDirectory', 'target'],
+	]);
+});
+
+test('Session hover localizes workspace and provider without translating their values', () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		const session: ISession = {
+			sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [],
+			providerLabel: 'Provider name', workspace: { authorityId: 'local', root: '/workspace' },
+		};
+		assert.deepEqual(getSessionSummaryHoverData(session), ['工作区：/workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session, {
+			threadId: 'child', status: 'active', origin: { type: 'root' },
+			workspace: { authorityId: 'remote', root: '/child-workspace' },
+		}), ['工作区：/child-workspace', '提供方：Provider name']);
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 

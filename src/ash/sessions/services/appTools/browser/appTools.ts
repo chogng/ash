@@ -3,6 +3,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import type { SessionGroup } from '../../sessions/browser/sessionGroupsService.js';
+import type { AutomationSessionsListMode, ISessionsListTreeNode, SessionSortMode, SessionsListMode } from '../../sessions/browser/sessionsListModelService.js';
 
 export interface TaskRunSummary {
 	readonly runId: string;
@@ -21,6 +22,21 @@ export interface TaskCatalog {
 }
 
 /** Window-owned capabilities used by application tools; transport details stay in the adapter. */
+export interface ISessionsListTools {
+	listSections(): readonly SessionGroup[];
+	readTree(): {
+		readonly mode: SessionsListMode;
+		readonly sort: SessionSortMode;
+		readonly automationSessions: AutomationSessionsListMode;
+		readonly sections: readonly ISessionsListTreeNode[];
+	} | undefined;
+	createSection(name: string, signal: AbortSignal): Promise<SessionGroup>;
+	renameSection(sectionId: string, name: string, signal: AbortSignal): Promise<void>;
+	deleteSection(sectionId: string, signal: AbortSignal): Promise<void>;
+	moveSession(sessionId: string, sectionId: string | null, signal: AbortSignal): Promise<void>;
+	reorderSection(sectionId: string, sessionIds: readonly string[], signal: AbortSignal): Promise<void>;
+}
+
 export interface IAppToolsHost extends IDisposable {
 	listTasks(directory: string, signal: AbortSignal): Promise<TaskCatalog>;
 	describeTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<ITaskDescription>;
@@ -33,12 +49,7 @@ export interface IAppToolsHost extends IDisposable {
 	openBrowser(resource: URI): Promise<boolean>;
 	openTerminal(signal: AbortSignal): Promise<string>;
 	navigate(sessionId: string, threadId: string): Promise<void>;
-	listSections(): readonly SessionGroup[];
-	createSection(name: string, signal: AbortSignal): Promise<SessionGroup>;
-	renameSection(sectionId: string, name: string, signal: AbortSignal): Promise<void>;
-	deleteSection(sectionId: string, signal: AbortSignal): Promise<void>;
-	moveSession(sessionId: string, sectionId: string | null, signal: AbortSignal): Promise<void>;
-	reorderSection(sectionId: string, sessionIds: readonly string[], signal: AbortSignal): Promise<void>;
+	readonly sessionsList: ISessionsListTools;
 	checkUpdate(): Promise<UpdateCheckResult>;
 	fireConfetti(): boolean;
 	clearTransientState(): void;

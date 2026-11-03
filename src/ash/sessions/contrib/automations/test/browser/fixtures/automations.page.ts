@@ -319,7 +319,9 @@ const management = {
 		activeDraft = '';
 		sessionChanged.fire();
 	},
-	async openThread(sessionId: string, threadId: string) { management.selectThread(sessionId, threadId); },
+	async prepareThread(sessionId: string, threadId: string) {
+		if (sessionId !== backgroundSession.sessionId || threadId !== 'background-thread') throw new Error('Unknown background conversation');
+	},
 	selectUntitledSession(id: string) { active = undefined; activeDraft = id; sessionChanged.fire(); },
 	createUntitledSession(title: string) {
 		const draft: IUntitledChatSession = { untitledSessionId: `draft-${drafts.length}`, title, model: undefined, agent: undefined, workspace: { type: 'local', root: directory } };

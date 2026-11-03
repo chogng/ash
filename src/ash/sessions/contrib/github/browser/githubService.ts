@@ -582,6 +582,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 			repo: repository.name,
 			number: pullRequest.number,
 			title: pullRequest.title,
+			headCommit: pullRequest.headCommit,
 			state,
 			status,
 			icon: computePullRequestIcon(state, status),

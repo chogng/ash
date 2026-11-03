@@ -1561,6 +1561,7 @@ impl AppServer {
             file_access,
             hooks,
             Arc::downgrade(&self.env_runtime),
+            &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
             database_path,
@@ -2794,6 +2795,25 @@ impl AppServer {
         Ok(())
     }
 
+    pub(crate) fn release_switched_session_directory(&self, session_id: &SessionId) {
+        let Ok(thread) = ash_protocol::ThreadId::new(session_id.as_str()) else {
+            return;
+        };
+        if let Err(error) = self.threads.with_execution_target(&thread, |target| {
+            if matches!(target, Some(ash_protocol::SessionExecutionTarget::Local { root })
+                if self.dir_services.as_ref().is_some_and(|dirs| &dirs.root == root))
+            {
+                return;
+            }
+            if let Some(runtime) = &self.git_turn_changes {
+                runtime.release_switched_directory(&thread);
+            }
+            self.release_session_directory_resources(session_id);
+        }) {
+            log::warn!("Cannot retire old Session directory: {error}");
+        }
+    }
+
     pub(super) fn collect_message_checkpoints(
         &self,
         source: &dyn core_api::MessageCheckpointSource,
@@ -2866,11 +2886,28 @@ impl AppServer {
     pub(super) fn admit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
-        request: ash_core::StartTurnRequest,
+        mut request: ash_core::StartTurnRequest,
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
+        let record = self.threads.thread_catalog_record(thread)?;
+        if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = record.execution_target
+        {
+            if self
+                .dir_services
+                .as_ref()
+                .is_none_or(|dirs| dirs.root != root)
+            {
+                return Err(CoreError::InvalidInput(
+                    "The session execution directory has changed".into(),
+                ));
+            }
+            // A queued admission must not race a directory change after the route check.
+            if request.expected_sequence == core_api::SequenceExpectation::Any {
+                request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
+            }
+        }
         let mut started = None;
         self.client_host.submit_turn_with_ide(
             thread,

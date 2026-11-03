@@ -1,5 +1,6 @@
 use super::git_turn_changes_runtime::GitRuntimeHandle;
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
+use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
 use core_api::CoreError;
 use core_api::ThreadWorktreeBinder;
@@ -81,7 +82,7 @@ impl GitTurnChangesRuntime {
         if let Err(error) = self
             .dirs
             .runtime
-            .block_on(self.dirs.worktrees.cleanup(binding, eligibility))
+            .block_on(self.dirs.manager_for(binding).cleanup(binding, eligibility))
         {
             self.bind_thread_services(thread_id, binding)
                 .map_err(|error| error.to_string())?;
@@ -173,6 +174,7 @@ impl GitTurnChangesRuntime {
                         .map_err(|error| error.to_string())?;
                 for record in records.iter().filter(|record| {
                     record.repository_id == repository_binding.repository_id()
+                        && record.worktree_root == repository_binding.worktree_root()
                         && !record.committed_paths.is_empty()
                 }) {
                     let before = ash_git::GitTreeId::new(record.before_tree.clone())
@@ -616,10 +618,11 @@ impl ThreadWorktreeBinder for GitRuntimeHandle {
 impl ThreadWorktreeBinder for GitTurnChangesRuntime {
     fn provision(&self, request: &ThreadWorktreeBindingRequest) -> Result<(), CoreError> {
         if let Some(binding) = self.binding(&request.thread_id) {
-            if request
-                .branch_name
-                .as_deref()
-                .is_some_and(|name| binding.target_branch() != Some(name))
+            if binding.source_dir_id() != self.dirs.id.as_str()
+                || request
+                    .branch_name
+                    .as_deref()
+                    .is_some_and(|name| binding.target_branch() != Some(name))
             {
                 return Err(CoreError::CommandConflict);
             }
@@ -659,6 +662,75 @@ impl ThreadWorktreeBinder for GitTurnChangesRuntime {
 }
 
 impl GitTurnChangesRuntime {
+    pub(super) fn prepare_switched_directory(&self, thread: &ThreadId) -> Result<(), CoreError> {
+        if self.binding(thread).is_some() || self.original_directory(thread).is_some() {
+            return Ok(());
+        }
+        self.dirs
+            .runtime
+            .block_on(
+                self.dirs
+                    .switched_worktrees
+                    .provision(&ManagedDirProvisionRequest {
+                        source: ManagedDirSource::CurrentDirectory {
+                            source_directory: self.dirs.root.clone(),
+                        },
+                        target: ManagedDirTarget::SourceHead,
+                        repository_targets: BTreeMap::new(),
+                        source_dir_id: self.dirs.id.to_string(),
+                        owner: ManagedDirOwner::Thread {
+                            thread_id: thread.to_string(),
+                        },
+                    }),
+            )
+            .map_err(|error| {
+                CoreError::Journal(format!("cannot prepare destination directory: {error}"))
+            })?;
+        Ok(())
+    }
+
+    pub(super) fn activate_switched_directory(&self, thread: &ThreadId) -> Result<(), CoreError> {
+        if let Some(binding) = self.binding(thread) {
+            return self.bind_thread_services(thread, &binding);
+        }
+        let owner = ManagedDirOwner::Thread {
+            thread_id: thread.to_string(),
+        };
+        let binding = match self.original_directory(thread) {
+            Some(binding) => binding,
+            None => self
+                .dirs
+                .runtime
+                .block_on(self.dirs.switched_worktrees.recover_owner(&owner))
+                .map_err(|error| {
+                    CoreError::Journal(format!("cannot recover destination directory: {error}"))
+                })?,
+        };
+        self.bind_prepared_directory(thread, binding)
+    }
+
+    fn original_directory(&self, thread: &ThreadId) -> Option<ManagedDirBinding> {
+        let owner = ManagedDirOwner::Thread {
+            thread_id: thread.to_string(),
+        };
+        self.dirs
+            .runtime
+            .block_on(self.dirs.worktrees.recover_owner(&owner))
+            .ok()
+            .filter(|binding| binding.source_dir_id() == self.dirs.id.as_str())
+    }
+
+    pub(super) fn release_switched_directory(&self, thread: &ThreadId) {
+        self.stop_watcher(thread);
+        self.dirs.file_access.unbind_thread_dir(thread);
+        self.dirs.hooks.unbind_thread_dir(thread);
+        self.dirs
+            .bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(thread);
+    }
+
     pub(super) fn provision_source(
         &self,
         request: &ThreadWorktreeBindingRequest,
@@ -666,6 +738,9 @@ impl GitTurnChangesRuntime {
         target: ManagedDirTarget,
     ) -> Result<(), CoreError> {
         if let Some(binding) = self.binding(&request.thread_id) {
+            if binding.source_dir_id() != self.dirs.id.as_str() {
+                return Err(CoreError::CommandConflict);
+            }
             return self.bind_thread_services(&request.thread_id, &binding);
         }
         let binding = self

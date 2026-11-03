@@ -32,6 +32,7 @@ import { CommandService } from '../../../../../workbench/services/commands/commo
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
+import '../../browser/sessionsActions.js';
 import '../../browser/views/sessionsViewActions.js';
 import '../../../../browser/workbenchChat.contribution.js';
 import '../../../../../workbench/contrib/chat/browser/chat.contribution.js';

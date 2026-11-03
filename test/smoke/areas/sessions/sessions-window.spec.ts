@@ -21,10 +21,25 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
 import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platform/keyboardLayout/common/userKeyboardLayout.js';
+import { APPLICATION_BADGE_CHANNEL } from '../../../../src/ash/platform/native/common/native.js';
+import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 
 // macOS application menus and fullscreen transitions require a shown, focused window.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 const emptyWorkspaceTest = test.extend({ openWorkspace: false });
+
+test('Agents Window can publish and clear its application badge', { tag: ['@electron-ui'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.evaluate(async channel => {
+		const sandbox = (globalThis as unknown as { ash: ISandboxGlobals; }).ash;
+		const canvas = document.createElement('canvas');
+		canvas.width = canvas.height = 32;
+		const context = canvas.getContext('2d')!;
+		context.fillRect(0, 0, 32, 32);
+		await sandbox.ipcRenderer.invoke(channel, { count: 1, description: '1 session needs your attention', iconDataURL: canvas.toDataURL() });
+		await sandbox.ipcRenderer.invoke(channel, { count: 0, description: '' });
+	}, APPLICATION_BADGE_CHANNEL);
+});
 
 test(
 	'Code sidebar retains Recents expansion with no projects',

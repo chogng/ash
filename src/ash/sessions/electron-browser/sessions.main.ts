@@ -71,6 +71,8 @@ import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-
 import { IAgentHostCanvasCollection } from '../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import '../contrib/sessions/electron-browser/sessions.contribution.js';
+import { SessionsApplicationBadge } from '../contrib/sessions/electron-browser/sessionsApplicationBadge.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
@@ -280,6 +282,10 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'sessions.contrib.wslAgentHostContribution',
 					'sessions.contrib.tunnelAgentHostContribution',
 					'sessions.contrib.automationsCustomView',
+					'sessions.contrib.titleBarWidget',
+					'workbench.contrib.sessionsMouseNavigation',
+					'sessions.automationSessionsListing',
+					SessionsApplicationBadge.ID,
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingContribution.ID,
 					'workbench.contrib.chatScreenshot',

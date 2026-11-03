@@ -23,7 +23,7 @@ import { sessionIdentity, sessionProviderAuthority } from '../../../src/ash/sess
 import type { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 
 /** Exercises the complete browser Workbench bootstrap with domain-owned fake hosts. */
-export function installMultiHostSessionsFixture(): { open(host: string, sideBySide?: boolean): Promise<void>; openLink(host: string, sideBySide?: boolean, threadId?: string): Promise<boolean>; disconnect(host: string): void; activeProvider(): string | undefined; showComparisonGroup(): Promise<void>; newChatInSession(): Promise<void>; calls: { host: string; method: string; sessionId: string; threadId: string; }[]; } {
+export function installMultiHostSessionsFixture(): { open(host: string, sideBySide?: boolean): Promise<void>; openLink(host: string, sideBySide?: boolean, threadId?: string): Promise<boolean>; disconnect(host: string): void; activeProvider(): string | undefined; showComparisonGroup(): Promise<void>; newChatInSession(): Promise<void>; showAttentionDraft(): void; calls: { host: string; method: string; sessionId: string; threadId: string; }[]; } {
 	const calls: { host: string; method: string; sessionId: string; threadId: string; }[] = [];
 	let services: InstantiationService;
 	const registrations = new Map<string, { dispose(): void; }>();
@@ -90,6 +90,9 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 						membershipStatus: 'active', executionStatus: 'queued', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [],
 					}],
 				}] : [] };
+				if (params.has('blockedTitlebar') && name === 'Host B') {
+					session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 1 } };
+				}
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {
 					automations,
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
@@ -112,6 +115,13 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 	});
 	return {
 		calls,
+		showAttentionDraft() {
+			const view = services.get(ISessionsService);
+			view.openNewSession();
+			for (const selection of view.visibleSelections) {
+				if (selection.kind === 'session') view.closeVisibleSelection(selection);
+			}
+		},
 		newChatInSession: () => services.get(ICommandService).executeCommand<void>('sessions.chat.newInSession'),
 		async showComparisonGroup() {
 			const groups = services.get(ISessionGroupsService);

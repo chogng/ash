@@ -1,0 +1,14 @@
+.ash-sessions-titlebar-widget {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.ash-sessions-titlebar-widget .ash-button {
+	max-width: 100%;
+}
+
+.ash-sessions-titlebar-widget .ash-button-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

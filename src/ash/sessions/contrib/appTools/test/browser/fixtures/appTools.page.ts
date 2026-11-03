@@ -1,5 +1,5 @@
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
-import { SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { createTestPathService } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -35,7 +35,7 @@ import { AppToolsHost } from '../../../browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../../../../../services/appTools/browser/appServerAppToolsHost.js';
 import { ISessionGroupsService, SessionGroupsService } from '../../../../../services/sessions/browser/sessionGroupsService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
-import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
+import { SessionsList } from '../../../../sessions/browser/views/sessionsList.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
@@ -139,14 +139,26 @@ const closedTerminals: string[] = [];
 const terminalCreations: ITerminalProcessCreateOptions[] = [];
 const profileSelections: TerminalProcessProfileSelection[] = [];
 const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
-const sessions = [1, 2].map(id => ({ sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', chats: [{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } }] }));
+const fixtureOptions = new URLSearchParams(location.search);
+const sessions = [1, 2, ...(fixtureOptions.has('treeFixture') ? [3] : [])].map(id => ({
+	sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', source: id === 3 ? 'automation' : undefined,
+	chats: [
+		{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } },
+		...(id === 2 && fixtureOptions.has('nested') ? [{
+			threadId: 'follow-up', title: 'Follow-up', status: 'active',
+			origin: { type: 'fork', parentThreadId: 'thread-2', parentSequence: 1 },
+		}] : []),
+	],
+}));
 const management = { sessions, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);
-resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage)));
+const listModel = new SessionsListModelService(storage);
+resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage)));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
+services.registerInstance(ISessionsListModelService, listModel);
 services.registerInstance(IDialogService, resources.add(new DialogService()));
 services.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
@@ -193,7 +205,9 @@ const terminalProcesses: ITerminalProcessService = {
 	write: async () => { throw new Error('Opening a terminal must not send command input'); },
 	resize: async () => { }, close: async options => { closedTerminals.push(options.terminalId); },
 };
-services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
+const contexts = resources.add(new ContextKeyService());
+contexts.setContext('sessions.workspaceMode', 'code');
+services.registerInstance(IContextKeyService, contexts);
 const renderer = createDisconnectedRendererApi();
 registerTestWorkbenchHostServices(services, { ...renderer,  appServer: { ...renderer.appServer, operatingSystem: executionOS , isAvailable: true } });
 services.registerSingleton(ILabelService, () => services.createInstance(LabelService));

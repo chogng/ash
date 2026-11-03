@@ -825,6 +825,29 @@ impl AgentRuntime for Runtime<'_> {
             .fork_session(self.binder, request)
             .map(Into::into)
     }
+    fn move_thread_to_session(
+        &self,
+        thread_id: &ThreadId,
+        source: &SessionId,
+        destination: &SessionId,
+        command_id: CommandId,
+    ) -> Result<ThreadView, CoreError> {
+        self.threads
+            .move_thread_to_session(thread_id, source, destination, command_id)
+            .map(Into::into)
+    }
+    fn change_session_directory(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+        command_id: CommandId,
+        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+    ) -> Result<ThreadView, CoreError> {
+        self.threads
+            .change_session_directory(session_id, root, command_id, prepare, activate)
+            .map(Into::into)
+    }
     fn fork_comparison(
         &self,
         request: ForkThreadRequest,

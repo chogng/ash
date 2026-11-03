@@ -373,6 +373,7 @@ impl Worktree {
 pub struct WorktreeManager {
     settings: WorktreeSettings,
     git: GitClient,
+    directory_namespace: Option<String>,
 }
 
 impl WorktreeManager {
@@ -430,7 +431,7 @@ impl WorktreeManager {
         owner.validate(source_dir_id)?;
         let baseline = hex_digest(directory.to_string_lossy().as_ref());
         let mut record = binding::BindingRecord::new(
-            owner.managed_dir_id(),
+            self.managed_dir_id(owner),
             owner.clone(),
             source_dir_id.into(),
             source.into(),
@@ -469,6 +470,26 @@ impl WorktreeManager {
         Self {
             settings,
             git: GitClient::system(),
+            directory_namespace: None,
+        }
+    }
+
+    /// Isolates alternate working copies and Git refs while retaining their logical Thread owner.
+    pub fn for_session_directory(&self, directory_id: &str) -> Self {
+        let namespace = hex_digest(directory_id);
+        let mut settings = self.settings.clone();
+        settings.root = settings.root.join("session-directories").join(&namespace);
+        Self {
+            settings,
+            git: self.git.clone(),
+            directory_namespace: Some(namespace),
+        }
+    }
+
+    fn managed_dir_id(&self, owner: &ManagedDirOwner) -> String {
+        match &self.directory_namespace {
+            Some(namespace) => hex_digest(&format!("{namespace}:{}", owner.metadata_owner_id())),
+            None => owner.managed_dir_id(),
         }
     }
 
@@ -810,10 +831,10 @@ impl WorktreeManager {
             }
             ManagedDirTarget::Detached { object_id } => (None, object_id.clone(), false),
         };
-        let digest = request.owner.managed_dir_id();
+        let digest = self.managed_dir_id(&request.owner);
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
-            let binding = self.recover(&checkout_root, &request.owner).await?;
+            let binding = self.recover_provision(&checkout_root, request).await?;
             if let ManagedDirTarget::NewBranch { name, .. } = &request.target
                 && binding.target_branch() != Some(name.as_str())
             {
@@ -1227,14 +1248,14 @@ impl WorktreeManager {
             bail!("managed directory source identity cannot be empty");
         }
         request.owner.validate(&request.source_dir_id)?;
-        let digest = request.owner.managed_dir_id();
+        let digest = self.managed_dir_id(&request.owner);
         let managed_root = resolve_directory_destination(&self.settings.root)?;
         if managed_root.starts_with(source_directory) {
             bail!("managed directory root cannot be inside the source directory");
         }
         let checkout_root = managed_root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
-            return self.recover(&checkout_root, &request.owner).await;
+            return self.recover_provision(&checkout_root, request).await;
         }
         if matches!(request.source, ManagedDirSource::ImmutableTree { .. }) {
             bail!("non-Git managed directories cannot be provisioned from a Git tree");
@@ -1280,7 +1301,7 @@ impl WorktreeManager {
         )?;
         if let Err(error) = std::fs::rename(staging.path(), &checkout_root) {
             if checkout_root.exists() {
-                return self.recover(&checkout_root, &request.owner).await;
+                return self.recover_provision(&checkout_root, request).await;
             }
             return Err(error.into());
         }
@@ -1314,7 +1335,8 @@ impl WorktreeManager {
             if record.kind != binding::BindingKind::Directory {
                 bail!("managed directory binding has an invalid dir kind");
             }
-            if !record.matches_owner(owner) || record.managed_worktree_id != owner.managed_dir_id()
+            if !record.matches_owner(owner)
+                || record.managed_worktree_id != self.managed_dir_id(owner)
             {
                 bail!("managed directory binding owner does not match its durable owner");
             }
@@ -1362,7 +1384,8 @@ impl WorktreeManager {
             bail!("managed worktree belongs to another execution owner");
         }
         let record = binding::read(repository.git_dir())?;
-        if !record.matches_owner(owner) || record.managed_worktree_id != owner.managed_dir_id() {
+        if !record.matches_owner(owner) || record.managed_worktree_id != self.managed_dir_id(owner)
+        {
             bail!("managed worktree binding owner does not match its durable owner");
         }
         let dir = repository.worktree_root().join(&record.relative_dir);
@@ -1389,9 +1412,21 @@ impl WorktreeManager {
         })
     }
 
+    async fn recover_provision(
+        &self,
+        checkout_root: &Path,
+        request: &ManagedDirProvisionRequest,
+    ) -> Result<ManagedDirBinding> {
+        let binding = self.recover(checkout_root, &request.owner).await?;
+        if binding.source_dir_id() != request.source_dir_id {
+            bail!("existing managed directory belongs to a different source directory");
+        }
+        Ok(binding)
+    }
+
     /// Recovers the deterministic managed directory assigned to one exact owner.
     pub async fn recover_owner(&self, owner: &ManagedDirOwner) -> Result<ManagedDirBinding> {
-        let digest = owner.managed_dir_id();
+        let digest = self.managed_dir_id(owner);
         self.recover(&self.settings.root.join(&digest[..4]).join(&digest), owner)
             .await
     }
@@ -1435,7 +1470,7 @@ impl WorktreeManager {
                 .checkout_root()
                 .file_name()
                 .and_then(|name| name.to_str())
-                != Some(owner.managed_dir_id().as_str())
+                != Some(self.managed_dir_id(&owner).as_str())
             {
                 continue;
             }
@@ -1498,7 +1533,7 @@ impl WorktreeManager {
         let mut record = binding::read(linked_repository.git_dir())?;
         if record.kind != binding::BindingKind::Git
             || !record.matches_owner(owner)
-            || record.managed_worktree_id != owner.managed_dir_id()
+            || record.managed_worktree_id != self.managed_dir_id(owner)
         {
             bail!("managed worktree binding does not match its durable owner");
         }
@@ -1545,7 +1580,7 @@ impl WorktreeManager {
             let mut nested_record = binding::read(opened_managed.git_dir())?;
             if nested_record.kind != binding::BindingKind::Git
                 || !nested_record.matches_owner(owner)
-                || nested_record.managed_worktree_id != owner.managed_dir_id()
+                || nested_record.managed_worktree_id != self.managed_dir_id(owner)
             {
                 bail!("managed nested worktree binding does not match its durable owner");
             }
@@ -1598,7 +1633,7 @@ impl WorktreeManager {
                 let owner = ManagedDirOwner::Thread {
                     thread_id: thread_id.clone(),
                 };
-                if record.managed_worktree_id != owner.managed_dir_id() {
+                if record.managed_worktree_id != self.managed_dir_id(&owner) {
                     continue;
                 }
                 recovered.push((

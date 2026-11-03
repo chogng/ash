@@ -86,6 +86,23 @@
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
 }
 
+.ash-sessions-titlebar-page-content:empty {
+	display: none;
+}
+
+.ash-sessions-titlebar-session-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	justify-content: center;
+	align-items: center;
+}
+
+.ash-sessions-titlebar-page-content:not(:empty)
+	+ .ash-sessions-titlebar-session-content {
+	display: none;
+}
+
 .ash-workbench[data-runtime="electron"] .ash-sessions-titlebar {
 	-webkit-app-region: drag;
 }

@@ -32,6 +32,7 @@ import { registerChatSessionsActions } from '../../workbench/contrib/chat/browse
 import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
+import '../contrib/sessions/browser/sessionsActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
 import { IChatService, type ChatAgent } from '../../workbench/services/chat/common/chatService.js';
 import type { ToolResultPresentation } from '../../platform/agentHost/common/agent.js';

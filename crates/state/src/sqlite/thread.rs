@@ -746,6 +746,28 @@ impl ThreadStore for SqliteThreadStore {
             .map_err(storage_error)
             .and_then(|value| from_sql_integer(value).map_err(ThreadStoreError::Storage))?;
         let result = validate_append_batch(batch, actual)?;
+        if batch.events.iter().any(|stored| {
+            matches!(
+                stored.event,
+                ash_protocol::ThreadEvent::ThreadDirectoryChanged { .. }
+            )
+        }) {
+            let admissible: bool = transaction
+                .query_row(
+                    "SELECT COUNT(*) = 1
+                   AND EXISTS(SELECT 1 FROM thread_catalog WHERE session_id = ?1 AND thread_id = ?2)
+                   AND NOT EXISTS(SELECT 1 FROM remote_history_bindings WHERE thread_id = ?2)
+                 FROM thread_catalog WHERE session_id = ?1",
+                    params![batch.catalog.session_id.as_str(), batch.thread_id.as_str()],
+                    |row| row.get(0),
+                )
+                .map_err(storage_error)?;
+            if !admissible {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "Directory change requires a local single-conversation Session".into(),
+                ));
+            }
+        }
         for prefix in &batch.history_prefixes {
             super::history::write_prefix(&transaction, prefix)?;
         }
@@ -827,15 +849,81 @@ impl ThreadStore for SqliteThreadStore {
                 actual,
             });
         }
+        let moved_from = batch.events.iter().find_map(|stored| match &stored.event {
+            ash_protocol::ThreadEvent::ThreadMovedToSession {
+                source_session_id,
+                destination_session_id,
+                ..
+            } => Some((source_session_id, destination_session_id)),
+            _ => None,
+        });
+        if let Some((source, destination)) = moved_from {
+            let current: String = transaction
+                .query_row(
+                    "SELECT session_id FROM thread_catalog WHERE thread_id = ?1",
+                    [batch.thread_id.as_str()],
+                    |row| row.get(0),
+                )
+                .map_err(storage_error)?;
+            let target = query_catalog(
+                &transaction,
+                "WHERE catalog.session_id = ?1 AND catalog.thread_id = ?1",
+                &[&destination.as_str() as &dyn ToSql],
+            )?;
+            let source_threads = query_catalog(
+                &transaction,
+                // The moving Thread's stream sequence has advanced. Its replacement
+                // catalog record is written below; only its peers are needed here.
+                "WHERE catalog.session_id = ?1 AND catalog.thread_id != ?2",
+                &[
+                    &source.as_str() as &dyn ToSql,
+                    &batch.thread_id.as_str() as &dyn ToSql,
+                ],
+            )?;
+            let imported: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM remote_history_bindings WHERE thread_id IN (?1, ?2))",
+                params![batch.thread_id.as_str(), destination.as_str()],
+                |row| row.get(0),
+            ).map_err(storage_error)?;
+            if batch.events.len() != 1
+                || current != source.as_str()
+                || &batch.catalog.session_id != destination
+                || SessionSource::from_session_id(source).is_some()
+                || SessionSource::from_session_id(destination).is_some()
+                || imported
+                || source_threads
+                    .iter()
+                    .any(|record| record.binding.source_thread_id() == Some(&batch.thread_id))
+                || !source_threads.iter().any(|record| {
+                    record.thread.thread_id.as_str() == source.as_str()
+                        && record.thread.status == ash_protocol::ThreadStatus::Active
+                })
+                || !target.first().is_some_and(|root| {
+                    root.thread.status == ash_protocol::ThreadStatus::Active
+                        && root.execution_target == batch.catalog.execution_target
+                })
+            {
+                return Err(ThreadStoreError::InvalidBatch(
+                    "Thread move requires two active Sessions with the same execution target"
+                        .into(),
+                ));
+            }
+        }
         let session_changed = session_list_changed(&transaction, &batch.catalog)?;
         if let Some(index) = &batch.history_index {
             super::thread_history::write(&transaction, index, batch.expected_sequence)?;
         }
         write_catalog(&transaction, &batch.catalog)?;
+        if let Some((source, _)) = moved_from {
+            super::graph::move_binding(&transaction, &batch.catalog.binding, source)?;
+            write_session_catalog(&transaction, source)?;
+        }
         if session_changed {
             write_session_catalog(&transaction, &batch.catalog.session_id)?;
         }
-        super::graph::write_binding(&transaction, &batch.catalog)?;
+        if moved_from.is_none() {
+            super::graph::write_binding(&transaction, &batch.catalog)?;
+        }
         if batch.expected_sequence == 0
             && let Some(source) = batch.catalog.binding.source_thread_id()
         {

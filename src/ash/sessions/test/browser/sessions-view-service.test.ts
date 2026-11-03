@@ -20,6 +20,7 @@ import { SyncDescriptor } from '../../../platform/instantiation/common/descripto
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { KeybindingRuleKind, KeybindingWeight, KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
+import '../../contrib/sessions/browser/sessionsActions.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import { AbstractCustomView } from '../../services/customView/browser/customView.js';
 
@@ -411,6 +412,7 @@ test('Recent visits persist as deduplicated conversation identities without chan
 		view.openSession('first', 'root');
 		await view.openPreviousSession();
 		assert.equal(selectionId(view.activeSelection), 'session:second:root');
+		assert.ok(view.getLastViewedAt({ sessionId: 'first', threadId: 'root' }));
 		assert.deepEqual(view.recentSessions, [
 			{ sessionId: 'first', threadId: 'root' },
 			{ sessionId: 'second', threadId: 'root' },
@@ -420,6 +422,7 @@ test('Recent visits persist as deduplicated conversation identities without chan
 	using restored = createView(sessions, storage);
 	await restored.initialize();
 	assert.deepEqual(restored.recentSessions.map(entry => entry.sessionId), ['first', 'second', 'third']);
+	assert.ok(restored.getLastViewedAt({ sessionId: 'first', threadId: 'root' }));
 });
 
 test('Restoring a Session window keeps the Forward destination from the saved recency order', async () => {

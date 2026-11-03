@@ -307,12 +307,6 @@ impl GitTurnChangesRuntime {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<TurnChangeSet>, String> {
-        if self
-            .binding(thread_id)
-            .is_some_and(|binding| binding.kind() == worktree::ManagedDirKind::Directory)
-        {
-            return Ok(Vec::new());
-        }
         let records = self
             .store
             .list_for_thread(thread_id)
@@ -424,6 +418,7 @@ impl GitTurnChangesRuntime {
                     records.iter().find(|record| {
                         record.turn_id == turn.turn_id
                             && record.repository_id == repository.repository_id()
+                            && record.worktree_root == repository.worktree_root()
                     })
                 });
                 let restored = match thread.restored_workspace() {

@@ -260,6 +260,13 @@ pub enum SessionRequest {
         expected_sequence: u64,
         direction: ash_protocol::HistoryDirection,
     },
+    MoveThreadToSession {
+        thread_id: ThreadId,
+        destination_session_id: SessionId,
+    },
+    ChangeDirectory {
+        root: std::path::PathBuf,
+    },
     /// Copies the selected Thread history into an independent Session without subscribing to it.
     ForkSession {
         parent_thread_id: ThreadId,

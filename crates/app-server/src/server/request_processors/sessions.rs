@@ -107,6 +107,100 @@ pub(super) struct SessionRequestProcessor<'ctx, C: SessionRequestProcessorContex
 }
 
 impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'ctx, C> {
+    pub(super) fn change_directory(
+        &self,
+        mutation: SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<SessionResult, RpcError> {
+        let runtime = self.context.git_turn_changes_runtime()?;
+        let dir = ash_file_access::Dir::open_local(&root)
+            .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
+        let grant = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .selected_grant
+            .clone();
+        let authorize = || {
+            grant
+                .as_ref()
+                .filter(|grant| {
+                    dir.id() == runtime.dirs.id
+                        && grant.is_active()
+                        && grant.dir().id() == dir.id()
+                        && grant
+                            .permissions()
+                            .allows(ash_file_access::Permission::ReadFiles)
+                })
+                .map(|_| ())
+                .ok_or_else(|| {
+                    core_api::CoreError::InvalidInput(
+                        "Directory does not match the authorized runtime".into(),
+                    )
+                })
+        };
+        authorize().map_err(core_error)?;
+        let thread_id = ThreadId::new(mutation.session_id.as_str())
+            .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
+        if let Some(queue) = self.queue.as_ref()
+            && queue
+                .list(&mutation.session_id, &thread_id)
+                .map_err(|_| RpcError::new(-32010, AppServerErrorName::QueueOperationFailed))?
+                .iter()
+                .any(|message| {
+                    matches!(
+                        message.status,
+                        queue::QueueStatus::Pending
+                            | queue::QueueStatus::Paused
+                            | queue::QueueStatus::Delivering
+                    )
+                })
+        {
+            return Err(RpcError::new(-32010, AppServerErrorName::QueueConflict));
+        }
+        self.context
+            .agent_runtime()
+            .change_session_directory(
+                &mutation.session_id,
+                dir.canonical_path(),
+                mutation.command_id,
+                |thread| {
+                    let commits = git_turn_changes::TurnCommitStore::list_commits(
+                        runtime.store.as_ref(),
+                        thread,
+                    )
+                    .map_err(|error| core_api::CoreError::Journal(error.to_string()))?;
+                    git_turn_changes::require_settled_publications(&commits).map_err(|_| {
+                        core_api::CoreError::InvalidInput(
+                            "Wait for pending Turn commits before changing directories".into(),
+                        )
+                    })?;
+                    if !runtime
+                        .history_files_ready(thread)
+                        .map_err(core_api::CoreError::Journal)?
+                        || runtime
+                            .history_restoration_pending(thread)
+                            .map_err(core_api::CoreError::Journal)?
+                    {
+                        return Err(core_api::CoreError::InvalidInput(
+                            "Wait for file history operations before changing directories".into(),
+                        ));
+                    }
+                    runtime.prepare_switched_directory(thread)?;
+                    authorize()
+                },
+                |thread| {
+                    authorize()?;
+                    runtime.activate_switched_directory(thread)?;
+                    self.context.bind_session_runtime(&mutation.session_id)
+                },
+            )
+            .map_err(core_error)?;
+        self.updates
+            .publish_session_details_changed(&mutation.session_id);
+        self.context.session_result(&mutation.session_id)
+    }
+
     pub(super) fn new(
         context: &'ctx C,
         agent_extensions: &'ctx super::Arc<super::ExtensionRegistry>,

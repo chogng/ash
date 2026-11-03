@@ -92,6 +92,8 @@ import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from '../../platform/menubar/electron-main/menubarMainService.js';
 import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from '../../platform/menubar/electron-main/menubar.js';
 import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from '../../platform/native/electron-main/nativeHostIpc.js';
+import { applicationBadgeIpcRoute } from '../../platform/native/electron-main/applicationBadge.js';
+import type { IApplicationBadge } from '../../platform/native/common/native.js';
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -2058,16 +2060,28 @@ export class AshApplication extends Disposable {
 					};
 					window.on('focus', onFocus);
 					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
-					// Reloaded renderers must register their current system-wide keybindings again.
-					const clearInterruptedKeybindings = (): void => {
+					const setApplicationBadge = (badge: IApplicationBadge): void => {
+						if (process.platform === 'win32') {
+							if (window.isDestroyed()) return;
+							const icon = badge.count && badge.iconDataURL ? nativeImage.createFromDataURL(badge.iconDataURL) : null;
+							window.setOverlayIcon(icon?.isEmpty() ? null : icon, badge.description);
+						} else if (process.platform === 'darwin' || process.platform === 'linux') {
+							app.setBadgeCount(badge.count);
+						}
+					};
+					const clearApplicationBadge = (): void => setApplicationBadge({ count: 0, description: '' });
+					windowDisposables.add(toDisposable(clearApplicationBadge));
+					// A replacement renderer publishes its own keybindings and attention badge.
+					const clearInterruptedRendererState = (): void => {
 						// Contribution leases belong to the live window and handle navigation themselves.
 						this.globalKeybindings.updateKeybindings(window.id, []);
+						clearApplicationBadge();
 					};
-					windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(clearInterruptedKeybindings));
-					window.webContents.on('render-process-gone', clearInterruptedKeybindings);
+					windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(clearInterruptedRendererState));
+					window.webContents.on('render-process-gone', clearInterruptedRendererState);
 					windowDisposables.add(toDisposable(() => {
 						if (window.isDestroyed()) return;
-						window.webContents.removeListener('render-process-gone', clearInterruptedKeybindings);
+						window.webContents.removeListener('render-process-gone', clearInterruptedRendererState);
 					}));
 					const runtimeResources = new DisposableStore();
 					let sessionsRelay: AppServerConnectionRelay;
@@ -2131,6 +2145,7 @@ export class AshApplication extends Disposable {
 					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
+						applicationBadgeIpcRoute(setApplicationBadge),
 						...this.terminalLifetimeRoutes(windowDisposables),
 						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),

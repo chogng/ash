@@ -1,48 +1,53 @@
-import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsMenuActiveConversationContext } from '../../../common/contextkeys.js';
-import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
-import { Separator, type IAction } from '../../../../base/common/actions.js';
-import { ISessionSectionOrderService } from '../../../services/sessions/browser/sessionSectionOrderService.js';
-import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
-import './media/sessionsList.css';
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { localize } from '../../../../nls.js';
-import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { captureAnimationTarget, triggerConfettiAnimation } from '../../../../base/browser/ui/animations/animations.js';
-import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
-import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
-import { getPullRequestLabel } from '../../../contrib/github/common/types.js';
-import { getHighestPriorityPullRequestIcon } from '../../../../workbench/common/chatPullRequest.js';
-import { sessionManagementLabel } from '../../sessionManagementLabels.js';
-import type { ISession, SessionManagementInfo } from '../../../services/sessions/common/session.js';
-import type { ThemeIcon } from '../../../../base/common/themables.js';
-import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { autorun } from '../../../../base/common/observable.js';
-import { IMenuService, type MenuActionGroup } from '../../../../platform/actions/common/actions.js';
-import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IProjectService, type Project } from '../../../../platform/projects/common/projectService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { generateUuid } from '../../../../base/common/uuid.js';
-import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
-import { Menus } from '../../menus.js';
-import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
-import { createSessionItemActions } from '../../agentSessionsModel.js';
-import type { SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { readNewChatDraftState } from '../../../contrib/chat/common/newChatDraftState.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
+import { ISessionsListModelService, type ISessionsListTreeNode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { Separator, type IAction } from '../../../../../base/common/actions.js';
+import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
+import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import '../media/sessionsList.css';
+import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { localize } from '../../../../../nls.js';
+import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { SessionActionFeedback } from '../sessionActionFeedback.js';
+import { getSessionsListEntries } from './sessionsListFilters.js';
+import { SessionsListSearch } from './sessionsListSearch.js';
+import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
+import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IGitHubService } from '../../../github/browser/githubService.js';
+import { getPullRequestLabel } from '../../../github/common/types.js';
+import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
+import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
+import type { SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import type { ThemeIcon } from '../../../../../base/common/themables.js';
+import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { autorun } from '../../../../../base/common/observable.js';
+import { IMenuService, type MenuActionGroup } from '../../../../../platform/actions/common/actions.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
+import { Menus } from '../../../../browser/menus.js';
+import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import { createSessionItemActions } from '../../../../browser/agentSessionsModel.js';
+import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
+import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
+import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
-	private readonly archiveFeedback = this._register(new MutableDisposable());
+	private readonly search: SessionsListSearch;
+	private readonly feedback = this._register(new SessionActionFeedback());
 	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
@@ -76,6 +81,7 @@ export class SessionsList extends DomWidget {
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
+		@IHoverService private readonly hoverService?: IHoverService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -88,6 +94,11 @@ export class SessionsList extends DomWidget {
 		this.heading.textContent = title;
 		this.list = h(ownerDocument, 'div');
 		this.list.className = 'ash-sessions-list-items';
+		this.search = this._register(new SessionsListSearch(this.domNode, this.list, () => this.render(), () => {
+			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
+			row?.focus();
+		}));
+		this._register(listModel.registerTree(mode, () => this.readTree()));
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
@@ -131,6 +142,12 @@ export class SessionsList extends DomWidget {
 						const checked = mode === 'always';
 						const label = localize('sessions.list.showAutomationSessions', 'Show Automation Sessions');
 						return Separator.join([{
+							id: 'sessions.list.search',
+							label: localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'),
+							tooltip: '',
+							enabled: true,
+							run: () => this.search.open(),
+						}], [{
 							id: 'sessions.list.toggleAutomationSessions',
 							label,
 							tooltip: label,
@@ -380,7 +397,28 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showItemMenu(selection: SessionsViewSelection, item: SessionListItem, anchor: ContextMenuAnchor): void {
-
+		const sessionActions: IAction[] = [];
+		if (selection.kind === 'session') {
+			const { session, threadId } = selection.active;
+			if (threadId === session.sessionId && this.sessionService.canChangeDirectory?.(session.sessionId)) {
+				sessionActions.push({
+					id: 'agentSession.changeDirectory',
+					label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…'),
+					tooltip: '',
+					enabled: true,
+					run: () => this.commands.executeCommand('agentSession.changeDirectory', session.sessionId),
+				});
+			}
+			if (this.sessionService.getChatMoveDestinations?.(session.sessionId, threadId).length) {
+				sessionActions.push({
+					id: 'agentSession.moveChatToSession',
+					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
+					tooltip: '',
+					enabled: true,
+					run: () => this.commands.executeCommand('agentSession.moveChatToSession', { sessionId: session.sessionId, threadId }),
+				});
+			}
+		}
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
 		if (context) SessionsMenuActiveConversationContext.bindTo(context).set(this.mode === 'code' && selection.kind === 'session' && selection.active.session.status === 'active');
@@ -390,22 +428,28 @@ export class SessionsList extends DomWidget {
 			menuActionOptions: { arg: selection },
 			contextKeyService: context,
 			getAnchor: () => anchor,
-			getActions: () => [...this.orderActions(item.presentation, 'row'), ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
+			getActions: () => [...this.orderActions(item.presentation, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
 				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
 					...action,
-					run: async () => {
-						const target = captureAnimationTarget(item.domNode);
-						const archived = await action.run();
-						if (archived === true && !this._store.isDisposed) this.archiveFeedback.value = triggerConfettiAnimation(target);
-						return archived;
-					},
+					run: () => this.feedback.archive(item.domNode, () => action.run()),
 				})],
 			onHide: () => {
 				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
 				item.setMenuVisible(false);
 			},
 		});
+	}
+
+	private readTree(): readonly ISessionsListTreeNode[] {
+		const nodes = new Map<Element, SessionListItem | SessionListSection>();
+		for (const [, item] of this.items) nodes.set(item.presentation, item);
+		for (const [, section] of this.sections) nodes.set(section.domNode, section);
+		const readChildren = (parent: HTMLElement): readonly ISessionsListTreeNode[] => Array.from(parent.children).flatMap(element => {
+			const node = nodes.get(element);
+			return node ? [node.describe(readChildren)] : [];
+		});
+		return readChildren(this.list);
 	}
 
 	private render(): void {
@@ -427,10 +471,10 @@ export class SessionsList extends DomWidget {
 			activeSections.add(key);
 			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
-				this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+				if (!this.search.hasQuery) this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 			}));
 			section.update(title, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'),
-				this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open);
+				!this.search.hasQuery && this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open);
 			if (key.startsWith('group:')) {
 				section.domNode.dataset.sectionOrderId = key;
 				section.button.draggable = true;
@@ -446,6 +490,7 @@ export class SessionsList extends DomWidget {
 			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
 			if (!session.forkSource && (!draft || (!draft.text.trim() && draft.contexts.length === 0))) continue;
+			if (!this.search.matches(session.title)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
 			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
@@ -459,24 +504,34 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const sortMode = this.listModel.sortMode;
-		const catalog = this.sessionService.sessions.map(session => ({ session, time: sessionSortTime(session, sortMode) }));
-		catalog.sort((left, right) => right.time - left.time);
-		for (const { session } of catalog) {
+		const catalog = getSessionsListEntries(this.sessionService.sessions, this.listModel,
+			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
+		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
+		for (const session of catalog) {
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
-			if (!current && !this.listModel.isSessionListed(session)) continue;
 			const activeChats = session.chats.filter(chat => chat.status === 'active');
-			const thread = activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
-			if (!thread || session.status !== 'active') continue;
+			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
+				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
+			if (!thread) continue;
+			const requests = this.github.getSessionPullRequests(session.sessionId);
+			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId),
+			...requests.map(getPullRequestLabel)];
+			const matchesSession = this.search.matches(thread.title, ...fields);
+			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
+				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
+			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
 			const item = itemFor(`session:${session.sessionId}`);
+			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
-			const requests = this.github.getSessionPullRequests(session.sessionId);
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			const children = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn').map(chat => {
+			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
+			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`);
+				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.viewService.openSession(session.sessionId, chat.threadId), chat.management);
+				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;
 			});
@@ -490,17 +545,19 @@ export class SessionsList extends DomWidget {
 		const projects: HTMLElement[] = [];
 		const chatGroups: HTMLElement[] = [];
 		for (const project of this.projects) {
+			if (!this.search.matches(project.name)) continue;
 			const item = itemFor(`project:${project.id}`, Lxicon.projects);
 			item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 			projects.push(item.domNode);
 		}
-		if (this.projectsFailed) projects.push(this.projectError);
+		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
 		for (const group of this.groups.groups) {
 			const members: HTMLElement[] = [];
 			for (const id of group.sessionIds) {
 				const item = remaining.get(id);
 				if (item) { members.push(item); remaining.delete(id); }
 			}
+			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
 			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code',
 				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined));
 		}
@@ -509,7 +566,8 @@ export class SessionsList extends DomWidget {
 		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
-		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error;
+		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error
+			?? (this.search.hasQuery ? localize({ bundle: 'ash.sessions', key: 'sessions.list.searchEmpty' }, 'No matching sessions.') : undefined);
 		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
@@ -517,8 +575,11 @@ export class SessionsList extends DomWidget {
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
 		if (orderedRecent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
-		for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
-		for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
+		// Keep filtered rows available so closing search can restore the original focus target.
+		if (!this.search.hasQuery) {
+			for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
+			for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
+		}
 		reconcileChildren(this.list, ordered);
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
@@ -551,13 +612,6 @@ function reconcileChildren(parent: HTMLElement, children: readonly HTMLElement[]
 	while (parent.childNodes.length > children.length) parent.lastChild!.remove();
 }
 
-function sessionSortTime(session: ISession, mode: 'created' | 'updated'): number {
-	if (mode === 'created') {
-		return (session.chats.find(chat => chat.origin.type === 'root') ?? session.chats[0])?.createdAt?.getTime() ?? 0;
-	}
-	return session.chats.reduce((latest, chat) => Math.max(latest, (chat.updatedAt ?? chat.createdAt)?.getTime() ?? 0), 0);
-}
-
 /** Project an order into movable slots while retaining fixed siblings in place. */
 function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly string[]) => readonly string[], attribute: 'rowOrderId' | 'sectionOrderId'): HTMLElement[] {
 	const movable = new Map<string, HTMLElement>();
@@ -581,6 +635,13 @@ class SessionListSection extends AbstractDisposable {
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private readonly listeners: { dispose(): void; }[];
+
+	describe(readChildren: (parent: HTMLElement) => readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
+		return {
+			id: this.domNode.dataset.section!, kind: 'section', label: this.label.textContent ?? '',
+			collapsed: this.collapsed, children: readChildren(this.body)
+		};
+	}
 
 	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed: boolean) => void) {
 		super();
@@ -648,6 +709,7 @@ class SessionListSection extends AbstractDisposable {
 
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLElement;
+	target: { readonly sessionId: string; readonly threadId: string; } | undefined;
 	private readonly button: HTMLButtonElement;
 	private readonly actions: ActionBar;
 	private readonly label: HTMLSpanElement;
@@ -658,10 +720,21 @@ class SessionListItem extends AbstractDisposable {
 	private readonly management: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
+	private readonly summaryHover = new MutableDisposable<IManagedHover>();
+	private summaryText: string | undefined;
 	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
+
+	describe(readChildren: (parent: HTMLElement) => readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
+		const id = this.domNode.dataset.item!;
+		const kind = id.startsWith('session:') ? 'session' : id.startsWith('chat:') ? 'chat' : id.startsWith('project:') ? 'project' : 'draft';
+		return {
+			id, kind, label: this.label.textContent ?? '', ...this.target,
+			...(this.chats?.childElementCount ? { children: readChildren(this.chats) } : {})
+		};
+	}
 
 	updateChats(children: readonly HTMLElement[]): void {
 		if (!children.length) {
@@ -760,11 +833,28 @@ class SessionListItem extends AbstractDisposable {
 
 	private updateDescription(): void {
 		const parts = [this.label.textContent, this.managementDescription, this.pullRequestDescription].filter(Boolean);
-		this.button.title = parts.join('\n');
+		if (!this.summaryHover.value) this.button.title = parts.join('\n');
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
+	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[]): void {
+		if (!hoverService) return;
+		const title = this.label.textContent ?? '';
+		const details = [this.managementDescription, ...metadata, this.pullRequestDescription].filter((value): value is string => !!value);
+		const summaryText = JSON.stringify([title, details]);
+		if (this.summaryText === summaryText) return;
+		this.summaryText = summaryText;
+		const content = createSessionSummaryHover(this.button.ownerDocument, title, details);
+		if (this.summaryHover.value) {
+			this.summaryHover.value.update(content);
+		} else {
+			this.button.removeAttribute('title');
+			this.summaryHover.value = hoverService.setupHover({ target: this.button, content, groupId: 'sessions-list' });
+		}
+	}
+
 	protected override disposeCore(): void {
+		this.summaryHover.dispose();
 		this.clickListener.dispose();
 		this.actions.dispose();
 		for (const listener of this.contextListeners) listener.dispose();

@@ -23,7 +23,7 @@ import type { IUpdateService, UpdateCheckResult } from '../../../../platform/upd
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { createDiffEditorInput } from '../../../../workbench/common/editor/diffEditorInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { ISessionGroupsService, type SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import { SessionsListTools } from '../../sessions/browser/sessionsListTools.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../../workbench/browser/actions/workspaceCommands.js';
@@ -31,6 +31,7 @@ import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHos
 
 /** Window-owned execution; tool definitions and durable business operations belong to Rust. */
 export class AppToolsHost extends Disposable implements IAppToolsHost {
+	readonly sessionsList: IAppToolsHost['sessionsList'];
 	private readonly celebration = this._register(new MutableDisposable());
 	private terminalGeneration = 0;
 	private readonly agentTaskRuns = new Set<ITaskRun>();
@@ -44,12 +45,12 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IViewsService private readonly views: IViewsService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
-		@ISessionGroupsService private readonly groups: ISessionGroupsService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
 		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
+		this.sessionsList = instantiation.createInstance(SessionsListTools);
 		this._register(workspace.onDidChangeWorkspace(() => this.terminalGeneration++));
 		this._register(toDisposable(() => this.clearTransientState()));
 		this._register(terminalProcesses.onConnectionState(() => this.terminalGeneration++));
@@ -160,24 +161,6 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 	}
 	public async navigate(sessionId: string, threadId: string): Promise<void> {
 		await this.navigation.openConversation(sessionId, threadId);
-	}
-	public listSections(): readonly SessionGroup[] {
-		return this.groups.groups;
-	}
-	public createSection(name: string, signal: AbortSignal): Promise<SessionGroup> {
-		return this.groups.create(name, signal);
-	}
-	public renameSection(sectionId: string, name: string, signal: AbortSignal): Promise<void> {
-		return this.groups.rename(sectionId, name, signal);
-	}
-	public deleteSection(sectionId: string, signal: AbortSignal): Promise<void> {
-		return this.groups.delete(sectionId, signal);
-	}
-	public moveSession(sessionId: string, sectionId: string | null, signal: AbortSignal): Promise<void> {
-		return this.groups.move(sessionId, sectionId, signal);
-	}
-	public reorderSection(sectionId: string, sessionIds: readonly string[], signal: AbortSignal): Promise<void> {
-		return this.groups.reorder(sectionId, sessionIds, signal);
 	}
 	public async checkUpdate(): Promise<UpdateCheckResult> {
 		if (!this.updates) throw new Error('Desktop updates are unavailable in this window');

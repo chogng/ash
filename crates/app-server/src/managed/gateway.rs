@@ -1349,6 +1349,35 @@ fn selected_execution_target(
         .map_err(|error| error.to_string())?;
         return Ok(selected);
     }
+    if method == Some("session/request")
+        && let Some(params) = params
+        && params["request"]["type"] == "changeDirectory"
+    {
+        let session_id = SessionId::new(
+            params["sessionId"]
+                .as_str()
+                .ok_or("Session ID is required")?,
+        )
+        .map_err(|error| error.to_string())?;
+        let session = registry
+            .local_session(&session_id)?
+            .ok_or("Local Session is unavailable")?;
+        if matches!(
+            session.execution_target,
+            Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. })
+        ) {
+            return Err("Changing directories requires a local Session".into());
+        }
+        let root = PathBuf::from(
+            params["request"]["root"]
+                .as_str()
+                .ok_or("Directory is required")?,
+        );
+        if !root.is_absolute() {
+            return Err("Directory must be absolute".into());
+        }
+        return Ok(Some(SessionExecutionTarget::Local { root }));
+    }
     // Import authority is bound to its source directory's Session, including the grant
     // issued while reviewing on that Session's execution runtime. Ignore unrelated
     // top-level identity fields that are not part of these methods' contracts.

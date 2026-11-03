@@ -506,6 +506,45 @@ async fn thread_recovery_repairs_links_after_the_source_repository_moves() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn one_thread_keeps_distinct_worktrees_for_folders_in_the_same_repository() {
+    let fixture = RepositoryFixture::new();
+    let nested = fixture.repository.join("switched-folder");
+    fs::create_dir(&nested).unwrap();
+    fs::write(nested.join("source.txt"), "new directory").unwrap();
+    let manager = fixture.manager();
+    let alternate = manager.for_session_directory("nested-source");
+    let owner = thread_owner("folder-switch");
+    let request = |source_directory, source_dir_id: &str| ManagedDirProvisionRequest {
+        source: ManagedDirSource::CurrentDirectory { source_directory },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: source_dir_id.into(),
+        owner: owner.clone(),
+    };
+    let first = manager
+        .provision(&request(fixture.repository.clone(), "original"))
+        .await
+        .unwrap();
+    fs::write(first.dir().join("README.md"), "keep old changes").unwrap();
+    let second = alternate
+        .provision(&request(nested, "nested-source"))
+        .await
+        .unwrap();
+    assert_ne!(first.managed_worktree_id(), second.managed_worktree_id());
+    assert_eq!(first.owner(), second.owner());
+    assert_eq!(
+        fs::read_to_string(first.dir().join("README.md")).unwrap(),
+        "keep old changes"
+    );
+    assert_eq!(
+        fs::read_to_string(second.dir().join("source.txt")).unwrap(),
+        "new directory"
+    );
+    assert_eq!(manager.recover_owner(&owner).await.unwrap(), first);
+    assert_eq!(alternate.recover_owner(&owner).await.unwrap(), second);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn named_provision_creates_the_requested_branch_only_in_the_new_worktree() {
     let fixture = RepositoryFixture::new();
     fs::write(fixture.repository.join("README.md"), "dirty source\n").unwrap();
@@ -538,6 +577,18 @@ async fn named_provision_creates_the_requested_branch_only_in_the_new_worktree()
         "dirty source\n"
     );
     assert_eq!(manager.provision(&request).await.unwrap(), binding);
+    let other_directory = ManagedDirProvisionRequest {
+        source_dir_id: "other-dir".into(),
+        ..request.clone()
+    };
+    assert!(
+        manager
+            .provision(&other_directory)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("different source directory")
+    );
     let renamed_retry = ManagedDirProvisionRequest {
         target: ManagedDirTarget::NewBranch {
             name: "ash/other".into(),
@@ -1006,6 +1057,26 @@ async fn non_git_threads_use_isolated_managed_directory_copies() {
     );
     assert!(!binding.dir().join(".git").exists());
     assert!(binding.repositories().is_empty());
+    let other = temporary.path().join("other-dir");
+    fs::create_dir(&other).unwrap();
+    fs::write(other.join("source.txt"), "different source\n").unwrap();
+    let wrong_source = ManagedDirProvisionRequest {
+        source: ManagedDirSource::CurrentDirectory {
+            source_directory: other,
+        },
+        target: ManagedDirTarget::SourceHead,
+        repository_targets: BTreeMap::new(),
+        source_dir_id: "other-dir".into(),
+        owner: thread_owner("plain-thread"),
+    };
+    assert!(
+        manager
+            .provision(&wrong_source)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("different source directory")
+    );
     fs::write(dir.join("source.txt"), "main dir changed\n").unwrap();
     assert_eq!(
         fs::read_to_string(binding.dir().join("source.txt")).unwrap(),

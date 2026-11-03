@@ -1,5 +1,4 @@
 import { applyAgentHostCompletionAction } from '../../../workbench/contrib/chat/browser/agentHostCompletionAction.js';
-import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
@@ -7,10 +6,6 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
-import type { SessionId, ThreadId } from '../../services/sessions/common/session.js';
-import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { getRecencyEntryKey } from '../../services/sessions/browser/sessionsRecencyHistory.js';
-import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
@@ -112,51 +107,3 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 		picker.show();
 	});
 }
-
-interface SessionsHistoryQuickPickItem extends IQuickPickItem {
-	readonly sessionId: SessionId;
-	readonly threadId: ThreadId;
-}
-
-export class ShowSessionsChatHistoryAction extends Action2 {
-	static readonly ID = 'sessions.chat.history';
-
-	constructor() {
-		super({ id: ShowSessionsChatHistoryAction.ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, 'Show Session History') });
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		const sessions = accessor.get(ISessionsManagementService);
-		const view = accessor.get(ISessionsService);
-		const quickPick = accessor.get(IQuickInputService).createQuickPick<SessionsHistoryQuickPickItem>();
-		const disposables = new DisposableStore();
-		disposables.add(quickPick);
-		quickPick.placeholder = 'Select a session';
-		const items = sessions.sessions.flatMap(session => {
-			if (session.status !== 'active') return [];
-			const threads = session.chats.filter(thread => thread.status === 'active');
-			return threads.map((thread, index) => ({
-				sessionId: session.sessionId,
-				threadId: thread.threadId,
-				label: session.title.trim() || 'Session',
-				description: [session.application?.label, threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
-				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
-			}));
-		});
-		const rank = new Map(view.recentSessions.map((entry, index) => [getRecencyEntryKey(entry), index]));
-		const getRank = (item: SessionsHistoryQuickPickItem) => rank.get(getRecencyEntryKey(item)) ?? Infinity;
-		quickPick.sortByLabel = false;
-		quickPick.items = items.sort((left, right) => getRank(left) - getRank(right));
-		disposables.add(quickPick.onDidAccept(() => {
-			const item = quickPick.selectedItems[0];
-			if (!item) return;
-
-			view.openSession(item.sessionId, item.threadId);
-			quickPick.hide();
-
-		}));
-		disposables.add(quickPick.onDidHide(() => disposables.dispose()));
-		quickPick.show();
-	}
-}
-registerAction2(ShowSessionsChatHistoryAction);

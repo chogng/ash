@@ -139,6 +139,13 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }): IAgentSessionService {
 	return {
+		canChangeDirectory: () => !remoteHost && connection.capabilities?.contracts.changeSessionDirectory?.version === 1,
+		async changeDirectory(params) {
+			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'changeDirectory', root: params.root,
+			})));
+			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
+		},
 		onDidChangeSession: Event.any((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/changed') {
 				listener.call(thisArgs, {
@@ -347,6 +354,15 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
 		canCreateSideChat: () => connection.capabilities?.contracts.sideChats?.version === 1,
+		canMoveThreadToSession: () => connection.capabilities?.contracts.moveThreadToSession?.version === 1,
+		moveThreadToSession: async params => {
+			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'moveThreadToSession', threadId: params.threadId, destinationSessionId: params.destinationSessionId,
+			})));
+			if (result.session.sessionId !== params.destinationSessionId || result.threadId !== params.threadId) {
+				throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
+			}
+		},
 		createSideChat: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
 				type: 'createSideChat', parentThreadId: params.threadId, sourceTurnId: params.sourceTurnId,

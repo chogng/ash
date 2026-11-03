@@ -16,8 +16,22 @@ import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-br
 import type { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { DialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
 import { validateNativeDialogOperation, validateOpenDialogResult, validateSaveDialogResult, validateMessageBoxResult } from '../../common/nativeHost.js';
+import { applicationBadgeIpcRoute } from '../../electron-main/applicationBadge.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('application badge IPC rejects invalid counts and oversized image dimensions', () => {
+	const counts: number[] = [];
+	const route = applicationBadgeIpcRoute(badge => counts.push(badge.count));
+	const header = Buffer.from('89504e470d0a1a0a0000000d494844520000002000000020080600000000000000', 'hex');
+	const image = () => 'data:image/png;base64,' + header.toString('base64');
+	route.invoke(route.validate({ count: 2, description: '2 sessions', iconDataURL: image() }));
+	header.writeUInt32BE(4096, 16);
+	assert.throws(() => route.validate({ count: 2, description: '2 sessions', iconDataURL: image() }), /dimensions/);
+	assert.throws(() => route.validate({ count: -1, description: '' }), /Invalid application badge/);
+	route.invoke(route.validate({ count: 0, description: '' }));
+	assert.deepEqual(counts, [2, 0]);
+});
 
 test('window frame reads use the creation value and reject renderer arguments', async () => {
 	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(route => route.channel === 'ash:native-host:get-title-bar-style')!;

@@ -278,6 +278,28 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
 	}
 
+	canChangeDirectory(): boolean {
+		return this.sessionApi.canChangeDirectory?.() === true;
+	}
+
+	async changeDirectory(sessionId: SessionId, root: string, commandId: string): Promise<void> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		await this.sessionApi.changeDirectory!({ sessionId, root, commandId });
+		this.assertCurrentConnection(generation, epoch);
+	}
+
+	canMoveChat(): boolean {
+		return this.rendererHost.thread.canMoveThreadToSession?.() === true;
+	}
+
+	async moveChat(sessionId: SessionId, threadId: ThreadId, destinationSessionId: SessionId, commandId: string): Promise<void> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		await this.rendererHost.thread.moveThreadToSession!({ sessionId, threadId, destinationSessionId, commandId });
+		this.assertCurrentConnection(generation, epoch);
+	}
+
 	async forkChat(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread> {
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
@@ -442,13 +464,15 @@ function connectionStatus(state: AppServerConnectionState): 'connecting' | 'conn
 
 function toSession(session: AgentSession, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
 	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry]));
+	const workspace = buildAgentHostSessionWorkspace(session.executionTarget);
+	const directoryChanged = previous?.workspace?.authorityId !== workspace?.authorityId || previous?.workspace?.root !== workspace?.root;
 	return {
 		application: getSessionApplication('ash'),
 		sessionId: session.sessionId,
 		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,
-		workspace: buildAgentHostSessionWorkspace(session.executionTarget),
+		workspace,
 		model: session.model,
 		management: { ...session.manager },
 		nextApprovalMode: previous?.nextApprovalMode ?? 'manual',
@@ -460,7 +484,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 				threadId: thread.threadId,
 				createdAt: thread.createdAtUnixMs === undefined ? undefined : new Date(thread.createdAtUnixMs),
 				updatedAt: thread.lastActivityAtUnixMs === undefined ? undefined : new Date(thread.lastActivityAtUnixMs),
-				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
+				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : directoryChanged ? undefined : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
 					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: 'root' as const },

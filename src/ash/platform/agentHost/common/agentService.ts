@@ -163,6 +163,8 @@ export interface IAgentSessionService {
 	/** Optional runtime capability; cancellation belongs to the originating connection. */
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
+	canChangeDirectory?(): boolean;
+	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string; }): Promise<void>;
 	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
 	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
 	readEnvironmentProfile?(environmentId: string): Promise<Readonly<Record<string, string>> | undefined>;
@@ -189,6 +191,8 @@ export interface IAgentThreadService {
 	createSideChat(params: Agent.SessionMutationParams & {
 		readonly threadId: string; readonly sourceTurnId: string; readonly title: string; readonly selection?: string;
 	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	canMoveThreadToSession?(): boolean;
+	moveThreadToSession?(params: Agent.SessionMutationParams & { readonly threadId: string; readonly destinationSessionId: string; }): Promise<void>;
 	fork(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly title: string;

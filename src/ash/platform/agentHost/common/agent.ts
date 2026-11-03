@@ -791,6 +791,8 @@ export type ThreadCommittedEvent =
 		| 'modelProvidersMigrated'
 		| 'threadArchived'
 		| 'threadRestored'
+		| 'threadMovedToSession'
+		| 'threadDirectoryChanged'
 		| 'goalCreated'
 		| 'goalUpdated'
 		| 'goalCleared'

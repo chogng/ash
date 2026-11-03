@@ -147,6 +147,31 @@ pub(super) fn write_binding(
     )
 }
 
+pub(super) fn move_binding(
+    connection: &Connection,
+    record: &ThreadBinding,
+    source: &ash_protocol::SessionId,
+) -> Result<(), ThreadStoreError> {
+    let mut previous = record.clone();
+    previous.session_id = source.clone();
+    if binding(connection, &record.thread_id)? != Some(previous) {
+        return Err(ThreadStoreError::InvalidBatch(
+            "Thread move does not match its current binding".into(),
+        ));
+    }
+    connection
+        .execute(
+            "UPDATE agent_threads SET session_id = ?1, binding_json = ?2 WHERE thread_id = ?3",
+            params![
+                record.session_id.as_str(),
+                serde_json::to_string(record).map_err(storage_error)?,
+                record.thread_id.as_str()
+            ],
+        )
+        .map_err(storage_error)?;
+    Ok(())
+}
+
 /// Installs already validated bindings, including schema migration of legacy history.
 pub(super) fn install_binding(
     connection: &Connection,

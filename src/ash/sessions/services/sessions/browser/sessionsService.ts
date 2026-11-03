@@ -28,6 +28,7 @@ export interface ISessionsService {
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	readonly recentSessions: readonly SessionRecencyEntry[];
+	getLastViewedAt(entry: SessionRecencyEntry): number | undefined;
 	initialize(): Promise<void>;
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
@@ -101,6 +102,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
+	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
 	get navigationRevision(): number { return this._navigationRevision; }
 	get visibleSelections(): readonly SessionsViewSelection[] { return this.slots.read().visibleSelections; }
 	get activeSelection(): SessionsViewSelection | undefined { return this.slots.read().activeSelection; }
@@ -199,6 +201,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const { index, wasActive, replacement } = removed;
 		const reference = referenceForSelection(selection);
 		if (reference.kind === 'session') {
+			if (wasActive && !this.customViews.activeCustomView.get()) this.recency.markViewed(reference);
 			this.closedItems.recordClosedItem(reference, index);
 		}
 		if (selection.kind === 'untitled') {
@@ -274,6 +277,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const reference = referenceForSelection(selection);
 		const previous = this.activeSelection;
 		const covered = this.customViews.activeCustomView.get() !== undefined;
+		if (!covered && previous?.kind === 'session' && selectionKey(previous) !== selectionKey(selection)) {
+			this.recency.markViewed({ sessionId: previous.active.session.sessionId, threadId: previous.active.threadId });
+		}
 		if (covered && intent === 'automatic' && this.customViews.activeCustomViewOpen.get()?.source === 'restore') {
 			// A restored view in an otherwise empty window covers the startup draft, rather than visiting it.
 			this.navigation.insertBeforeInitialVisit(reference, entry => entry.kind === 'customView');

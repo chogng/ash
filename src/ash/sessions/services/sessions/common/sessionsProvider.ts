@@ -50,6 +50,10 @@ export interface ISessionsProvider extends IDisposable {
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
 	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;
+	canMoveChat?(): boolean;
+	canChangeDirectory?(): boolean;
+	changeDirectory?(sessionId: SessionId, root: string, commandId: string): Promise<void>;
+	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId, commandId: string): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	deleteSession(session: ISession): Promise<void>;

@@ -439,6 +439,60 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return active;
 	}
 
+	canChangeDirectory(sessionId: SessionId): boolean {
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
+		const chat = session?.chats[0];
+		if (!session || session.source || session.status !== 'active' || session.chats.length !== 1 || chat?.threadId !== sessionId
+			|| chat.origin.type !== 'root' || chat.status !== 'active'
+			|| session.workspace && (session.workspace.authorityId !== 'local' || session.workspace.runtime)
+			|| chat.executionStatus === 'queued' || chat.executionStatus === 'running' || chat.executionStatus === 'waiting'
+			|| chat.management?.status === 'working' || chat.management?.status === 'needsInput') return false;
+		const provider = this.providers.getProvider(parseSessionIdentity(sessionId, this.defaultProviderId).providerId);
+		return !!provider?.changeDirectory && provider.canChangeDirectory?.() === true;
+	}
+
+	async changeDirectory(sessionId: SessionId, root: string): Promise<void> {
+		if (!this.canChangeDirectory(sessionId)) throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.directory.changeUnavailable' }, 'This session cannot change directories right now.'));
+		const provider = this.owner(sessionId);
+		await provider.changeDirectory!(parseSessionIdentity(sessionId, this.defaultProviderId).backendSessionId, root, createUuid());
+		this.assertCurrentProvider(provider);
+		await this.refresh();
+	}
+
+	getChatMoveDestinations(sessionId: SessionId, threadId: ThreadId): readonly ISession[] {
+		const source = this._sessions.find(session => session.sessionId === sessionId);
+		const thread = source?.chats.find(chat => chat.threadId === threadId);
+		if (!source || source.source || source.status !== 'active' || !thread || threadId === sessionId
+			|| !source.chats.some(chat => chat.threadId === sessionId && chat.status === 'active')
+			|| thread.status !== 'active' || thread.origin.type !== 'root'
+			|| thread.executionStatus === 'queued' || thread.executionStatus === 'running' || thread.executionStatus === 'waiting'
+			|| thread.management?.status === 'working' || thread.management?.status === 'needsInput'
+			|| source.chats.some(chat => chat.origin.type !== 'root' && chat.origin.parentThreadId === threadId)) return [];
+		const provider = this.providers.getProvider(parseSessionIdentity(sessionId, this.defaultProviderId).providerId);
+		if (!provider?.moveChat || !provider.canMoveChat?.()) return [];
+		// A conversation's managed worktree can differ from the Session's execution target.
+		const workspace = source.workspace;
+		if (workspace === undefined) return [];
+		return this._sessions.filter(session => session.sessionId !== sessionId && !session.source
+			&& session.status === 'active' && session.providerId === source.providerId
+			&& session.chats.some(chat => chat.threadId === session.sessionId && chat.status === 'active')
+			&& (workspace === null ? session.workspace === null : session.workspace?.root === workspace.root
+				&& session.workspace.authorityId === workspace.authorityId
+				&& session.workspace.runtime?.providerId === workspace.runtime?.providerId
+				&& session.workspace.runtime?.workspace === workspace.runtime?.workspace));
+	}
+
+	async moveChat(sessionId: SessionId, threadId: ThreadId, destination: SessionId): Promise<void> {
+		if (!this.getChatMoveDestinations(sessionId, threadId).some(session => session.sessionId === destination)) {
+			throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChatUnavailable' }, 'This conversation cannot be moved to that session.'));
+		}
+		const provider = this.owner(sessionId);
+		const identity = (id: string) => parseSessionIdentity(id, this.defaultProviderId).backendSessionId;
+		await provider.moveChat!(identity(sessionId), identity(threadId), identity(destination), createUuid());
+		this.assertCurrentProvider(provider);
+		await this.refresh();
+	}
+
 	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'archiving'); }
 	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'stopping'); }
 

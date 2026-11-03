@@ -1,13 +1,10 @@
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { captureSessionActionTarget } from '../../../../browser/sessionActionsService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
-import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
-
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -22,6 +19,9 @@ import { IProjectService } from '../../../../../platform/projects/common/project
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
+import { isRecord } from '../../../../../base/common/types.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 registerAction2(class CloseSessionAction extends Action2 {
 	constructor() {
@@ -39,26 +39,6 @@ registerAction2(class CloseSessionAction extends Action2 {
 		if (selection.kind === 'untitled') {
 			writeNewChatDraftState(accessor.get(IStorageService), undefined, `untitled:${selection.session.untitledSessionId}`, chatInputStatePersistence);
 		}
-	}
-});
-
-registerAction2(class ReopenLastClosedItemAction extends Action2 {
-	constructor() {
-		super({
-			id: 'sessions.reopenLastClosedItem',
-			title: localize2('reopenLastClosedItem', 'Reopen Closed Chat or Session'),
-			f1: true,
-			precondition: IsSessionsWindowContext.isEqualTo(true),
-			keybinding: {
-				weight: KeybindingWeight.SessionsContrib,
-				when: ContextKeyExpr.not('sessions.editorTool'),
-				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyT,
-			},
-		});
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ISessionsService).reopenLastClosedItem();
 	}
 });
 
@@ -122,6 +102,46 @@ registerAction2(class MoveSessionToGroupAction extends Action2 {
 			const session = await target.resolve();
 			await groups.move(session.sessionId, (await groups.create(name.trim())).sectionId);
 		} else await groups.move((await target.resolve()).sessionId, selected.id || null);
+	}
+});
+
+registerAction2(class ChangeSessionDirectoryAction extends Action2 {
+	constructor() { super({ id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (typeof argument !== 'string') return;
+		const sessions = accessor.get(ISessionsManagementService);
+		if (!sessions.canChangeDirectory?.(argument) || !sessions.changeDirectory) return;
+		const workspace = sessions.sessions.find(session => session.sessionId === argument)?.workspace;
+		const dialogs = accessor.get(IFileDialogService);
+		const [folder] = await dialogs.showOpenDialog({
+			title: localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…'),
+			canSelectFolders: true, canSelectFiles: false, canSelectMany: false, availableFileSystems: ['file'],
+			defaultUri: workspace ? URI.file(workspace.root) : undefined,
+		}) ?? [];
+		if (folder?.scheme === 'file') await sessions.changeDirectory(argument, folder.fsPath);
+	}
+});
+
+registerAction2(class MoveChatToSessionAction extends Action2 {
+	constructor() { super({ id: 'agentSession.moveChatToSession', title: localize2({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;
+		const { sessionId, threadId } = argument;
+		const sessions = accessor.get(ISessionsManagementService);
+		const view = accessor.get(ISessionsService);
+		const input = accessor.get(IQuickInputService);
+		const destinations = sessions.getChatMoveDestinations?.(sessionId, threadId);
+		if (!destinations?.length || !sessions.moveChat) return;
+		const selected = await pickSessionDestination(input, localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
+			destinations.map(session => ({ label: session.title, id: session.sessionId, description: session.workspace?.root })));
+		if (!selected) return;
+		const active = view.activeSelection;
+		const follow = active?.kind === 'session' && active.active.session.sessionId === sessionId && active.active.threadId === threadId;
+		const revision = view.navigationRevision;
+		await sessions.moveChat(sessionId, threadId, selected.id);
+		if (follow && revision === view.navigationRevision) await view.openThread(selected.id, threadId);
 	}
 });
 

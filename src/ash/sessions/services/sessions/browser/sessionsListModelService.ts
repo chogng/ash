@@ -1,4 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { readStoredOrder, resolveSectionOrder, storeReorderedIds } from './sessionSectionOrderService.js';
@@ -6,6 +7,16 @@ import type { ISession } from '../common/session.js';
 
 export type SessionSortMode = 'created' | 'updated';
 export type AutomationSessionsListMode = 'always' | 'afterReply' | 'never';
+export type SessionsListMode = 'chat' | 'code';
+export interface ISessionsListTreeNode {
+	readonly id: string;
+	readonly label: string;
+	readonly kind: 'section' | 'session' | 'chat' | 'draft' | 'project';
+	readonly collapsed?: boolean;
+	readonly sessionId?: string;
+	readonly threadId?: string;
+	readonly children?: readonly ISessionsListTreeNode[];
+}
 
 export interface ISessionsListModelService {
 	readonly onDidChange: Event<void>;
@@ -22,6 +33,8 @@ export interface ISessionsListModelService {
 	isSessionPinned(session: ISession): boolean;
 	pinSession(session: ISession): void;
 	unpinSession(session: ISession): void;
+	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
+	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
 
 export const ISessionsListModelService = createServiceIdentifier<ISessionsListModelService>('sessionsListModelService');
@@ -36,6 +49,18 @@ const pinnedSessionPrefix = 'sessions.list.pinned.';
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
 	readonly onDidChange: Event<void>;
+	private readonly trees = new Map<SessionsListMode, () => readonly ISessionsListTreeNode[]>();
+
+	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable {
+		this.trees.set(mode, read);
+		return toDisposable(() => {
+			if (this.trees.get(mode) === read) this.trees.delete(mode);
+		});
+	}
+
+	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined {
+		return this.trees.get(mode)?.();
+	}
 
 	constructor(@IStorageService private readonly storage: IStorageService) {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
