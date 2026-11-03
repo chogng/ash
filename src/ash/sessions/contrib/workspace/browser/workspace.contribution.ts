@@ -1,3 +1,5 @@
+import { BrowserDialogHandler } from '../../../../workbench/browser/parts/dialogs/dialog.js';
+import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -23,7 +25,7 @@ import {
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, type DirectoryPermissionRequest, type IDirectoryPermissionRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import {
 	AppServerRecoveryAvailableContext,
@@ -32,6 +34,41 @@ import {
 import { MANAGE_TRUST_COMMAND_ID } from '../../../../workbench/contrib/workspace/common/workspace.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+
+export function createSessionFolderTrustRequestService(
+	container: HTMLElement,
+	showPrompt: (load: () => Promise<DialogRequest>, handler: IDialogHandler, signal?: AbortSignal) => Promise<IDialogOutcome>,
+): IDirectoryPermissionRequestService & {
+	confirmFolderTrust(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean>;
+} {
+	const handler = new BrowserDialogHandler(container, {
+		messageAsTitle: true,
+		extraClasses: ['ash-sessions-directory-permission-dialog'],
+		disableCloseButton: true,
+		disableDefaultAction: true,
+		focusCancelButton: true,
+		buttonOptions: [undefined, { presentation: 'quiet' }],
+	});
+	const confirmFolderTrust = async (request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean> => {
+		const location = request.remoteHostLabel
+			? localize('sessions.workspace.remoteTrustLocation', 'Folder on {0}: {1}', request.remoteHostLabel, request.path)
+			: localize('sessions.workspace.trustLocation', 'Folder: {0}', request.path);
+		const outcome = await showPrompt(async () => ({
+			kind: 'confirmation',
+			message: localize('sessions.workspace.trustQuestion', 'Trust this folder for Agents?'),
+			detail: location + '\n\n' + localize('sessions.workspace.trustDetail', 'Trust allows Agents to read and edit files, run commands, and load project instructions and integrations in this folder.'),
+			primaryButton: localize('sessions.workspace.trustAndOpen', 'Trust and Open'),
+		}), handler, signal);
+		return outcome.button === DialogResult.Primary;
+	};
+	return {
+		requiresDevelopmentTrust: true,
+		confirmFolderTrust,
+		async requestDirectoryPermissions(request, signal) {
+			return await confirmFolderTrust(request, signal) ? 'development' : 'cancel';
+		},
+	};
+}
 
 const connectionRecoveryState = new RawContextKey<IAppServerConnectionRecovery['status']>(
 	'sessions.connectionRecoveryState',

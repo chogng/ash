@@ -19,7 +19,7 @@ import { SessionConversationLinks } from './agentHost/sessionConversationLinks.j
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
-import { sessionWorkspaceUri } from '../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../common/sessionWorkspace.js';
 import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports } from './agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from './agentHost/sessionsChatService.js';
 import { SessionsLanguageModelsService } from './agentHost/sessionsLanguageModelsService.js';
@@ -364,6 +364,7 @@ export interface IWorkbenchOptions {
 	readonly api: IWorkbenchHost;
 	readonly workspaceSelection: () => SessionWorkspaceSelection;
 	readonly workspace: () => IWorkspace;
+	readonly initialWorkspaceReady?: Promise<void>;
 	readonly browserFileSystemProvider?: IFileSystemProvider;
 	/** Host-owned extension execution; embedders can supply a disconnected implementation. */
 	readonly extensionHost?: IExtensionHostApi;
@@ -531,8 +532,15 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(IAppServerSkillApi, options.api.skills);
 		primaryHostServices.registerSingleton(IPromptsService, () => primaryHostServices.createInstance(PromptsService));
+		if (!serviceCollection.has(ISessionFolderAuthorizationService)) {
+			services.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+		}
+		const folderAuthorization = services.get(ISessionFolderAuthorizationService);
 		const provider = this._register(primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
+			authorizeWorkspace: (target, signal) => folderAuthorization.authorize(
+				target.root, signal, target.type === 'ssh' ? { api: options.api, label: target.host }
+				: target.type === 'remote' ? { api: options.api, label: target.authority } : undefined),
 			selectWorkspace: async folders => {
 				using selection = services.createInstance(WorkspacePicker, {});
 				return await selection.pick(folders);
@@ -1126,7 +1134,8 @@ export abstract class Workbench extends Disposable {
 		this.lifecycleService.phase = LifecyclePhase.Ready;
 		// Configuration initialization above owns its first load and reports unavailable workspace settings.
 		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
-		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady]).then(async () => {
+		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady, options.initialWorkspaceReady]).then(async () => {
+			if (!this.isDisposed && options.initialWorkspaceReady) workspace.updateWorkspace(options.workspace());
 			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts);
 			if (this.isDisposed) return;
 			using suppression = entryLayout.suppressEditorAutoVisibility();

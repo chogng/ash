@@ -75,6 +75,8 @@ import { ChatConfiguration } from '../../../workbench/contrib/chat/common/consta
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
@@ -363,6 +365,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	paneServices.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 

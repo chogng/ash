@@ -175,7 +175,8 @@
 
 /* Scope the palette to buttons so other uses of the accent keep their own colors.
  * Explicit widget styles and page-owned presentations can still override it. */
-.ash-sessions-window .ash-button {
+.ash-sessions-window .ash-button,
+.ash-sessions-directory-permission-dialog .ash-button {
 	--ash-button-primaryForeground: var(--ash-editor-background);
 	--ash-button-primaryBackground: var(--ash-foreground);
 	--ash-button-primaryHoverBackground: color-mix(
@@ -253,4 +254,40 @@
 	.ash-button-primary:focus-visible {
 	/* The HC focus color matches the fill; separate the ring from that fill. */
 	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-sessions-directory-permission-dialog {
+	inline-size: min(36rem, calc(100vw - var(--ash-spacing-size320)));
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-sessions-directory-permission-dialog
+	> :is(.ash-dialog-header, .ash-dialog-body) {
+	padding-inline: var(--ash-spacing-size240);
+}
+
+.ash-sessions-directory-permission-dialog > .ash-dialog-header {
+	padding-block-start: var(--ash-spacing-size240);
+}
+
+.ash-sessions-directory-permission-dialog > .ash-dialog-body {
+	padding-block-end: var(--ash-spacing-size240);
+}
+
+.ash-sessions-directory-permission-dialog .ash-dialog-actions {
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	padding-block-start: var(--ash-spacing-size200);
+}
+
+.ash-sessions-directory-permission-dialog .ash-dialog-actions .ash-button {
+	min-inline-size: 0;
+	padding-inline: var(--ash-spacing-size120);
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-directory-permission-dialog
+	.ash-dialog-actions
+	.ash-button-quiet {
+	margin-inline-end: auto;
 }

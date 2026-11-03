@@ -11,6 +11,7 @@ import { ASH_REMOTE_SCHEME, getRemoteWorkspacePath, isRemoteResource } from '../
 import { IWorkspaceContextService, getWorkspaceRemoteAuthority } from '../../../../platform/workspace/common/workspace.js';
 import {
 	DEVELOPMENT_DIR_PERMISSIONS,
+	hasDevelopmentPermissions,
 	IWorkspaceTrustApi,
 	IWorkspaceTrustManagementService,
 	IWorkspaceTrustRequestService,
@@ -242,10 +243,6 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 	private current(generation: number): boolean {
 		return !this.isDisposed && generation === this.generation;
 	}
-}
-
-function hasDevelopmentPermissions(allowed: readonly WorkspaceTrustPermission[] | undefined): boolean {
-	return allowed !== undefined && DEVELOPMENT_DIR_PERMISSIONS.every(permission => allowed.includes(permission));
 }
 
 /** One pending decision per workspace; UI listeners present it without owning its completion. */

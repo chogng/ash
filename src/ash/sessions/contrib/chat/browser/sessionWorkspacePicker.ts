@@ -33,7 +33,7 @@ import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegat
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
 import { buildAgentHostSessionWorkspace, selectionFromResource, selectionFromWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession, SessionExecutionTarget } from '../../../services/sessions/common/session.js';
@@ -96,6 +96,7 @@ export class SessionWorkspacePicker extends Disposable {
 		@IActionWidgetService actionWidget: IActionWidgetService,
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 		@ILocalGitService private readonly git: ILocalGitService,
+		@ISessionFolderAuthorizationService private readonly folderAuthorization: ISessionFolderAuthorizationService,
 	) {
 		super();
 		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
@@ -227,16 +228,14 @@ export class SessionWorkspacePicker extends Disposable {
 					: item.mode === 'folder' || item.mode === 'browse' ? Lxicon.folder : undefined,
 			run: async () => {
 				if (!isCurrent()) return;
-				if (item.mode === 'browse' || item.mode === 'clone') {
-					await this.selectWorkspace(draft, item.mode, source);
+				if (item.mode === 'browse' || item.mode === 'clone' || item.mode === 'folder' || item.mode === 'worktree') {
+					await this.selectWorkspace(draft, item.mode, item.target ?? source);
 				} else {
-					const current = this.draft!;
 					this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, item.target ?? source ?? draft.workspace, {
-						devContainer: item.mode === 'container' || item.mode === 'worktree' && current.devContainer,
-						branchName: item.mode === 'worktree' ? current.branchName : undefined,
+						devContainer: item.mode === 'container',
+						branchName: undefined,
 					});
 					status(item.label);
-					if (item.mode === 'folder' && item.target) { await this.recordRecentFolder(draft.providerId, item.target); }
 				}
 			},
 		});
@@ -391,11 +390,13 @@ export class SessionWorkspacePicker extends Disposable {
 		});
 	}
 
-	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone', source: SessionExecutionTarget | undefined): Promise<void> {
+	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone' | 'folder' | 'worktree', source: SessionExecutionTarget | undefined): Promise<void> {
 		const lifetime = new DisposableStore();
 		this.pending.value = lifetime;
 		this.pendingDraftId = draft.untitledSessionId;
 		const cancellation = new CancellationTokenSource();
+		const authorization = new AbortController();
+		lifetime.add(toDisposable(() => authorization.abort()));
 		lifetime.add(toDisposable(() => cancellation.dispose(true)));
 		lifetime.add(toDisposable(() => {
 			this.pendingDraftId = undefined;
@@ -420,7 +421,7 @@ export class SessionWorkspacePicker extends Disposable {
 				}))?.[0];
 				if (!parent || parent.scheme !== 'file' || parent.authority || cancellation.token.isCancellationRequested) { return; }
 				target = selectionFromResource(await cloneRepository(this.git, url.trim(), parent, name, cancellation.token));
-			} else {
+			} else if (mode === 'browse') {
 				if (source && source.type !== 'local') {
 					const root = await this.quickInput.input({
 						title: localize('sessions.workspace.browseTitle', 'Choose a conversation folder'),
@@ -442,16 +443,22 @@ export class SessionWorkspacePicker extends Disposable {
 				}
 			}
 			// Native dialogs may outlive their composer; a late result must not change another draft.
-			if (target && !cancellation.token.isCancellationRequested && this.draft?.untitledSessionId === draft.untitledSessionId
-				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId && this.model.inputState.phase !== 'submitting') {
-				this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, target, { branchName: undefined });
-				status(localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
-				await this.recordRecentFolder(draft.providerId, target);
-			}
+			const isCurrent = () => !authorization.signal.aborted && this.draft?.untitledSessionId === draft.untitledSessionId
+				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId && this.model.inputState.phase !== 'submitting';
+			if (!target || !isCurrent()) { return; }
+			const provider = draft.providerId && this.providers.getProvider(draft.providerId) as IAgentHostSessionsProvider | undefined;
+			const accepted = provider && provider.authorizeWorkspace
+				? await provider.authorizeWorkspace(target, authorization.signal)
+				: target.type !== 'local' || await this.folderAuthorization.authorize(target.root, authorization.signal);
+			if (!accepted || !isCurrent()) { return; }
+			this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, target, mode === 'worktree'
+				? { devContainer: this.draft?.devContainer, branchName: this.draft?.branchName } : { branchName: undefined });
+			status(localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
+			if (mode !== 'worktree') await this.recordRecentFolder(draft.providerId, target);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested && !isCancellationError(error)) { this.notifications.error(getErrorMessage(error)); }
 		} finally {
-			lifetime.dispose();
+			if (this.pending.value === lifetime) { this.pending.clear(); }
 		}
 	}
 

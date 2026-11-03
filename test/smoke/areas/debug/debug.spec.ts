@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import type { Locator } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
@@ -260,7 +261,7 @@ test('debugging routes colliding adapter IDs to their own workspace folders', { 
 	}, workspaceFile);
 	const page = await opened;
 	for (const { directory } of folders) {
-		const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
+		const prompt = directoryPermissionPrompt(page);
 		await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
 		await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 	}

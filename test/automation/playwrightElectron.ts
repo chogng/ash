@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from './dialogs.js';
 import { execFile, type ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
 import { DisposableStore, toDisposable } from '../../src/ash/base/common/lifecycle.js';
@@ -218,9 +219,10 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		);
 		const ready = driver.workbench.waitForReady();
 		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
-			const prompt = page.getByRole('dialog', { name: 'Ash' });
+			const prompt = directoryPermissionPrompt(page);
 			await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 			if (await prompt.isVisible()) {
+				await page.locator('.ash-workbench').waitFor({ state: 'visible' });
 				await prompt.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|信任文件夹)$/u }).click();
 				onMilestone?.('trust-accepted');
 			}

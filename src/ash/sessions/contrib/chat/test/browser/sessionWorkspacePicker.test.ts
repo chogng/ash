@@ -21,18 +21,21 @@ import { IQuickInputService, type IInputOptions } from '../../../../../platform/
 import { IWorkspacesService, type IRecent } from '../../../../../platform/workspaces/common/workspaces.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ISessionFolderAuthorizationService } from '../../../../common/sessionWorkspace.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
+import { getSessionsChatAccessibilityHelp } from '../../browser/sessionsChatAccessibilityHelp.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(ISessionFolderAuthorizationService, { authorize });
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
 	const changed = lifetime.add(new Emitter<void>());
 	const updated = lifetime.add(new Emitter<void>());
@@ -133,10 +136,22 @@ test('Workspace picker hides when the composer moves from a draft to a session',
 	assert.equal(f.button.disabled, true);
 });
 
+test('A declined worktree grant leaves the draft on its original folder', async () => {
+	const requested: string[] = [];
+	using f = fixture(undefined, [], [], undefined, undefined, undefined, async path => {
+		requested.push(path);
+		return false;
+	});
+	await f.open();
+	await f.choose('review');
+	assert.deepEqual(requested, ['/checkouts/review']);
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
+});
+
 test('Workspace picks an existing worktree for only its owning independent conversation', async () => {
 	using f = fixture();
 	await f.open();
-	f.choose('review');
+	await f.choose('review');
 	assert.equal(f.drafts[0]?.workspace.type, 'local');
 	assert.equal((f.drafts[0]?.workspace as SessionExecutionTarget).root, '/checkouts/review');
 	assert.equal((f.drafts[1]?.workspace as SessionExecutionTarget).root, URI.file('/project').fsPath);
@@ -182,7 +197,7 @@ test('Branches and the worktree toggle form the last group', async () => {
 	assert.equal(toggle?.group?.icon?.id, 'worktree');
 	assert.equal(toggle?.standaloneToggle?.label, 'New worktree');
 	assert.equal(toggle?.standaloneToggle?.checked, false);
-	f.choose('Recent project');
+	await f.choose('Recent project');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/recent').fsPath });
 });
 
@@ -202,7 +217,7 @@ test('Workspace rows show the folder name and use the full path for hover and ac
 		assert.equal(row.tooltip, uri.fsPath);
 		assert.equal(row.detail, uri.fsPath);
 	}
-	f.choose('project');
+	await f.choose('project');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: project.fsPath });
 });
 
@@ -269,7 +284,7 @@ test('Workspace includes recent active Session folders from the draft host after
 	]);
 	await f.open();
 	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('')), ['Recent project', 'latest', 'earlier']);
-	f.choose('latest');
+	await f.choose('latest');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/latest').fsPath });
 });
 
@@ -323,6 +338,28 @@ test('Browsing a local folder changes only the owning conversation without chang
 	assert.equal(f.labels[0], 'another');
 });
 
+test('Local folder selection waits for permission before changing the draft or recents', async () => {
+	for (const accept of [false, true]) {
+		const target = URI.file('/new-project');
+		const requested = new DeferredPromise<string>();
+		const answer = new DeferredPromise<boolean>();
+		using f = fixture(undefined, [], [], undefined, undefined, undefined, async path => {
+			await requested.complete(path);
+			return answer.p;
+		});
+		await f.open();
+		const selection = f.choose(accept ? 'Open Folder…' : 'Recent project');
+		if (accept) { await f.dialog.complete([target]); }
+		assert.equal(await requested.p, accept ? target.fsPath : URI.file('/recent').fsPath);
+		assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/project').fsPath });
+		assert.equal(f.history.length, 1);
+		await answer.complete(accept);
+		await selection;
+		assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: accept ? target.fsPath : URI.file('/project').fsPath });
+		assert.equal(f.history.length, accept ? 2 : 1);
+	}
+});
+
 test('Browsing a remote conversation preserves its host instead of opening a local native dialog', async () => {
 	using f = fixture({ type: 'ssh', host: 'build', root: '/source' });
 	await f.open();
@@ -339,6 +376,7 @@ test('Workspace cancellation keeps the draft and the Chinese picker exposes tran
 	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'));
 	setNlsMessages('zh-CN', translations);
 	try {
+		assert.match(getSessionsChatAccessibilityHelp(), /选择尚未完全信任的本地文件夹时会打开信任对话框/);
 		using f = fixture();
 		await f.open();
 		assert.ok(f.labels.includes('克隆仓库…'));

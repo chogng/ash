@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -30,7 +31,7 @@ focusTest('a second instance opens an independent Workbench and reuses an existi
 		await emitSecondInstance(application, secondWorkspace.directory);
 		secondPage = await secondPagePromise;
 		if (target.appServerMode === 'required') {
-			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
+			await directoryPermissionPrompt(secondPage).getByRole('button', { name: 'Trust Folder' }).click();
 		}
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
@@ -107,7 +108,7 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		await emitSecondInstance(application, secondWorkspace.directory);
 		secondPage = await secondPagePromise;
 		if (target.appServerMode === 'required') {
-			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
+			await directoryPermissionPrompt(secondPage).getByRole('button', { name: 'Trust Folder' }).click();
 		}
 		await new Workbench(secondPage).waitForReady();
 
@@ -155,7 +156,7 @@ test('dirty editor content survives an immediate Electron window close', { tag: 
 		const opened = application.waitForEvent('window');
 		await emitSecondInstance(application, workspace.directory);
 		secondPage = await opened;
-		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
+		await directoryPermissionPrompt(secondPage).getByRole('button', { name: 'Trust Folder' }).click();
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
 		await secondPage.bringToFront();

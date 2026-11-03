@@ -28,6 +28,7 @@ export interface AppServerSessionsProviderHost {
 	readonly id?: string;
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
+	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal) => Promise<boolean>;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
@@ -256,6 +257,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return sources.some(source => buildAgentHostSessionWorkspace(source)?.authorityId === authority);
 	}
 
+	public async authorizeWorkspace(target: SessionExecutionTarget, signal: AbortSignal): Promise<boolean> {
+		if (!this.host.authorizeWorkspace || target.type === 'provider') return true;
+		const source = buildAgentHostSessionWorkspace(target);
+		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal);
+	}
+
 	public isDevContainerWorkspaceAvailable(workspaceUri: URI, token = CancellationToken.None): Promise<boolean> {
 		if (!this.ownsSourceAuthority(workspaceUri.scheme === 'file' ? 'local' : workspaceUri.authority)) return Promise.resolve(false);
 		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
@@ -284,6 +291,14 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
 		const token = options?.token ?? CancellationToken.None;
+		if (this.host.authorizeWorkspace) {
+			const authorization = new AbortController();
+			using cancellation = token.onCancellationRequested(() => authorization.abort());
+			if (token.isCancellationRequested) throw canceled();
+			for (const target of [...(executionTarget ? [executionTarget] : []), ...options?.additionalFolders ?? []]) {
+				if (!await this.authorizeWorkspace(target, authorization.signal)) throw canceled();
+			}
+		}
 		if (options?.devContainer) {
 			const source = executionTarget && buildAgentHostSessionWorkspace(executionTarget);
 			if (!executionTarget || executionTarget.type === 'provider' || !source || !this.ownsSourceAuthority(source.authorityId)) {

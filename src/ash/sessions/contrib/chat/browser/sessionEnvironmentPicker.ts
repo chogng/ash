@@ -1,3 +1,4 @@
+import type { IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
 import { trackChatInputPickerFocus } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPickerActionItem.js';
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { parseSessionEnvironment } from '../../../services/sessions/common/sessionEnvironment.js';
@@ -37,6 +38,7 @@ export class SessionEnvironmentPicker extends Disposable {
 	private readonly newEnvironment = this._register(new MutableDisposable<NewEnvironmentDialog>());
 	private readonly dropdown: ActionWidgetDropdown;
 	private readonly connecting = this._register(new MutableDisposable());
+	private readonly folderAuthorization = this._register(new MutableDisposable());
 	private readonly host: HTMLElement;
 	private visible = true;
 
@@ -99,6 +101,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		this.visible = visible;
 		if (!visible) {
 			this.connecting.clear();
+			this.folderAuthorization.clear();
 			this.dropdown.element.removeAttribute('aria-busy');
 		}
 		this.update();
@@ -271,8 +274,24 @@ export class SessionEnvironmentPicker extends Disposable {
 	private async applyEnvironment(draft: IUntitledChatSession, providerId: string, environment: SessionEnvironmentSelection): Promise<void> {
 		if (!this.isCurrent(draft)) return;
 		await this.persistDraft();
-		if (!this.isCurrent(draft) || !this.providers.getProvider(providerId)) return;
+		const provider = this.providers.getProvider(providerId) as IAgentHostSessionsProvider | undefined;
+		if (!this.isCurrent(draft) || !provider || !await this.authorizeFolders(provider, environment.folders)) return;
+		if (!this.isCurrent(draft) || this.providers.getProvider(providerId) !== provider) return;
 		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, environment.folders[0], { providerId, environment });
+	}
+
+	private async authorizeFolders(provider: IAgentHostSessionsProvider, folders: readonly SessionExecutionTarget[]): Promise<boolean> {
+		if (!provider.authorizeWorkspace) return true;
+		const controller = new AbortController();
+		const operation = this.folderAuthorization.value = toDisposable(() => controller.abort());
+		try {
+			for (const target of folders) {
+				if (!await provider.authorizeWorkspace(target, controller.signal) || controller.signal.aborted) return false;
+			}
+			return true;
+		} finally {
+			if (this.folderAuthorization.value === operation) this.folderAuthorization.clear();
+		}
 	}
 
 	private async showNewEnvironment(draft: IUntitledChatSession, distros: readonly string[], saved: readonly RemoteConnectionDefinition[]): Promise<void> {
@@ -385,6 +404,10 @@ export class SessionEnvironmentPicker extends Disposable {
 		if ((provider.id === draft.providerId && !draft.environment) || !this.isCurrent(draft)) return;
 		await this.persistDraft();
 		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider || provider.connectionStatus?.get() === 'disconnected') return;
+		const workspace = provider.currentWorkspace();
+		const folders = workspace.type === 'current' ? [] : workspace.type === 'multiple' ? workspace.folders.map(folder => folder.target) : [workspace];
+		if (!await this.authorizeFolders(provider as IAgentHostSessionsProvider, folders)) return;
+		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider) return;
 		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, undefined, { providerId: provider.id, clearEnvironment: true });
 	}
 

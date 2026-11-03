@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { _electron, type ElectronApplication } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -49,7 +50,7 @@ for (const reloadBackend of [false, true]) test(`development extension manifests
 		const page = await application.firstWindow();
 		const workbench = new Workbench(page);
 		const ready = workbench.waitForReady();
-		const trust = page.getByRole('dialog', { name: 'Ash' });
+		const trust = directoryPermissionPrompt(page);
 		await Promise.race([ready, trust.waitFor({ state: 'visible' })]);
 		if (await trust.isVisible()) await trust.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		await ready;

@@ -1,3 +1,6 @@
+import type { SessionExecutionTarget } from '../../../../services/sessions/common/session.js';
+import { hasDevelopmentPermissions } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { ISessionFolderAuthorizationService } from '../../../../common/sessionWorkspace.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Action } from '../../../../../base/common/actions.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
@@ -71,11 +74,21 @@ export class RemoteAgentHostContribution extends Disposable {
 		const root = info.directory!.uri;
 		// This contribution is the scope owner. Its providers borrow only this connection's domains.
 		const services = createAgentHostSessionScope(this.instantiation, api, resources);
+		const folderAuthorization = services.getOptional(ISessionFolderAuthorizationService);
 		const provider = resources.add(services.createInstance(RemoteAgentHostSessionsProvider, {
 			id: remoteAgentHostProviderId(info), label: connection.name,
 			root, directory: info.directory!,
 			workspace: () => isSSHAgentHost(connection) ? { type: 'ssh', host: connection.host, root: connection.workspace } : { type: 'remote', authority: root.authority, root: connection.workspace },
 			selectWorkspace: async () => undefined,
+			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal) => {
+				const directory = info.directory!.target;
+				if (!isSSHAgentHost(connection) && connection.type === 'tunnel') {
+					// A tunnel borrows its published root grant and cannot widen permissions on the remote host.
+					return directory.type === 'environment' && target.root === connection.workspace
+						&& hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(directory.dirId));
+				}
+				return folderAuthorization.authorize(target.root, signal, { api, label: connection.name });
+			}),
 		}));
 		resources.add(this.providers.registerProvider(provider));
 		void this.checkWindowsSandbox(info, resources);

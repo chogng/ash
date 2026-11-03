@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -37,7 +38,7 @@ test('repeated folder opens wait for the permission choice past 30 seconds', { t
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder).then(() => undefined, error => String(error));
-	const prompt = page.getByRole('dialog', { name: 'Ash' });
+	const prompt = directoryPermissionPrompt(page);
 	await expect(prompt).toBeVisible();
 	const repeatedOpening = page.evaluate(folder => {
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
@@ -67,7 +68,7 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, value: unknown): Promise<void>; }; }; }).ash.ipcRenderer;
 		return ipc.invoke('ash:native-host:open-workspace', folder);
 	}, nextFolder);
-	const prompt = page.getByRole('dialog', { name: 'Ash' });
+	const prompt = directoryPermissionPrompt(page);
 	await expect(prompt).toBeVisible();
 	await prompt.getByRole('button', { name: 'Open in Restricted Mode' }).click();
 	await opening;

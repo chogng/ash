@@ -12,7 +12,7 @@ import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { ILogService } from '../../log/common/log.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../remote/common/remote.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL, REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../remote/common/remoteConnectionIpc.js';
-import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
+import { hasDevelopmentPermissions, type IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
 import { agentHostConnectionAddress } from '../common/agentHostConnectionsService.js';
 import type { IAgentConnection } from '../common/agentService.js';
@@ -22,6 +22,7 @@ import { LocalAgentHostServiceClient } from './localAgentHostService.js';
 
 interface RemoteAgentHostOptions {
 	readonly browser: boolean;
+	readonly requiresDevelopmentTrust?: boolean;
 	readonly onDidSuspendOS: (listener: () => void) => DisposableHandle;
 	readonly onDidResumeOS: (listener: () => void) => DisposableHandle;
 	readonly createApi: (lease: LocalAgentHostServiceClient, target: RemoteAgentHostConnection, resources: DisposableStore, id: string) => IAgentConnection;
@@ -199,6 +200,11 @@ export class RemoteAgentHostService extends Disposable implements IRemoteAgentHo
 				}
 				// A Tunnel uses the Web session's existing grant, never Desktop host privileges.
 				const directory = await api.fs.resolvePath(root);
+				if (this.options.requiresDevelopmentTrust
+					&& (directory.target.type !== 'environment'
+						|| !hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(directory.target.dirId)))) {
+					throw new CancellationError();
+				}
 				if (directory.uri.toString() !== root.toString()) throw new Error(localize('agentHost.rootChanged', 'The host returned a different workspace directory.'));
 				scope.directory = directory;
 			};

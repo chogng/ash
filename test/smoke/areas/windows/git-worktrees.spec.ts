@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -62,7 +63,7 @@ test('Changes title open worktree menu switches to the resolved workspace on bot
 	await picker.getByRole('combobox').fill(checkout);
 	await picker.getByRole('combobox').press('Enter');
 	if (target.kind === 'electron') {
-		const permission = page.getByRole('dialog', { name: 'Ash', exact: true });
+		const permission = directoryPermissionPrompt(page);
 		await expect(permission).toBeVisible();
 		await permission.getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 		await expect.poll(async () => {

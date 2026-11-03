@@ -138,3 +138,17 @@
 .ash-dialog[data-dialog-severity="error"] {
 	border-top-color: var(--ash-error-foreground);
 }
+
+.ash-dialog-action-with-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	min-inline-size: 0;
+}
+
+.ash-dialog-button-detail {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	text-align: center;
+	overflow-wrap: anywhere;
+}

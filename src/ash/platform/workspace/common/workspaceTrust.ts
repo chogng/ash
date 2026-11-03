@@ -70,6 +70,11 @@ export const DEVELOPMENT_DIR_PERMISSIONS: readonly WorkspaceTrustPermission[] = 
 	'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'mutateRepository',
 ]);
 
+/** Full trust is an effective grant for every development capability. */
+export function hasDevelopmentPermissions(allowed: readonly WorkspaceTrustPermission[] | undefined): boolean {
+	return allowed !== undefined && DEVELOPMENT_DIR_PERMISSIONS.every(permission => allowed.includes(permission));
+}
+
 /** Frontend view of the current workspace's effective directory permissions. */
 export interface IWorkspaceTrustInfo {
 	readonly isTrusted: boolean;
@@ -111,6 +116,7 @@ export interface DirectoryPermissionRequest {
 }
 
 export interface IDirectoryPermissionRequestService {
+	readonly requiresDevelopmentTrust?: boolean;
 	requestDirectoryPermissions(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
 }
 

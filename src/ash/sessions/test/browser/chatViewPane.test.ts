@@ -1,6 +1,8 @@
 import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
@@ -184,6 +186,7 @@ function createInputServices(
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	services.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
@@ -1212,6 +1215,7 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		fixture.services.registerInstance(ISessionContext, fixture.model);
+		fixture.services.registerInstance(ILayoutService, { activeContainer: document.body } as ILayoutService);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
@@ -1530,6 +1534,8 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	editorServices.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+	editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },

@@ -192,6 +192,34 @@ suite('workspace trust during directory opening', () => {
 		assert.deepEqual(paths, ['/srv/project']);
 	});
 
+	test('Agents startup and remote setup refuse saved restricted grants until development is approved', async () => {
+		const grants: WorkspaceTrustPermission[][] = [];
+		const writes: unknown[] = [];
+		const prompts: unknown[] = [];
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async (_method: unknown, params: unknown) => { writes.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
+		const api = {
+			...trustApi(new Map([['/restricted', ['readFiles']]]), grants),
+			persistGrant: async (_path: string, grant: import('../../../workspace/common/workspaceTrust.js').WorkspaceTrustGrant) => {
+				assert.equal(grant.type, 'user');
+				writes.push(grant.permissions);
+			},
+		};
+		const folder = { id: 'root', path: URI.file('/restricted').fsPath, remoteHostLabel: 'Build host' };
+		await assert.rejects(host.initializeWorkspaceDirectories(client, {
+			requiresDevelopmentTrust: true,
+			requestDirectoryPermissions: async request => { prompts.push(request); return 'restricted'; },
+		}, api, [folder]), isCancellationError);
+		assert.deepEqual(writes, []);
+		assert.equal(grants.length, 0);
+		await host.initializeWorkspaceDirectories(client, {
+			requiresDevelopmentTrust: true,
+			requestDirectoryPermissions: async request => { prompts.push(request); return 'development'; },
+		}, api, [folder]);
+		assert.deepEqual(prompts, [folder, folder].map(({ path, remoteHostLabel }) => ({ path, remoteHostLabel })));
+		assert.equal(grants[0]?.includes('executeCommands'), true);
+		assert.deepEqual(writes, [grants[0], { dirs: [{ id: folder.id, path: folder.path, grant: { type: 'config' } }] }]);
+	});
+
 	test('cancelling a trust request does not create or persist a grant', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('Unexpected environment write'); } } as unknown as AppServerProtocolClient;

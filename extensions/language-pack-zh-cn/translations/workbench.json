@@ -974,6 +974,8 @@
     "dialog.aboutAction": "关于 Ash",
     "dialog.aboutTitle": "关于 Ash",
     "dialog.aboutVersion": "版本 {0}",
+    "workspaceTrust.restrictedActionDetail": "可编辑文件，命令和工作区集成保持禁用",
+    "workspaceTrust.developmentActionDetail": "启用命令和工作区集成",
     "workspaceTrust.question": "是否信任此文件夹中的文件？",
     "workspaceTrust.detail": "文件夹：{0}\n\n受限模式下可编辑和保存文件。信任此文件夹以启用命令、项目配置、指令、技能、MCP 服务器、钩子、插件和语言服务。",
     "workspaceTrust.remoteDetail": "远程环境：{0}\n文件夹：{1}\n\n此选择控制 Ash 对该环境中此文件夹的访问权限。受限模式下，Ash 可编辑和保存文件。信任此文件夹以在该环境中启用命令、项目配置、指令、技能、MCP 服务器、钩子、插件和语言服务。",
