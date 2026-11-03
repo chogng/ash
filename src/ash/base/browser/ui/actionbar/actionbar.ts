@@ -192,8 +192,8 @@ export class ActionBar extends Disposable implements IActionRunner {
 
 	clear(): void { this.setActions([]); }
 
-	setActions(actions: readonly IAction[]): void {
-		if (this.isDisposed || this.deferActions(actions, false)) return;
+	setActions(actions: readonly IAction[], options?: { readonly retainOpenDropdowns?: boolean; }): void {
+		if (this.isDisposed || this.deferActions(actions, false, options?.retainOpenDropdowns)) return;
 		if (this.draggingEntry && !actions.includes(this.draggingEntry.action)) this.endDrag();
 		const activeElement = getActiveElement(this.domNode.ownerDocument);
 		const focusedEntry = this.entries.find(({ container }) => container.contains(activeElement));
@@ -424,8 +424,14 @@ export class ActionBar extends Disposable implements IActionRunner {
 		this.visibleDropdowns.clear();
 	}
 
-	private deferActions(actions: readonly IAction[], update: boolean): boolean {
-		if (this.visibleDropdowns.size > 0 || this.pointerActivation.value) {
+	private deferActions(actions: readonly IAction[], update: boolean, retainOpenDropdowns = false): boolean {
+		// A caller can update siblings of an open dropdown whose action identity is retained.
+		const canRetainDropdowns = retainOpenDropdowns && [...this.visibleDropdowns].every(item => {
+			const entry = this.entries.find(candidate => candidate.item === item);
+			return entry && actions.filter(action => action === entry.action).length === 1
+				&& this.entries.filter(candidate => candidate.action === entry.action).length === 1;
+		});
+		if (this.pointerActivation.value || (this.visibleDropdowns.size > 0 && !canRetainDropdowns)) {
 			// Entry disposal cancels its popup, including a native OS menu. Keep the
 			// displayed action snapshot alive until dismissal and retain only the latest update.
 			this.pendingActions = { actions, update };

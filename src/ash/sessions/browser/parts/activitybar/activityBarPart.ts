@@ -19,7 +19,7 @@ import { ActivityBarPosition } from '../../../../workbench/common/configuration.
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { observableValue } from '../../../../base/common/observable.js';
+import { autorun, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -51,7 +51,7 @@ export class ActivityBar extends Disposable {
 	};
 	private readonly actions = new Map<string, ActivityAction>();
 	private order: string[];
-	private pinnedCodeActions: Set<string>;
+	private readonly pinnedCodeActions = observableValue<ReadonlySet<string>>(this, new Set());
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
 	private readonly bottomDomNode: HTMLDivElement;
@@ -74,7 +74,7 @@ export class ActivityBar extends Disposable {
 		this.domNode.className = 'ash-sessions-activity-content labeled';
 		container.append(this.domNode);
 		this.order = this.readOrder();
-		this.pinnedCodeActions = this.readPinnedCodeActions();
+		this.pinnedCodeActions.set(this.readPinnedCodeActions());
 		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
 		const codeMenu = this._register(menus.createMenu(Menus.CodeActivityBar, contextKeys));
 		const top = h(container.ownerDocument, 'div');
@@ -93,7 +93,7 @@ export class ActivityBar extends Disposable {
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
 			actionViewItemProvider: action => action === this.moreAction
-				? new MoreActionViewItem(action, contextMenuService, () => this.orderedActions.filter(item => !this.isPrimaryCodeAction(item.id)), id => this.setCodeActionPinned(id, true))
+				? new MoreActionViewItem(action, contextMenuService, () => this.moreActions, this.pinnedCodeActions, (id, pinned) => this.setCodeActionPinned(id, pinned))
 				: new CompositeActionViewItem(action, {
 					presentation: 'navigation',
 					navigationClassName: 'ash-sessions-activity-item',
@@ -146,8 +146,8 @@ export class ActivityBar extends Disposable {
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope !== StorageScope.PROFILE) return;
 			if (event.key === pinnedCodeActionsKey) {
-				this.pinnedCodeActions = this.readPinnedCodeActions();
-				this.renderNavigation();
+				this.pinnedCodeActions.set(this.readPinnedCodeActions());
+				this.renderNavigation({ retainOpenDropdowns: true });
 			} else if (event.external && event.key === this.orderStorageKey) {
 				updateActions();
 			}
@@ -248,14 +248,18 @@ export class ActivityBar extends Disposable {
 
 	private getUnpinActions(target: Element): readonly IAction[] {
 		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		if (this.domNode.dataset.workspaceMode !== 'code' || !id || !this.pinnedCodeActions.has(id)) return [];
+		if (this.domNode.dataset.workspaceMode !== 'code' || !id || !this.pinnedCodeActions.get().has(id)) return [];
 		return [{
 			id: 'sessions.activity.unpin',
 			label: localize('sessions.activity.unpin', 'Unpin from Sidebar'),
 			icon: Lxicon.unpin,
 			tooltip: '',
 			enabled: true,
-			run: () => this.setCodeActionPinned(id, false),
+			run: () => {
+				this.setCodeActionPinned(id, false);
+				this.navigation.setTabStop(this.labeled ? this.moreAction.id : id);
+				this.navigation.focus();
+			},
 		}];
 	}
 
@@ -271,8 +275,6 @@ export class ActivityBar extends Disposable {
 		if (pinned) pins.add(id);
 		else pins.delete(id);
 		this.storage.store(pinnedCodeActionsKey, JSON.stringify([...pins]), StorageScope.PROFILE, StorageTarget.USER);
-		this.navigation.setTabStop(pinned || !this.labeled ? id : this.moreAction.id);
-		this.navigation.focus();
 		status(pinned
 			? localize('sessions.activity.pinned', '{0} pinned to the sidebar.', action.label)
 			: localize('sessions.activity.unpinned', '{0} unpinned from the sidebar.', action.label));
@@ -305,7 +307,7 @@ export class ActivityBar extends Disposable {
 	}
 
 	private isPrimaryCodeAction(id: string): boolean {
-		return primaryCodeActionIds.has(id) || this.pinnedCodeActions.has(id);
+		return primaryCodeActionIds.has(id) || this.pinnedCodeActions.get().has(id);
 	}
 
 	private get primaryActions(): readonly ActivityAction[] {
@@ -314,9 +316,14 @@ export class ActivityBar extends Disposable {
 			: this.orderedActions;
 	}
 
-	private renderNavigation(): void {
+	private get moreActions(): readonly ActivityAction[] {
+		return this.orderedActions.filter(action => !primaryCodeActionIds.has(action.id));
+	}
+
+	private renderNavigation(options?: { readonly retainOpenDropdowns?: boolean; }): void {
 		const actions = this.primaryActions;
-		this.navigation.setActions(actions.length < this.orderedActions.length ? [...actions, this.moreAction] : actions);
+		const showMore = this.labeled && this.domNode.dataset.workspaceMode === 'code' && this.moreActions.length > 0;
+		this.navigation.setActions(showMore ? [...actions, this.moreAction] : actions, options);
 	}
 
 	private get orderStorageKey(): string {
@@ -364,14 +371,12 @@ export class ActivityBar extends Disposable {
 }
 
 class MoreActionViewItem extends DropdownMenuActionViewItem {
-	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], pinAction: (id: string) => void) {
+	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], pins: IObservable<ReadonlySet<string>>, setPinned: (id: string, pinned: boolean) => void) {
 		super(action, getActions, {
 			showContextMenu: delegate => contextMenus.showContextMenu({
 				...delegate,
-				getActionViewItem: (item, options) => new PinnableMenuActionViewItem(item, options, () => {
-					this.hide();
-					pinAction(item.id);
-				}),
+				getActionViewItem: (item, options) => new PinnableMenuActionViewItem(item, options,
+					pins.map(ids => ids.has(item.id)), pinned => setPinned(item.id, pinned)),
 				getMenuClassName: () => 'ash-sessions-navigation-menu',
 				getCheckedActionsRepresentation: () => 'radio',
 			}),
@@ -388,12 +393,9 @@ class MoreActionViewItem extends DropdownMenuActionViewItem {
 class PinnableMenuActionViewItem extends MenuActionViewItem {
 	private readonly pinItem: ButtonActionViewItem;
 
-	constructor(action: IAction, options: MenuActionViewItemOptions, pin: () => void) {
+	constructor(action: IAction, options: MenuActionViewItemOptions, pinned: IObservable<boolean>, setPinned: (pinned: boolean) => void) {
 		super(action, options);
-		const label = localize('sessions.activity.pin', 'Pin {0} to Sidebar', action.label);
-		this.pinItem = this._register(new SidebarPinActionViewItem({
-			id: 'sessions.activity.pin', label, tooltip: label, icon: Lxicon.pin, enabled: true, run: pin,
-		}, { ...options, iconOnly: true, actionRunner: undefined }, () => this.focus()));
+		this.pinItem = this._register(new SidebarPinActionViewItem(action, options, pinned, setPinned, () => this.focus()));
 	}
 
 	override render(container: HTMLElement): void {
@@ -409,8 +411,16 @@ class PinnableMenuActionViewItem extends MenuActionViewItem {
 }
 
 class SidebarPinActionViewItem extends ButtonActionViewItem {
-	constructor(action: IAction, options: ActionViewItemOptions, private readonly focusPrimary: () => void) {
-		super(action, options);
+	constructor(
+		private readonly entry: IAction,
+		options: ActionViewItemOptions,
+		private readonly pinned: IObservable<boolean>,
+		setPinned: (pinned: boolean) => void,
+		private readonly focusPrimary: () => void,
+	) {
+		super({
+			id: 'sessions.activity.pin', label: '', tooltip: '', enabled: true, run: () => setPinned(!pinned.get()),
+		}, { ...options, iconOnly: true, actionRunner: undefined });
 	}
 
 	override render(container: HTMLElement): void {
@@ -418,6 +428,15 @@ class SidebarPinActionViewItem extends ButtonActionViewItem {
 		const button = this.button.domNode;
 		button.classList.add('ash-sessions-navigation-menu-pin');
 		button.setAttribute('role', 'menuitem');
+		this._register(autorun(reader => {
+			const pinned = this.pinned.read(reader);
+			const label = pinned
+				? localize('sessions.activity.unpinItem', 'Unpin {0} from Sidebar', this.entry.label)
+				: localize('sessions.activity.pin', 'Pin {0} to Sidebar', this.entry.label);
+			this.button.icon = pinned ? Lxicon.pinFilled : Lxicon.pin;
+			this.button.setTitle(label);
+			button.setAttribute('aria-label', label);
+		}));
 		this.setTabbable(false);
 		this._register(addDisposableListener(button, 'keydown', event => {
 			if (event.key === 'ArrowLeft') {

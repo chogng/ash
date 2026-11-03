@@ -483,31 +483,52 @@ for (const locale of ['en', 'zh-CN'])
 			await expect(collab).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await expect(collabPin).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		}
+		const collabRowBounds = await collabRow.boundingBox();
 		await collabPin.click();
 		const pinnedCollab = navigation.getByRole('button', { name: 'Collab', exact: true });
-		await expect(pinnedCollab).toBeFocused();
+		const collabUnpin = page.getByRole('menuitem', { name: chinese ? '从侧栏取消固定 Collab' : 'Unpin Collab from Sidebar' });
+		await expect(pinnedCollab).toBeVisible();
+		await expect(more).toHaveAttribute('aria-expanded', 'true');
+		expect(await collabRow.boundingBox()).toEqual(collabRowBounds);
+		await expect(collabUnpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
 		await expect(page.locator('[data-view-container-id="ash.collaboration"]')).toBeHidden();
 
-		await more.click();
-		await expect(collab).toHaveCount(0);
 		const symphony = page.getByRole('menuitemradio', { name: 'Symphony', exact: true });
 		await symphony.press('ArrowRight');
 		const symphonyPin = page.getByRole('menuitem', { name: chinese ? '将 Symphony 固定到侧栏' : 'Pin Symphony to Sidebar' });
+		const symphonyUnpin = page.getByRole('menuitem', { name: chinese ? '从侧栏取消固定 Symphony' : 'Unpin Symphony from Sidebar' });
+		const pinnedSymphony = navigation.getByRole('button', { name: 'Symphony', exact: true });
 		await expect(symphonyPin).toBeFocused();
 		await symphonyPin.press('Enter');
-		await expect(navigation.getByRole('button', { name: 'Symphony', exact: true })).toBeFocused();
-		await expect(more).toHaveCount(0);
+		await expect(pinnedSymphony).toBeVisible();
+		await expect(symphonyUnpin).toBeFocused();
+		await expect(symphonyUnpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
 		await expect(page.locator('.ash-symphony-monitor')).toBeHidden();
+		await symphonyUnpin.press('Enter');
+		await expect(pinnedSymphony).toHaveCount(0);
+		await expect(symphonyPin).toBeFocused();
+		await expect(symphonyPin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin');
+		await symphonyPin.press('Enter');
+		await symphonyUnpin.press('Escape');
+		await expect(more).toBeFocused();
+		await expect(pinnedCollab).toBeVisible();
+		await expect(pinnedSymphony).toBeVisible();
 
 		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
 		await expect(pinnedCollab).toBeVisible();
-		await expect(navigation.getByRole('button', { name: 'Symphony', exact: true })).toBeVisible();
-		await pinnedCollab.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '从侧栏取消固定' : 'Unpin from Sidebar' }).click();
-		await expect(pinnedCollab).toHaveCount(0);
-		await expect(more).toBeFocused();
+		await expect(pinnedSymphony).toBeVisible();
 		await more.click();
-		await expect(collab).toBeVisible();
+		await expect(collabUnpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+		await expect(symphonyUnpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+		await collabUnpin.click();
+		await expect(pinnedCollab).toHaveCount(0);
+		await expect(collabPin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin');
+		await collabPin.press('Escape');
+		await expect(pinnedCollab).toHaveCount(0);
+		await pinnedSymphony.press('Shift+F10');
+		await page.getByRole('menuitem', { name: chinese ? '从侧栏取消固定' : 'Unpin from Sidebar' }).click();
+		await expect(pinnedSymphony).toHaveCount(0);
+		await expect(more).toBeFocused();
 	});
 
 test('Sessions reports browser errors and rejected promises once without rethrowing', async ({ page }) => {
