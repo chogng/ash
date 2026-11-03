@@ -119,6 +119,7 @@ fn hook(
             args: Vec::new(),
         },
         enablement,
+        claude_pre_tool_use: None,
     }
 }
 
@@ -224,6 +225,7 @@ fn before_request(tool_name: &str) -> BeforeToolHookRequest {
         turn_id: TurnId::new("turn-test").unwrap(),
         tool_call_id: ToolCallId::new("tool-test").unwrap(),
         tool_name: tool_name.into(),
+        tool_input: serde_json::json!({}),
     }
 }
 

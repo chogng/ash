@@ -3,6 +3,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+/// Compatibility contract for a Claude PreToolUse command.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClaudePreToolUseHook {
+    #[schemars(range(min = 1, max = 600))]
+    pub timeout_seconds: u32,
+}
+
 /// Executed Hook state retained in the owning Thread's history.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(

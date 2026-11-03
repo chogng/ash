@@ -4,6 +4,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { parse, type YamlNode, type YamlParseError } from '../../../../../base/common/yaml.js';
 import { Range } from '../../../../../editor/common/core/range.js';
+import { getPromptFileType, PromptsType } from './promptTypes.js';
 
 /** Keeps the exact document and separates its Markdown body for readonly snapshot consumers. */
 export class ParsedPromptFile {
@@ -93,12 +94,17 @@ export class PromptBody {
 		const packageResource = this.uri.scheme === Schemas.internal && this.uri.authority === 'skill';
 		// A pinned package reference never acquires access to host files or another package.
 		if (packageResource && (path.startsWith('/') || path.startsWith('~/') || /^[a-z][a-z\d+.-]*:/iu.test(path))) return undefined;
-		if (path.startsWith('~/')) return userHome ? URI.joinPath(userHome, path.slice(2)) : undefined;
 		try {
 			const hasScheme = /^[a-z][a-z\d+.-]*:/iu.test(path);
 			const target = URI.parse(hasScheme ? path : `relative:${path}`, true);
 			if (hasScheme) return target.scheme === 'file' || target.scheme === this.uri.scheme ? target : undefined;
-			const resolved = URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
+			if (packageResource && (target.path.startsWith('/') || target.path.startsWith('~/'))) return undefined;
+			if (target.path.startsWith('~/')) {
+				return userHome ? URI.joinPath(userHome, target.path.slice(2)).with({ fragment: target.fragment }) : undefined;
+			}
+			const resolved = target.path.startsWith('/')
+				? this.uri.with({ path: target.path, fragment: target.fragment })
+				: URI.joinPath(this.uri.with({ fragment: '' }), '..', target.path).with({ fragment: target.fragment });
 			if (packageResource && !resolved.path.startsWith(`/${this.uri.path.split('/')[1]}/`)) return undefined;
 			return resolved;
 		} catch { return undefined; }
@@ -137,8 +143,10 @@ export class PromptFileParser {
 	}
 }
 
-/** Applies Skill limits and editor coordinates to the shared YAML syntax tree. */
+/** Applies each definition format's header limits and editor coordinates to the shared YAML tree. */
 function parseHeader(uri: URI, source: string, offset: number, end: number, range: Range, closed: boolean): PromptHeader {
+	const type = getPromptFileType(uri);
+	const definition = type === PromptsType.agent || type === PromptsType.instructions;
 	const attributes: IHeaderAttribute[] = [];
 	const errors: ParseError[] = [];
 	const starts = [0];
@@ -158,17 +166,25 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		const last = position(offset + Math.max(start, finish));
 		return new Range(first.line, first.column, last.line, last.column);
 	};
-	if (!closed) errors.push({ code: 'unclosedHeader', range: new Range(1, 1, 1, 4), message: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.') });
+	if (!closed) errors.push({
+		code: 'unclosedHeader', range: new Range(1, 1, 1, 4), message: definition
+			? localize('prompt.syntax.definitionUnclosed', 'Close the definition header with a line containing --- before the Markdown body.')
+			: localize('prompt.syntax.unclosed', 'Close the Skill header with a line containing --- before the Markdown body.')
+	});
 	const text = source.slice(offset, end);
 	const encoder = new TextEncoder();
 	const headerLines = text.split(/\r\n|\n|\r/u);
-	const exceedsBytes = encoder.encode(text).length > 16 * 1024;
-	if (exceedsBytes || headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 || headerLines.some(line => encoder.encode(line).length > 2048)) {
-		errors.push({
-			code: 'headerTooLarge', range, message: exceedsBytes
-				? localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.')
-				: localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.')
-		});
+	const exceedsBytes = encoder.encode(text).length > (definition ? 32 : 16) * 1024;
+	if (exceedsBytes || !definition && (headerLines.filter((line, index) => index < headerLines.length - 1 || line.length > 0).length > 256 || headerLines.some(line => encoder.encode(line).length > 2048))) {
+		let message: string;
+		if (definition) {
+			message = localize('prompt.syntax.definitionLimit', 'Agent and Instruction files support up to 32 KiB of UTF-8 text.');
+		} else if (exceedsBytes) {
+			message = localize('prompt.syntax.tooLarge', 'The Skill header exceeds 16 KiB. Move instructions into the Markdown body.');
+		} else {
+			message = localize('prompt.syntax.catalogLimits', 'The Skill header exceeds the catalog limits (16 KiB, 256 lines, or 2 KiB per line). Move instructions into the Markdown body.');
+		}
+		errors.push({ code: 'headerTooLarge', range, message });
 		return new PromptHeader(range, uri, attributes, errors);
 	}
 	const unsupported = new Set<string>();
@@ -177,7 +193,11 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 		const end = node?.endOffset ?? 0;
 		const nodeRange = at(start, end);
 		if (depth > 8 || unsupported.has(`${start}:${end}`)) {
-			errors.push({ code: 'unsupportedYaml', range: nodeRange, message: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.') });
+			errors.push({
+				code: 'unsupportedYaml', range: nodeRange, message: definition
+					? localize('prompt.syntax.definitionUnsupported', 'This editor cannot validate YAML aliases, anchors, tags or deeply nested values. The backend validates the saved definition.')
+					: localize('prompt.syntax.unsupported', 'Skill headers do not support YAML aliases, anchors, tags or deeply nested values.')
+			});
 			return { type: 'scalar', value: '', format: 'none', range: nodeRange };
 		}
 		if (node?.type === 'map') return {
@@ -198,17 +218,29 @@ function parseHeader(uri: URI, source: string, offset: number, end: number, rang
 				// its placeholder; deeper nodes remain behind the existing depth limit.
 				unsupported.add(`${error.startOffset}:${error.endOffset}`);
 			} else {
-				errors.push({ code: error.code, range: at(error.startOffset, error.endOffset), message: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code) });
+				errors.push({
+					code: error.code, range: at(error.startOffset, error.endOffset), message: definition
+						? localize('prompt.syntax.definitionYaml', 'Invalid YAML in the definition header ({0}).', error.code)
+						: localize('prompt.syntax.invalidYaml', 'Invalid YAML in the Skill header ({0}).', error.code)
+				});
 			}
 		}
 		const root = convert(syntax, 0);
 		if (root.type === 'map') {
 			for (const property of root.properties) attributes.push({ key: property.key.value, keyRange: property.key.range, range: Range.fromPositions(property.key.range.getStartPosition(), property.value.range.getEndPosition()), value: property.value });
 		} else if (text.trim()) {
-			errors.push({ code: 'expectedMapping', range: root.range, message: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.') });
+			errors.push({
+				code: 'expectedMapping', range: root.range, message: definition
+					? localize('prompt.syntax.definitionMapping', 'A definition header must be a mapping of field names to values.')
+					: localize('prompt.syntax.mapping', 'A Skill header must be a mapping of field names to values.')
+			});
 		}
 	} catch {
-		errors.push({ code: 'invalidYaml', range, message: localize('prompt.syntax.parseFailed', 'The Skill header could not be parsed as YAML.') });
+		errors.push({
+			code: 'invalidYaml', range, message: definition
+				? localize('prompt.syntax.definitionParseFailed', 'The definition header could not be parsed as YAML.')
+				: localize('prompt.syntax.parseFailed', 'The Skill header could not be parsed as YAML.')
+		});
 	}
 	return new PromptHeader(range, uri, attributes, errors);
 }

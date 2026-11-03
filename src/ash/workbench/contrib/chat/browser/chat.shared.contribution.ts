@@ -92,6 +92,11 @@ import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
+import { registerPromptActions } from './promptSyntax/promptFileActions.js';
+import { registerSkillActions } from './promptSyntax/skillActions.js';
+import { registerRunPromptActions } from './promptSyntax/runPromptAction.js';
+import { registerAgentActions } from './promptSyntax/chatModeActions.js';
+import { registerNewPromptFileActions } from './promptSyntax/newPromptFileActions.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatSetupContribution } from './chatSetup/chatSetupContributions.js';
@@ -112,6 +117,11 @@ registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceF
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PromptLanguageFeaturesProvider));
+registerWorkbenchContribution('chat.promptActions', WorkbenchPhase.BlockStartup, () => registerPromptActions());
+registerWorkbenchContribution('chat.skillActions', WorkbenchPhase.BlockStartup, () => registerSkillActions());
+registerWorkbenchContribution('chat.runPromptActions', WorkbenchPhase.BlockStartup, () => registerRunPromptActions());
+registerWorkbenchContribution('chat.agentActions', WorkbenchPhase.BlockStartup, () => registerAgentActions());
+registerWorkbenchContribution('chat.newPromptFileActions', WorkbenchPhase.BlockStartup, () => registerNewPromptFileActions());
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
 	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });

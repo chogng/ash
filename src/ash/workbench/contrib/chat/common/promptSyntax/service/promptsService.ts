@@ -11,6 +11,8 @@ import type { ParsedPromptFile } from '../promptFileParser.js';
 export interface IAgentSkill extends SkillDescriptor {
 	readonly uri: URI;
 	readonly name: string;
+	/** The frontend host adapter binds this resource to its Session provider. */
+	readonly providerId?: string;
 }
 
 export interface SkillManagementSnapshot {
@@ -26,6 +28,8 @@ export interface IPromptsService extends IDisposable {
 	/** Reads authoritative TOML declarations, including disabled and legacy Hooks. */
 	getHooks(token: CancellationToken, sessionId?: string): Promise<readonly HookSource[]>;
 	findAgentSkills(token: CancellationToken, sessionId?: string): Promise<readonly IAgentSkill[]>;
+	/** Resolves an owned readable Skill snapshot in its original Session and current catalog. */
+	resolveSkill(resource: URI, token: CancellationToken): Promise<IAgentSkill | undefined>;
 	/** Refreshes metadata with one bounded retry when that refresh invalidates its own response. */
 	readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot>;
 	/** Uses the displayed backend revision, with no automatic mutation retry on conflict. */

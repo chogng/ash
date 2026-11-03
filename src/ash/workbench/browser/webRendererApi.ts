@@ -129,7 +129,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 			turn: createAppServerAgentTurnService(connection, snapshots),
 			turnChanges: createAppServerTurnChangesApi(connection),
 			skills: createAppServerSkillOperations(connection),
-			instructions: createAppServerInstructionService(connection),
+			instructions: createAppServerInstructionService(connection, remoteHost),
 			documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 			resource,
 			extensions: createAppServerExtensionApi(connection, resource),

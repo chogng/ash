@@ -17,7 +17,7 @@ import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadServi
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
 import { sessionWorkspaceUri } from '../common/sessionWorkspace.js';
-import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices } from './agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports } from './agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from './agentHost/sessionsChatService.js';
 import { SessionsLanguageModelsService } from './agentHost/sessionsLanguageModelsService.js';
 import { SessionsPromptsService } from './agentHost/sessionsPromptsService.js';
@@ -143,7 +143,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
-import { ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
+import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -260,7 +260,7 @@ import { IViewDescriptorService } from '../../workbench/common/views.js';
 import { ViewDescriptorService } from '../../workbench/services/views/browser/viewDescriptorService.js';
 import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
 import { ViewsService } from '../../workbench/services/views/browser/viewsService.js';
-import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
+import type { IUntitledChatSession, SessionWorkspaceSelection } from '../services/sessions/common/session.js';
 import { WorkspacePicker } from '../contrib/chat/browser/sessionWorkspacePicker.js';
 import { IDevContainerAgentHostService } from '../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../contrib/providers/remoteAgentHost/browser/devContainerAgentHostService.js';
@@ -598,7 +598,6 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IIssueFormService, () => services.createInstance(IssueFormService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		primaryHostServices.registerInstance(ILanguageModelsService, this._register(primaryHostServices.createInstance(LanguageModelsService)));
-		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
 		services.registerInstance(IAgentToolsApi, options.api.agentTools);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
@@ -623,6 +622,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ISessionPrimaryProviderServices, primaryHostServices.createInstance(SessionProviderServices));
 		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
 		services.registerInstance(ISessionProviderScopeService, providerScopes);
+		services.registerInstance(IInstructionService, { ...options.api.instructions, captureImports: sessionId => captureInstructionImports(providerScopes.getScope(sessionId), sessionId) });
 		this._register(services.createInstance(SessionFileSystemContribution, provider.id));
 		if (options.api.appServer.isAvailable) {
 			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
@@ -895,7 +895,18 @@ export abstract class Workbench extends Disposable {
 					}
 				} finally { listener.dispose(); }
 			},
-			createNewConversation: async () => { await commandService.executeCommand('sessions.newSession'); },
+			createNewConversation: async options => {
+				if (!options) { await commandService.executeCommand('sessions.newSession'); return true; }
+				// Select the Agent presentation before creating its mode-scoped draft.
+				if (options?.focus) await commandService.executeCommand('sessions.open.code');
+				const created = options?.providerId
+					? view.openNewSession(localize('chat.sessions.new', 'New Session'), { providerId: options.providerId })
+					: await commandService.executeCommand<IUntitledChatSession | undefined>(NewSessionsChatAction.ID);
+				if (!created) return false;
+				if (options?.agent) sessions.setUntitledSessionAgent(created.untitledSessionId, options.agent);
+				if (options?.focus) sessionsPart!.focus();
+				return true;
+			},
 			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => {

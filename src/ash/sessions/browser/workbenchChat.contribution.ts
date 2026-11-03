@@ -26,7 +26,7 @@ import { ChatContextKeys } from '../../workbench/contrib/chat/common/actions/cha
 import { registerAction2 } from '../../platform/actions/common/actions.js';
 import { ForkConversationAction } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import '../contrib/sessions/browser/views/sessionsViewActions.js';
-import { IChatService } from '../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ChatAgent } from '../../workbench/services/chat/common/chatService.js';
 import type { ToolResultPresentation } from '../../platform/agentHost/common/agent.js';
 
 class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
@@ -46,9 +46,11 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		await this.openConversation(target.sessionId, target.threadId);
 	}
 
-	async createNewConversation(): Promise<void> {
-		this.sessions.createUntitledSession();
-		await this.views.focusView(CHAT_VIEW_ID);
+	async createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): Promise<boolean> {
+		if (options?.providerId !== undefined && options.providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));
+		const draft = this.sessions.createUntitledSession();
+		if (options?.agent) this.sessions.setUntitledSessionAgent(draft.untitledSessionId, options.agent);
+		return options?.focus ? this.views.focusView(CHAT_VIEW_ID) : true;
 	}
 
 	get revision(): number { return this.sessions.navigationRevision; }

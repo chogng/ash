@@ -941,6 +941,8 @@
     "accessibility.editorMinimap": "小地图提供当前文档的视觉概览。在命令面板中使用“切换小地图”显示或隐藏它。小地图设置可控制尺寸、自动显隐和章节标题。使用“转到行”或“转到符号”可通过键盘导航到同一文档的内容。",
     "accessibility.editorNavigation": "在引用速览中，用方向键移动结果，F4 和 Shift+F4 循环结果，F6 在结果列表和预览编辑器之间切换焦点。按 Enter 打开结果后，F12 循环已保存的结果，Escape 结束循环。层级树用方向键移动和展开，方向按钮选择调用者、被调用者、父类型或子类型。Escape 关闭速览。",
     "accessibility.editorCodeActions": "<keybinding:editor.action.quickFix> 打开代码操作。有可用操作时，行旁会出现按钮。重构和源代码操作菜单显示对应类别的操作。重命名用 Enter 提交，Escape 取消；支持预览时，用 Ctrl+Enter 或 Command+Enter 打开预览。",
+    "accessibility.agentDefinitionControls": "在 Agent 定义中，使用工具列表上方的“选择工具”可编辑该列表。按 Tab 聚焦“使用此 Agent 新建聊天”，按 Enter 打开草稿。按 Escape 返回编辑器。",
+    "accessibility.editorDefinitionActions": "Skill、Agent 和指令定义提供字段补全和诊断。对名称或加载策略错误使用 <keybinding:editor.action.quickFix> 可修复对应值。编辑使用文档撤销历史；后端会验证已保存的定义。使用“聊天：使用当前 Agent 新建聊天”可通过已保存的目录 Agent 打开尚未发送的聊天。从 Skills 打开的 Skill 提供“聊天：在新聊天中运行当前 Skill”，这会新建对话并发送所选 Skill。两个命令也可在编辑器标题操作中使用。“聊天：导入指令”允许选择来源文件，在只读编辑器中审阅完整转换结果，再通过通知中的“导入”发布。关闭该通知将取消导入。",
     "editor.fontFamily.title": "字体",
     "editor.fontFamily.description": "输入字体名称或用逗号分隔的字体列表。留空时使用 {0}。",
     "editor.fontSize.title": "字号",

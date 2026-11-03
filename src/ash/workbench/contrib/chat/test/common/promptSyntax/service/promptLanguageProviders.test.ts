@@ -1,3 +1,4 @@
+import { IPromptsService } from '../../../../common/promptSyntax/service/promptsService.js';
 import { DeferredPromise } from '../../../../../../../base/common/async.js';
 import { createTestLanguageModelToolsService, type ToolCatalogFixture } from '../../tools/testLanguageModelToolsService.js';
 import assert from 'node:assert/strict';
@@ -12,13 +13,14 @@ import { PromptLinkProvider } from '../../../../common/promptSyntax/languageProv
 import { PromptValidator } from '../../../../common/promptSyntax/languageProviders/promptValidator.js';
 import { PromptFileParser } from '../../../../common/promptSyntax/promptFileParser.js';
 import { PromptHoverProvider } from '../../../../common/promptSyntax/languageProviders/promptHovers.js';
+import type { IPathService } from '../../../../../../../platform/path/common/pathService.js';
 
 async function complete(source: string, position: Position, name = 'SKILL.md', aborted = false) {
 	using model = new TextModel(source, { resource: URI.file(`/skills/review/${name}`), languageId: 'markdown' });
 	const controller = new AbortController();
 	if (aborted) controller.abort();
 	using service = createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected catalog read'); } });
-	return await new PromptHeaderAutocompletion(service).provideCompletions({
+	return await new PromptHeaderAutocompletion(service, emptyPrompts, emptyInstructions).provideCompletions({
 		requestId: 1, resource: model.uri, languageId: 'markdown', position,
 		context: { kind: LanguageCompletionTriggerKind.Invoke }, snapshot: model.createVersionedSnapshot(),
 	}, controller.signal);
@@ -87,7 +89,7 @@ test('allowed-tools suggestions read the real capability catalog, omit hidden an
 	const pending = new DeferredPromise<ToolCatalogFixture>();
 	let reads = 0;
 	using service = createTestLanguageModelToolsService({ isAvailable: true, read: () => { reads++; return pending.p; } });
-	const provider = new PromptHeaderAutocompletion(service);
+	const provider = new PromptHeaderAutocompletion(service, emptyPrompts, emptyInstructions);
 	const controller = new AbortController();
 	const request = { requestId: 1, resource: model.uri, languageId: 'markdown', position: new Position(3, 26), context: { kind: LanguageCompletionTriggerKind.Invoke as const }, snapshot: model.createVersionedSnapshot() };
 	const first = provider.provideCompletions(request, controller.signal);
@@ -98,7 +100,7 @@ test('allowed-tools suggestions read the real capability catalog, omit hidden an
 	assert.deepEqual(result?.items.map(item => ({ label: item.label, range: item.range })), [{ label: 'read_file', range: new Range(3, 25, 3, 32) }]);
 	const delayed = new DeferredPromise<ToolCatalogFixture>();
 	using delayedService = createTestLanguageModelToolsService({ isAvailable: true, read: () => delayed.p });
-	const cancelled = new PromptHeaderAutocompletion(delayedService).provideCompletions(request, controller.signal);
+	const cancelled = new PromptHeaderAutocompletion(delayedService, emptyPrompts, emptyInstructions).provideCompletions(request, controller.signal);
 	controller.abort();
 	await delayed.complete(tools);
 	assert.equal(await cancelled, undefined);
@@ -110,10 +112,27 @@ test('Prompt links use the original Skill URI and reject code, remote web links 
 	using model = new TextModel('---\nname: review\n---\n[Guide](references/guide.md) and `[code](hidden.md)`', { resource: uri, languageId: 'markdown' });
 	const controller = new AbortController();
 	const request = { model, snapshot: model.createVersionedSnapshot(), resource: uri, languageId: 'markdown', modelLanguageId: 'markdown', signal: controller.signal };
-	const provider = new PromptLinkProvider();
+	const provider = new PromptLinkProvider({ resolvedUserHome: undefined } as IPathService);
 	assert.deepEqual(provider.provideLinks(request, controller.signal).map(link => ({ range: link.range, target: link.target })), [{ range: new Range(4, 9, 4, 28), target: uri.with({ path: '/review/references/guide.md' }).toString() }]);
 	controller.abort();
 	assert.deepEqual(provider.provideLinks(request, controller.signal), []);
+});
+
+test('Skill links use the owning host home and preserve encoded filenames and fragments', () => {
+	const uri = URI.parse('ash-remote://host-a/skills/review/SKILL.md');
+	using model = new TextModel('[Home](~/docs/guide%20one.md#read%20me) and #file:~/notes.md', { resource: uri, languageId: 'markdown' });
+	const signal = new AbortController().signal;
+	const request = { model, snapshot: model.createVersionedSnapshot(), resource: uri, languageId: 'markdown', modelLanguageId: 'markdown', signal };
+	const home = URI.parse('ash-remote://host-a/home/user');
+	const paths = { resolvedUserHome: home } as IPathService;
+	const provider = new PromptLinkProvider(paths);
+	assert.deepEqual(provider.provideLinks(request, signal).map(link => link.target), [
+		home.with({ path: '/home/user/docs/guide one.md', fragment: 'read me' }).toString(),
+		home.with({ path: '/home/user/notes.md' }).toString(),
+	]);
+	for (const resolvedUserHome of [undefined, URI.file('/home/local'), home.with({ authority: 'host-b' })]) {
+		assert.deepEqual(new PromptLinkProvider({ resolvedUserHome } as IPathService).provideLinks(request, signal), []);
+	}
 });
 
 test('Skill tool completion uses qualified references and tool set membership, including aliases already present in the header', async () => {
@@ -123,7 +142,7 @@ test('Skill tool completion uses qualified references and tool set membership, i
 			sourceGroups: [{ id: 'docs-set', source: 'mcp', sourceId: 'docs-server', tools: ['search_docs'] }],
 		})
 	});
-	const provider = new PromptHeaderAutocompletion(service);
+	const provider = new PromptHeaderAutocompletion(service, emptyPrompts, emptyInstructions);
 	for (const existing of ['', 'search_docs ']) {
 		const line = `allowed-tools: ${existing}mcp/`;
 		using model = new TextModel(`---\nname: review\n${line}\n---`, { resource: URI.file('/skills/review/SKILL.md'), languageId: 'markdown' });
@@ -157,3 +176,6 @@ test('Skill diagnostic hover uses the actual quoted key range when the key inclu
 	assert.equal(hover?.contents.length, 1);
 	assert.match(String(hover?.contents[0]), /custom:key/u);
 });
+
+const emptyPrompts = { findAgentSkills: async () => { throw new Error('Unexpected Skill catalog read'); } } as unknown as IPromptsService;
+const emptyInstructions = { isAvailable: false, list: async () => { throw new Error('Unexpected Instructions catalog read'); } };

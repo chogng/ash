@@ -87,6 +87,7 @@ import { Selection } from '../../../src/ash/editor/common/core/selection.js';
 import { IModelService } from '../../../src/ash/editor/common/services/model.js';
 import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { CodeBlockPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/codeBlockPart.js';
@@ -170,6 +171,7 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
 // This fixture hosts standalone editors rather than tabbed Workbench groups.
@@ -236,6 +238,7 @@ registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
+services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], sourceGroups: [] }) }));
 registerCodeEditorServices(services);
 const skillResourceRequests: unknown[] = [];

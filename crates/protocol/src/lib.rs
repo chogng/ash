@@ -86,6 +86,7 @@ pub use guardian::ReviewEvidenceTrust;
 pub use guardian::RiskLevel;
 pub use guardian::SandboxDenialEvidence;
 pub use guardian::UserAuthorization;
+pub use hook::ClaudePreToolUseHook;
 pub use hook::HookEvent;
 pub use hook::HookRunRecord;
 pub use hook::HookRunStatus;

@@ -101,6 +101,19 @@ test('YAML key ranges preserve quoted colons and missing scalars independently f
 	assert.equal(metadata.type === 'map' && metadata.properties[0].value.type === 'scalar' && metadata.properties[0].value.missing, undefined);
 });
 
+test('Prompt paths distinguish filesystem roots, home references and pinned package boundaries', () => {
+	const parser = new PromptFileParser();
+	const local = parser.parse(URI.file('/work/review/SKILL.md'), 'Local').body!;
+	assert.equal(local.resolveFilePath('/shared/guide%20one.md#section')?.toString(), URI.file('/shared/guide one.md').with({ fragment: 'section' }).toString());
+	assert.equal(local.resolveFilePath('~/guide%20one.md#section', URI.file('/home/user'))?.toString(), URI.file('/home/user/guide one.md').with({ fragment: 'section' }).toString());
+	const uri = URI.parse('private://skill/review/SKILL.md?source=pinned');
+	const pinned = parser.parse(uri, 'Pinned').body!;
+	for (const path of ['~/guide.md', '%7E/guide.md', '/review/guide.md', '%2Freview/guide.md', '%2e%2e/secret.md', 'references/%2e%2e/%2e%2e/secret.md']) {
+		assert.equal(pinned.resolveFilePath(path, URI.file('/home/user')), undefined, path);
+	}
+	assert.equal(pinned.resolveFilePath('references/guide%20one.md#section')?.toString(), uri.with({ path: '/review/references/guide one.md', fragment: 'section' }).toString());
+});
+
 test('Prompt YAML keeps null-like scalars distinct from quoted values and unsupported syntax', () => {
 	const content = '---\r\nempty:\r\nnullValue: null\r\ntilde: ~\r\nquotedEmpty: ""\r\nquotedNull: \'null\'\r\ntagged: !!str null\r\nanchored: &name plain\r\nalias: *name\r\n---';
 	const header = new PromptFileParser().parse(URI.file('/work/SKILL.md'), content).header!;

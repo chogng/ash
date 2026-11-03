@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../common/languageModels.js';
 import { expect } from '@playwright/test';
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -55,6 +56,7 @@ import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfig
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { createTestPathService } from '../../../../test/common/workbenchHostTestServices.js';
 
@@ -324,6 +326,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
+	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
 	const languages = services.get(ILanguageService);
 	resources.add(languages.registerLanguage({ id: 'markdown' }));
@@ -332,6 +335,7 @@ test('Skill diagnostic contribution handles open, edits, language changes and di
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
 	assert.ok(model instanceof TextModel);
 	markers.changeOne('other', uri, [{ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2, severity: MarkerSeverity.Warning, message: 'existing' }]);
+	services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], sourceGroups: [] }) }));
 	services.registerInstance(IPromptsService, resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { }, readTextResource: async () => { throw new Error('No discovered Skill'); } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } })));
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
@@ -361,6 +365,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
 	services.registerInstance(IPathService, createTestPathService({}, services.get(IWorkspaceContextService)));
+	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	const models = services.get(IModelService);
 	const languages = services.get(ILanguageService);
 	resources.add(languages.registerLanguage({ id: 'markdown' }));
@@ -368,6 +373,7 @@ test('Skill diagnostics follow shared editor bindings and cancel validation afte
 	const model = resources.add(models.createModel('---\nname: review\n---', languages.createById('markdown'), uri));
 	assert.ok(model instanceof TextModel);
 	const markers = services.get(IMarkerService);
+	services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected tool read'); } }));
 	services.registerInstance(IPromptsService, { parseNew: async () => { throw new Error('Unexpected Skill read'); } } as unknown as IPromptsService);
 	using first = createTestCodeEditor({ container: document.createElement('div'), instantiationService: services, model });
@@ -421,6 +427,7 @@ test('streamed memory references retain their buttons, code editor and focus as 
 test('Skill resource content provider shares readonly models and cancels a late resource on removal', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices());
+	services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('Unexpected capabilities read'); } }));
 	registerCodeEditorServices(services);
 	resources.add(services.get(ILanguageService).registerLanguage({ id: 'markdown', extensions: ['.md'] }));
@@ -438,6 +445,7 @@ test('Skill resource content provider shares readonly models and cancels a late 
 		},
 	}, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 	services.registerInstance(IPromptsService, prompts);
+	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 	using contribution = services.createInstance(PromptLanguageFeaturesProvider);
 	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'session');
 	const resolver = services.get(ITextModelService);

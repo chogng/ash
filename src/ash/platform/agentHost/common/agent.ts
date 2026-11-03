@@ -224,6 +224,8 @@ export interface AgentRoleDefinition {
 }
 
 export interface AgentRoleCatalog {
+	/** The host adapter supplies the catalog owner when a window has multiple backends. */
+	readonly providerId?: string;
 	readonly agents: readonly AgentRoleDefinition[];
 	readonly diagnostics: readonly string[];
 }

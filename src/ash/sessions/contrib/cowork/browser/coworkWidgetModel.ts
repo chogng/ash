@@ -78,6 +78,7 @@ export class CoworkWidgetModel extends Disposable {
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
+	private readonly skillSelectorsLoading = observableValue(this, false);
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
 	private readonly changeDetails = new Map<string, TurnChangeDetails>();
 	private changesGeneration = 0;
@@ -153,6 +154,7 @@ export class CoworkWidgetModel extends Disposable {
 			modelsError: this.modelsError,
 			slashCommands: [],
 			skillSelectors: this._skillSelectors,
+			skillSelectorsLoading: this.skillSelectorsLoading.get(),
 			selectedModel: this.selectedModel,
 			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
@@ -616,13 +618,19 @@ export class CoworkWidgetModel extends Disposable {
 	private async loadSkillSelectors(): Promise<void> {
 		const generation = ++this.skillCatalogGeneration;
 		const sessionId = this.sessionId;
+		this.skillSelectorsLoading.set(true);
+		this._onDidChange.fire();
 		try {
 			const catalog = await this.skills.findAgentSkills(CancellationToken.None, sessionId);
 			if (this.isDisposed || generation !== this.skillCatalogGeneration || sessionId !== this.sessionId) return;
 			this._skillSelectors = toSkillSelectors(catalog);
-			this._onDidChange.fire();
 		} catch {
 			// Keep the last valid catalog when a transient refresh fails.
+		} finally {
+			if (!this.isDisposed && generation === this.skillCatalogGeneration && sessionId === this.sessionId) {
+				this.skillSelectorsLoading.set(false);
+				this._onDidChange.fire();
+			}
 		}
 	}
 

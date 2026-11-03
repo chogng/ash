@@ -879,6 +879,7 @@ impl ToolScheduler {
                 turn_id: context.turn_id().clone(),
                 tool_call_id: tool_call_id.clone(),
                 tool_name: tool_name.clone(),
+                tool_input: call.arguments.clone(),
             },
             context.cancellation(),
         )?;

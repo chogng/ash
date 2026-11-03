@@ -654,7 +654,7 @@ services.registerInstance(IViewsService, {
 	getActiveViewPaneContainerWithId: () => extensionsContainer,
 	openView: async (id: string) => extensionsContainer.openView(id, true),
 } as unknown as IViewsService);
-registerSkillActions();
+disposables.add(registerSkillActions());
 const commands = disposables.add(new CommandService(services));
 const lsp = disposables.add(services.createInstance(LanguageServerSettingsRenderer, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);

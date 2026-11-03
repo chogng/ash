@@ -21,7 +21,7 @@ import type { AdvisorConfig, IAgentModelsService } from '../../../platform/model
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
-import type { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ILanguageModelsConfigurationService } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -43,7 +43,7 @@ function messageHistory(threadId: string, sequence: number, text: string): Threa
 	};
 }
 
-function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false) {
+function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false, skillService?: IPromptsService) {
 	const resources = new DisposableStore();
 	const updates = resources.add(new Emitter<ThreadUpdateEnvelope>());
 	const transcripts = resources.add(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -74,7 +74,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
-	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
+	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
 	const models = { onDidChangeModels: Event.None, listModels: async () => [], readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }) } as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
 	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
@@ -1004,4 +1004,28 @@ test('Cowork does not expose Code command execution and submits slash text liter
 		assert.equal(f.compacts.length, 0);
 		assert.equal(f.consults.length, 0);
 	}
+});
+
+
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} retains Skill catalog loading until the newest owned read settles`, async () => {
+	using skillsChanged = new Emitter<void>();
+	const first = new DeferredPromise<readonly IAgentSkill[]>();
+	const second = new DeferredPromise<readonly IAgentSkill[]>();
+	let reads = 0;
+	const prompts = { onDidChangeSkills: skillsChanged.event, findAgentSkills: () => ++reads === 1 ? first.p : second.p } as unknown as IPromptsService;
+	const f = fixture(kind, undefined, false, false, prompts);
+	using resources = f.resources;
+	const initialization = f.model.initialize();
+	assert.equal(f.model.inputState.skillSelectorsLoading, true);
+	skillsChanged.fire();
+	assert.equal(reads, 2);
+	await first.complete([]);
+	await initialization;
+	assert.equal(f.model.inputState.skillSelectorsLoading, true, 'an older read cannot finish the replacement catalog read');
+	const ready = new Promise<void>(resolve => resources.add(f.model.onDidChange(() => {
+		if (!f.model.inputState.skillSelectorsLoading) resolve();
+	})));
+	await second.complete([]);
+	await ready;
+	assert.equal(f.model.inputState.skillSelectorsLoading, false);
 });

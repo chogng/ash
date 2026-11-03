@@ -498,6 +498,7 @@ fn hooks_browser_reads_external_toml_edits_and_refreshes_without_writing() {
                     args: vec![],
                 },
                 enablement: HookEnablementDto::Disabled,
+                claude_pre_tool_use: None,
             },
         })
         .unwrap();

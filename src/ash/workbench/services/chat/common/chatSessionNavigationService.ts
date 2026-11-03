@@ -1,7 +1,7 @@
 import { canceled } from '../../../../base/common/errors.js';
 import type { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { localize } from '../../../../nls.js';
-import type { IChatService, ThreadRead } from './chatService.js';
+import type { ChatAgent, IChatService, ThreadRead } from './chatService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { OpenSessionLink } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -26,8 +26,8 @@ export interface IChatSessionNavigationService {
 	prepareConversationLink?(sessionId: string, threadId: string): Promise<OpenSessionLink>;
 	/** Resolves an opaque authority without interpreting it in shared Workbench code. */
 	openConversationLink?(address: OpenSessionLink): Promise<void>;
-	/** Creates and selects an unsent draft through the window’s Session owner. */
-	createNewConversation(): void | Promise<void>;
+	/** Creates and selects an unsent draft; focus reveals its presentation. False means the host picker was canceled. */
+	createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): boolean | void | Promise<boolean | void>;
 	/** Hosts with their own conversation presentation also own its history picker. */
 	showConversationHistory?(): void | Promise<void>;
 	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];

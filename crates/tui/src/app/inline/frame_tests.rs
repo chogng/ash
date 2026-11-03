@@ -249,6 +249,7 @@ fn hooks_inline_details_wrap_and_scroll_without_losing_actions() {
             ],
         },
         enablement: HookEnablementDto::Disabled,
+        claude_pre_tool_use: None,
     };
     let mut app = app();
     app.update(crate::hooks::Event::Opened(

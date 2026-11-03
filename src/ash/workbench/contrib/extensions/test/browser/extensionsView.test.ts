@@ -1517,6 +1517,15 @@ suite('extensions browser component', () => {
 			await details.getByRole('tab', { name: instructions, exact: true }).press('Enter');
 			await expect(details.getByRole('tabpanel', { name: instructions, exact: true })).toContainText('Review changes carefully.');
 			await expect(details.getByRole('tabpanel', { name: instructions, exact: true })).not.toContainText('metadata:');
+			await details.getByRole('link', { name: 'SKILL.md', exact: true }).focus();
+			await details.getByRole('link', { name: 'SKILL.md', exact: true }).press('Enter');
+			const documentRequest = await page.evaluate(() => {
+				const request = window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'document').at(-1) as [string, { resource: { query: string; }; label: string; readOnly: boolean; languageId: string; }];
+				return { label: request[1].label, readOnly: request[1].readOnly, languageId: request[1].languageId, query: request[1].resource.query };
+			});
+			expect(documentRequest).toMatchObject({ label: 'review/SKILL.md', readOnly: true, languageId: 'markdown' });
+			expect(documentRequest.query).toContain('session-scope');
+
 			await header.focus();
 			await header.press('ArrowLeft');
 			await expect(header).toHaveAttribute('aria-expanded', 'false');

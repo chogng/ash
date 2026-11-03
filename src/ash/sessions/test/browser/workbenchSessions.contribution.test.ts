@@ -144,6 +144,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 		activeUntitledSession: undefined as { readonly untitledSessionId: string; } | undefined,
 	};
 	using services = new InstantiationService();
+	services.registerInstance(IChatService, {} as IChatService);
 	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
 	services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)?.[1];
@@ -157,6 +158,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 
 test('provider-qualified navigation never opens an equal host-local ID on the ambient host', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IChatService, {} as IChatService);
 	let opened = 0;
 	services.registerInstance(ISessionsManagementService, { openThread: async () => { opened++; } } as unknown as ISessionsManagementService);
 	services.registerInstance(IViewsService, {} as IViewsService);
@@ -347,6 +349,7 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 
 test('conversation navigation focuses the opened result without focusing a later selection', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IChatService, {} as IChatService);
 	let active = { session: { sessionId: 'source' }, threadId: 'source-thread' };
 	let complete = Promise.resolve();
 	let selectResult = true;
@@ -370,4 +373,26 @@ test('conversation navigation focuses the opened result without focusing a later
 	await pending.complete();
 	await opening;
 	assert.equal(focused, 1);
+});
+
+
+test('A reusable-workflow new Chat reveals the Code conversation through its navigation owner', async () => {
+	using services = new InstantiationService();
+	let created = 0;
+	const selected: unknown[] = [];
+	const focused: string[] = [];
+	services.registerInstance(ISessionsManagementService, { createUntitledSession: () => { created++; return { untitledSessionId: `draft-${created}` }; }, setUntitledSessionAgent: (id: string, agent: unknown) => { selected.push([id, agent]); } } as unknown as ISessionsManagementService);
+	services.registerInstance(IViewsService, { focusView: async (id: string) => { focused.push(id); return true; } } as unknown as IViewsService);
+	services.registerInstance(IChatService, {} as IChatService);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
+	const navigation = services.get(IChatSessionNavigationService);
+	await navigation.createNewConversation();
+	assert.deepEqual(focused, []);
+	await navigation.createNewConversation({ focus: true });
+	assert.equal(created, 2);
+	assert.deepEqual(focused, ['ash.chat.view']);
+	const agent = { name: 'reviewer', description: 'Review changes.', sourceId: 'directory:project' };
+	await navigation.createNewConversation({ focus: true, agent });
+	assert.deepEqual(selected, [['draft-3', agent]]);
 });

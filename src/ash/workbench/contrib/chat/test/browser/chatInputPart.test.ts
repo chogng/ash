@@ -5170,3 +5170,18 @@ test('authentication uses the bound MCP host and cancels hidden login without ap
 	await part.acceptActiveToolConfirmation();
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveOnce' } }]);
 });
+
+
+test('Attaching a Skill retains its accepted source and digest through text edits and catalog refresh before submission', async () => {
+	const accepted = { id: { source: 'plugin:review-tools@1', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:accepted' } };
+	const replacement = { ...accepted, id: { ...accepted.id, source: 'replacement-host' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:replacement' } };
+	const sent: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async (text, _mode, skills) => { sent.push({ text, skills }); } });
+	const state: ChatInputState = { mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true };
+	part.render(state);
+	part.attachSkill(accepted);
+	part.appendToDraft('Inspect the project changes.');
+	part.render({ ...state, skillSelectors: [{ name: 'review', source: replacement.id.source, description: 'Replacement', skill: replacement }] });
+	await part.acceptInput();
+	assert.deepEqual(sent, [{ text: '$review\n\nInspect the project changes.', skills: [accepted] }]);
+});

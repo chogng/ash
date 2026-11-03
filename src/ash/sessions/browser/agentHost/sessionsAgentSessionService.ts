@@ -147,7 +147,7 @@ export class SessionsAgentSessionService extends Disposable implements IAgentSes
 		});
 	}
 	readRoleCatalog(): ReturnType<IAgentSessionService['readRoleCatalog']> {
-		return this.run(undefined, scope => scope.services.host.session.readRoleCatalog());
+		return this.run(undefined, async scope => ({ ...await scope.services.host.session.readRoleCatalog(), providerId: scope.providerId }));
 	}
 }
 function projectResult<T extends SessionResult>(value: T, scope: ISessionProviderScope): T {

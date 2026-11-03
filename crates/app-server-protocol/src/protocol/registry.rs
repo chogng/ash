@@ -6829,6 +6829,7 @@ typescript_bindings! {
     HookMatcherDto,
     HookActionDto,
     HookConfigDto,
+    ash_protocol::ClaudePreToolUseHook,
     LanguageServerModeDto,
     LanguageServerConfigDto,
     FrontendConfigDto,

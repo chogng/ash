@@ -488,6 +488,9 @@ pub struct HookConfigDto {
     pub matcher: HookMatcherDto,
     pub action: HookActionDto,
     pub enablement: HookEnablementDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub claude_pre_tool_use: Option<ash_protocol::ClaudePreToolUseHook>,
 }
 
 /// Reads user declarations and directory declarations discoverable by one Session.

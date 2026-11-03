@@ -158,6 +158,8 @@ export interface CodeLensList {
 }
 
 export interface CodeLensProvider {
+	/** Executes a lens owned by this provider in the originating editor. */
+	executeCodeLensCommand?(model: model.ITextModel, command: Command, editorId: string): void | Promise<void>;
 	onDidChange?: Event<this>;
 	provideCodeLenses(model: model.ITextModel, token: CancellationToken): ProviderResult<CodeLensList>;
 	resolveCodeLens?(model: model.ITextModel, codeLens: CodeLens, token: CancellationToken): ProviderResult<CodeLens>;

@@ -1,5 +1,6 @@
 use crate::error::hook_execution_error;
 use crate::outcome::HookDecision;
+use crate::outcome::parse_claude_pre_tool_use;
 use crate::outcome::parse_output;
 use ash_async_utils::CancellationToken;
 use ash_config::HookAction;
@@ -119,7 +120,20 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
         evidence: &mut core_api::HookRunEvidence,
     ) -> Result<HookDecision, CoreError> {
         let HookAction::Process { program, args } = &hook.action;
-        let result = self.executor.execute(
+        let compatibility_executor = hook.claude_pre_tool_use.map(|compatibility| {
+            CommandExecutor::new(
+                self.dir.clone(),
+                exec_server::LocalSandbox::new(ash_install_context::InstallContext::current())
+                    .build(),
+                AlwaysAuthorized,
+                ExecutionLimits {
+                    timeout: Duration::from_secs(u64::from(compatibility.timeout_seconds)),
+                    max_output_bytes: HOOK_OUTPUT_BYTES,
+                },
+            )
+        });
+        let executor = compatibility_executor.as_ref().unwrap_or(&self.executor);
+        let result = executor.execute(
             CommandRequest {
                 program: program.clone(),
                 arguments: args.clone(),
@@ -136,7 +150,11 @@ impl HookProcessExecutor for LocalHookProcessExecutor {
                 evidence.exit_code = output.exit_code;
                 evidence.stdout_truncated = output.stdout_truncated;
                 evidence.stderr_truncated = output.stderr_truncated;
-                parse_output(hook.id.as_str(), output)
+                if hook.claude_pre_tool_use.is_some() {
+                    parse_claude_pre_tool_use(hook.id.as_str(), output)
+                } else {
+                    parse_output(hook.id.as_str(), output)
+                }
             }
             Ok(CommandExecutionOutcome::SandboxDenied(_)) => Err(CoreError::Policy(format!(
                 "Hook '{}' was denied by the directory sandbox",

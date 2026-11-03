@@ -1,3 +1,4 @@
+import { ILanguageModelsService } from '../../common/languageModels.js';
 import { createTestLanguageModelToolsService } from '../common/tools/testLanguageModelToolsService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -9,9 +10,15 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import type { IModelService } from '../../../../../editor/common/services/model.js';
+import type { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ITextModelService, ITextModelContentProvider } from '../../../../../editor/common/services/resolverService.js';
 import type { IMarkerService } from '../../../../../platform/markers/common/markers.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../common/tools/languageModelToolsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promptFileContributions.js';
@@ -19,6 +26,10 @@ import { PromptLanguageFeaturesProvider } from '../../browser/promptSyntax/promp
 for (const end of ['disposed', 'created'] as const) test(`Skill text content provider releases a read when the contribution is ${end}`, async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IPathService, { resolvedUserHome: undefined } as IPathService);
+	services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
+	services.registerInstance(IFileService, resources.add(new FileService()));
+	services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: false, read: async () => { throw new Error('No capability read expected'); } }));
 	const features = resources.add(new LanguageFeaturesService());
 	const languages = resources.add(new LanguageService());
@@ -27,9 +38,32 @@ for (const end of ['disposed', 'created'] as const) test(`Skill text content pro
 	let signal: AbortSignal | undefined;
 	const prompts = resources.add(new PromptsService({ onDidChangeSkills: Event.None, list: async () => ({ generation: 1, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 1, skills: [{ id: { source: 'user:test', name: 'review' }, contentDigest: `sha256:${'a'.repeat(64)}`, description: 'Review', enabled: true, compatible: true }] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { }, readTextResource: (_ref, _path, current) => { signal = current; return pending.p; } }, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } }));
 	const { catalog } = await prompts.readSkillManagement();
+	services.registerInstance(IPromptsService, prompts);
 	let provider: ITextModelContentProvider | undefined;
 	const models: TextModel[] = [];
-	const contribution = resources.add(new PromptLanguageFeaturesProvider(features, { getModels: () => [], getModel: () => null, onModelAdded: Event.None, onModelRemoved: Event.None, onModelLanguageChanged: Event.None, createModel: (text: string, language: { languageId: string; }, uri: URI) => { const model = resources.add(new TextModel(text, { languageId: language.languageId, resource: uri })); models.push(model); return model; } } as unknown as IModelService, {} as IMarkerService, services, languages, { registerTextModelContentProvider: (_scheme, value) => { provider = value; return toDisposable(() => { provider = undefined; }); } } as ITextModelService, prompts));
+	const contribution = resources.add(new PromptLanguageFeaturesProvider(
+		features,
+		{
+			getModels: () => [], getModel: () => null,
+			onModelAdded: Event.None, onModelRemoved: Event.None, onModelLanguageChanged: Event.None,
+			createModel: (text: string, language: { languageId: string; }, uri: URI) => {
+				const model = resources.add(new TextModel(text, { languageId: language.languageId, resource: uri }));
+				models.push(model);
+				return model;
+			},
+		} as unknown as IModelService,
+		{} as IMarkerService,
+		services,
+		languages,
+		{
+			registerTextModelContentProvider: (_scheme, value) => {
+				provider = value;
+				return toDisposable(() => { provider = undefined; });
+			},
+		} as ITextModelService,
+		prompts,
+		{ onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None, listCodeEditors: () => [] } as unknown as ICodeEditorService,
+	));
 	const content = provider!.provideTextContent(catalog.skills[0].uri);
 	if (end === 'disposed') contribution.dispose();
 	assert.equal(signal?.aborted, end === 'disposed');

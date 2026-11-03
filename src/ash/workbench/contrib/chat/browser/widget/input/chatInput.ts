@@ -47,6 +47,8 @@ export interface ChatInputState {
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
+	/** Skill discovery can still be pending after model selection is ready. */
+	readonly skillSelectorsLoading?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;

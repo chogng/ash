@@ -134,6 +134,24 @@ pub(crate) fn encode_input(
     invocation: &HookInvocation<'_>,
     dir: &Path,
 ) -> Result<Vec<u8>, CoreError> {
+    if hook.claude_pre_tool_use.is_some() {
+        let HookInvocation::BeforeTool(request) = invocation else {
+            return Err(CoreError::Execution(
+                "Claude PreToolUse Hook received an incompatible event".into(),
+            ));
+        };
+        return bounded_input(
+            hook,
+            &serde_json::json!({
+                "hook_event_name": "PreToolUse",
+                "session_id": request.session_id.as_str(),
+                "cwd": dir,
+                "tool_name": request.tool_name,
+                "tool_use_id": request.tool_call_id.as_str(),
+                "tool_input": request.tool_input,
+            }),
+        );
+    }
     let event = HookInputEvent {
         name: hook.event,
         session_id: match invocation {
@@ -157,13 +175,20 @@ pub(crate) fn encode_input(
         },
         subject: invocation.subject(),
     };
-    let bytes = serde_json::to_vec(&HookInput {
-        protocol_version: HOOK_PROTOCOL_VERSION,
-        hook_id: hook.id.as_str(),
-        dir,
-        event,
-    })
-    .map_err(|error| CoreError::Execution(format!("could not encode Hook input: {error}")))?;
+    bounded_input(
+        hook,
+        &HookInput {
+            protocol_version: HOOK_PROTOCOL_VERSION,
+            hook_id: hook.id.as_str(),
+            dir,
+            event,
+        },
+    )
+}
+
+fn bounded_input(hook: &HookConfig, input: &impl Serialize) -> Result<Vec<u8>, CoreError> {
+    let bytes = serde_json::to_vec(input)
+        .map_err(|error| CoreError::Execution(format!("could not encode Hook input: {error}")))?;
     if bytes.len() > HOOK_INPUT_BYTES {
         return Err(CoreError::Execution(format!(
             "Hook '{}' input exceeds the {HOOK_INPUT_BYTES}-byte limit",

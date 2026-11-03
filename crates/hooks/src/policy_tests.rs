@@ -14,6 +14,7 @@ fn hook(id: &str) -> HookConfig {
             args: Vec::new(),
         },
         enablement: HookEnablement::Enabled,
+        claude_pre_tool_use: None,
     }
 }
 

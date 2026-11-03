@@ -1,3 +1,5 @@
+import { localize } from '../../../nls.js';
+import { OperatingSystem } from '../../../base/common/platform.js';
 import type { IAppServerApi, IAppServerConnectionRecovery, IAppServerSkillApi, IAppServerHookApi, IResourceApi, IServerEventApi, SkillCatalog, SkillDescriptor, ResourceMetadataResult } from '../common/appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -189,6 +191,43 @@ export function createAppServerHookOperations(connection: AppServerProtocolClien
 		onDidChangeHooks: (listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'config/changed') listener.call(thisArgs);
 		}),
+		async captureClaudeHookImport() {
+			const generation = connection.generation;
+			const current = () => connection.state === 'ready' && generation === connection.generation;
+			if (!current() || (connection.operatingSystem !== OperatingSystem.Linux && connection.operatingSystem !== OperatingSystem.Macintosh)) {
+				throw new Error(localize('prompt.hooks.posixRequired', 'Connect to a POSIX host to import Claude Hooks.'));
+			}
+			const config = await appServerRequest(connection, 'config/read', {});
+			return async (commands, isCurrent) => {
+				let revision = config.revision;
+				let imported = 0;
+				let existing = 0;
+				for (const entry of commands) {
+					if (!current() || !isCurrent()) break;
+					if (Object.hasOwn(config.hooks, entry.id)) {
+						existing++;
+						continue;
+					}
+					try {
+						const result = await appServerRequest(connection, 'hook/upsert', {
+							commandId: generateUuid(),
+							expectedRevision: revision,
+							hook: {
+								id: entry.id, event: 'preToolUse', enablement: 'disabled',
+								matcher: { toolNames: [] },
+								action: { type: 'process', program: entry.program, args: [...entry.args] },
+								claudePreToolUse: { timeoutSeconds: entry.timeoutSeconds },
+							},
+						});
+						revision = result.revision;
+						imported++;
+					} catch (error) {
+						return { imported, existing, error };
+					}
+				}
+				return { imported, existing };
+			};
+		},
 		list: async sessionId => {
 			const result = await appServerRequest(connection, 'hook/list', sessionId ? { sessionId } : {});
 			return result.sources.map(source => ({

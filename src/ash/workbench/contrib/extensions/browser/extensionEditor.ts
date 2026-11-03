@@ -429,6 +429,9 @@ export class ExtensionEditor extends EditorPane {
 					]
 				}]);
 				this.header.status.textContent = '';
+				this.addResourceLink('SKILL.md', async () => {
+					await this.editors.openEditor({ resource: skill.uri, label: `${skill.id.name}/SKILL.md`, languageId: 'markdown', readOnly: true }, { pinned: true });
+				});
 				this.capabilities.textContent = [
 					skill.compatible ? localize({ bundle: 'ash.extensions', key: 'skillCompatible' }, 'Compatible') : localize({ bundle: 'ash.extensions', key: 'skillCompatibilityUnknown' }, 'Compatibility unknown'),
 					localize({ bundle: 'ash.extensions', key: 'skillInvoke' }, 'Invoke enabled skills with ${0} in chat.', skill.id.name),

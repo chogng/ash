@@ -195,6 +195,8 @@ export interface IChatInputPart extends IDisposable {
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	appendToDraft(text: string): void;
+	/** Inserts a source-qualified Skill selector and retains its exact revision for submission. */
+	attachSkill(skill: SkillReference): void;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void>;
 	openModelPicker(): void;
@@ -455,10 +457,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const completions = this._register(instantiationService.createInstance(AgentHostInputCompletions, this.input.getModel(), {
 				currentLifecycle: () => this.inputLifecycle.signal,
 				getContext: () => this.state.conversation ?? {},
-				acceptSkill: skill => {
-					const captured = this.draftSkills?.references.filter(reference => reference.id.name !== skill.id.name) ?? [];
-					this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, [...captured, skill]) };
-				},
+				acceptSkill: skill => this.captureSkill(skill),
 				isEnabled: () => this.visible && !this.state.aiDisabled,
 				acceptResource: (resource, isDirectory, replacement, signal) => this.acceptResourceCompletion(resource, isDirectory, replacement, signal),
 			} satisfies AgentHostInputCompletionHost));
@@ -995,6 +994,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.input.insertText(suffix);
 		}
 		this.renderToolbar();
+	}
+
+	attachSkill(skill: SkillReference): void {
+		if (this.isDisposed || !this.visible || this.state.aiDisabled) return;
+		this.appendToDraft(`$${skill.id.name}`);
+		this.captureSkill(skill);
+	}
+
+	private captureSkill(skill: SkillReference): void {
+		const captured = this.draftSkills?.references.filter(reference => reference.id.name !== skill.id.name) ?? [];
+		this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, [...captured, skill]) };
 	}
 
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void {

@@ -256,6 +256,7 @@ pub(super) fn hook_config_dto(hook: HookConfig) -> HookConfigDto {
         },
         action: hook_action_dto(hook.action),
         enablement: hook_enablement_dto(hook.enablement),
+        claude_pre_tool_use: hook.claude_pre_tool_use,
     }
 }
 
@@ -268,6 +269,7 @@ fn hook_config_from_dto(hook: HookConfigDto) -> Result<HookConfig, RpcError> {
         },
         action: hook_action_from_dto(hook.action),
         enablement: hook_enablement_from_dto(hook.enablement),
+        claude_pre_tool_use: hook.claude_pre_tool_use,
     })
 }
 
