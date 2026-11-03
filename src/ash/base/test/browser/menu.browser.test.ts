@@ -10,6 +10,58 @@ suite('Menu browser behavior', () => {
 		await browser.page.evaluate(kind => window.ashMenuTest.mount(kind), kind);
 	};
 
+	for (const side of ['left', 'right'] as const) {
+		test(`floating menus avoid ${side} window controls and follow visible overlay geometry`, async () => {
+			await open('basic');
+			await browser.page.evaluate(side => {
+				window.ashMenuTest.overlay(90, innerWidth - 210, 40);
+				window.ashMenuTest.popup(side === 'left' ? 0 : innerWidth - 1, 0);
+			}, side);
+			const popup = browser.page.locator('.ash-context-view-menu:not([hidden])');
+			const primary = browser.page.getByRole('menuitem', { name: 'Primary', exact: true });
+			await expect(primary).toBeFocused();
+			await expect(popup).toHaveCSS('top', '40px');
+			for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+				await browser.page.evaluate(scheme => window.ashMenuTest.theme(scheme), scheme);
+				const box = await popup.boundingBox();
+				assert.ok(box && box.y >= 40 && box.x >= 0 && box.x + box.width <= 1280 && box.y + box.height <= 720);
+				await browser.page.screenshot({ path: browser.info.outputPath(`wco-${side}-${scheme}.png`) });
+			}
+			await browser.page.evaluate(() => window.ashMenuTest.overlay(90, innerWidth - 210, 64));
+			await expect(popup).toHaveCSS('top', '64px');
+			await browser.page.evaluate(() => window.ashMenuTest.overlay(90, innerWidth - 210, 64, false));
+			await expect(popup).toHaveCSS('top', '0px');
+			await expect(primary).toBeFocused();
+			await primary.press('Escape');
+			await expect(popup).toHaveCount(0);
+			await expect(browser.page.getByRole('button', { name: 'Outside', exact: true })).toBeFocused();
+		});
+	}
+
+	test('keyboard submenus avoid window controls through the shared floating host', async () => {
+		await open('nested');
+		await browser.page.evaluate(() => {
+			window.ashMenuTest.overlay(90, 590, 200);
+			window.ashMenuTest.focus(2);
+		});
+		await browser.page.keyboard.press('ArrowRight');
+		const choice = browser.page.getByRole('menuitemradio', { name: 'Choice', exact: true });
+		await expect(choice).toBeFocused();
+		const popup = browser.page.locator('.ash-context-view-menu:not([hidden])');
+		await expect(popup).toHaveCSS('top', '200px');
+		await browser.page.keyboard.press('ArrowDown');
+		await browser.page.keyboard.press('ArrowRight');
+		await expect(browser.page.getByRole('menuitem', { name: 'Child', exact: true })).toBeFocused();
+		for (const view of await popup.all()) {
+			const box = await view.boundingBox();
+			assert.ok(box && box.y >= 200 && box.x >= 0 && box.x + box.width <= 1280 && box.y + box.height <= 720);
+		}
+		await browser.page.keyboard.press('Escape');
+		await expect(browser.page.getByRole('menuitem', { name: 'Nested', exact: true })).toBeFocused();
+		await browser.page.keyboard.press('Escape');
+		await expect(browser.page.getByRole('menuitem', { name: 'First', exact: true })).toBeFocused();
+	});
+
 	test('updates state, modifier labels and shortcuts in place and keeps Tab in a standalone menu', async () => {
 		await open('basic');
 		const primary = browser.page.locator('[data-action-id="primary"] > button');

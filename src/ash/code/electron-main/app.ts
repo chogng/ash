@@ -141,7 +141,7 @@ import { electronRemoteWindowMainHost } from '../../platform/remote/electron-mai
 import { RemoteWindowMainContext } from '../../platform/remote/electron-main/remoteWindowMainContext.js';
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from '../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type DirectoryPermissionRequest, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from '../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WORKSPACE_EDIT_CHANNEL, WORKSPACE_EDIT_ERROR_CHANNEL, validateWorkspaceEdit, WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL, validateWorkspaceConfigurationRequest } from '../../platform/workspace/common/workspaceIpc.js';
@@ -1685,7 +1685,7 @@ export class AshApplication extends Disposable {
 			}),
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
 			...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
 			...windowDisposables.add(new ImageViewMainService(window, {
 				entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
@@ -2112,7 +2112,7 @@ export class AshApplication extends Disposable {
 						{ channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL, validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters'); return undefined; }, invoke: () => wslHosts.listDistros() },
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
-						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
 						...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
 						...windowDisposables.add(new ImageViewMainService(window, {
 							entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
@@ -2472,8 +2472,20 @@ export class AshApplication extends Disposable {
 		return workspaceHost.createGrant(path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS);
 	}
 
-	private directoryPermissionPrompt(path: string): DialogRequest {
+	private directoryPermissionPrompt(request: DirectoryPermissionRequest): DialogRequest {
 		const translate = (key: string, english: string): string => this.activeLanguagePack.bundles.ash?.[key] ?? english;
+		let detail: string;
+		if (request.remoteHostLabel) {
+			detail = formatNlsMessage(
+				translate('workspaceTrust.remoteDetail', localize2('workspaceTrust.remoteDetail', 'Remote environment: {0}\nFolder: {1}\n\nThis choice controls Ash access to this folder in that environment. In Restricted Mode, Ash can edit and save files. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services there.').original),
+				{ '0': request.remoteHostLabel, '1': request.path },
+			);
+		} else {
+			detail = formatNlsMessage(
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
+				{ '0': request.path },
+			);
+		}
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,
@@ -2481,10 +2493,7 @@ export class AshApplication extends Disposable {
 			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder').original),
 			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
 			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
-			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
-				{ '0': path },
-			),
+			detail,
 		};
 	}
 

@@ -90,7 +90,7 @@ suite('workspace trust during directory opening', () => {
 			const requests: unknown[] = [];
 			const prompts: string[] = [];
 			const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async (_method: unknown, params: unknown) => { requests.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
-			await host.initializeWorkspace(client, { requestDirectoryPermissions: async path => { prompts.push(path); return choice; } }, trustApi(new Map(), grants), workspace(['/new']));
+			await host.initializeWorkspace(client, { requestDirectoryPermissions: async request => { prompts.push(request.path); return choice; } }, trustApi(new Map(), grants), workspace(['/new']));
 			const permissions = choice === 'restricted' ? RESTRICTED_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
 			assert.deepEqual(prompts, [URI.file('/new').fsPath]);
 			assert.deepEqual(grants, [permissions]);
@@ -179,16 +179,16 @@ suite('workspace trust during directory opening', () => {
 
 	test('remote directory prompts display the host while granting only the original server path', async () => {
 		const paths: string[] = [];
-		const labels: string[] = [];
+		const prompts: unknown[] = [];
 		const api = trustApi(new Map(), []);
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => ({ dirs: [] }) } as unknown as AppServerProtocolClient;
 		await host.initializeWorkspaceDirectories(client, {
-			requestDirectoryPermissions: async label => { labels.push(label); return 'restricted'; },
+			requestDirectoryPermissions: async request => { prompts.push(request); return 'restricted'; },
 		}, {
 			...api,
 			createGrant: (path, permissions) => { paths.push(path); return api.createGrant(path, permissions); },
-		}, [{ id: 'root', path: '/srv/project', label: 'server-a:/srv/project' }]);
-		assert.deepEqual(labels, ['server-a:/srv/project']);
+		}, [{ id: 'root', path: '/srv/project', remoteHostLabel: 'Build environment (server-a)' }]);
+		assert.deepEqual(prompts, [{ path: '/srv/project', remoteHostLabel: 'Build environment (server-a)' }]);
 		assert.deepEqual(paths, ['/srv/project']);
 	});
 
@@ -219,6 +219,21 @@ suite('workspace trust during directory opening', () => {
 			assert.deepEqual(grants, []);
 			registration.dispose();
 			assert.equal(listeners.size, 0);
+		} finally { reply = undefined; }
+	});
+
+	test('the host permission prompt carries normalized remote display context without granting access', async () => {
+		const prompts: unknown[] = [];
+		const grants: WorkspaceTrustPermission[][] = [];
+		using registration = host.registerAppServerWorkspaceHost(async () => { }, {
+			requestDirectoryPermissions: async request => { prompts.push(request); return 'restricted'; },
+		}, trustApi(new Map(), grants), async () => { throw new Error('Unexpected directory replacement'); });
+		const completion = new Promise<unknown>(resolve => { reply = resolve; });
+		try {
+			listeners.get('ash:workspace:operation')!({ nonce: 'prompt', operation: 'selectPermissions', params: { path: '/srv/project', remoteHostLabel: 'Build\nEnvironment' } });
+			assert.deepEqual(await completion, { nonce: 'prompt', result: 'restricted' });
+			assert.deepEqual(prompts, [{ path: '/srv/project', remoteHostLabel: 'Build Environment' }]);
+			assert.deepEqual(grants, []);
 		} finally { reply = undefined; }
 	});
 

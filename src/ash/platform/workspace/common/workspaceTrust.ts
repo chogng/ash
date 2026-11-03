@@ -104,8 +104,14 @@ export interface IWorkspaceTrustManagementService {
 export const IWorkspaceTrustManagementService = createServiceIdentifier<IWorkspaceTrustManagementService>('workspaceTrustManagementService');
 
 /** Startup directory authorization is available before Workbench services exist. */
+export interface DirectoryPermissionRequest {
+	readonly path: string;
+	/** Presentation only; the connection and directory path determine authorization. */
+	readonly remoteHostLabel?: string;
+}
+
 export interface IDirectoryPermissionRequestService {
-	requestDirectoryPermissions(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
+	requestDirectoryPermissions(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
 }
 
 export interface WorkspaceTrustRequestButton {

@@ -6,6 +6,8 @@ import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNo
 import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focus.js';
 import { getViewport } from '../../geometry.js';
 import { observeResize } from '../../observer.js';
+import { getVisibleWCOTitlebarAreaRect } from '../../browser.js';
+import { avoidWindowControlsOverlay } from './windowControlsOverlay.js';
 
 export {
 	AnchorAlignment,
@@ -174,6 +176,10 @@ export class ContextView
 			'resize',
 			() => this.layout(),
 		));
+		const overlay = (targetWindow.navigator as Navigator & { windowControlsOverlay?: EventTarget; }).windowControlsOverlay;
+		if (overlay) {
+			this.visibleListeners.add(addDisposableListener(overlay, 'geometrychange', () => this.layout()));
+		}
 		const visualViewport = targetWindow.visualViewport;
 		if (visualViewport) {
 			this.visibleListeners.add(addDisposableListener(
@@ -211,12 +217,20 @@ export class ContextView
 		const targetWindow = getWindow(this.element);
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();
+		const viewport = getViewport(targetWindow);
 		const result = layout2d(
-			getViewport(targetWindow),
+			viewport,
 			{ width: bounds.width, height: bounds.height },
 			anchor,
 			options,
 		);
+		const titlebar = getVisibleWCOTitlebarAreaRect(targetWindow);
+		const position = avoidWindowControlsOverlay(titlebar && {
+			x: titlebar.x - viewport.left,
+			y: titlebar.y - viewport.top,
+			width: titlebar.width,
+			height: titlebar.height,
+		}, viewport, bounds, result);
 		this.element.classList.toggle(
 			'ash-context-view-above',
 			result.anchorPosition === AnchorPosition.Above,
@@ -238,7 +252,7 @@ export class ContextView
 			result.anchorAlignment === AnchorAlignment.Center,
 		);
 		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
-			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - result.left}px`);
+			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - position.left}px`);
 		} else {
 			this.element.style.removeProperty('--ash-context-view-anchor-offset');
 		}
@@ -246,8 +260,8 @@ export class ContextView
 			'ash-context-view-axis-horizontal',
 			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
 		);
-		this.element.style.left = `${result.left}px`;
-		this.element.style.top = `${result.top}px`;
+		this.element.style.left = `${position.left}px`;
+		this.element.style.top = `${position.top}px`;
 	}
 
 	hide(

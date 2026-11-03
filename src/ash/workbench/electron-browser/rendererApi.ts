@@ -159,7 +159,13 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const restoreWorkspace = (retry = false): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
 			if (workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
-				return trackWorkspaceInitialization(Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)));
+				let remoteHostLabel: string | undefined;
+				if (remoteConnection.kind === 'ssh') {
+					remoteHostLabel = remoteConnection.host;
+				} else if (remoteConnection.kind === 'remote') {
+					remoteHostLabel = remoteConnection.authority;
+				}
+				return trackWorkspaceInitialization(Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel })));
 			}
 			return workspaceInitialization.promise;
 		};

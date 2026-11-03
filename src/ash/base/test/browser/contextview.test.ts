@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ContextViewHideReason as ContextViewHideReasonValue } from '../../browser/ui/contextview/contextview.js';
@@ -91,6 +92,41 @@ test('ContextView reports replacement and outside-pointer hide reasons exactly o
 	]);
 	assert.equal(contextView.visible, false);
 	contextView.dispose();
+});
+
+test('ContextView reads its owner window overlay and releases geometry listeners when hidden', () => {
+	const other = new JSDOM('<!doctype html><body></body>');
+	const overlay = Object.assign(new EventTarget(), {
+		visible: true,
+		getTitlebarAreaRect: () => new other.window.DOMRect(80, 0, 300, 40),
+	});
+	Object.defineProperties(other.window, {
+		innerWidth: { value: 500 },
+		innerHeight: { value: 400 },
+	});
+	Object.defineProperty(other.window.navigator, 'windowControlsOverlay', { value: overlay });
+	using contextView = new ContextView(other.window.document.body);
+	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 100, 80);
+	try {
+		contextView.show({ anchor: { left: 400, top: 0, width: 0, height: 0 }, content: other.window.document.createElement('div') });
+		assert.equal(contextView.element.style.top, '40px');
+		assert.equal(getEventListeners(overlay, 'geometrychange').length, 1);
+		overlay.visible = false;
+		overlay.dispatchEvent(new Event('geometrychange'));
+		assert.equal(contextView.element.style.top, '0px');
+		overlay.visible = true;
+		overlay.dispatchEvent(new Event('geometrychange'));
+		assert.equal(contextView.element.style.top, '40px');
+		contextView.hide();
+		assert.equal(getEventListeners(overlay, 'geometrychange').length, 0);
+		const top = contextView.element.style.top;
+		overlay.visible = false;
+		overlay.dispatchEvent(new Event('geometrychange'));
+		assert.equal(contextView.element.style.top, top);
+	} finally {
+		contextView.dispose();
+		other.window.close();
+	}
 });
 
 test('ContextView restores focus after Escape closes the topmost view', () => {

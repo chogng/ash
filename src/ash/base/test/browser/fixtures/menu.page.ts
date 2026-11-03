@@ -3,6 +3,7 @@ import { DisposableStore, MutableDisposable } from '../../../common/lifecycle.js
 import { Menu, HorizontalDirection, VerticalDirection } from '../../../browser/ui/menu/menu.js';
 import { MenuBar } from '../../../browser/ui/menu/menubar.js';
 import { getActiveElement } from '../../../browser/dom.js';
+import { ContextView, ContextViewFocusRestore } from '../../../browser/ui/contextview/contextview.js';
 import { Keybinding, logicalKey, resolveKeybinding } from '../../../common/keybindings.js';
 import { OperatingSystem } from '../../../common/platform.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
@@ -24,6 +25,12 @@ let menu: Menu | undefined;
 let bar: MenuBar | undefined;
 let primary: Action | undefined;
 let lastShadow: ShadowRoot | undefined;
+const overlay = Object.assign(new EventTarget(), {
+	visible: false,
+	getTitlebarAreaRect: () => overlayRect,
+});
+let overlayRect = new DOMRect();
+Object.defineProperty(navigator, 'windowControlsOverlay', { configurable: true, value: overlay });
 
 function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact'): void {
 	scene.clear();
@@ -89,6 +96,22 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 
 const api = {
 	mount,
+	overlay(x: number, width: number, height: number, visible = true): void {
+		overlayRect = new DOMRect(x, 0, width, height);
+		overlay.visible = visible;
+		overlay.dispatchEvent(new Event('geometrychange'));
+	},
+	popup(left: number, top: number): void {
+		document.querySelector<HTMLButtonElement>('#outside')!.focus();
+		const popup = scene.value!.add(new ContextView(document.body));
+		popup.show({
+			anchor: { left, top, width: 0, height: 0 },
+			content: menu!.getContainer(),
+			presentation: 'menu',
+			focusRestore: ContextViewFocusRestore.Previous,
+		});
+		menu!.focus(true);
+	},
 	theme(name: 'light' | 'dark' | 'hcDark' | 'hcLight'): void {
 		theme.setColorTheme({ light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[name]);
 	},

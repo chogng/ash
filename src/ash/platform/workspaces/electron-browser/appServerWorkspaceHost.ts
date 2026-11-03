@@ -9,23 +9,25 @@ import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.j
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { parseWorkspace } from '../../workspace/common/workspace.js';
+import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
+export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi, options: { readonly remoteHostLabel?: string; } = {}): Promise<void> {
 	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	if (generation !== client.generation || client.state !== 'ready') throw canceled();
 	await initializeWorkspaceDirectories(client, workspaceTrust, trustApi, workspace.folders.map(folder => ({
 		id: folder.id,
 		path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,
+		remoteHostLabel: options.remoteHostLabel,
 	})));
 }
 
-/** Binds only these directories on this connection; a label affects the trust prompt, never authorization. */
-export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly label?: string; }[]): Promise<void> {
+/** Binds only these directories on this connection; a host label never affects authorization. */
+export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly remoteHostLabel?: string; }[]): Promise<void> {
 	const generation = client.generation;
 	let retired = client.state !== 'ready';
 	const cancellation = new AbortController();
@@ -50,7 +52,7 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 				continue;
 			}
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
-			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal), cancellation.signal);
+			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions({ path, remoteHostLabel: folder.remoteHostLabel }, cancellation.signal), cancellation.signal);
 			assertCurrent();
 			if (choice === 'cancel') { throw canceled(); }
 			if (choice !== 'development' && choice !== 'restricted') { throw new TypeError('Invalid directory permission selection'); }
@@ -76,8 +78,7 @@ export function registerAppServerWorkspaceHost(ready: () => Promise<void>, works
 			await ready();
 			switch (operation) {
 				case 'selectPermissions': {
-					if (typeof params.path !== 'string') throw new TypeError('Invalid directory path');
-					return workspaceTrust.requestDirectoryPermissions(params.path);
+					return workspaceTrust.requestDirectoryPermissions(validateDirectoryPermissionRequest(params));
 				}
 				case 'readPermissions': {
 					const request = decodeAppServerRequestParams('config/directoryGrants/read', params);

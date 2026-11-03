@@ -25,7 +25,7 @@ interface RemoteAgentHostOptions {
 	readonly onDidSuspendOS: (listener: () => void) => DisposableHandle;
 	readonly onDidResumeOS: (listener: () => void) => DisposableHandle;
 	readonly createApi: (lease: LocalAgentHostServiceClient, target: RemoteAgentHostConnection, resources: DisposableStore, id: string) => IAgentConnection;
-	readonly initializeDirectories: (client: AppServerProtocolClient, trust: IWorkspaceTrustApi, directories: readonly { readonly id: string; readonly path: string; readonly label: string; }[]) => Promise<void>;
+	readonly initializeDirectories: (client: AppServerProtocolClient, trust: IWorkspaceTrustApi, directories: readonly { readonly id: string; readonly path: string; readonly remoteHostLabel: string; }[]) => Promise<void>;
 }
 
 interface HostScope {
@@ -193,7 +193,9 @@ export class RemoteAgentHostService extends Disposable implements IRemoteAgentHo
 			const initialize = async (): Promise<void> => {
 				const root = remoteAgentHostRoot(target, id);
 				if (isSSHAgentHost(target) || target.type === 'wsl') {
-					await this.options.initializeDirectories(lease.client, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, label: root.toString() }]);
+					const host = isSSHAgentHost(target) ? target.host : target.distro;
+					const remoteHostLabel = target.name === host ? host : `${target.name} (${host})`;
+					await this.options.initializeDirectories(lease.client, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, remoteHostLabel }]);
 				}
 				// A Tunnel uses the Web session's existing grant, never Desktop host privileges.
 				const directory = await api.fs.resolvePath(root);
