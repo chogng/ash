@@ -13,7 +13,6 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { ILocalGitService } from '../../../../../platform/git/common/localGitService.js';
-import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem, type IActionListDelegate } from '../../../../../platform/actionWidget/browser/actionList.js';
@@ -35,7 +34,6 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
-	services.registerInstance(ILabelService, { getUriLabel: (uri: URI) => uri.fsPath } as ILabelService);
 	const changed = lifetime.add(new Emitter<void>());
 	const updated = lifetime.add(new Emitter<void>());
 	const loaded = lifetime.add(new Emitter<void>());
@@ -188,7 +186,7 @@ test('Branches and the worktree toggle form the last group', async () => {
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/recent').fsPath });
 });
 
-test('Workspace rows provide folder names and parent directory metadata while selecting the full folder path', async () => {
+test('Workspace rows show the folder name and use the full path for hover and accessibility', async () => {
 	const project = URI.file('/work/project');
 	const checkout = URI.file('/work/checkout');
 	const archive = URI.file('/work/archive');
@@ -197,8 +195,12 @@ test('Workspace rows provide folder names and parent directory metadata while se
 		{ folderUri: archive, label: archive.fsPath },
 	], undefined, { name: 'project', uri: project });
 	await f.open();
-	for (const name of ['project', 'checkout', 'archive']) {
-		assert.equal(f.items.find(item => item.label === name)?.description, URI.file('/work').fsPath);
+	for (const [name, uri] of [['project', project], ['checkout', checkout], ['archive', archive]] as const) {
+		const row = f.items.find(item => item.label === name);
+		assert.ok(row);
+		assert.equal(row.description, undefined);
+		assert.equal(row.tooltip, uri.fsPath);
+		assert.equal(row.detail, uri.fsPath);
 	}
 	f.choose('project');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: project.fsPath });

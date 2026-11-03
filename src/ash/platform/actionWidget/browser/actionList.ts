@@ -55,6 +55,8 @@ export interface IActionListItem<T> {
 	/** Searchable metadata announced with the action, separate from the visible label and badge. */
 	readonly detail?: string;
 	readonly description?: string;
+	/** Overrides the default row tooltip text. */
+	readonly tooltip?: string;
 }
 
 function isDisabled(entry: IActionListItem<unknown>): boolean {
@@ -65,7 +67,7 @@ export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
-	/** Enable description tooltips in menus, or disable the default tooltips in detail rows. */
+	/** Enable row tooltips in menus, or disable the default tooltips in detail rows. */
 	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
@@ -185,7 +187,7 @@ class ActionListAction extends ButtonActionViewItem {
 
 	protected override setupTooltip(): void {
 		if (this.options.showRowTooltips === false) { return; }
-		this.setupDelayedHover(this.button.domNode, [this.action.label, this.entry.description].filter(Boolean).join(' · '));
+		this.setupDelayedHover(this.button.domNode, this.entry.tooltip ?? [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 	}
 }
 
@@ -438,7 +440,7 @@ export class ActionList<T> extends Disposable {
 				if (!entry || action instanceof SubmenuAction) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
 				const customRow = entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
-					|| (this.options.showRowTooltips && entry.description);
+					|| (this.options.showRowTooltips && (entry.tooltip || entry.description));
 				if (!customRow) return undefined;
 				const row = new ActionListAction(action, entry, this.options);
 				if (entry.standaloneToggle) this.toggleRows.set(entry, row);

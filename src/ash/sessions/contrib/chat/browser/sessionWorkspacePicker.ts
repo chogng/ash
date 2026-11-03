@@ -4,7 +4,7 @@ import { SessionsRecentWorkspacesService } from '../../../services/sessions/brow
 import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { basename, dirname } from '../../../../base/common/resources.js';
+import { basename } from '../../../../base/common/resources.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -20,7 +20,6 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { ILocalGitService } from '../../../../platform/git/common/localGitService.js';
-import { ILabelService } from '../../../../platform/label/common/label.js';
 import { cloneRepository } from '../../../services/sessions/browser/cloneRepository.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -54,7 +53,7 @@ interface IWorkspaceWorktreeQuery {
 
 interface IWorkspacePickerAction extends IAction {
 	readonly recent?: boolean;
-	readonly description?: string;
+	readonly rowTooltip?: string;
 	readonly submenu?: readonly IWorkspacePickerAction[];
 	readonly standaloneToggle?: IActionListItemInlineToggle;
 }
@@ -62,7 +61,6 @@ interface IWorkspacePickerAction extends IAction {
 interface IWorkspaceModeItem {
 	readonly recent?: boolean;
 	readonly label: string;
-	readonly description?: string;
 	readonly picked?: boolean;
 	readonly mode: 'workspace' | 'container' | 'browse' | 'clone' | 'worktree' | 'folder';
 	readonly target?: SessionExecutionTarget;
@@ -98,7 +96,6 @@ export class SessionWorkspacePicker extends Disposable {
 		@IActionWidgetService actionWidget: IActionWidgetService,
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 		@ILocalGitService private readonly git: ILocalGitService,
-		@ILabelService private readonly labels: ILabelService,
 	) {
 		super();
 		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
@@ -223,7 +220,7 @@ export class SessionWorkspacePicker extends Disposable {
 		const toAction = (item: IWorkspaceModeItem): IWorkspacePickerAction => ({
 			recent: item.recent,
 			id: `sessions.workspace.${item.mode}.${item.target?.root ?? ''}`,
-			label: item.label, description: item.mode === 'folder' ? item.description : undefined,
+			label: item.label, rowTooltip: item.mode === 'folder' ? item.target?.root : undefined,
 			tooltip: item.target?.root ?? '', enabled: true, checked: item.picked,
 			icon: item.mode === 'worktree' ? Lxicon.gitBranch
 				: item.mode === 'clone' ? Lxicon.githubAlt
@@ -318,7 +315,6 @@ export class SessionWorkspacePicker extends Disposable {
 			}
 			const folderAction = (folder: typeof candidates[number], recent: boolean) => toAction({
 				recent, label: folder.label, mode: 'folder', target: folder.target,
-				description: this.labels.getUriLabel(dirname(folderUri(folder.target)), { relative: false }),
 				picked: source?.type === folder.target.type && source.root === folder.target.root,
 			});
 			const known = new Set([...candidates, ...recents].map(({ target }) => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!).toString()));
@@ -550,8 +546,8 @@ export class WorkspacePicker extends Disposable {
 			kind: ActionListItemKind.Separator, label: '',
 		} : {
 			kind: ActionListItemKind.Action, id: action.id, label: action.label,
-			description: action.description,
-			detail: action.description ? undefined : action.tooltip,
+			tooltip: action.rowTooltip,
+			detail: action.tooltip,
 			disabled: !action.enabled, checked: action.checked, item: action.standaloneToggle ? undefined : action,
 			submenu: action.submenu?.map(toItem), standaloneToggle: action.standaloneToggle,
 			group: action.icon ? { title: '', icon: action.icon } : undefined,
