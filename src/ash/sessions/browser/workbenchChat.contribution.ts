@@ -1,3 +1,9 @@
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { SavedSSHConversationHost } from './agentHost/savedSSHConversationHost.js';
+import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
+import type { OpenSessionLink } from '../../platform/agentHost/common/openSessionLink.js';
+import { SessionConversationLinks } from './agentHost/sessionConversationLinks.js';
+import { parseSessionIdentity, sessionIdentity } from '../services/sessions/common/sessionIdentity.js';
 import { IAgentSessionActionsService } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { SessionActionsService } from './sessionActionsService.js';
 import { ChatViewPane } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
@@ -7,7 +13,7 @@ import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/edi
 import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../workbench/browser/editor.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID, SSH_AGENT_HOST_PROVIDER_PREFIX } from '../common/agentHostSessionsProvider.js';
 import { localize } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
@@ -29,21 +35,46 @@ import '../contrib/sessions/browser/views/sessionsViewActions.js';
 import { IChatService, type ChatAgent } from '../../workbench/services/chat/common/chatService.js';
 import type { ToolResultPresentation } from '../../platform/agentHost/common/agent.js';
 
-class ChatSessionNavigationService implements IChatSessionNavigationServiceContract {
+class ChatSessionNavigationService extends Disposable implements IChatSessionNavigationServiceContract {
+	private readonly links: SessionConversationLinks;
+	private readonly linkLifetime = new AbortController();
+
 	constructor(
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IViewsService private readonly views: IViewsService,
 		@IChatService private readonly chat: IChatService,
-	) { }
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
+		super();
+		this._register(toDisposable(() => this.linkLifetime.abort()));
+		this.links = instantiation.createInstance(SessionConversationLinks, LOCAL_AGENT_HOST_PROVIDER_ID);
+	}
+
+	captureConnection(sessionId: string) { return this.links.captureConnection(sessionId); }
+
+	prepareConversationLink(sessionId: string, threadId: string): Promise<OpenSessionLink> {
+		return this.links.prepare(sessionId, threadId);
+	}
+
+	async openConversationLink(address: OpenSessionLink): Promise<void> {
+		const { sessionId, threadId } = await this.links.open(address, this.sessions, async (providerId, assertCurrent) => {
+			if (!providerId.startsWith(SSH_AGENT_HOST_PROVIDER_PREFIX)) return false;
+			return this.instantiation.createInstance(SavedSSHConversationHost).connect(providerId, assertCurrent, this.linkLifetime.signal);
+		});
+		await this.focusConversation(sessionId, threadId);
+	}
 
 	async openToolResult(sourceSessionId: string, target: ToolResultPresentation, signal: AbortSignal): Promise<void> {
 		if (signal.aborted || target.type !== 'sessionTarget' || !this.sessions.sessions.some(session => session.sessionId === sourceSessionId)) {
 			throw new Error(localize('chat.tool.resultUnavailable', 'This result is unavailable on its originating host.'));
 		}
 		const revision = this.revision;
-		await this.chat.readThread(target.sessionId, target.threadId);
+		const { providerId } = parseSessionIdentity(sourceSessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		const sessionId = sessionIdentity(providerId, target.sessionId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		const threadId = sessionIdentity(providerId, target.threadId, LOCAL_AGENT_HOST_PROVIDER_ID);
+		await this.chat.readThread(sessionId, threadId);
 		if (signal.aborted || revision !== this.revision) return;
-		await this.openConversation(target.sessionId, target.threadId);
+		await this.openConversation(sessionId, threadId);
 	}
 
 	async createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): Promise<boolean> {
@@ -75,10 +106,11 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		return active ? { sessionId: active.session.sessionId, threadId: active.threadId } : undefined;
 	}
 
-	getConversations(): readonly { readonly providerId: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
+	getConversations(): readonly { readonly providerId: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
 		return this.sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
 			session.chats.filter(chat => chat.status === 'active').map(chat => ({
-				providerId: LOCAL_AGENT_HOST_PROVIDER_ID,
+				providerId: session.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID,
+				providerLabel: session.providerLabel,
 				sessionId: session.sessionId,
 				threadId: chat.threadId,
 				title: `${session.title} · ${chat.title ?? 'Conversation'}`,
@@ -86,10 +118,14 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 	}
 
 	async openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void> {
-		if (providerId !== undefined && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) {
+		if (providerId !== undefined && providerId !== parseSessionIdentity(sessionId, LOCAL_AGENT_HOST_PROVIDER_ID).providerId) {
 			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));
 		}
 		await this.sessions.openThread(sessionId, threadId);
+		await this.focusConversation(sessionId, threadId);
+	}
+
+	private async focusConversation(sessionId: string, threadId: string): Promise<void> {
 		const active = this.getActiveConversation();
 		if (active?.sessionId === sessionId && active.threadId === threadId) await this.views.focusView(CHAT_VIEW_ID);
 	}

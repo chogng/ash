@@ -1,3 +1,4 @@
+import './remoteAgentHost/remoteAgentHost.contribution.js';
 import { AgentHostOpenSessionLinkOpenerContribution } from './agentSessions/agentHost/openSessionLinkOpener.contribution.js';
 import { ChatInputSessionLinkProvider } from './widget/input/editor/chatInputSessionLinkProvider.js';
 import { registerMoveActions } from './actions/chatMoveActions.js';

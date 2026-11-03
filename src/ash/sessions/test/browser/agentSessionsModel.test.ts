@@ -43,6 +43,7 @@ function fixture() {
 	const catalog = services.createInstance(ChatHistoryModel);
 	return Object.assign(resources, {
 		catalog, opened,
+		setSessions(value: ISession[]) { sessions = value; changed.fire(); },
 		getRefreshes: () => refreshes,
 		finish() { sessions = [{ ...sessions[0]!, chats: [{ ...sessions[0]!.chats[0]!, management: { status: 'completed', statusChangedAtUnixMs: 1 } }, sessions[0]!.chats[1]!] }]; changed.fire(); },
 		pin() { pinned = true; storageChanged.fire({ scope: StorageScope.PROFILE, key: 'sessions.list.pinned.session', target: undefined, external: false }); },
@@ -69,6 +70,23 @@ suite('Shared Agent Sessions catalog', () => {
 		f.finish();
 		assert.equal(model.sessions[0]!.description, '/workspace');
 		assert.equal(f.catalog.getSession(URI.parse('unknown:/missing')), undefined);
+	});
+
+	test('same-title conversations expose distinct hosts and open the selected host identity', () => {
+		using f = fixture();
+		const remote = (host: string): ISession => ({
+			sessionId: `${host}/session`, providerId: host, providerLabel: host, title: 'Review', status: 'active', nextApprovalMode: 'manual',
+			workspace: { root: '/workspace', authorityId: host },
+			chats: [{ threadId: `${host}/root`, status: 'active', origin: { type: 'root' } }],
+		});
+		f.setSessions([remote('Build A'), remote('Build B')]);
+		const [a, b] = f.catalog.sessions;
+		assert.equal(a?.label, b?.label);
+		assert.equal(a?.description, 'Build A · /workspace');
+		assert.equal(b?.description, 'Build B · /workspace');
+		assert.equal(b?.providerLabel, 'Build B');
+		f.catalog.getSession(b!.children![0]!.resource)?.open();
+		assert.deepEqual(f.opened, [['Build B/session', 'Build B/root']]);
 	});
 
 	test('both consumers observe pinning, grouping, refresh and archive through the same owner', async () => {

@@ -232,6 +232,7 @@ class SessionReferenceContextPickerPick implements IChatContextPickerItem {
 			placeholder: localize('chat.context.selectSession', 'Select a session'),
 			picks: picksWithPromiseFn(async query => [...filterQuickPickItems(conversations.map(conversation => ({
 				label: conversation.title,
+				description: conversation.providerLabel,
 				asAttachment: () => this.captureConversation(conversation, controller.signal),
 			})), query)]),
 			dispose: () => controller.abort(),

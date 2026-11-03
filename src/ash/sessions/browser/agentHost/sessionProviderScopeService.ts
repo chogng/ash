@@ -24,7 +24,7 @@ import { SessionScopedPromptsService } from './sessionScopedPromptsService.js';
 import { parseSessionIdentity, sessionIdentity } from '../../services/sessions/common/sessionIdentity.js';
 
 /** Captured at host-scope composition, before the window installs its routing facades. */
-export class SessionProviderServices {
+export class SessionProviderServices extends Disposable {
 	constructor(
 		@IChatService readonly chat: IChatService,
 		@ILanguageModelsService readonly models: ILanguageModelsService,
@@ -32,7 +32,7 @@ export class SessionProviderServices {
 		@IAgentExecutionSettingsService readonly execution: IAgentExecutionSettingsService,
 		@IAgentConnection readonly host: IAgentConnection,
 		@ILanguageModelToolsService readonly tools: ILanguageModelToolsService,
-	) { }
+	) { super(); }
 }
 export const ISessionPrimaryProviderServices = createServiceIdentifier<SessionProviderServices>('sessionPrimaryProviderServices');
 
@@ -123,6 +123,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		if (providerId !== this.defaultProviderId && !provider.instantiationService) throw canceled();
 		const services = providerId === this.defaultProviderId ? this.primary : provider.instantiationService!.createInstance(SessionProviderServices);
 		const lifetime = new DisposableStore();
+		if (providerId !== this.defaultProviderId) lifetime.add(services);
 		let thread: IAgentThreadService | undefined;
 		const scope: ISessionProviderScope = {
 			providerId, services,

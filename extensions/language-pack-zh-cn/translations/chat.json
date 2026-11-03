@@ -250,7 +250,7 @@
     "chat.notice.help": "聊天通知显示在消息上方。通知优先于功能介绍和提示。使用 {0} 在可见通知与消息之间切换焦点。使用 Tab 访问通知操作。Escape 可从通知返回消息，或关闭功能介绍并停止其录音。隐藏的功能介绍会停止录音，并在通知消失后恢复显示。关闭通知会隐藏当前通知。通知操作应用于此输入框。",
     "chat.input.commandArguments": "命令参数：{0}",
     "chat.sessionLink.open": "打开会话",
-    "chat.input.sessionLinksHelp": "在 IDE 聊天输入框中，将光标移到会话链接内，在命令面板运行“打开链接”，即可打开对应会话。也可以按住 Ctrl（macOS 上为 Command）并点击链接。打开链接不会发送草稿。",
+    "chat.input.sessionLinksHelp": "在 IDE 聊天输入框中，将光标移到会话链接内，在命令面板运行“打开链接”，即可打开对应会话。也可以按住 Ctrl（macOS 上为 Command）并点击链接。在桌面端，打开已保存 SSH 宿主的会话链接时，可能会提示你连接。确认宿主和工作区后，选择“连接并打开”或“取消”。使用“Agents：管理已连接宿主”管理其他远程连接。宿主选择器会朗读连接状态，并在可用时提供“重新连接”操作。聊天历史记录会显示远程会话所在的宿主。后续消息会发送到该会话所在的宿主。打开链接不会发送草稿。",
     "chat.developer.logInputHistory": "开发人员：记录聊天输入历史",
     "chat.category": "聊天",
     "chat.plugin.create.invalidId": "请使用 publisher/plugin-name 格式，且只包含小写字母、数字和连字符。",

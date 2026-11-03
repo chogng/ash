@@ -506,6 +506,12 @@ Main and keeps its token only for that window lease. It uses the Web session's
 existing directory authorization. Disconnect retires the provider and its file
 routes without falling back to another host or stopping the shared daemon.
 
+Desktop Code Chat uses the same provider registry and host-scoped Chat routing
+as the Agents window. Opening a conversation link resolves its provider
+authority against the current window's connected hosts. The retained composer
+uses that provider's models and execution settings, and Session and Thread
+identities keep follow-up messages on the originating host.
+
 ## Failure and lifecycle semantics
 
 - The renderer never creates a durable Session merely because the window or a

@@ -71,7 +71,8 @@ export class ChatHistoryModel implements IAgentSessionsService, IAgentSessionsMo
 			const activity = getInProgressSessionDescription(chat?.management ?? session.management);
 			records.push({
 				id: `${archived ? 'archived' : 'session'}:${session.sessionId}`, resource, label,
-				description: activity ?? session.workspace?.root ?? '', kind: 'session',
+				description: [session.providerLabel, activity ?? session.workspace?.root].filter(Boolean).join(' · '),
+				providerLabel: session.providerLabel, kind: 'session',
 				target: { sessionId: session.sessionId, threadId: chat?.threadId }, active, inProgress: activity !== undefined,
 				group: this.groups.groups.find(group => group.sessionIds.includes(session.sessionId)),
 				isArchived: () => archived, isPinned: () => pinned,

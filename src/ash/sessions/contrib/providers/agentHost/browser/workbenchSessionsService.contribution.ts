@@ -1,3 +1,14 @@
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
+import { ChatService } from '../../../../../workbench/services/chat/browser/chatService.js';
+import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
+import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { ISessionPrimaryProviderServices, ISessionProviderScopeService, SessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { SessionsChatService } from '../../../../browser/agentHost/sessionsChatService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -34,6 +45,24 @@ class WorkbenchSessionsStartupContribution extends Disposable {
 	}
 }
 
+class WorkbenchPrimaryProviderServices extends SessionProviderServices {
+	constructor(
+		@IInstantiationService instantiation: IInstantiationService,
+		@ILanguageModelsService models: ILanguageModelsService,
+		@IPromptsService prompts: IPromptsService,
+		@IAgentExecutionSettingsService execution: IAgentExecutionSettingsService,
+		@IAgentConnection host: IAgentConnection,
+		@ILanguageModelToolsService tools: ILanguageModelToolsService,
+	) {
+		const chat = instantiation.createInstance(ChatService);
+		super(chat, models, prompts, execution, host, tools);
+		this._register(chat);
+	}
+}
+
+registerSingleton(ISessionPrimaryProviderServices, WorkbenchPrimaryProviderServices, InstantiationType.Delayed);
+registerSingleton(ISessionProviderScopeService, new SyncDescriptor(SessionProviderScopeService, [LOCAL_AGENT_HOST_PROVIDER_ID], true));
+registerSingleton(IChatService, SessionsChatService, InstantiationType.Delayed);
 registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
 registerSingleton(IDevContainerAgentHostService, DevContainerAgentHostService, InstantiationType.Delayed);
 registerWorkbenchContribution('sessions.contrib.workbenchStartup', WorkbenchPhase.BlockRestore,

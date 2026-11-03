@@ -30,7 +30,7 @@ export interface IChatSessionNavigationService {
 	createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): boolean | void | Promise<boolean | void>;
 	/** Hosts with their own conversation presentation also own its history picker. */
 	showConversationHistory?(): void | Promise<void>;
-	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
+	getConversations(): readonly { readonly providerId?: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;
 	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined;

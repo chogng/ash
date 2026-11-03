@@ -1,3 +1,4 @@
+import { RemoteAgentHostContribution } from '../../../browser/remoteAgentHost/remoteAgentHostChatContribution.js';
 import { AgentHostOpenSessionLinkOpenerContribution } from '../../../browser/agentSessions/agentHost/openSessionLinkOpener.contribution.js';
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -39,7 +40,7 @@ suite('Conversation links', () => {
 		let active: { sessionId: string; threadId: string; } | undefined = { sessionId: 'active', threadId: 'root' };
 		let generation = 1;
 		const stateListeners = new Set<(state: 'stopped') => void>();
-		let registered: IOpener | undefined;
+		const registered = new Set<IOpener>();
 		let read = async (sessionId: string, threadId: string) => ({ thread: { sessionId, threadId } });
 		const opened: unknown[] = [];
 		const copied: string[] = [];
@@ -60,9 +61,10 @@ suite('Conversation links', () => {
 		} as IChatSessionNavigationService;
 		services.registerInstance(IChatSessionNavigationService, navigation);
 		services.registerInstance(IOpenerService, {
-			registerOpener: opener => { registered = opener; return toDisposable(() => { registered = undefined; }); },
+			registerOpener: opener => { registered.add(opener); return toDisposable(() => { registered.delete(opener); }); },
 		} as IOpenerService);
 		lifetime.add(services.createInstance(AgentHostOpenSessionLinkOpenerContribution));
+		lifetime.add(services.createInstance(RemoteAgentHostContribution));
 		return {
 			copied, opened, announcements,
 			routeWith: (prepare: NonNullable<IChatSessionNavigationService['prepareConversationLink']>, open: NonNullable<IChatSessionNavigationService['openConversationLink']>) => { navigation.prepareConversationLink = prepare; navigation.openConversationLink = open; },
@@ -74,7 +76,12 @@ suite('Conversation links', () => {
 				return lifetime.add(services.createInstance(ChatViewTitleControl, container, 'chat-link', async () => { }));
 			},
 			copy: (context?: unknown) => Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.copySessionLink')!, context)),
-			open: (uri: URI) => registered!.open(uri),
+			open: async (uri: URI) => {
+				for (const opener of registered) {
+					if (await opener.open(uri)) return true;
+				}
+				return false;
+			},
 			select: (value: typeof active) => { active = value; },
 			readWith: (value: typeof read) => { read = value; },
 			reconnect: () => { generation++; },

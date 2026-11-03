@@ -87,6 +87,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	services.registerInstance(IRemoteConnectionService, lifetime.add(services.createInstance(RemoteConnectionService)));
 	const opened: string[] = [];
 	const closed: string[] = [];
+	const reconnected: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
 	let openResult: ((target: RemoteAgentHostConnection, host: IRemoteAgentHostProtocolClient) => Promise<IRemoteAgentHostProtocolClient>) | undefined;
@@ -131,7 +132,13 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			get connections() { return [...hosts.values()]; },
 			onDidChangeConnections: hostChanges.event,
 			disconnect,
-			reconnect: async () => { },
+			reconnect: async id => {
+				reconnected.push(id);
+				const entry = [...hosts.entries()].find(([, value]) => value.id === id);
+				assert.ok(entry);
+				hosts.set(entry[0], { ...entry[1], state: 'ready' });
+				hostChanges.fire();
+			},
 			listWSLDistros: async () => [],
 			connect: async (target, signal) => {
 				const key = agentHostConnectionAddress(target);
@@ -290,7 +297,14 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
 		services, commands, contribution, scopeOwner, registry, automations, quickInput, errors,
-		opened, closed, renamed, deleted, connect, choose, picker, sessionDirectoryRequests,
+		opened, closed, renamed, deleted, reconnected, connect, choose, picker, sessionDirectoryRequests,
+		crash: (name: string) => {
+			const entry = [...hosts.entries()].find(([, value]) => value.connection.name === name);
+			assert.ok(entry);
+			hosts.set(entry[0], { ...entry[1], state: 'crashed' });
+			hostChanges.fire();
+			return entry[1].id;
+		},
 		containerSessions: () => { containerSessions = true; },
 		connectTarget: (target: RemoteAgentHostConnection) => (services.get(IAgentConnection) as IWorkbenchHost).agentHosts!.connect(target, new AbortController().signal), files, fileRequests, primaryRequests, resourceRequests, openResources,
 		publishSessions: (sessions: readonly ISession[]) => { canonicalSessions = sessions; catalogChanges.fire(); },
@@ -391,6 +405,24 @@ test('disconnecting one Agents host unregisters its provider and retains the oth
 	assert.deepEqual(context.automations.automations.get().map(plan => plan.name), ['build-b']);
 });
 
+test('the host picker shows connection status and reconnects the exact retained provider', async () => {
+	using context = fixture();
+	await context.connect('build-a');
+	await context.connect('build-b');
+	const first = context.registry.getProviders().find(provider => provider.label === 'build-a');
+	const command = context.commands.executeCommand(manageHosts);
+	const id = context.crash('build-a');
+	const items = context.picker().items;
+	assert.equal(items.find(item => !('type' in item) && item.label === 'build-a' && item.description === 'Disconnected')?.label, 'build-a');
+	assert.equal(items.find(item => !('type' in item) && item.label === 'build-b' && item.description === 'Connected')?.label, 'build-b');
+	assert.ok(!items.some(item => 'label' in item && item.label === 'Reconnect to build-b'));
+	await context.choose('Reconnect to build-a');
+	await command;
+	assert.deepEqual(context.reconnected, [id]);
+	assert.deepEqual(context.closed, []);
+	assert.equal(context.registry.getProviders().find(provider => provider.label === 'build-a'), first);
+});
+
 test('reselecting an already connected target shares the existing scope', async () => {
 	using context = fixture();
 	await context.connect('build-a');
@@ -420,7 +452,7 @@ test('the host picker uses Chinese labels and closes on cancellation and owner d
 	setNlsMessages(chinese.locale, chinese.bundles);
 	try {
 		const command = context.commands.executeCommand(manageHosts);
-		assert.equal(context.picker().ariaLabel, '连接宿主，或选择已连接宿主以断开连接');
+		assert.equal(context.picker().ariaLabel, '连接宿主、选择宿主以断开连接，或选择对应的重新连接操作');
 		assert.equal(context.picker().items[0]!.label, '连接已保存的 SSH 宿主…');
 		context.picker().hide();
 		await command;

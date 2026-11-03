@@ -8,9 +8,7 @@ import { IOpenerService } from '../../../../../../platform/opener/common/opener.
 import { IChatService } from '../../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService, withChatConversation } from '../../../../../services/chat/common/chatSessionNavigationService.js';
 
-const connectionAuthority = 'local';
-
-/** Opens conversation links inside the current owner instead of sending them to the OS. */
+/** Opens conversation links on the current window’s ambient host. */
 export class AgentHostOpenSessionLinkOpenerContribution extends Disposable {
 	public static readonly ID = 'workbench.chat.agentHostOpenSessionLinkOpener';
 
@@ -26,7 +24,7 @@ export class AgentHostOpenSessionLinkOpenerContribution extends Disposable {
 
 	private async open(target: URI | string): Promise<boolean> {
 		const resource = typeof target === 'string' ? URI.parse(target) : target;
-		if (resource.scheme !== OPEN_SESSION_LINK_SCHEME) {
+		if (resource.scheme !== OPEN_SESSION_LINK_SCHEME || resource.authority !== 'local') {
 			return false;
 		}
 		let link;
@@ -41,9 +39,6 @@ export class AgentHostOpenSessionLinkOpenerContribution extends Disposable {
 				throw canceled();
 			}
 			return true;
-		}
-		if (link.connectionAuthority !== connectionAuthority) {
-			throw new Error(localize('chat.sessionLink.connection', 'The connection for this conversation link is unavailable.'));
 		}
 		await withChatConversation(this.chat, this.appServer, link.sessionId, link.threadId, async () => {
 			if (this.isDisposed) {

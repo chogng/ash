@@ -619,7 +619,7 @@ export abstract class Workbench extends Disposable {
 			this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
 		} else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
-		services.registerInstance(ISessionPrimaryProviderServices, primaryHostServices.createInstance(SessionProviderServices));
+		services.registerInstance(ISessionPrimaryProviderServices, this._register(primaryHostServices.createInstance(SessionProviderServices)));
 		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
 		services.registerInstance(ISessionProviderScopeService, providerScopes);
 		services.registerInstance(IInstructionService, { ...options.api.instructions, captureImports: sessionId => captureInstructionImports(providerScopes.getScope(sessionId), sessionId) });
@@ -909,26 +909,9 @@ export abstract class Workbench extends Disposable {
 			},
 			showConversationHistory: () => commandService.executeCommand(ShowSessionsChatHistoryAction.ID),
 			get revision() { return view.navigationRevision; },
-			captureConnection: sessionId => {
-				const scope = providerScopes.getScope(sessionId);
-				scope.assertCurrent();
-				const appServer = scope.services.host.appServer;
-				const generation = appServer.connectionGeneration;
-				let retired = false;
-				const listener = appServer.onConnectionState(() => { retired = true; });
-				return Object.assign(toDisposable(() => { retired = true; listener.dispose(); }), {
-					generation,
-					assertCurrent: async () => {
-						scope.assertCurrent();
-						if (retired || generation !== appServer.connectionGeneration) throw canceled();
-						const state = await appServer.getConnectionState();
-						scope.assertCurrent();
-						if (retired || generation !== appServer.connectionGeneration || state !== 'ready') throw canceled();
-					},
-				});
-			},
+			captureConnection: sessionId => conversationLinks.captureConnection(sessionId),
 			prepareConversationLink: (sessionId, threadId) => conversationLinks.prepare(sessionId, threadId),
-			openConversationLink: address => conversationLinks.open(address),
+			openConversationLink: async address => { await conversationLinks.open(address, view); },
 			getActiveConversation: () => {
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;

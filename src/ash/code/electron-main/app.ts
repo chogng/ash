@@ -1332,6 +1332,49 @@ export class AshApplication extends Disposable {
 		})).routes();
 	}
 
+	private remoteAgentHostRoutes(window: BrowserWindow, entryUrl: string, connections: IRemoteConnectionApi, windowDisposables: DisposableStore): IpcRoute<unknown, unknown>[] {
+		const target = { webContents: window.webContents, allowedEntryUrls: new Set([normalizeEntryUrl(entryUrl)]) };
+		const wslHosts = new WSLRemoteAgentHostService();
+		const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(connections, async (connection, id, signal, ticket) => {
+			const resources = new DisposableStore();
+			try {
+				let tunnel: TunnelAgentHostService | undefined;
+				if (!isSSHAgentHost(connection) && connection.type === 'tunnel') {
+					tunnel = resources.add(new TunnelAgentHostService(connection.endpoint, ticket));
+					connection = canonicalAgentHostConnection({ ...connection, workspace: await tunnel.acquire(signal) });
+				}
+				const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(connection, id) };
+				// SSH owns a remote Workbench connection; its directory is granted on that connection.
+				const relay = resources.add(isSSHAgentHost(connection)
+					? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
+					: new AppServerConnectionRelay({ enabled: true, processLauncher: connection.type === 'wsl' ? wslHosts.createProcessLauncher(connection) : tunnel! }, { id }));
+				resources.add(this.trustedIpcRouter.register(target, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: connection.workspace }))));
+				return Object.assign(resources, { connection });
+			} catch (error) {
+				resources.dispose();
+				throw error;
+			}
+		}));
+		const retireAgentHosts = (): void => agentHosts.reset();
+		window.webContents.on('did-navigate', retireAgentHosts);
+		window.webContents.on('render-process-gone', retireAgentHosts);
+		windowDisposables.add(toDisposable(() => {
+			window.webContents.removeListener('did-navigate', retireAgentHosts);
+			window.webContents.removeListener('render-process-gone', retireAgentHosts);
+		}));
+		return [
+			...agentHosts.routes(),
+			{
+				channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL,
+				validate: (value: unknown) => {
+					if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters');
+					return undefined;
+				},
+				invoke: () => wslHosts.listDistros(),
+			},
+		];
+	}
+
 	private createAppServerConnectionRelay(
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
@@ -1678,6 +1721,7 @@ export class AshApplication extends Disposable {
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...this.terminalLifetimeRoutes(windowDisposables),
+			...this.remoteAgentHostRoutes(window, rendererEntry.url, record.remoteConnections, windowDisposables),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => {
 				const folder = workspaceContext.getResolvedWorkspace().folders[0]?.uri;
@@ -2073,43 +2117,10 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
-					const agentHostTarget = {
-						webContents: window.webContents,
-						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
-					};
-					const wslHosts = new WSLRemoteAgentHostService();
-					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, async (target, id, signal, ticket) => {
-						const resources = new DisposableStore();
-						try {
-							let tunnel: TunnelAgentHostService | undefined;
-							if (!isSSHAgentHost(target) && target.type === 'tunnel') {
-								tunnel = resources.add(new TunnelAgentHostService(target.endpoint, ticket));
-								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
-							}
-							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
-							// SSH owns a remote Workbench connection; its directory is granted on that connection.
-							const relay = resources.add(isSSHAgentHost(target)
-								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
-								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
-							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
-							return Object.assign(resources, { connection: target });
-						} catch (error) {
-							resources.dispose();
-							throw error;
-						}
-					}));
-					const retireAgentHosts = (): void => agentHosts.reset();
-					window.webContents.on('did-navigate', retireAgentHosts);
-					window.webContents.on('render-process-gone', retireAgentHosts);
-					windowDisposables.add(toDisposable(() => {
-						window.webContents.removeListener('did-navigate', retireAgentHosts);
-						window.webContents.removeListener('render-process-gone', retireAgentHosts);
-					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
 						...this.terminalLifetimeRoutes(windowDisposables),
-						...agentHosts.routes(),
-						{ channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL, validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters'); return undefined; }, invoke: () => wslHosts.listDistros() },
+						...this.remoteAgentHostRoutes(window, sessionsEntry.url, session.remoteConnections, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),

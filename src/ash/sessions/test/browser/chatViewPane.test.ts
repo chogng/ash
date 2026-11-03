@@ -216,7 +216,11 @@ function createInputServices(
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
 }
-function createSessionChatViewPane(...args: ConstructorParameters<typeof SessionChatViewPane>): InstanceType<typeof SessionChatViewPane> {
+type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [...infer Head, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService]
+	? [...Head, opener?: IOpenerService, editor?: IEditorService]
+	: never;
+
+function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): InstanceType<typeof SessionChatViewPane> {
 	const services = inputResources.add(args[12].createChild());
 	services.registerInstance(IChatService, args[2]);
 	services.registerInstance(ISessionsManagementService, args[3]);
@@ -236,6 +240,7 @@ function createSessionChatViewPane(...args: ConstructorParameters<typeof Session
 	services.registerInstance(IEditorGroupsService, args[18]);
 	if (args[19]) services.registerInstance(IOpenerService, args[19]);
 	if (args[20]) services.registerInstance(IEditorService, args[20]);
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(descriptor));
@@ -691,6 +696,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(IContextKeyService, contextKeys);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -1787,6 +1793,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -2033,6 +2040,7 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	let focusedView: string | undefined;
 	services.registerInstance(ISessionsManagementService, sessions);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
@@ -2116,6 +2124,7 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			const calls: { id: string; target: unknown; }[] = [];
 			services.registerInstance(ISessionsManagementService, sessions);
 			const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+			services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 			services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 			const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 			services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
@@ -5249,6 +5258,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const layout = testLayoutService();
 	commandServices.registerInstance(IWorkbenchLayoutService, layout);
 	const viewServices = resources.add(inputServices.createChild());
+	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	commandServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessions);
@@ -6947,6 +6957,7 @@ test('IDE item organization retains the background composer and never submits it
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
 	f.commandServices.registerSingleton(IAgentSessionActionsService, () => f.commandServices.createInstance(actionsDescriptor));
 	const navDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	f.commandServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	f.commandServices.registerSingleton(IChatSessionNavigationService, () => f.commandServices.createInstance(navDescriptor));
 	await f.commands.executeCommand('sessions.list.togglePin', { untitledSessionId: draft.untitledSessionId });
 	await nextTask();

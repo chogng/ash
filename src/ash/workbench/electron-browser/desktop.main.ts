@@ -121,7 +121,7 @@ export class DesktopMain extends Disposable {
 				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
 				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
-			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
+			], { browser: true, textDocuments: true, agentHosts: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
 				if (!resolverScope.value) {
 					const scope = new DisposableStore();
 					resolverScope.value = scope;

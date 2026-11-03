@@ -21,7 +21,9 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 	const peers = new Set<Socket>();
 	let sshd: ReturnType<typeof spawn> | undefined;
 	let errors = '';
+	let connectionCount = 0;
 	const gateway = createServer(socket => {
+		connectionCount++;
 		const upstream = connect(sshdPort, '127.0.0.1');
 		peers.add(socket);
 		peers.add(upstream);
@@ -80,7 +82,7 @@ export async function createSshFixture(daemon: string, address = '127.0.0.1') {
 			if (sshd!.exitCode !== null) throw new Error(`OpenSSH fixture exited: ${errors}`);
 			return run('printf SSH_READY').catch(() => '');
 		}, { timeout: 15_000, message: 'Disposable OpenSSH accepts its generated client key' }).toBe('SSH_READY');
-		return { root, ssh, host: 'ash-desktop-fixture', address, disconnect, close };
+		return { root, ssh, host: 'ash-desktop-fixture', address, get connectionCount() { return connectionCount; }, disconnect, close };
 	} catch (error) {
 		await close();
 		throw error;

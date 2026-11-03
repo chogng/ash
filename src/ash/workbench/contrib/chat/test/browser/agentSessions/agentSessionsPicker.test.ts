@@ -33,12 +33,13 @@ test('Workbench history renders a borrowed host catalog without Session services
 		using configuration = new TestConfigurationService();
 		using quickInput = new TestQuickInputService({ container: dom.window.document.body, instantiationService: services });
 		const opened: string[] = [];
-		const entry = (label: string): IAgentSession => ({
-			id: 'host-entry', label, resource: URI.from({ scheme: 'test-session', path: '/host-entry' }), description: '', kind: 'session', active: false, target: { sessionId: 'host-entry', threadId: 'root' },
+		const entry = (id: string, label: string, providerLabel: string): IAgentSession => ({
+			id, label, providerLabel, resource: URI.from({ scheme: 'test-session', path: `/${id}` }),
+			description: '', kind: 'session', active: false, target: { sessionId: id, threadId: 'root' },
 			isArchived: () => false, isPinned: () => false,
-			open: () => { opened.push('host-entry'); },
+			open: () => { opened.push(id); },
 		});
-		let items = [entry('Alpha')];
+		let items = [entry('host-a', 'Alpha', 'Build A'), entry('host-b', 'Alpha', 'Build B')];
 		services.registerInstance(IAgentSessionsService, {
 			getSession: resource => items.find(item => item.resource.toString() === resource.toString()),
 			model: {
@@ -62,15 +63,17 @@ test('Workbench history renders a borrowed host catalog without Session services
 		assert.equal(picker.anchorPosition, 'below');
 		assert.equal(changes.hasListeners(), true);
 		picker.value = 'Alpha';
-		picker.activeItems = [picker.items.filter((item): item is IQuickPickItem & { id: string; session: IAgentSession; } => !('type' in item))[0]!];
-		items = [entry('Alpha renamed')];
+		const choices = picker.items.filter((item): item is IQuickPickItem & { id: string; session: IAgentSession; } => !('type' in item));
+		assert.deepEqual(choices.map(item => [item.label, item.detail]), [['Alpha', 'Build A'], ['Alpha', 'Build B']]);
+		picker.activeItems = [choices[1]!];
+		items = [items[0]!, entry('host-b', 'Alpha renamed', 'Build B')];
 		changes.fire();
 		assert.equal(picker.value, 'Alpha');
 		assert.equal(picker.activeItems[0]?.label, 'Alpha renamed');
 		picker.selectedItems = [picker.activeItems[0]!];
 		await picker.accept();
 		await picking;
-		assert.deepEqual(opened, ['host-entry']);
+		assert.deepEqual(opened, ['host-b']);
 		assert.equal(changes.hasListeners(), false);
 		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 	} finally {

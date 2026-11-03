@@ -11,6 +11,28 @@ import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../..
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { Menus } from '../../../../browser/menus.js';
 
+interface HostPickItem extends IQuickPickItem {
+	readonly info?: IAgentHostConnectionInfo;
+	readonly command?: string;
+	readonly reconnect?: boolean;
+}
+
+function hostStatus(state: IAgentHostConnectionInfo['state']): string {
+	switch (state) {
+		case 'ready': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connected' }, 'Connected');
+		case 'starting':
+		case 'initializing': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.connecting' }, 'Connecting');
+		case 'restarting': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.reconnecting' }, 'Reconnecting');
+		case 'stopping': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.disconnecting' }, 'Disconnecting');
+		case 'stopped':
+		case 'crashed': return localize({ bundle: 'ash.workbench', key: 'agentHosts.status.disconnected' }, 'Disconnected');
+	}
+}
+
+function canReconnect(info: IAgentHostConnectionInfo): boolean {
+	return !!info.connection && (info.state === 'stopped' || info.state === 'crashed');
+}
+
 const manageHostsCommand = 'sessions.action.manageAgentHosts';
 
 /** Connects saved SSH targets and manages this window's connected hosts. */
@@ -40,32 +62,65 @@ export class SSHAgentHostContribution extends Disposable {
 
 	private async showHosts(): Promise<void> {
 		const add: IQuickPickItem = { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.add' }, 'Connect a Saved SSH Host…') };
-		const items = this.hosts.connections.filter(info => !info.isAmbient && info.remoteConnection).map(info => ({ label: info.name, description: isSSHAgentHost(info.remoteConnection!) ? info.remoteConnection!.host : info.remoteConnection!.type === 'wsl' ? info.remoteConnection!.distro : info.remoteConnection!.endpoint, detail: info.remoteConnection!.workspace, info }));
-		const selected = await this.pick<IQuickPickItem & { readonly info?: IAgentHostConnectionInfo; readonly command?: string; }>(
-			[add, { label: localize('sessions.hosts.connectWSL', 'Agents: Connect to WSL…'), command: 'sessions.action.connectWSLAgentHost' }, { label: localize('sessions.hosts.connectTunnel', 'Agents: Connect to Ash Tunnel…'), command: 'sessions.action.connectTunnelAgentHost' }, ...items],
-			localize({ bundle: 'ash.workbench', key: 'agentHosts.select' }, 'Connect a host, or select a connected host to disconnect'),
+		const hostItems = () => this.hosts.connections.flatMap<HostPickItem>(info => {
+			const connection = info.remoteConnection;
+			if (info.isAmbient || !connection) return [];
+			const address = isSSHAgentHost(connection) ? connection.host : connection.type === 'wsl' ? connection.distro : connection.endpoint;
+			const detail = [address, connection.workspace].filter(Boolean).join(' · ');
+			const description = hostStatus(info.state);
+			const item = { id: info.id, label: info.name, description, detail, info };
+			return canReconnect(info) ? [item, {
+				id: `reconnect:${info.id}`,
+				label: localize({ bundle: 'ash.workbench', key: 'agentHosts.reconnect' }, 'Reconnect to {0}', info.name),
+				description, detail, info, reconnect: true,
+			}] : [item];
+		});
+		const connectItems: readonly HostPickItem[] = [
+			add,
+			{ label: localize('sessions.hosts.connectWSL', 'Agents: Connect to WSL…'), command: 'sessions.action.connectWSLAgentHost' },
+			{ label: localize('sessions.hosts.connectTunnel', 'Agents: Connect to Ash Tunnel…'), command: 'sessions.action.connectTunnelAgentHost' },
+		];
+		const selected = await this.pick<HostPickItem>(
+			() => [...connectItems, ...hostItems()],
+			localize({ bundle: 'ash.workbench', key: 'agentHosts.select' }, 'Connect a host, select a host to disconnect, or choose its Reconnect action'),
 		);
 		if (!selected || this.isDisposed) { return; }
 		if (selected.command) { await this.commands.executeCommand(selected.command); return; }
-		if (selected.info) {
-			this.remoteHosts.disconnect(selected.info.id);
+		const hostId = selected.info?.id;
+		if (hostId !== undefined) {
+			const current = this.hosts.connections.find(info => info.id === hostId);
+			if (!current) return;
+			if (selected.reconnect) {
+				if (canReconnect(current)) await this.remoteHosts.reconnect(current.id);
+			} else {
+				this.remoteHosts.disconnect(current.id);
+			}
 			return;
 		}
 		const available = await this.connections.list();
 		if (this.isDisposed) { return; }
 		const target = await this.pick(
 			available.map(connection => ({ label: connection.name, description: connection.host, detail: connection.workspace, connection })),
-			localize({ bundle: 'ash.workbench', key: 'agentHosts.target' }, 'Select a saved SSH host to connect in this Agents window'),
+			localize({ bundle: 'ash.workbench', key: 'agentHosts.target' }, 'Select a saved SSH host to connect in this window'),
 		);
 		if (target && !this.isDisposed) { await this.connect(target.connection); }
 	}
 
-	private pick<T extends IQuickPickItem>(items: readonly T[], placeholder: string): Promise<T | undefined> {
+	private pick<T extends IQuickPickItem>(items: readonly T[] | (() => readonly T[]), placeholder: string): Promise<T | undefined> {
 		this.assertNotDisposed();
 		const resources = new DisposableStore();
 		this.pickers.add(resources);
 		const picker = resources.add(this.quickInput.createQuickPick<T>());
-		picker.items = items;
+		picker.items = typeof items === 'function' ? items() : items;
+		if (typeof items === 'function') {
+			resources.add(this.hosts.onDidChangeConnections(() => {
+				const previous = picker.activeItems[0];
+				const updated = items();
+				picker.items = updated;
+				const active = updated.find(item => previous?.id ? item.id === previous.id : item === previous);
+				if (active) picker.activeItems = [active];
+			}));
+		}
 		picker.placeholder = picker.ariaLabel = placeholder;
 		return new Promise(resolve => {
 			let settled = false;

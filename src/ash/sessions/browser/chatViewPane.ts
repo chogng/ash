@@ -1,6 +1,8 @@
+import { ISessionProviderScopeService } from './agentHost/sessionProviderScopeService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ChatViewPane, type IChatViewPaneEntry } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewPane.js';
-import { DisposableStore } from '../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore } from '../../base/common/lifecycle.js';
 import { Emitter } from '../../base/common/event.js';
 import type { IQuickChatSession, IChatWidgetViewOptions } from '../../workbench/contrib/chat/browser/chat.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
@@ -32,7 +34,7 @@ import { createSessionItemActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
-import { ChatWidgetModel } from './chatWidgetModel.js';
+import { ChatWidgetModel, type ChatWidgetSelection } from './chatWidgetModel.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -55,6 +57,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	private readonly contextMenuService: IContextMenuService;
 	private readonly restoredThreadIds = new Map<string, ThreadId>();
 	private readonly panes = new Map<string, ChatWidget<ChatWidgetModel>>();
+	private readonly paneScopes = this._register(new DisposableMap<ChatWidget<ChatWidgetModel>, DisposableStore>());
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
 	private restoringViewState = true;
@@ -85,8 +88,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IEditorGroupsService editorGroups: IEditorGroupsService,
-		@IOpenerService private readonly openerService?: IOpenerService,
-		@IEditorService editorService?: IEditorService,
+		@IOpenerService private readonly openerService: IOpenerService | undefined,
+		@IEditorService editorService: IEditorService | undefined,
+		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
 	) {
 		super(container, options, commandService, layoutService, instantiationService, configuration, notifications, lifecycleService, contextKeyService, editorGroups, editorService);
 		this.chatService = chatService;
@@ -124,6 +128,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			for (const popup of this.popouts.values()) popup.resources.dispose();
 			this.popouts.clear();
 			for (const pane of this.panes.values()) pane.dispose();
+			this.paneScopes.clearAndDisposeAll();
 			this.panes.clear();
 		}));
 		this.updateSessionsLayout();
@@ -351,6 +356,40 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		return session;
 	}
 
+	private createChatPane(selection: ChatWidgetSelection, options?: IChatWidgetViewOptions): ChatWidget<ChatWidgetModel> {
+		const providerId = selection.kind === 'untitled' ? selection.session.providerId : selection.active.session.providerId;
+		const resources = new DisposableStore();
+		const services = providerId && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID
+			? resources.add(this.providerScopes.createScope(undefined, providerId))
+			: this.instantiationService;
+		try {
+			const model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
+			resources.add(model);
+			const pane = services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
+				this.paneHost,
+				`ash-chat-pane-${++chatPaneInstanceId}`,
+				model,
+				() => { this.sessionService.createUntitledSession(); },
+				this.contextMenuService,
+				this.contextViewService,
+				this.commandService,
+				this.accessibleViewService,
+				this.notifications,
+				this.openerService,
+				this.editorService,
+				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
+				undefined, options,
+			);
+			resources.delete(model);
+			setDisposableOwner(model, pane);
+			this.paneScopes.set(pane, resources);
+			return pane;
+		} catch (error) {
+			resources.dispose();
+			throw error;
+		}
+	}
+
 	protected override updateSessions(openPaneId?: string): {
 		readonly entries: readonly IChatViewPaneEntry<ChatWidgetModel>[];
 		readonly activePaneId: string | undefined;
@@ -368,21 +407,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			retainedPaneIds.add(paneId);
 			let pane = this.panes.get(paneId);
 			if (!pane) {
-				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
-					this.paneHost,
-					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'untitled', session: untitledSession }, this.sessionService),
-					() => { this.sessionService.createUntitledSession(); },
-					this.contextMenuService,
-					this.contextViewService,
-					this.commandService,
-					this.accessibleViewService,
-					this.notifications,
-					this.openerService,
-					this.editorService,
-					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-					undefined, this.embeddedOptions.get(untitledSession.untitledSessionId),
-				);
+				pane = this.createChatPane({ kind: 'untitled', session: untitledSession }, this.embeddedOptions.get(untitledSession.untitledSessionId));
 				pane.bindDraftStorage({
 					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
 					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
@@ -409,21 +434,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			// Catalog history is not an opened conversation. Instantiating every
 			// entry also restores every subscription and catalog read on reconnect.
 			if (!pane) {
-				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
-					this.paneHost,
-					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'session', active: selection }, this.sessionService),
-					() => { this.sessionService.createUntitledSession(); },
-					this.contextMenuService,
-					this.contextViewService,
-					this.commandService,
-					this.accessibleViewService,
-					this.notifications,
-					this.openerService,
-					this.editorService,
-					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-					undefined, undefined,
-				);
+				pane = this.createChatPane({ kind: 'session', active: selection });
 				pane.bindDraftStorage({
 					read: identity => readNewChatDraftState(this.storage, identity, chatInputStatePersistence),
 					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity, chatInputStatePersistence),
@@ -447,6 +458,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			this.embeddedChats.get(pane)?.session.dispose();
 			this.popouts.get(pane)?.resources.dispose();
 			pane.dispose();
+			this.paneScopes.deleteAndDispose(pane);
 		}
 		if (!this.restoringViewState) this.openedPaneIds = this.openedPaneIds.filter(id => retainedPaneIds.has(id));
 		return {
@@ -548,6 +560,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 					this.embeddedChats.get(pane)?.session.dispose();
 					this.popouts.get(pane)?.resources.dispose();
 					pane.dispose();
+					this.paneScopes.deleteAndDispose(pane);
 					continue;
 				}
 			}

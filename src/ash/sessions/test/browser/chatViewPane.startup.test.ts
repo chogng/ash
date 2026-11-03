@@ -1,3 +1,4 @@
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ChatHistoryModel } from '../../browser/chatHistoryModel.js';
@@ -130,6 +131,7 @@ test('opens a local Chat conversation before the backend session request settles
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
 	using viewServices = services.createChild();
+	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessionService);
 	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);

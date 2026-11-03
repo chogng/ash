@@ -8,6 +8,7 @@ export interface IAgentSession {
 	readonly resource: URI;
 	readonly label: string;
 	readonly description: string;
+	readonly providerLabel?: string;
 	readonly kind: 'draft' | 'session';
 	readonly target: { readonly untitledSessionId: string; } | { readonly sessionId: string; readonly threadId?: string; };
 	readonly active: boolean;

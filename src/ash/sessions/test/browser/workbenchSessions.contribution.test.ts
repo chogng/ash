@@ -1,3 +1,12 @@
+import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
+import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
+import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
+import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
+import { ISessionPrimaryProviderServices, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -15,11 +24,11 @@ import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
-import { IAgentSessionService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { IDevContainerAgentHostService } from '../../common/devContainerAgentHostService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -117,24 +126,33 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	using workspace = new TestWorkspaceService({ id: 'empty-window' });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IQuickInputService, {} as IQuickInputService);
-	services.registerInstance(IChatService, {} as IChatService);
+	services.registerInstance(IAgentThreadService, api.thread);
+	services.registerInstance(IServerEventApi, api.events);
+	services.registerInstance(ITurnChangesApi, api.turnChanges);
+	services.registerInstance(IAgentExecutionSettingsService, api.executionSettings);
+	using configuration = new InMemoryConfigurationService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(ILanguageModelsService, {} as ILanguageModelsService);
+	services.registerInstance(IPromptsService, {} as IPromptsService);
+	services.registerInstance(ILanguageModelToolsService, {} as ILanguageModelToolsService);
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IViewsService, { openView: async () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
 	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-		if (id === ISessionsManagementService || id === IChatSessionNavigationService || id === IDevContainerAgentHostService) {
+		if ([ISessionsManagementService, IChatSessionNavigationService, IDevContainerAgentHostService, ISessionProviderScopeService, ISessionPrimaryProviderServices, IChatService].some(service => service === id)) {
 			services.registerSingleton(id, () => services.createInstance(descriptor));
 		}
 	}
 	const sessions = services.get(ISessionsManagementService);
 	const navigation = services.get(IChatSessionNavigationService);
+	assert.ok(services.get(IChatService) instanceof SessionsChatService);
 	assert.deepEqual(navigation.getConversations(), []);
 	assert.equal(navigation.getActiveConversation(), undefined);
 	assert.equal(await navigation.captureActiveDraft(), undefined);
 	using contributions = WorkbenchContributionsRegistry.createHost(services);
 	contributions.advance(WorkbenchPhase.BlockRestore);
 	await sessions.initialize();
-	assert.equal(subscriptions, 1);
+	assert.equal(subscriptions, 2); // The provider and the ambient Chat backend each consume Session changes.
 	assert.equal(catalogLoads, 1);
 });
 
@@ -144,6 +162,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 		activeUntitledSession: undefined as { readonly untitledSessionId: string; } | undefined,
 	};
 	using services = new InstantiationService();
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerInstance(IChatService, {} as IChatService);
 	services.registerInstance(ISessionsManagementService, selection as unknown as ISessionsManagementService);
 	services.registerInstance(IViewsService, { openView: async () => undefined, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
@@ -158,6 +177,7 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 
 test('provider-qualified navigation never opens an equal host-local ID on the ambient host', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerInstance(IChatService, {} as IChatService);
 	let opened = 0;
 	services.registerInstance(ISessionsManagementService, { openThread: async () => { opened++; } } as unknown as ISessionsManagementService);
@@ -349,6 +369,7 @@ test('Conversation review cannot open after an A-B-A selection change', async ()
 
 test('conversation navigation focuses the opened result without focusing a later selection', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerInstance(IChatService, {} as IChatService);
 	let active = { session: { sessionId: 'source' }, threadId: 'source-thread' };
 	let complete = Promise.resolve();
@@ -383,6 +404,7 @@ test('A reusable-workflow new Chat reveals the Code conversation through its nav
 	const focused: string[] = [];
 	services.registerInstance(ISessionsManagementService, { createUntitledSession: () => { created++; return { untitledSessionId: `draft-${created}` }; }, setUntitledSessionAgent: (id: string, agent: unknown) => { selected.push([id, agent]); } } as unknown as ISessionsManagementService);
 	services.registerInstance(IViewsService, { focusView: async (id: string) => { focused.push(id); return true; } } as unknown as IViewsService);
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerInstance(IChatService, {} as IChatService);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));

@@ -907,8 +907,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAgentThreadService, api.thread);
 		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
-		const chatService = this._register(services.createInstance(ChatService));
-		services.registerInstance(IChatService, chatService);
+		if (!services.has(IChatService)) services.registerSingleton(IChatService, () => services.createInstance(ChatService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
