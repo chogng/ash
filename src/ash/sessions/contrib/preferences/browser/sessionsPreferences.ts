@@ -3,6 +3,7 @@ import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
@@ -567,7 +568,7 @@ export class SessionsPreferences extends Disposable {
 			SessionsConfiguration.activityBarLocation
 		].map(id => defaults.get(id));
 		const generalSettings: readonly ISetting[] = [
-			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING),
+			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING || setting.id === ChatConfiguration.TipsEnabled),
 			displayLanguageSetting(defaults.get(LocalizationConfiguration.locale), this.localeService, this.languagePackService, this.localizationService, this.configurationService),
 		];
 		const designSettings: readonly ISetting[] = [

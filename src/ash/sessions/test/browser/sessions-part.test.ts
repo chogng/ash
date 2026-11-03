@@ -71,6 +71,11 @@ import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/b
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { getWindowById, getWindowId } from '../../../base/browser/window.js';
 
@@ -93,6 +98,7 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
+await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
 const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
@@ -354,6 +360,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const paneServices = registerTestComponentServices(editorServices);
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 
@@ -394,18 +401,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 2);
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-input .ash-chat-input-editor').length, 2);
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 2);
-	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
-	assert.ok(firstTip);
+	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	const initialWidgets = paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget);
 	assert.equal(initialWidgets.length, 2);
-	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
-	const retainedTip = part.domNode.querySelector('.ash-chat-input-tip');
-	viewService.activateSelection(viewService.activeSelection!);
-	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), retainedTip);
-	retainedTip!.querySelector<HTMLButtonElement>('button')!.click();
-	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
-	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 
 	(part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement).focus();
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-slot.active'));
@@ -424,6 +422,22 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedInput);
 	assert.equal(paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget).length, 1);
 	assert.equal(initialWidgets.filter(widget => widget.isDisposed).length, 1);
+	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
+	assert.ok(firstTip);
+	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
+	viewService.activateSelection(viewService.activeSelection!);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), firstTip);
+	const configuration = paneServices.get(IConfigurationService);
+	firstTip.querySelector('button')!.focus();
+	await configuration.updateValue(ChatConfiguration.TipsEnabled, false);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
+	assert.ok(retainedInput?.querySelector('.ash-chat-input-container')?.contains(dom.window.document.activeElement));
+	await configuration.updateValue(ChatConfiguration.TipsEnabled, true);
+	const restoredTip = part.domNode.querySelector('.ash-chat-input-tip');
+	assert.ok(restoredTip);
+	restoredTip.querySelector('button')!.click();
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
+	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };

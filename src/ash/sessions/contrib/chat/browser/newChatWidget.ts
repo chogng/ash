@@ -9,7 +9,9 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
@@ -50,6 +52,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
+		@IConfigurationService configuration: IConfigurationService,
 	) {
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
@@ -92,11 +95,19 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this._register(toDisposable(() => tipContainer.remove()));
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
-			isEligible: () => !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
+			isEligible: () => this.visible && configuration.getValue<boolean>(ChatConfiguration.TipsEnabled) !== false
+				&& !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
-				&& !this.model.inputState.interaction,
+				&& !this.model.inputState.interaction
+				&& !widgets.getAllWidgets().some(widget => widget !== this && widget.visible && widget.domNode.ownerDocument === parent.ownerDocument),
 			focusInput: () => this.input.focus(),
 		}, this.input.noticeHost));
+		this._register(widgets.onDidChangeWidgets(() => {
+			if (!this.isDisposed) this.tips.update();
+		}));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(ChatConfiguration.TipsEnabled)) this.tips.update();
+		}));
 		footer.classList.add('ash-sessions-chat-input-footer');
 		if (!model.isNestedDraft) {
 			this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));

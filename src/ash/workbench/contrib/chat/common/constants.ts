@@ -12,6 +12,7 @@ export enum ChatConfiguration {
 	FontSize = 'chat.fontSize',
 	RequestQueueingDefaultAction = 'chat.requestQueuing.defaultAction',
 	AutoExpandToolFailures = 'chat.tools.autoExpandFailures',
+	TipsEnabled = 'chat.tips.enabled',
 }
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';

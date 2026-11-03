@@ -259,6 +259,22 @@ configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
 configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.TipsEnabled,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.tips.enabled.invalid', 'The Chat tips setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.tips.enabled.title', 'Show Chat tips'); },
+		get description() { return localize('chat.tips.enabled.description', 'Show tips in new Code conversations in the Agents window.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.AutoExpandToolFailures,
 	defaultValue: true,
 	scope: ConfigurationScope.WINDOW,
