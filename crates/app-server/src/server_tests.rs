@@ -7871,7 +7871,18 @@ fn restricted_dir_exposes_git_status_but_rejects_mutations() {
             "params":{"paths":["tracked.txt"]}
         }),
     );
-    assert_eq!(staged["error"]["message"], "GitUnavailable");
+    assert_eq!(staged["error"]["data"]["kind"], "PermissionRequired");
+
+    let missing_repository = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/status","params":{"repositoryId":"retired-repository"}}),
+    );
+    assert_eq!(missing_repository["error"]["code"], -32602);
+    assert_eq!(
+        missing_repository["error"]["data"]["kind"],
+        "GitRepositoryNotFound"
+    );
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
@@ -8031,7 +8042,7 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
         &mut reader,
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{"mode":{"remote":"origin"}}}),
     );
-    assert_eq!(rejected["error"]["message"], "GitUnavailable");
+    assert_eq!(rejected["error"]["data"]["kind"], "PermissionRequired");
     assert_eq!(
         read_git(&["rev-parse", "refs/remotes/origin/main"]),
         origin_ref

@@ -29,13 +29,13 @@ import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWor
 import { getSessionsChatAccessibilityHelp } from '../../browser/sessionsChatAccessibilityHelp.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true, isTrusted: ISessionFolderAuthorizationService['isTrusted'] = async () => true) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
-	services.registerInstance(ISessionFolderAuthorizationService, { authorize });
+	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted, authorize });
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
 	const changed = lifetime.add(new Emitter<void>());
 	const updated = lifetime.add(new Emitter<void>());
@@ -187,7 +187,7 @@ test('Branches and the worktree toggle form the last group', async () => {
 	await f.open();
 	assert.deepEqual(f.items.map(item => item.kind === ActionListItemKind.Separator ? null : item.label), [
 		'Recent project', null,
-		'Clone Repository…', 'Manage Recent Folders…', 'Open Folder…', null,
+		'Clone Repository…', 'Open Folder…', null,
 		'main', 'New worktree',
 	]);
 	const branches = f.items.find(item => item.label === 'main');
@@ -221,36 +221,15 @@ test('Workspace rows show the folder name and use the full path for hover and ac
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: project.fsPath });
 });
 
-test('Hiding a recent folder applies to another draft and restoring leaves shared history intact', async () => {
-	using f = fixture();
-	await f.open();
-	await f.choose('Manage Recent Folders…');
-	const hidden = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
-	await f.choose('Hide Recent project');
-	await hidden;
-	f.model.untitledSessionId = 'second';
-	f.updated.fire();
-	await f.open();
-	assert.ok(!f.labels.includes('Recent project'));
-	assert.ok(f.history.some(recent => 'folderUri' in recent && recent.folderUri.path === '/recent'));
-	await f.choose('Manage Recent Folders…');
-	const reloaded = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
-	await f.choose('Restore Recent project');
-	await reloaded;
-	assert.ok(f.labels.includes('Recent project'));
-	assert.deepEqual(f.drafts.map(draft => draft.workspace), [
-		{ type: 'local', root: URI.file('/project').fsPath },
-		{ type: 'local', root: URI.file('/project').fsPath },
-	]);
-});
-
 test('A recent checkout verified by the current host appears once as a worktree', async () => {
 	using f = fixture(undefined, [], [
+		{ folderUri: URI.file('/project'), label: 'Selected repository' },
 		{ folderUri: URI.file('/checkouts/review'), label: 'Duplicate checkout' },
 		{ folderUri: URI.file('/other.worktrees/review'), label: 'Unverified folder' },
 	]);
 	await f.open();
 	assert.ok(f.items.some(item => item.submenu?.some(branch => branch.label === 'review')));
+	assert.ok(f.labels.includes('Selected repository'));
 	assert.ok(!f.labels.includes('Duplicate checkout'));
 	assert.ok(f.labels.includes('Unverified folder'));
 });
@@ -286,6 +265,31 @@ test('Workspace includes recent active Session folders from the draft host after
 	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('')), ['Recent project', 'latest', 'earlier']);
 	await f.choose('latest');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/latest').fsPath });
+});
+
+test('Folder candidates require existing trust without prompting', async () => {
+	const trusted = URI.file('/trusted');
+	const unchecked = URI.file('/unchecked');
+	const failed = URI.file('/failed');
+	const permission = new DeferredPromise<boolean>();
+	using f = fixture(undefined, [], [
+		{ folderUri: trusted, label: 'Trusted folder' },
+		{ folderUri: failed, label: 'Unavailable folder' },
+	], undefined, { name: 'Unchecked folder', uri: unchecked }, undefined,
+		async () => assert.fail('Listing candidates must not request authorization'), async path => {
+			if (path === failed.fsPath) throw new Error('Trust unavailable');
+			return path === trusted.fsPath || (path === unchecked.fsPath && await permission.p);
+		});
+	await f.open();
+	assert.ok(f.labels.includes('Trusted folder'));
+	assert.ok(f.labels.includes('Open Folder…'));
+	assert.ok(!f.labels.includes('Recent project'));
+	assert.ok(!f.labels.includes('Unavailable folder'));
+	assert.ok(!f.labels.includes('Unchecked folder'));
+	const updated = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
+	await permission.complete(true);
+	await updated;
+	assert.ok(f.labels.includes('Unchecked folder'));
 });
 
 test('New worktree toggles the draft without prompting and retains the selected branch checkout', async () => {

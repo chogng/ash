@@ -4607,9 +4607,9 @@ impl AppServer {
             Some(ClientMethod::GitWorktreeDelete) => {
                 self.git_processor().git_worktree_delete(&request.params)
             }
-            Some(ClientMethod::GitWorktreeList) => {
-                self.git_processor().git_worktree_list(&request.params)
-            }
+            Some(ClientMethod::GitWorktreeList) => self
+                .git_processor()
+                .git_worktree_list(connection, &request.params),
             Some(ClientMethod::GitWorktreeResolve) => {
                 self.git_processor().git_worktree_resolve(&request.params)
             }

@@ -5,6 +5,9 @@ import { ASH_REMOTE_SCHEME, withRemoteWorkspacePath } from '../../platform/remot
 import type { ISessionWorkspace } from '../services/sessions/common/session.js';
 
 export interface ISessionFolderAuthorizationService {
+	/** Checks existing local directory permissions without prompting or granting access. */
+	isTrusted(path: string): Promise<boolean>;
+
 	/** Returns whether the folder can be selected after the host's directory permission check. */
 	authorize(path: string, signal: AbortSignal, host?: { readonly api: IAgentConnection; readonly label: string; }): Promise<boolean>;
 }

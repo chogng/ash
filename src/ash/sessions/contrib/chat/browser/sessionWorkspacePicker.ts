@@ -246,7 +246,6 @@ export class SessionWorkspacePicker extends Disposable {
 		}
 		let allWorktrees = worktreeQuery?.worktrees;
 		let hasContainer = false;
-		let recents: Awaited<ReturnType<WorkspacePicker['getRecentFolders']>> = [];
 		const workspace = this.workspace.getWorkspace();
 		const folders = selectionFromWorkspace(workspace);
 		const workspaceFolders = folders.type === 'multiple' ? folders.folders
@@ -255,7 +254,15 @@ export class SessionWorkspacePicker extends Disposable {
 			source?.type === 'ssh' ? candidate.type === 'ssh' && candidate.host === source.host
 				: source?.type === 'remote' ? candidate.type === 'remote' && candidate.authority === source.authority
 					: candidate.type === 'local';
-		const candidates = workspaceFolders.filter(folder => accepts(folder.target));
+		const windowFolders = workspaceFolders.filter(folder => accepts(folder.target));
+		let candidates: typeof windowFolders = [];
+		let recents: Awaited<ReturnType<WorkspacePicker['getRecentFolders']>> = [];
+		const folderUri = (target: SessionExecutionTarget): URI => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
+		const trustedFolders = async (folders: typeof recents) => {
+			const trusted = await Promise.all(folders.map(({ target }) => target.type !== 'local'
+				|| this.folderAuthorization.isTrusted(target.root).catch(() => false)));
+			return folders.filter((_, index) => trusted[index]);
+		};
 		const buildActions = () => {
 			const environmentItems: IWorkspaceModeItem[] = [];
 			if (hasContainer) {
@@ -263,7 +270,6 @@ export class SessionWorkspacePicker extends Disposable {
 				environmentItems.push({ label: localize('sessions.workspace.useContainer', 'Use Dev Container'), mode: 'container', picked: draft.devContainer });
 			}
 			const worktreesOnHost = allWorktrees ?? [];
-			const folderUri = (target: SessionExecutionTarget): URI => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
 			const sourceKey = source && folderUri(source).toString();
 			const sourceRepositories = new Set(worktreesOnHost.flatMap(worktree => {
 				if (!worktree.repository) return [];
@@ -316,16 +322,16 @@ export class SessionWorkspacePicker extends Disposable {
 				recent, label: folder.label, mode: 'folder', target: folder.target,
 				picked: source?.type === folder.target.type && source.root === folder.target.root,
 			});
-			const known = new Set([...candidates, ...recents].map(({ target }) => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!).toString()));
-			const sessionFolders = this.workspaceFallback.getWorkspaces(draft.providerId, known, accepts);
-			// Only fold checkouts confirmed by the current host. Other recent folders remain
-			// selectable even when their names resemble a worktree.
+			// Keep the selected folder in recents even when Git lists it as a checkout.
+			// Other confirmed checkouts are available under the branch submenu.
 			const worktrees = new Set(sourceWorktrees.map(worktree => folderUri(worktree.target).toString()));
-			const recentFolders = [...recents, ...sessionFolders].filter(folder => !worktrees.has(folderUri(folder.target).toString()));
-			const hidden = this.recentWorkspaces.getHidden();
+			const recentFolders = recents.filter(folder => {
+				const key = folderUri(folder.target).toString();
+				return key === sourceKey || !worktrees.has(key);
+			});
 			const visibleFolders = new Set([
 				...candidates.map(folder => folderUri(folder.target).toString()),
-				...recentFolders.map(folder => folderUri(folder.target).toString()).filter(key => !hidden.has(key)),
+				...recentFolders.map(folder => folderUri(folder.target).toString()),
 			]);
 			const collapsed = new Set(worktreesOnHost.flatMap(worktree => {
 				if (!worktree.repository) return [];
@@ -333,39 +339,16 @@ export class SessionWorkspacePicker extends Disposable {
 				const repository = folderUri(worktree.repository).toString();
 				return checkout !== sourceKey && checkout !== repository && visibleFolders.has(repository) ? [checkout] : [];
 			}));
-			const manage: IAction = {
-				id: 'sessions.workspace.manageRecent', label: localize('sessions.workspace.manageRecent', 'Manage Recent Folders…'),
-				tooltip: '', enabled: true,
-				run: () => {
-					if (!isCurrent()) return;
-					this.picker.showPicker(recentFolders.map(folder => {
-						const uri = folderUri(folder.target);
-						const wasHidden = hidden.has(uri.toString());
-						const label = wasHidden
-							? localize('sessions.workspace.restoreRecent', 'Restore {0}', folder.label)
-							: localize('sessions.workspace.hideRecent', 'Hide {0}', folder.label);
-						return {
-							id: uri.toString(), label, tooltip: folder.target.root, enabled: true,
-							run: () => {
-								if (!isCurrent()) return;
-								this.recentWorkspaces.setHidden(uri, !wasHidden);
-								status(label);
-								this.showPicker();
-							},
-						};
-					}));
-				},
-			};
 			const folderActions = [
 				...candidates.map(folder => folderAction(folder, false)),
 				...recentFolders.filter(folder => {
 					const key = folderUri(folder.target).toString();
-					return !hidden.has(key) && !collapsed.has(key);
+					return !collapsed.has(key);
 				}).map(folder => folderAction(folder, true)),
 			];
 			return Separator.join(
 				[...folderActions, ...environmentItems.map(toAction)],
-				[...actions, ...(recentFolders.length ? [manage] : []), openFolder],
+				[...actions, openFolder],
 				worktreeActions,
 			);
 		};
@@ -385,7 +368,17 @@ export class SessionWorkspacePicker extends Disposable {
 					.then(available => { if (available) { hasContainer = true; update(); } }, error => {
 						if (!token.isCancellationRequested && !isCancellationError(error)) this.notifications.error(error);
 					}),
-				this.picker.getRecentFolders(candidates, accepts).then(result => { recents = result; if (recents.length) update(); }, () => { }),
+				trustedFolders(windowFolders).then(result => {
+					candidates = result;
+					if (candidates.length) update();
+				}),
+				this.picker.getRecentFolders(windowFolders, accepts).catch(() => []).then(async history => {
+					if (token.isCancellationRequested || !isCurrent()) return;
+					const known = new Set([...windowFolders, ...history].map(({ target }) => folderUri(target).toString()));
+					const sessionFolders = this.workspaceFallback.getWorkspaces(draft.providerId, known, accepts);
+					recents = await trustedFolders([...history, ...sessionFolders]);
+					if (recents.length) update();
+				}),
 			]);
 		});
 	}

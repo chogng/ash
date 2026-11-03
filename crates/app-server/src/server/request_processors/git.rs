@@ -2,6 +2,8 @@ use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
 use super::decode;
+use super::directory_grants_protocol::DirectoryPathRequirement;
+use super::directory_grants_protocol::validate_path;
 use super::result;
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
@@ -70,6 +72,7 @@ use ash_app_server_protocol::protocol::git::GitWorktreeCreateResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteMode;
 use ash_app_server_protocol::protocol::git::GitWorktreeDeleteParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeDto;
+use ash_app_server_protocol::protocol::git::GitWorktreeListParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeListResult;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveParams;
 use ash_app_server_protocol::protocol::git::GitWorktreeResolveResult;
@@ -95,6 +98,11 @@ const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 /// Coordinates the existing owners needed by the git adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait GitRequestProcessorContext: Send + Sync {
+    fn authorize_worktree_source(
+        &self,
+        path: PathBuf,
+    ) -> Result<ash_file_access::Authorization, RpcError>;
+
     fn delete_worktree_session(
         &self,
         owner_thread_id: &str,
@@ -780,7 +788,7 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         let runtime = match self.context.git_runtime_service() {
             Ok(runtime) => runtime,
             Err(error)
-                if error.message == AppServerErrorName::GitUnavailable
+                if error.message == AppServerErrorName::GitWorkspaceUnavailable
                     && folders.as_ref().is_none_or(Vec::is_empty) =>
             {
                 // The host may query the catalog before any workspace directory is bound.
@@ -1209,8 +1217,43 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         })
     }
 
-    pub(super) fn git_worktree_list(&self, value: &Value) -> Result<Value, RpcError> {
-        let params: GitRepositoryParams = decode(value)?;
+    pub(super) fn git_worktree_list(
+        &self,
+        connection: &ConnectionState,
+        value: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: GitWorktreeListParams = decode(value)?;
+        if let Some(path) = params.source_path {
+            connection.require_directory_grants_host()?;
+            validate_path(Path::new(&path), DirectoryPathRequirement::Absolute)?;
+            if params.repository_id.is_some() || path.len() > 32_768 || path.contains('\0') {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            let authorization = self
+                .context
+                .authorize_worktree_source(PathBuf::from(path))
+                .inspect_err(|error| {
+                    log::debug!(
+                        "git/worktree/list stage=directory_authorization kind={:?}",
+                        error.message
+                    );
+                })?;
+            let listed = authorization
+                .execute(
+                    authorization.subject(),
+                    authorization.dir(),
+                    ash_file_access::Permission::InspectRepository,
+                    || Self::list_worktrees_at(authorization.dir().canonical_path()),
+                )
+                .map_err(|_| RpcError::new(-32073, AppServerErrorName::PermissionRequired))?
+                .inspect_err(|error| {
+                    log::debug!(
+                        "git/worktree/list stage=worktree_lookup kind={:?}",
+                        error.message
+                    );
+                })?;
+            return result(&listed);
+        }
         result(&self.git_worktree_list_result(params.repository_id.as_deref())?)
     }
 
@@ -1287,14 +1330,32 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
             .git_runtime_service()?
             .readable_source_for(repository_id)
             .map_err(git_error)?;
-        // Listing is authorized by GitRuntime and does not require a conversation's managed dirs.
+        Self::list_worktrees_at(&source)
+    }
+
+    fn list_worktrees_at(source: &Path) -> Result<GitWorktreeListResult, RpcError> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?;
-        let worktrees = runtime
-            .block_on(worktree::WorktreeManager::list_existing(&source))
-            .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?
+        let worktrees = match runtime.block_on(worktree::WorktreeManager::list_existing(source)) {
+            Ok(worktrees) => worktrees,
+            Err(error)
+                if matches!(
+                    error.downcast_ref::<ash_git::GitError>(),
+                    Some(ash_git::GitError::NotAWorkingTree { .. })
+                ) =>
+            {
+                Vec::new()
+            }
+            Err(_) => {
+                return Err(RpcError::new(
+                    -32061,
+                    AppServerErrorName::GitOperationFailed,
+                ));
+            }
+        };
+        let worktrees = worktrees
             .into_iter()
             .map(|worktree| {
                 let state = match (worktree.availability(), worktree.owner()) {
@@ -1585,7 +1646,7 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
         GitRuntimeError::RepositoryNotFound => {
-            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+            RpcError::new(-32602, AppServerErrorName::GitRepositoryNotFound)
         }
         GitRuntimeError::Boundary
         | GitRuntimeError::Service(GitServiceError::Boundary)
@@ -1621,7 +1682,7 @@ pub(super) fn git_error(error: GitRuntimeError) -> RpcError {
             RpcError::new(-32000, AppServerErrorName::ServerOverloaded)
         }
         GitRuntimeError::Service(GitServiceError::Permission) => {
-            RpcError::new(-32060, AppServerErrorName::GitUnavailable)
+            RpcError::new(-32060, AppServerErrorName::PermissionRequired)
         }
     }
 }

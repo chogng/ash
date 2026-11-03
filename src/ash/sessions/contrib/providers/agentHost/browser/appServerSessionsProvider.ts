@@ -237,10 +237,20 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const worktrees = await this.rendererHost.localGit.listWorktrees(token);
+		const git = this.rendererHost.localGit;
+		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
+		let worktrees = await git.listWorktrees(token).catch(error => {
+			if (workspace.type !== 'local') throw error;
+			this.assertCurrentConnection(generation, epoch);
+			if (token.isCancellationRequested) throw canceled();
+			return [];
+		});
+		// A draft can select a trusted folder outside the window's repository catalog.
+		if (workspace.type === 'local' && !worktrees.some(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path))) {
+			worktrees = [...worktrees, ...await git.listWorktrees(token, workspace.root)];
+		}
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) { throw canceled(); }
-		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
 		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
 		return worktrees.filter(worktree => includeOtherRepositories || projectSources.has(worktree.sourcePath))
 			.map(worktree => ({

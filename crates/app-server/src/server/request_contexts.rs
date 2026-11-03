@@ -325,6 +325,22 @@ impl super::fs_operations::FileSystemRequestProcessorContext for AppServer {
 }
 
 impl super::git_operations::GitRequestProcessorContext for AppServer {
+    fn authorize_worktree_source(
+        &self,
+        path: std::path::PathBuf,
+    ) -> Result<ash_file_access::Authorization, super::RpcError> {
+        let denied = || super::RpcError::new(-32073, super::AppServerErrorName::PermissionRequired);
+        let grant = self
+            .authorize_local_dir_root(path, None)
+            .map_err(|_| denied())?;
+        if grant.source() != ash_file_access::GrantSource::ExplicitUser {
+            return Err(denied());
+        }
+        grant
+            .authorize(ash_file_access::Permission::InspectRepository)
+            .map_err(|_| denied())
+    }
+
     fn session_dir_authorization(
         &self,
         session_id: &ash_protocol::SessionId,

@@ -359,7 +359,10 @@ Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/br
 
 `ash code` 首页“新建工作树”打开同仓库选择器；用户可独立创建 detached 工作树，创建后停留在列表并选中新目录。选择已有或新建的工作树时，TUI 先通过 `git/worktree/resolve` 重新验证，再由本地或 Remote host 连接到以该目录为根的 App Server。这个操作不新建 Session，也不改变原会话的目录；随后提交任务才开始新 Session，新 Thread 以所选目录为来源建立自己的受管工作树。工作树选择器不打开已绑定其他 Thread、锁定或失效的目录；选中其他干净、未绑定的关联工作树后按 `d` 可确认删除。顶部“项目分支”面板提供基于 HEAD 新建本地分支、切换现有分支，以及对非当前分支按 `d` 确认删除；Git 拒绝未合并或在任一工作树中检出的分支。
 
-稳定失败边界包括 `GitUnavailable`、`GitNotRepository`、`GitOperationFailed` 和部分暂存内容已变化时的 `GitIndexChanged`。内部 executable、
+Git RPC 调用方通过 `error.data.kind` 区分失败原因。窗口没有 Git 服务时返回 `GitWorkspaceUnavailable`，
+仓库 ID 未在当前目录中登记时返回 `GitRepositoryNotFound`，缺少所需 Git 权限时返回 `PermissionRequired`。
+`GitNotRepository` 表示目录不是 Git 工作树，`GitOperationFailed` 表示 Git 操作失败，`GitIndexChanged` 表示部分暂存内容已变化。
+缺少受管工作树服务时仍返回 `GitUnavailable`。工作树查询的调试日志标明仓库解析、目录授权或工作树读取阶段。内部 executable、
 stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是供用户选择的显式数据。
 
 ## 当前限制

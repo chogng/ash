@@ -133,3 +133,80 @@ fn historical_session_repository_contexts_use_its_grant_without_environment_fall
     assert_eq!(retired["error"]["code"], -32064, "{retired}");
     server.close_connection(connection);
 }
+
+#[test]
+fn draft_worktrees_use_the_explicit_source_grant_without_activating_a_workspace() {
+    let directories = tempfile::tempdir().unwrap();
+    let repo = directories.path().join("draft");
+    initialize_repository(&repo, "draft-main", "https://example.invalid/draft.git");
+    let commit = std::process::Command::new("git")
+        .current_dir(&repo)
+        .args([
+            "-c",
+            "user.name=Ash Test",
+            "-c",
+            "user.email=ash@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+        ])
+        .output()
+        .unwrap();
+    assert!(commit.status.success(), "{:?}", commit.stderr);
+    let config = Arc::new(ConfigStore::open(&directories.path().join("state.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, DirGrantPolicy::UserConfig(Arc::clone(&config)))
+        .unwrap();
+    let mut connection = server.product_host_connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"draft-worktree-fixture","version":"1"},
+            "capabilities":{"directoryGrantsHost":{"version":1}}
+        }}),
+    );
+    assert!(initialized.get("error").is_none(), "{initialized}");
+    let query = |id| json!({"jsonrpc":"2.0","id":id,"method":"git/worktree/list","params":{"sourcePath":repo}});
+    let denied = call(&server, &mut connection, query(2));
+    assert_eq!(denied["error"]["message"], "PermissionRequired", "{denied}");
+
+    let granted = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":3,"method":"config/directoryGrants/set","params":{
+            "commandId":"grant-draft","expectedRevision":config.read_snapshot().unwrap().revision,
+            "path":repo,"permissions":["inspectRepository"]
+        }}),
+    );
+    assert!(granted.get("error").is_none(), "{granted}");
+    let listed = call(&server, &mut connection, query(4));
+    assert_eq!(
+        listed["result"]["worktrees"][0]["branch"], "draft-main",
+        "{listed}"
+    );
+    assert_eq!(
+        listed["result"]["worktrees"][0]["current"], true,
+        "{listed}"
+    );
+    let catalog = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,"method":"git/repositories","params":{}}),
+    );
+    assert_eq!(catalog["result"]["repositories"], json!([]), "{catalog}");
+
+    let status = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":6,"method":"git/status","params":{}}),
+    );
+    assert_eq!(status["error"]["code"], -32060, "{status}");
+    assert_eq!(
+        status["error"]["data"]["kind"], "GitWorkspaceUnavailable",
+        "{status}"
+    );
+}

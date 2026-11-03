@@ -4,7 +4,6 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { URI } from '../../../../../base/common/uri.js';
 import { JSDOM } from 'jsdom';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { SessionsRecentWorkspacesService } from '../../browser/sessionsRecentWorkspacesService.js';
@@ -144,7 +143,7 @@ test('removing the default provider retires bare IDs and keeps the remaining pro
 	assert.ok(!primary.calls.includes('read:same'));
 });
 
-test('new drafts restore only a visible selection from their own host', () => {
+test('new drafts restore only a selection from their own host', () => {
 	using registry = new SessionsProvidersService();
 	using primary = new Provider('primary');
 	using remote = new Provider('remote');
@@ -164,6 +163,4 @@ test('new drafts restore only a visible selection from their own host', () => {
 	assert.deepEqual(management.createUntitledSession(undefined, undefined, primary.id, false).workspace, primary.currentWorkspace());
 	recent.setSelected(remote.id, { ...remoteFolder, host: 'another-host' });
 	assert.deepEqual(management.createUntitledSession(undefined, undefined, remote.id).workspace, remote.currentWorkspace());
-	recent.setHidden(URI.file(localFolder.root), true);
-	assert.deepEqual(management.createUntitledSession(undefined, undefined, primary.id).workspace, primary.currentWorkspace());
 });

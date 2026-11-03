@@ -14,7 +14,7 @@ export class AppServerLocalGitService implements ILocalGitService {
 
 	constructor(private readonly connection: AppServerProtocolClient) { }
 
-	public async listWorktrees(token: CancellationToken): ReturnType<ILocalGitService['listWorktrees']> {
+	public async listWorktrees(token: CancellationToken, sourcePath?: string): ReturnType<ILocalGitService['listWorktrees']> {
 		const generation = this.connection.generation;
 		using cancellation = new CancellationTokenSource(token);
 		using subscription = this.connection.onStateChange(state => { if (state !== 'ready') cancellation.cancel(); });
@@ -24,6 +24,18 @@ export class AppServerLocalGitService implements ILocalGitService {
 			}
 		};
 		checkCurrent();
+		if (sourcePath !== undefined) {
+			try {
+				const result = await raceCancellationError(appServerRequest(this.connection, 'git/worktree/list', { sourcePath }), cancellation.token);
+				checkCurrent();
+				return result.worktrees.filter(worktree => worktree.state === 'ready').map(worktree => ({
+					label: worktree.branch || worktree.path, path: worktree.current ? sourcePath : worktree.path, sourcePath,
+				}));
+			} catch (error) {
+				if (error instanceof AppServerRemoteError && error.errorName === 'PermissionRequired') return [];
+				throw error;
+			}
+		}
 		const repositories = await raceCancellationError(appServerRequest(this.connection, 'git/repositories', {}), cancellation.token);
 		checkCurrent();
 		const checkouts = await Promise.all(repositories.repositories.map(async repository => {

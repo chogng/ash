@@ -186,7 +186,7 @@ function createInputServices(
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
-	services.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
@@ -1534,7 +1534,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
-	editorServices.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+	editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {

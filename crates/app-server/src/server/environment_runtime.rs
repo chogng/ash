@@ -3533,7 +3533,7 @@ impl AppServer {
             .workspace
             .git
             .clone()
-            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))
+            .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitWorkspaceUnavailable))
     }
 
     pub(super) fn content_search_service_for(

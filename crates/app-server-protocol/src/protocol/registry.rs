@@ -1408,6 +1408,8 @@ use crate::protocol::git::GitWorktreeDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeResolveParams;
@@ -5617,7 +5619,7 @@ client_methods! {
         serialization: RepositoryExclusive,
     },
     GitWorktreeList => "git/worktree/list" {
-        params: GitRepositoryParams,
+        params: GitWorktreeListParams,
         response: GitWorktreeListResult,
         serialization: RepositoryExclusive,
     },
@@ -7870,6 +7872,7 @@ typescript_bindings! {
     GitWorktreeCreateResult,
     GitWorktreeDto,
     GitWorktreeStateDto,
+    GitWorktreeListParams,
     GitWorktreeListResult,
     GitWorktreeResolveParams,
     GitWorktreeResolveResult,

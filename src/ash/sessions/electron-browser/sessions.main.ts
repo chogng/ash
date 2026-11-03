@@ -142,9 +142,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);
 		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => {
+			const localTrust = createAppServerWorkspaceTrustApi(localClient);
 			serviceCollection.set(ISessionFolderAuthorizationService, {
+				isTrusted: async path => {
+					const directory = await localTrust.readDirectory(path);
+					return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
+				},
 				authorize: (path, signal, host) => authorizeSessionFolder(
-					host?.api.workspaceTrust ?? createAppServerWorkspaceTrustApi(localClient),
+					host?.api.workspaceTrust ?? localTrust,
 					listener => {
 						if (!host) return localClient.onStateChange(listener);
 						const subscription = host.api.appServer.onConnectionState(listener);

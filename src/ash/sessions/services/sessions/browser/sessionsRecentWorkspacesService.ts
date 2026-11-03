@@ -5,15 +5,13 @@ import { buildAgentHostSessionWorkspace, selectionFromResource } from '../../../
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import type { SessionExecutionTarget, SessionWorkspaceSelection } from '../common/session.js';
 
-const storageKey = 'sessions.hiddenRecentWorkspaces';
-
-/** Stores Agents picker preferences separately from the Workbench's shared recent-folder history. */
+/** Stores the last folder selected in Agents per provider. */
 export class SessionsRecentWorkspacesService {
 	constructor(@IStorageService private readonly storage: IStorageService) { }
 
 	public getSelected(providerId: string, current: SessionWorkspaceSelection): SessionExecutionTarget | undefined {
 		const value = this.storage.get(this.selectedKey(providerId), StorageScope.PROFILE);
-		if (!value || this.readHidden().has(value)) return undefined;
+		if (!value) return undefined;
 		try {
 			const folder = URI.parse(value, true);
 			if (folder.scheme !== Schemas.file && folder.scheme !== Schemas.ashRemote) return undefined;
@@ -34,31 +32,5 @@ export class SessionsRecentWorkspacesService {
 
 	private selectedKey(providerId: string): string {
 		return `sessions.selectedRecentWorkspace.${providerId}`;
-	}
-
-	public getHidden(): ReadonlySet<string> {
-		return this.readHidden();
-	}
-
-	public setHidden(folder: URI, hidden: boolean): void {
-		const key = folder.toString();
-		const folders = this.readHidden();
-		if (folders.has(key) === hidden) return;
-		if (hidden) folders.add(key);
-		else folders.delete(key);
-		if (folders.size) this.storage.store(storageKey, JSON.stringify([...folders]), StorageScope.PROFILE, StorageTarget.MACHINE);
-		else this.storage.remove(storageKey, StorageScope.PROFILE);
-	}
-
-	private readHidden(): Set<string> {
-		const stored = this.storage.get(storageKey, StorageScope.PROFILE);
-		if (!stored) return new Set();
-		try {
-			const value: unknown = JSON.parse(stored);
-			if (Array.isArray(value)) return new Set(value.filter((entry): entry is string => typeof entry === 'string'));
-		} catch {
-			// Treat an unreadable filter as empty so the shared history is still usable.
-		}
-		return new Set();
 	}
 }

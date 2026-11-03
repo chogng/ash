@@ -533,7 +533,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAppServerSkillApi, options.api.skills);
 		primaryHostServices.registerSingleton(IPromptsService, () => primaryHostServices.createInstance(PromptsService));
 		if (!serviceCollection.has(ISessionFolderAuthorizationService)) {
-			services.registerInstance(ISessionFolderAuthorizationService, { authorize: async () => true });
+			services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 		}
 		const folderAuthorization = services.get(ISessionFolderAuthorizationService);
 		const provider = this._register(primaryHostServices.createInstance(AppServerSessionsProvider, {

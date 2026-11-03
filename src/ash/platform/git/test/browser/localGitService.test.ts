@@ -32,6 +32,29 @@ test('worktree choices use the captured workspace repositories and exclude unava
 	assert.deepEqual(calls, [['git/repositories', {}], ['git/worktree/list', { repositoryId: 'repo' }]]);
 });
 
+test('worktrees for a draft outside the window use the selected source and exclude unavailable checkouts', async () => {
+	const sourcePath = '/draft/repo';
+	const service = new AppServerLocalGitService({
+		generation: 1, state: 'ready', onStateChange: Event.None,
+		request: async (definition: { method: string; }, params: unknown) => {
+			assert.equal(definition.method, 'git/worktree/list');
+			assert.deepEqual(params, { sourcePath });
+			decodeAppServerRequestParams('git/worktree/list', params);
+			return {
+				worktrees: [
+					{ path: '/resolved/repo', branch: 'main', current: true, state: 'ready' },
+					{ path: '/review', branch: 'review', current: false, state: 'ready' },
+					{ path: '/owned', branch: null, current: false, state: 'threadOwned' },
+				]
+			};
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.listWorktrees(CancellationToken.None, sourcePath), [
+		{ label: 'main', path: sourcePath, sourcePath },
+		{ label: 'review', path: '/review', sourcePath },
+	]);
+});
+
 test('App local Git sends typed clone and cancellation requests with the same operation identity', async () => {
 	const requests: unknown[] = [];
 	const connection = {
