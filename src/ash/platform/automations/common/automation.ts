@@ -13,6 +13,7 @@ export interface PullRequestChecksCondition {
 	readonly number: number;
 	readonly accountId: string;
 	readonly credentialRevision: string;
+	readonly artifactId?: string;
 }
 
 export interface AutomationDefinition {

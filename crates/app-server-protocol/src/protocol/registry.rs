@@ -6388,6 +6388,7 @@ typescript_bindings! {
     crate::protocol::github::GitHubManagedSettingsFailure,
     crate::protocol::github::GitHubManagedSettingsRefresh,
     crate::protocol::github::GitHubManagedSettingsResult,
+    crate::protocol::github::GitHubPullRequestArtifactOrigin,
     crate::protocol::github::GitHubPullRequestReference,
     crate::protocol::github::GitHubSessionPullRequestsParams,
     crate::protocol::github::GitHubIssueReference,

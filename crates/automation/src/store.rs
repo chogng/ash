@@ -112,6 +112,14 @@ impl AutomationStore {
                 "cannot remove a provider condition".into(),
             ));
         }
+        if let Some(binding) = previous.as_ref().and_then(artifact_binding)
+            && artifact_binding_for_condition(request.definition.condition.as_ref())
+                != Some(binding)
+        {
+            return Err(AutomationError::Invalid(
+                "cannot change the artifact binding of an existing plan".into(),
+            ));
+        }
         if previous.is_none() && plans(&transaction)?.len() >= 1_000 {
             return Err(AutomationError::Invalid(
                 "profile plan limit reached".into(),
@@ -202,6 +210,11 @@ impl AutomationStore {
             return decode_run(&result);
         }
         let plan = plan(&transaction, id)?.ok_or(AutomationError::NotFound)?;
+        if plan.status == AutomationStatus::Paused && artifact_binding(&plan).is_some() {
+            return Err(AutomationError::Invalid(
+                "artifact Autopilot is paused".into(),
+            ));
+        }
         if has_active_run(&transaction, id)? {
             return Err(AutomationError::Busy);
         }
@@ -424,6 +437,21 @@ impl AutomationStore {
             || plans(&connection)?
                 .iter()
                 .any(|plan| plan.status == AutomationStatus::Enabled && plan.next_run_at.is_some()))
+    }
+}
+
+fn artifact_binding(plan: &Automation) -> Option<&str> {
+    artifact_binding_for_condition(plan.definition.condition.as_ref())
+}
+
+fn artifact_binding_for_condition(
+    condition: Option<&ash_protocol::AutomationCondition>,
+) -> Option<&str> {
+    match condition {
+        Some(ash_protocol::AutomationCondition::GitHubChecks { artifact_id, .. }) => {
+            artifact_id.as_deref()
+        }
+        None => None,
     }
 }
 

@@ -127,6 +127,12 @@ pub enum AppToolOperation {
         archived: bool,
     },
     ListProjects {},
+    RecordPullRequestArtifact {
+        host: String,
+        owner: String,
+        repository: String,
+        number: u64,
+    },
     AutomationUpdate {
         operation: AutomationOperation,
     },
@@ -296,6 +302,19 @@ impl AppToolService {
                     ));
                 }
             }
+            AppToolOperation::RecordPullRequestArtifact {
+                host,
+                owner,
+                repository,
+                number,
+            } => {
+                bounded(host, 253)?;
+                bounded(owner, 100)?;
+                bounded(repository, 100)?;
+                if !(1..=9_007_199_254_740_991).contains(number) {
+                    return Err(CoreError::Policy("invalid pull request number".into()));
+                }
+            }
             AppToolOperation::ListThreads { .. }
             | AppToolOperation::ReadThread { .. }
             | AppToolOperation::SetThreadArchived { .. }
@@ -330,7 +349,8 @@ fn app_tool_capability(name: &ToolName) -> Option<(ash_protocol::ToolCategory, &
         | "rename_sidebar_section"
         | "delete_sidebar_section"
         | "move_thread_to_sidebar_section"
-        | "reorder_section" => Some((ToolCategory::Sessions, "app.sessions")),
+        | "reorder_section"
+        | "record_pull_request_artifact" => Some((ToolCategory::Sessions, "app.sessions")),
         "list_projects" => Some((ToolCategory::Projects, "app.projects")),
         "automation_update" => Some((ToolCategory::Automations, "app.automations")),
         "open_in_ash" => Some((ToolCategory::Workbench, "app.workbench")),
@@ -638,6 +658,12 @@ fn definitions() -> Vec<ToolDefinition> {
             "Archive or restore an Ash task when requested. Archiving stops its running work; do not archive the executing task.",
             json!({"session_id":string,"archived":{"type":"boolean"}}),
             &["session_id", "archived"],
+        ),
+        definition(
+            "record_pull_request_artifact",
+            "Record a GitHub pull request created by this task so it appears in the current Ash session. Record only after GitHub confirms creation. This records the result without granting approval for merge or automation.",
+            json!({"host":string,"owner":string,"repository":string,"number":{"type":"integer","minimum":1,"maximum":9007199254740991_u64}}),
+            &["host", "owner", "repository", "number"],
         ),
         definition(
             "list_projects",

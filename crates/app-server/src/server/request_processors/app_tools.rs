@@ -34,6 +34,12 @@ enum TaskDirectoryAccess {
 /// Coordinates the existing owners needed by the app tools adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait AppToolsRequestProcessorContext: Send + Sync {
+    fn record_pull_request_artifact(
+        &self,
+        context: &AppToolContext,
+        repository: &github::Repository,
+        number: u64,
+    ) -> Result<(), CoreError>;
     fn session_views(&self) -> Result<Vec<ash_protocol::Session>, super::RpcError>;
     fn archive_session_request(
         &self,
@@ -124,6 +130,15 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                 serde_json::to_value(result.map_err(rpc_error)?).map_err(json_error)?
             }
             AppToolOperation::ListProjects {} => json!({"projects":self.projects.as_deref().ok_or_else(|| CoreError::Execution("projects are unavailable".into()))?.list().map_err(|error| CoreError::Execution(error.to_string()))?.iter().map(project_projection::summary).collect::<Vec<_>>() }),
+            AppToolOperation::RecordPullRequestArtifact { host, owner, repository, number } => {
+                if cancellation.is_cancelled() {
+                    return Err(CoreError::Execution("artifact recording cancelled".into()));
+                }
+                let repository = github::Repository::new(host, owner, repository)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                self.context.record_pull_request_artifact(context, &repository, number)?;
+                json!({"recorded":true})
+            }
             AppToolOperation::AutomationUpdate { operation } => self.execute_app_automation(operation, &command_id, context)?,
             other => {
                 let operation = match other {
@@ -152,7 +167,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     AppToolOperation::ReorderSection { section_id, session_ids } => AppHostOperation::ReorderSection { section_id, session_ids },
                     AppToolOperation::CheckAppUpdate {} => AppHostOperation::CheckUpdate {},
                     AppToolOperation::FireConfetti {} => AppHostOperation::Confetti {},
-                    AppToolOperation::ListThreads { .. } | AppToolOperation::ReadThread { .. } | AppToolOperation::CreateThread { .. } | AppToolOperation::ForkThread { .. } | AppToolOperation::SetThreadArchived { .. } | AppToolOperation::ListProjects {} | AppToolOperation::AutomationUpdate { .. } => unreachable!("business operations were handled above"),
+                    AppToolOperation::ListThreads { .. } | AppToolOperation::ReadThread { .. } | AppToolOperation::CreateThread { .. } | AppToolOperation::ForkThread { .. } | AppToolOperation::SetThreadArchived { .. } | AppToolOperation::ListProjects {} | AppToolOperation::AutomationUpdate { .. } | AppToolOperation::RecordPullRequestArtifact { .. } => unreachable!("business operations were handled above"),
                 };
                 self.execute_app_host(operation, context, cancellation)?
             }
@@ -334,16 +349,25 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                         .read_session_thread_snapshot(session_id, thread_id)
                         .map_err(rpc_error)?;
                 }
-                self.automation_processor.automation_write(
-                    &serde_json::to_value(AutomationWriteParams {
+                if matches!(
+                    definition.condition,
+                    Some(ash_protocol::AutomationCondition::GitHubChecks {
+                        artifact_id: Some(_),
+                        ..
+                    })
+                ) {
+                    return Err(CoreError::Execution(
+                        "PR artifact Autopilot requires explicit user authorization".into(),
+                    ));
+                }
+                self.automation_processor
+                    .automation_write(AutomationWriteParams {
                         command_id: command_id.to_string(),
                         id,
                         expected_revision,
                         definition,
                         status,
                     })
-                    .map_err(json_error)?,
-                )
             }
             AutomationOperation::Delete {
                 id,

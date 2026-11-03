@@ -309,6 +309,38 @@ suite('Session GitHub associations', () => {
 		assert.equal(requests[0].state, 'unavailable');
 		assert.deepEqual(requests[0].recordedReference, reference);
 	});
+	test('a produced PR stays visible and removable when no GitHub account is available', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		using context = fixture({ listAccounts: async () => [], listSessionPullRequests: async () => [reference] });
+		const requests = await context.load();
+		assert.equal(requests.length, 1);
+		assert.equal(requests[0].state, 'unavailable');
+		assert.deepEqual(requests[0].recordedReference, reference);
+	});
+
+	test('PR artifact merge rejects a head change after selection and dispatches against a fresh head', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		let headCommit = 'a'.repeat(40);
+		const merged: string[] = [];
+		using context = fixture({
+			listSessionPullRequests: async () => [reference],
+			readPullRequest: async () => ({ ...pullRequest, mergeable: true, headCommit }),
+			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: false, allowRebaseMerge: false, allowAutoMerge: false }),
+			mergePullRequest: async (_repository, _number, merge) => {
+				merged.push(merge.commit);
+				return { merged: true, commit: merge.commit, message: '' };
+			},
+		});
+		const [request] = await context.load();
+		await assert.rejects(context.service.invokePullRequestArtifact('session', request, async binding => {
+			headCommit = 'b'.repeat(40);
+			return binding.actions[0];
+		}), /changed/);
+		assert.deepEqual(merged, []);
+		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
+		assert.deepEqual(merged, ['b'.repeat(40)]);
+	});
+
 	test('recorded PRs survive branch changes and duplicate discovery is merged', async () => {
 		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
 		let associated = true;
@@ -592,6 +624,87 @@ suite('sessionGitHub browser component', () => {
 		await expect(attach).toBeFocused();
 		await page.reload();
 		await expect(remove).toHaveCount(0);
+	});
+
+	test('a produced PR can be removed in Chinese after sign-out without a workspace', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.goto('/sessionGitHub.html?noWorkspace&locale=zh-CN');
+		const remove = page.getByRole('button', { name: '移除拉取请求产物 team/one #7' });
+		await expect(remove).toBeVisible();
+		await page.evaluate(() => window.ashSessionGitHub.signOut());
+		await expect(page.locator('.ash-session-chat-input-pr')).toHaveAccessibleName(/状态不可用$/);
+		await remove.focus();
+		await page.keyboard.press('Enter');
+		await expect(remove).toHaveCount(0);
+		await page.reload();
+		await expect(remove).toHaveCount(0);
+	});
+
+	test('PR artifact actions require explicit selection before dispatching GitHub auto-merge', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.goto('/sessionGitHub.html?noWorkspace&locale=zh-CN');
+		const actions = page.getByRole('button', { name: 'team/one #7 的拉取请求操作' });
+		const action = page.getByText('启用 GitHub 自动合并（压缩并合并）', { exact: true });
+		await expect(page.getByRole('button', { name: '移除拉取请求产物 team/one #7' })).toBeVisible();
+		await expect(actions).toBeVisible();
+		await actions.focus();
+		await page.keyboard.press('Enter');
+		await expect(action).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(action).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge'))).toHaveLength(0);
+		await actions.click();
+		await action.click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge').map(request => ({
+			number: request.params.number, method: request.params.method, commit: request.params.commit,
+		})))).toEqual([{ number: 7, method: 'squash', commit: '7'.repeat(40) }]);
+		await actions.click();
+		await expect(action).toHaveCount(0);
+	});
+
+	test('Chinese PR Autopilot authorizes and pauses one persisted artifact generation', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?checks&locale=zh-CN');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true, artifactId: 'a'.repeat(32) },
+		])));
+		await page.reload();
+		await page.getByRole('button', { name: '启用 PR 自动跟进', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write')
+			.map(request => (request.params.definition as { condition: { artifactId?: string; }; }).condition.artifactId)))
+			.toEqual(['a'.repeat(32)]);
+		await page.reload();
+		await page.getByRole('button', { name: '停止 PR 自动跟进', exact: true }).click();
+		await expect(page.getByRole('button', { name: '启用 PR 自动跟进', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write')
+			.map(request => request.params.status))).toEqual(['paused']);
+	});
+
+	test('a PR artifact can be merged through the toolbar and refreshes its state', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.reload();
+		const actions = page.getByRole('button', { name: 'Pull request actions for team/one #7' });
+		await expect(actions).toBeVisible();
+		await page.evaluate(() => window.ashSessionGitHub.setMergeable());
+		await actions.click();
+		await page.getByText('Squash and merge', { exact: true }).click();
+		await expect(page.locator('.ash-session-chat-input-pr')).toHaveAccessibleName(/Merged$/);
+		await expect(actions).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').map(request => ({
+			number: request.params.number, method: request.params.method, commit: request.params.commit,
+		})))).toEqual([{ number: 7, method: 'squash', commit: '7'.repeat(40) }]);
 	});
 
 	test('Chinese attach input supports cancellation and restores focus', async function () {

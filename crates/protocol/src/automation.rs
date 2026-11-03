@@ -99,6 +99,10 @@ pub enum AutomationCondition {
         number: u64,
         account_id: String,
         credential_revision: String,
+        /// Binds artifact Autopilot consent to one durable record generation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        artifact_id: Option<String>,
     },
 }
 

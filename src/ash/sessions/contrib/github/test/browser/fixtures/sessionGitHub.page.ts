@@ -67,6 +67,7 @@ class Transport implements AppServerTransport {
 	public failingChecks = false;
 	public unresolvedComments = false;
 	public mergeable: boolean | null = null;
+	private autoMerge = false;
 	public signedIn = true;
 	private references: GitHubPullRequestReference[] = JSON.parse(sessionStorage.getItem('test-backend-pr-references') ?? '[]');
 	public on(event: string, listener: (payload: unknown) => void): void {
@@ -88,7 +89,7 @@ class Transport implements AppServerTransport {
 		const repository = request.params.repository as { name: string; } | undefined;
 		const number = repository?.name === 'two' ? 8 : 7;
 		const state = this.states.get(number)!;
-		const pr = { number, title: `Changes in ${repository?.name}`, body: '', url: `https://github.com/team/${repository?.name}/pull/${number}`, state: state === 'closed' || state === 'merged' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06' : null, mergeable: this.mergeable, headCommit: String(number).repeat(40), headBranch: 'feature', headRepository: `team/${repository?.name}`, baseBranch: 'main', autoMerge: false };
+		const pr = { number, title: `Changes in ${repository?.name}`, body: '', url: `https://github.com/team/${repository?.name}/pull/${number}`, state: state === 'closed' || state === 'merged' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06' : null, mergeable: this.mergeable, headCommit: String(number).repeat(40), headBranch: 'feature', headRepository: `team/${repository?.name}`, baseBranch: 'main', autoMerge: this.autoMerge };
 		switch (request.method) {
 			case 'github/session/pullRequests': this.reply(request, { references: this.references }); break;
 			case 'github/session/pullRequest/attach': {
@@ -99,7 +100,9 @@ class Transport implements AppServerTransport {
 			}
 			case 'github/session/pullRequest/detach': {
 				const reference = request.params.reference as GitHubPullRequestReference;
-				this.references = this.references.filter(item => JSON.stringify(item) !== JSON.stringify(reference));
+				this.references = this.references.filter(item =>
+					item.number !== reference.number || item.repository.host !== reference.repository.host
+					|| item.repository.owner !== reference.repository.owner || item.repository.name !== reference.repository.name);
 				this.persistReferences(request);
 				break;
 			}
@@ -149,6 +152,17 @@ class Transport implements AppServerTransport {
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
 			case 'github/pullRequest/read': this.reply(request, pr); break;
+			case 'github/repository/read':
+				this.reply(request, { defaultBranch: 'main', fullName: 'team/one', allowMergeCommit: true, allowSquashMerge: true, allowRebaseMerge: false, allowAutoMerge: true });
+				break;
+			case 'github/pullRequest/autoMerge':
+				this.autoMerge = true;
+				this.reply(request, null);
+				break;
+			case 'github/pullRequest/merge':
+				this.states.set(number, 'merged');
+				this.reply(request, { merged: true, commit: 'a'.repeat(40), message: 'Merged' });
+				break;
 			case 'github/check/details': this.reply(request, { title: 'Build failure', summary: 'Compiler error', text: '<script>untrusted output</script>', annotations: [{ path: 'src/main.rs', startLine: 3, endLine: 4, annotationLevel: 'failure', message: `Error page ${request.params.page}`, title: null }], nextPage: request.params.page === 1 ? 2 : null, actionsJob: true }); break;
 			case 'github/check/log': this.reply(request, { url: 'https://productionresults.blob.core.windows.net/logs?sig=fixture' }); break;
 			case 'github/check/rerun': this.reply(request, null); break;
@@ -282,6 +296,7 @@ window.ashSessionGitHub = {
 		transport.mergeable = attention === 'conflicts' ? false : null;
 		statusChanged.fire(gitStatus('one'));
 	},
+	setMergeable: () => { transport.mergeable = true; statusChanged.fire(gitStatus('one')); },
 	changeBranch: () => { branch = 'another'; statusChanged.fire(gitStatus('one')); },
 	signOut: () => { transport.signedIn = false; accountsChanged.fire({ revision: 2n, accounts: [] }); },
 	selectDraft: () => { selection = undefined; selected.fire(); },
@@ -289,4 +304,4 @@ window.ashSessionGitHub = {
 	dispose: () => { resources.dispose(); list.domNode.remove(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashSessionGitHub: { submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }
+declare global { interface Window { ashSessionGitHub: { submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; setMergeable(): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }

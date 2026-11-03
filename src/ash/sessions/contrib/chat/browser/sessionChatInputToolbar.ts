@@ -9,12 +9,13 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { computeAggregateIssueIcon, computeIssueIcon } from '../../../../workbench/common/chatIssue.js';
-import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
+import type { ArtifactAction, IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
@@ -114,21 +115,23 @@ export class SessionChatInputToolbar extends Disposable {
 	}
 
 	public render(): void {
-		const requests = this.model.sessionId ? this.github.getSessionPullRequests(this.model.sessionId) : [];
+		const sessionId = this.model.sessionId;
+		const requests = sessionId ? this.github.getSessionPullRequests(sessionId) : [];
 		const present = new Set<string>();
 		for (const request of requests) {
-			const key = request.uri.toString();
+			const key = JSON.stringify([sessionId, request.uri.toString()]);
 			present.add(key);
 			let entry = this.entries.get(key);
 			if (!entry) {
 				entry = this.entries.set(key, new PullRequestEntry(this.domNode, request, this.opener, this.notifications, this.editors, async reference => {
-					const sessionId = this.model.sessionId;
 					if (!sessionId) { return; }
 					await this.github.detachPullRequest(sessionId, reference);
 					if (!this.isDisposed) {
 						this.attachDomNode.focus();
 						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
 					}
+				}, this.quickInput, async (request, select) => {
+					if (sessionId) { await this.github.invokePullRequestArtifact(sessionId, request, select); }
 				}));
 				this.domNode.insertBefore(entry.containerDomNode, this.attachDomNode);
 			}
@@ -217,9 +220,20 @@ class PullRequestEntry extends Disposable {
 	private readonly iconDomNode: HTMLSpanElement;
 	private readonly labelDomNode: HTMLSpanElement;
 	private readonly removeDomNode: HTMLButtonElement;
+	private readonly actionsDomNode: HTMLButtonElement;
+	private readonly pickerLifetime = this._register(new DisposableStore());
 	private request: IResolvedSessionPullRequest;
 
-	constructor(container: HTMLElement, request: IResolvedSessionPullRequest, opener: IOpenerService, notifications: INotificationService, editors: IEditorService, detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>) {
+	constructor(
+		container: HTMLElement,
+		request: IResolvedSessionPullRequest,
+		opener: IOpenerService,
+		notifications: INotificationService,
+		editors: IEditorService,
+		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
+		private readonly quickInput: IQuickInputService,
+		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => Promise<void>,
+	) {
 		super();
 		this.request = request;
 		this.containerDomNode = h(container.ownerDocument, 'div');
@@ -244,7 +258,21 @@ class PullRequestEntry extends Disposable {
 			const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
 			void editors.openEditor({ resource, label: getPullRequestLabel(this.request), readOnly: true, showBreadcrumbs: false }).catch(error => notifications.error(error));
 		}));
-		this.containerDomNode.append(this.domNode, reviewDomNode, this.removeDomNode);
+		this.actionsDomNode = this._register(new Button(this.containerDomNode, {
+			...defaultButtonStyles, label: localize('sessions.github.artifactActions', 'PR Actions'), presentation: 'secondary', size: 'small',
+		})).domNode;
+		this.actionsDomNode.classList.add('ash-session-chat-input-pr-action');
+		this._register(addDisposableListener(this.actionsDomNode, 'click', () => {
+			if (this.actionsDomNode.disabled) { return; }
+			this.actionsDomNode.disabled = true;
+			void invoke(this.request, binding => this.selectAction(binding)).catch(error => notifications.error(error)).finally(() => {
+				this.actionsDomNode.disabled = false;
+				if (!this.isDisposed && this.actionsDomNode.ownerDocument.activeElement === this.actionsDomNode.ownerDocument.body) {
+					(this.actionsDomNode.hidden ? this.domNode : this.actionsDomNode).focus();
+				}
+			});
+		}));
+		this.containerDomNode.append(this.domNode, reviewDomNode, this.actionsDomNode, this.removeDomNode);
 		container.append(this.containerDomNode);
 		this._register(addDisposableListener(this.domNode, 'click', event => {
 			event.preventDefault();
@@ -259,10 +287,43 @@ class PullRequestEntry extends Disposable {
 		this._register(toDisposable(() => this.containerDomNode.remove()));
 	}
 
+	private async selectAction(binding: IArtifactIntegrationBinding): Promise<ArtifactAction | undefined> {
+		if (this.isDisposed) { return undefined; }
+		if (!binding.actions.length) {
+			status(localize('sessions.github.artifactNoActions', 'No merge actions are currently available for this pull request.'));
+			return undefined;
+		}
+		const picker = this.pickerLifetime.add(this.quickInput.createQuickPick<ArtifactAction>());
+		picker.items = binding.actions;
+		picker.title = picker.ariaLabel = localize('sessions.github.artifactActionPicker', 'Merge actions for {0}', binding.artifact.label);
+		picker.placeholder = localize('sessions.github.artifactActionConsent', 'Select an action to authorize its described effect');
+		return new Promise(resolve => {
+			this.pickerLifetime.add(toDisposable(() => resolve(undefined)));
+			this.pickerLifetime.add(picker.onDidHide(() => this.pickerLifetime.clear()));
+			this.pickerLifetime.add(picker.onDidAccept(() => {
+				const action = picker.selectedItems[0];
+				if (action) {
+					resolve(action);
+					picker.hide();
+				}
+			}));
+			picker.show();
+		});
+	}
+
 	public update(request: IResolvedSessionPullRequest): void {
 		this.request = request;
+		const actionsAvailable = !!request.artifact && request.state === 'open';
+		if (!actionsAvailable) {
+			if (this.actionsDomNode.ownerDocument.activeElement === this.actionsDomNode) { this.domNode.focus(); }
+			this.pickerLifetime.clear();
+		}
+		this.actionsDomNode.hidden = !actionsAvailable;
+		this.actionsDomNode.setAttribute('aria-label', localize('sessions.github.artifactActionsLabel', 'Pull request actions for {0}/{1} #{2}', request.owner, request.repo, request.number));
 		this.removeDomNode.hidden = !request.recordedReference;
-		this.removeDomNode.setAttribute('aria-label', localize('sessions.github.removeLabel', 'Remove attached pull request {0}/{1} #{2}', request.owner, request.repo, request.number));
+		this.removeDomNode.setAttribute('aria-label', request.recordedReference?.isArtifact
+			? localize('sessions.github.removeArtifactLabel', 'Remove pull request artifact {0}/{1} #{2}', request.owner, request.repo, request.number)
+			: localize('sessions.github.removeLabel', 'Remove attached pull request {0}/{1} #{2}', request.owner, request.repo, request.number));
 		this.iconDomNode.replaceChildren();
 		appendIcon(request.icon, this.iconDomNode);
 		this.iconDomNode.style.color = `var(${colorCssVariable(request.icon.color!.id)})`;

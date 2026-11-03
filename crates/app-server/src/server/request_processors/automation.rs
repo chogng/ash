@@ -60,8 +60,10 @@ impl AutomationRequestProcessor {
         })
     }
 
-    pub(super) fn automation_write(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: AutomationWriteParams = decode(params)?;
+    pub(super) fn automation_write(
+        &self,
+        params: AutomationWriteParams,
+    ) -> Result<Value, RpcError> {
         let automation = self
             .automation_store()?
             .write(

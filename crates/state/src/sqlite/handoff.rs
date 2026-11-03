@@ -24,7 +24,7 @@ use std::io::Write;
 
 const MAX_FRAME: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE: u64 = 8 * 1024 * 1024 * 1024;
-const VERSION: u32 = 4;
+const VERSION: u32 = 6;
 
 // Column order is part of this versioned data contract. SQL identifiers only come from this
 // list, so a remote archive cannot add a table, execute SQL, or import account credentials.
@@ -33,7 +33,7 @@ const TABLES: &[(&str, &str)] = &[
     ("thread_streams", "thread_id,current_sequence"),
     (
         "thread_pull_requests",
-        "thread_id,host,owner,repository,number",
+        "thread_id,host,owner,repository,number,is_artifact,artifact_id,artifact_source_thread,artifact_source_turn",
     ),
     (
         "thread_batches",
@@ -383,7 +383,7 @@ impl SqliteThreadStore {
         else {
             return Err(error("invalid history archive header"));
         };
-        if !matches!(version, 2 | 3 | VERSION) {
+        if !matches!(version, 2 | 3 | 4 | 5 | VERSION) {
             return Err(error("unsupported history archive version"));
         }
         let source = ContentDigest::new(source).map_err(error)?;
@@ -404,6 +404,13 @@ impl SqliteThreadStore {
                         let (name, columns) = TABLES
                             .get(table)
                             .ok_or_else(|| error("unknown history table"))?;
+                        let columns = if version < 5 && *name == "thread_pull_requests" {
+                            "thread_id,host,owner,repository,number"
+                        } else if version == 5 && *name == "thread_pull_requests" {
+                            "thread_id,host,owner,repository,number,is_artifact"
+                        } else {
+                            columns
+                        };
                         if cells.len() != columns.split(',').count() {
                             return Err(error("invalid history row width"));
                         }
@@ -448,6 +455,10 @@ impl SqliteThreadStore {
                     Frame::Header { .. } => return Err(error("duplicate history archive header")),
                 }
             }
+            transaction.execute(
+                "UPDATE thread_pull_requests SET artifact_id = lower(hex(randomblob(16))) WHERE is_artifact = 1 AND artifact_id IS NULL",
+                [],
+            ).map_err(error)?;
             verify_records(&transaction)?;
             let incomplete: bool = transaction.query_row("SELECT EXISTS(SELECT * FROM export_attachments EXCEPT SELECT * FROM received_attachments) OR EXISTS(SELECT * FROM received_attachments EXCEPT SELECT * FROM export_attachments)", [], |row| row.get(0)).map_err(error)?;
             if incomplete {

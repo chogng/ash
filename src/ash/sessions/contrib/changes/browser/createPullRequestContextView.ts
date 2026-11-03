@@ -214,7 +214,7 @@ export class CreatePullRequestContextView extends Disposable {
 				const warnings: string[] = [];
 				const matchesLocalHead = result.headCommit === choice.repository.head.objectId;
 				if (!matchesLocalHead) { warnings.push(localize('sessions.changes.prHeadChanged', 'The published branch differs from the local commit. Review the pull request before merging.')); }
-				try { assertHostCurrent(); await github.attachSessionPullRequest(backendSessionId, { repository: { host: target.host, owner: target.owner, name: target.name }, number: result.number }); }
+				try { assertHostCurrent(); await github.attachSessionPullRequest(backendSessionId, { repository: { host: target.host, owner: target.owner, name: target.name }, number: result.number, isArtifact: true }); }
 				catch { warnings.push(localize('sessions.changes.prAttachFailed', 'The pull request was created, but could not be attached to this session.')); }
 				if (options.autoMergeMethod && matchesLocalHead && !options.draft) {
 					try {

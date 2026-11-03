@@ -3718,9 +3718,16 @@ impl AppServer {
                 .automation_processor
                 .automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => {
-                let response = self
-                    .automation_processor
-                    .automation_write(&request.params)?;
+                let params: ash_app_server_protocol::protocol::automation::AutomationWriteParams =
+                    decode(&request.params)?;
+                if params.status == ash_protocol::AutomationStatus::Enabled
+                    && !self
+                        .artifact_binding_is_current(&params.definition)
+                        .map_err(|message| core_error(core_api::CoreError::Execution(message)))?
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let response = self.automation_processor.automation_write(params)?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }

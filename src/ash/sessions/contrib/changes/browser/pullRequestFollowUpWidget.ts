@@ -22,6 +22,7 @@ interface FollowUpRow {
 	readonly owner: string;
 	readonly repository: string;
 	readonly number: number;
+	readonly artifactId?: string;
 	readonly sessionId: string;
 	readonly threadId: string;
 	readonly directory: string;
@@ -110,11 +111,12 @@ export class PullRequestFollowUpWidget extends Disposable {
 					const owner = pr.owner.toLowerCase();
 					const repository = pr.repo.toLowerCase();
 					const hash = new StringSHA1();
-					hash.update(JSON.stringify([sessionId, threadId, host, owner, repository, pr.number]));
+					const artifactId = pr.recordedReference?.artifactId;
+					hash.update(JSON.stringify([sessionId, threadId, host, owner, repository, pr.number, ...(artifactId ? [artifactId] : [])]));
 					const id = `pr-follow-up-${hash.digest()}`;
 					return {
 						id, label: `${pr.owner}/${pr.repo} #${pr.number}`, host, owner, repository,
-						number: pr.number, sessionId, threadId, directory, scope, backend,
+						number: pr.number, artifactId, sessionId, threadId, directory, scope, backend,
 						plan: plans.find(plan => plan.id === id)
 					};
 				});
@@ -127,7 +129,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 				rows.push({
 					id: plan.id, label: `${condition.owner}/${condition.repository} #${condition.number}`,
 					host: condition.host, owner: condition.owner, repository: condition.repository,
-					number: condition.number, sessionId, threadId, directory, scope, backend, plan
+					number: condition.number, artifactId: condition.artifactId, sessionId, threadId, directory, scope, backend, plan
 				});
 			}
 			this.rows.set(rows, undefined);
@@ -172,9 +174,10 @@ export class PullRequestFollowUpWidget extends Disposable {
 				this.rendered.set(row.id, control);
 			}
 			control.row = row;
-			control.button.label = row.plan?.status === 'enabled'
-				? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up')
-				: localize('sessions.changes.startFollowUp', 'Follow PR checks');
+			const enabled = row.plan?.status === 'enabled';
+			control.button.label = row.artifactId
+				? (enabled ? localize('sessions.changes.stopArtifactAutopilot', 'Stop PR Autopilot') : localize('sessions.changes.startArtifactAutopilot', 'Enable PR Autopilot'))
+				: (enabled ? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up') : localize('sessions.changes.startFollowUp', 'Follow PR checks'));
 			control.button.enabled = !control.busy;
 			control.button.domNode.setAttribute('aria-pressed', String(row.plan?.status === 'enabled'));
 		}
@@ -206,7 +209,8 @@ export class PullRequestFollowUpWidget extends Disposable {
 					schedule: { type: 'interval', anchor: Date.now() + 1_000, minutes: 1 },
 					condition: {
 						type: 'gitHubChecks', host: row.host, owner: row.owner, repository: row.repository,
-						number: row.number, accountId: account.id, credentialRevision: account.credentialRevision.toString()
+						number: row.number, accountId: account.id, credentialRevision: account.credentialRevision.toString(),
+						...(row.artifactId ? { artifactId: row.artifactId } : {}),
 					},
 				}, 'enabled');
 			}

@@ -11,7 +11,7 @@ use std::path::Path;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 15;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 17;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
@@ -151,6 +151,8 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         | Some(12)
         | Some(13)
         | Some(14)
+        | Some(15)
+        | Some(16)
         | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
@@ -321,8 +323,36 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
          );",
         )
         .map_err(sql_error)?;
+    if locked_version.is_none_or(|version| version < 16)
+        && !transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('thread_pull_requests') WHERE name = 'is_artifact')",
+            [],
+            |row| row.get::<_, bool>(0),
+        ).map_err(sql_error)?
+    {
+        transaction
+            .execute_batch("ALTER TABLE thread_pull_requests ADD COLUMN is_artifact INTEGER NOT NULL DEFAULT 0 CHECK(is_artifact IN (0, 1));")
+            .map_err(sql_error)?;
+    }
     if locked_version.is_none_or(|version| version < 14) {
         super::handoff::create_schema(&transaction)?;
+    }
+    if locked_version.is_none_or(|version| version < 17)
+        && !transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('thread_pull_requests') WHERE name = 'artifact_id')",
+            [],
+            |row| row.get::<_, bool>(0),
+        ).map_err(sql_error)?
+    {
+        // Frozen profiles reject writes to this table. Install identities only on writable
+        // histories; an old frozen history receives identities when imported instead.
+        transaction.execute_batch(
+            "ALTER TABLE thread_pull_requests ADD COLUMN artifact_id TEXT;
+             ALTER TABLE thread_pull_requests ADD COLUMN artifact_source_thread TEXT;
+             ALTER TABLE thread_pull_requests ADD COLUMN artifact_source_turn TEXT;
+             UPDATE thread_pull_requests SET artifact_id = lower(hex(randomblob(16)))
+             WHERE is_artifact = 1 AND NOT EXISTS (SELECT 1 FROM history_ownership WHERE receiver IS NOT NULL);"
+        ).map_err(sql_error)?;
     }
     if locked_version.is_some_and(|version| version < 13) {
         // Session cache format 3 adds branch management from verified catalog rows.

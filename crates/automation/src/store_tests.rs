@@ -222,6 +222,7 @@ fn follow_up(directory: &Path) -> AutomationWrite {
         number: 7,
         account_id: "account".into(),
         credential_revision: "1".into(),
+        artifact_id: None,
     });
     request
 }

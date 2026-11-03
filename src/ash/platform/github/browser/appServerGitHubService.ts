@@ -30,7 +30,13 @@ export class AppServerGitHubService implements IGitHubService {
 
 	public async listSessionPullRequests(sessionId: string): Promise<readonly GitHubPullRequestReference[]> {
 		const result = await this.referenceRequest('github/session/pullRequests', { sessionId });
-		return result.references.map(reference => ({ repository: { ...reference.repository }, number: reference.number }));
+		return result.references.map(reference => ({
+			repository: { ...reference.repository },
+			number: reference.number,
+			...(reference.isArtifact === true ? { isArtifact: true } : {}),
+			...(reference.artifactId !== undefined ? { artifactId: reference.artifactId } : {}),
+			...(reference.artifactOrigin !== undefined ? { artifactOrigin: { ...reference.artifactOrigin } } : {}),
+		}));
 	}
 	public async attachSessionPullRequest(sessionId: string, reference: GitHubPullRequestReference): Promise<void> {
 		await this.referenceRequest('github/session/pullRequest/attach', { sessionId, reference });

@@ -548,6 +548,100 @@ fn open_follow_up_server(
 }
 
 #[test]
+fn artifact_follow_up_revokes_the_old_generation_after_restart() {
+    let initialize = |server: &crate::AppServer, connection: &mut crate::ConnectionState| {
+        let response = call(
+            server,
+            connection,
+            json!({"jsonrpc":"2.0", "id":1, "method":"initialize",
+                "params":{"clientInfo":{"name":"test","version":"1"}}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+    };
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let api = Arc::new(FollowUpApi::default());
+    let open = || open_follow_up_server(profile.path(), directory.path(), api.clone());
+    let (server, store) = open();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = super::create_session(&server, &mut connection, 2, "artifact source");
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let reference = json!({"repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"isArtifact":true});
+    let attach = |server: &crate::AppServer, connection: &mut crate::ConnectionState, id| {
+        let response = call(
+            server,
+            connection,
+            json!({"jsonrpc":"2.0","id":id,
+            "method":"github/session/pullRequest/attach","params":{"sessionId":session,"reference":reference}}),
+        );
+        assert!(response.get("error").is_none(), "{response}");
+    };
+    attach(&server, &mut connection, 3);
+    let listed = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,
+        "method":"github/session/pullRequests","params":{"sessionId":session}}),
+    );
+    let artifact = listed["result"]["references"][0]["artifactId"]
+        .as_str()
+        .unwrap();
+    let mut params = json!({"commandId":"authorize-artifact","id":"artifact-follow-up","expectedRevision":0,"status":"enabled",
+        "definition":{"title":"Artifact follow-up","prompt":"Fix CI","directory":directory.path(),
+            "session":{"type":"continue","sessionId":session,"threadId":session},
+            "schedule":{"type":"interval","anchor":0,"minutes":1},
+            "condition":{"type":"gitHubChecks","host":"github.com","owner":"team","repository":"repo","number":7,
+                "accountId":"account","credentialRevision":"1","artifactId":artifact}}});
+    let authorized = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":5,
+        "method":"automation/write","params":params}),
+    );
+    assert_eq!(authorized["result"]["status"], "enabled", "{authorized}");
+    let now = ash_automation::now().unwrap();
+    let run = store
+        .run_now("artifact-follow-up", "first-check", now)
+        .unwrap();
+    let detached = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":6,
+        "method":"github/session/pullRequest/detach","params":{"sessionId":session,"reference":reference}}),
+    );
+    assert!(detached.get("error").is_none(), "{detached}");
+    attach(&server, &mut connection, 7);
+    drop(connection);
+    drop(server);
+    drop(store);
+    let (reopened, store) = open();
+    let mut connection = reopened.connection();
+    initialize(&reopened, &mut connection);
+    let observed = reopened.advance_automation_run(&run, now).unwrap();
+    assert_eq!(observed.status, AutomationRunStatus::Stopped);
+    assert!(observed.turn_id.is_none());
+    assert_eq!(
+        store.list().unwrap()[0].status,
+        ash_protocol::AutomationStatus::Paused
+    );
+    store.observe(&observed).unwrap();
+    assert!(matches!(
+        store.run_now("artifact-follow-up", "run-after-revocation", now),
+        Err(ash_automation::AutomationError::Invalid(_))
+    ));
+    params["commandId"] = json!("reauthorize-retired-artifact");
+    params["expectedRevision"] = json!(2);
+    let rejected = call(
+        &reopened,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":8,
+        "method":"automation/write","params":params}),
+    );
+    assert_eq!(rejected["error"]["message"], "InvalidParams", "{rejected}");
+}
+
+#[test]
 fn pr_follow_up_sequence_conflict_retries_the_reserved_head_even_after_restart() {
     let initialize = |server: &crate::AppServer, connection: &mut crate::ConnectionState| {
         let response = call(

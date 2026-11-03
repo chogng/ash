@@ -68,22 +68,36 @@ fn manual_pull_requests_survive_reopen_and_follow_session_deletion() {
         append_created_thread(&store, &other_session, &other, 2);
         assert!(store.attach_pull_request(&root, &repository, 7).unwrap());
         assert!(!store.attach_pull_request(&root, &normalized, 7).unwrap());
+        assert!(store.record_pull_request(&root, &normalized, 7).unwrap());
+        assert!(!store.record_pull_request(&root, &normalized, 7).unwrap());
+        assert!(!store.attach_pull_request(&root, &normalized, 7).unwrap());
         store.attach_pull_request(&other, &normalized, 8).unwrap();
         assert!(store.attach_pull_request(&root, &repository, 0).is_err());
     }
     let store = SqliteThreadStore::open(&path).unwrap();
+    let artifact_id = store
+        .pull_request_artifact_id(&root, &normalized, 7)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         store.list_pull_requests(&root).unwrap(),
-        vec![(normalized.clone(), 7)]
+        vec![(normalized.clone(), 7, true, Some(artifact_id.clone()), None)]
     );
     assert!(store.detach_pull_request(&root, &repository, 7).unwrap());
     assert!(!store.detach_pull_request(&root, &repository, 7).unwrap());
-    store.attach_pull_request(&root, &repository, 9).unwrap();
+    assert!(store.record_pull_request(&root, &repository, 7).unwrap());
+    assert_ne!(
+        store
+            .pull_request_artifact_id(&root, &repository, 7)
+            .unwrap()
+            .as_deref(),
+        Some(artifact_id.as_str())
+    );
     store.delete_session(&session).unwrap();
     assert!(store.list_pull_requests(&root).unwrap().is_empty());
     assert_eq!(
         store.list_pull_requests(&other).unwrap(),
-        vec![(normalized, 8)]
+        vec![(normalized, 8, false, None, None)]
     );
 }
 
@@ -135,12 +149,12 @@ fn schema_13_upgrade_keeps_prs_and_adds_issue_references_with_freeze_triggers() 
         store.attach_pull_request(&root, &repository, 7).unwrap();
     }
     let connection = rusqlite::Connection::open(&path).unwrap();
-    connection.execute_batch("DROP TABLE thread_issues; UPDATE ash_schema_migrations SET version = 13 WHERE component = 'event-store';").unwrap();
+    connection.execute_batch("DROP TABLE thread_issues; ALTER TABLE thread_pull_requests DROP COLUMN artifact_source_turn; ALTER TABLE thread_pull_requests DROP COLUMN artifact_source_thread; ALTER TABLE thread_pull_requests DROP COLUMN artifact_id; ALTER TABLE thread_pull_requests DROP COLUMN is_artifact; UPDATE ash_schema_migrations SET version = 13 WHERE component = 'event-store';").unwrap();
     drop(connection);
     let store = SqliteThreadStore::open(&path).unwrap();
     assert_eq!(
         store.list_pull_requests(&root).unwrap(),
-        vec![(repository.clone(), 7)]
+        vec![(repository.clone(), 7, false, None, None)]
     );
     assert!(store.attach_issue(&root, &repository, 7).unwrap());
     assert_eq!(store.list_issues(&root).unwrap(), vec![(repository, 7)]);

@@ -5,6 +5,8 @@
 - 提供本机输入历史的 SQLite 存储，独立迁移、原子追加与裁剪、稳定游标和文字搜索。
 - 提供 Thread、Git Turn Changes、Project 与 Memory 的 SQLite 存储；各领域使用独立 migration component，Session tree 仍由 Thread 的 `session_id` 聚合。
 - 会话列表和单会话刷新从每个 Session 一条的记录读取；记录与 Thread 事件同事务更新，旧数据库升级时从 Thread 目录生成。
+- 事件存储格式 17 为 PR 产物分配持久身份，并记录 Agent 来源的 Thread 和 Turn。移除后重新记录会分配新身份。归档格式 6 保留身份与来源，仍可导入格式 2 至 5。
+- 事件存储格式 16 为 PR 关联保存产物标记。旧记录按引用读取，重复附加保留已有产物标记。历史归档格式 5 保留该标记，并可导入格式 2 至 4。
 - 事件存储格式 14 增加根 Thread 的 `thread_issues`，保存规范化的 Issue 主机、仓库及编号。PR 与 Issue 分别去重，同一编号可以独立关联；标题、状态和账号凭据不入库。引用随根 Thread 删除，受历史迁移停写触发器保护。归档格式 3 包含 Issue 引用，仍可导入格式 2 的旧归档。
 - 事件存储格式 13 从已校验的版本 2 Thread 目录重建版本 3 Session 缓存，加入各分支已有的管理事实；不升级 Thread 目录版本，不为显示列表重放完整历史。
 - 事件存储格式 12 增加 `thread_pull_requests`，保存 Session 根 Thread 的手动 PR 引用。主机、仓库及编号规范化后去重，不保存标题、状态或账号凭据；删除根 Thread 时同事务清理引用。历史归档格式 2 包含此表，引用遵守相同的迁移停写约束。

@@ -102,6 +102,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Sessions · TODO
 
+### Artifact Integrations
+
+- [ ] **Artifact Integrations** · 对照 VS Code `0dc300b2c77` 的 `src/vs/platform/artifactIntegrations`。Changes 直接创建的 GitHub PR 已记录为会话产物。Sessions 从存储投影通用记录，按 provider／Session／产物／集成绑定操作，经显式选择调用 GitHub 合并或 GitHub 托管的自动合并。Agent 可记录 PR 产物，App Server 保存来源 Thread／Turn 和一次性的记录身份。PR Autopilot 的 CI 修复由既有 Automations owner 保存授权与运行历史，移除产物后旧身份失效。仍需通用集成注册与 provider 生命周期、手动原生动作的持久运行与结果对账、通用详情和 prompt 动作，以及真实 GitHub 测试仓库的写入与重连验收。
+
 - [ ] **评估 · Agent Window 20px 图标字体**：可能需要按 20×20px 设计基准制作独立图标字体；后续确认适用范围、线宽与留白，并对比现有 16px 字体放大的效果，再决定实施。
 - [ ] **后端前置** · 为 Agent PR 的持续合并策略与 request metadata 补后端工作流契约；当前只闭合请求提交／排队、直接创建 PR、Draft 和 auto-merge，任务提交成功不能视为 PR 已创建。
 

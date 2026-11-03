@@ -859,6 +859,32 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
 }
 
 impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer {
+    fn record_pull_request_artifact(
+        &self,
+        context: &app_tools::AppToolContext,
+        repository: &github::Repository,
+        number: u64,
+    ) -> Result<(), core_api::CoreError> {
+        let store = self.thread_pull_requests.as_ref().ok_or_else(|| {
+            core_api::CoreError::Execution("artifact records are unavailable".into())
+        })?;
+        let root = ash_protocol::ThreadId::new(context.session_id.as_str())
+            .map_err(|error| core_api::CoreError::Execution(error.to_string()))?;
+        if store
+            .record_agent_pull_request(
+                &root,
+                repository,
+                number,
+                &context.thread_id,
+                &context.turn_id,
+            )
+            .map_err(core_api::CoreError::ThreadStore)?
+        {
+            self.updates.publish_session_changed(&context.session_id);
+        }
+        Ok(())
+    }
+
     fn session_views(&self) -> Result<Vec<ash_protocol::Session>, super::RpcError> {
         self.agent_processor().session_views()
     }
