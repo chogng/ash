@@ -98,6 +98,7 @@ import { ChatEntitlementService, IChatEntitlementService } from '../../../servic
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
+import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 // Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
@@ -239,6 +240,8 @@ configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.AutoExpandToolFailures,
 	defaultValue: true,
 	scope: ConfigurationScope.WINDOW,
+registerWorkbenchContribution(ChatStatusBarEntry.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(ChatStatusBarEntry));
 	schema: { type: 'boolean' },
 	parse(value: unknown): boolean {
 		if (typeof value === 'boolean') { return value; }

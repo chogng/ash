@@ -179,6 +179,7 @@ test('Start Plan choices send separate region login methods', async () => {
 
 function accountFixture(state: AccountState, operations: string[]): IAccountService {
 	return {
+		readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 		onDidChangeAccounts: Event.None,
 		onDidCompleteLogin: Event.None,
 		read: async () => { operations.push('read'); return state; },

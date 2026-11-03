@@ -179,6 +179,8 @@ Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本�
 `speechLanguageConfigToLanguage` 从 TypeScript `SPEECH_LANGUAGE_CONFIG` 解析语言，同一次 factory 向 Host 递交；auto 使用 display language，未知输入回到 en-US。旧 `dictation.language` 只控制原后端，不双写。onSpeech 激活等待、provider acquisition 和 capture 归原 recording/token；等待时显示 Starting，收到 Started 才显示 Listening，同步取消后不再启动后端。精确 session 事件不写入另一个输入，预取消 keyword 返回 Canceled。
 
 Desktop 只给已完成 Agent 回答提供 Read Aloud。`voiceChatActions.ts` 经 `renderAsPlaintext` → SpeechService／MainThreadSpeech 向原扩展逐段合成，每段遵守 Host 16384 UTF-16 上限且不拆代理对；RPC 接受不代表播放结束，必须等待 Stopped 后才能下一段。Error／取消／注册撤销拒绝等待并释放。来源文字改变、移除、隐藏、行 Escape 或窗口 StopReadAloud 取消本次 CTS，不停止其他窗口或其他 owner 的 TTS；旧 finally 不能清除同窗口新操作。Web 未装配 Desktop command 或 provider 撤销时隐藏按钮。
+`browser/chatStatus/chatStatusEntry.ts` 通过窗口级状态栏显示订阅账号状态，并使用 Quick Input 提供账号管理、模型连接和 Usage 入口。状态来自 `IAccountService`，账号事件淘汰迟到读取；禁用 AI 或释放窗口时撤回入口与选择器。上下文及累计 token 用量仍由原输入框和 Usage 页面拥有，不迁入状态栏，也不表示订阅剩余额度。订阅额度复用后端 `account/rateLimits/read`：窗口剩余百分比与重置时间、ChatGPT credits、xAI 账期和精确 USD 余额分别展示；未知字段不推断为不限量。按账号独立处理加载与失败，选择器内刷新可重试；账号事件、关闭、禁用 AI 和释放取消旧结果写回。未接入上游 Copilot 推广、套餐升级或扩展 Chat 状态项。
+
 
 标准 HasSpeechProvider／SpeechToTextInProgress／TextToSpeechInProgress context keys 由 SpeechService 的事实驱动，不另存录音状态。无障碍提示、语言偏好、焦点、控制可用性均使用同一窗口服务；fixture 也必须在 window 级注册一次配置、ContextKey、ExtensionService 和 SpeechService。
 

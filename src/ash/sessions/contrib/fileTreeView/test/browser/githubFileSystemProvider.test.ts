@@ -83,6 +83,7 @@ class RepositoryFixture extends Disposable {
 			readRepositoryBlob: async (_repository, sha) => { this.blobRequests.push(sha); return { sha, bytes: await this.readBlob() }; },
 		});
 		this.services.registerInstance(IAccountService, {
+			readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 			onDidChangeAccounts: this.accountChanges.event, onDidCompleteLogin: Event.None,
 			read: async () => ({ revision: 1n, accounts: [] }),
 			startLogin: async () => { throw new Error('Reads must not prompt for authorization'); },

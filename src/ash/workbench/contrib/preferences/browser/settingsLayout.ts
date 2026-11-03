@@ -579,7 +579,7 @@ export const SettingsNavigation = [
 						id: 'dictation',
 						label: localize('settings.dictation.group', 'Voice input'),
 						description: localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'),
-						settings: ['dictation.*'],
+						settings: ['dictation.*', 'agents.voice.showButton'],
 					},
 				],
 			},

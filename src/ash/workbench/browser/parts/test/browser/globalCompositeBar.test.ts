@@ -102,6 +102,7 @@ test('Activity Bar global actions open account and management menus', async () =
 	};
 	const loggedOutProviders: string[] = [];
 	const accountService: IAccountService = {
+		readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 		onDidChangeAccounts: accountsChanged.event,
 		onDidCompleteLogin: Event.None,
 		read: async () => accountState,
@@ -229,7 +230,7 @@ function accountReadServices(disposables: InstanceType<typeof DisposableStore>, 
 	const unexpected = async (): Promise<never> => { throw new Error('Unexpected account or storage mutation'); };
 	const changes = disposables.add(new Emitter<AccountState>());
 	let reads = 0;
-	const accounts: IAccountService = { onDidChangeAccounts: changes.event, onDidCompleteLogin: Event.None, read: async () => { reads++; throw failure; }, startLogin: unexpected, cancelLogin: unexpected, logout: unexpected };
+	const accounts: IAccountService = { readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); }, onDidChangeAccounts: changes.event, onDidCompleteLogin: Event.None, read: async () => { reads++; throw failure; }, startLogin: unexpected, cancelLogin: unexpected, logout: unexpected };
 	services.registerInstance(AccountServiceId, accounts);
 	services.registerInstance(GitHubConnectionServiceId, { isConnecting: false, connect: unexpected, cancel: unexpected });
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters) });

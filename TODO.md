@@ -198,3 +198,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## Chat accessibility · 缺失宿主入口
 
 - [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。
+
+## Chat Status · 订阅额度最终 Desktop 复验
+
+- [ ] **验证阻塞** · `chatStatusEntry.ts` 已通过 `IAccountService.readRateLimits` 接入现有 `account/rateLimits/read`，42 项定向测试（含中英文真实 Chromium 渲染、账号切换、取消、精确余额与未知额度）通过，独立本地化生成缺失 0 项。最后执行 `pnpm run test:smoke:ui test/smoke/areas/chat/chat-status.spec.ts` 时，准备与 Renderer 类型检查通过，但 Vite 的 `ash-browser-extensions` 内嵌本地化生成报 `Unknown translation: zh-CN/ash.chat/chat.context.invalidProviderData`；相同源码由 `bun build/resources/localization.ts` 独立生成成功。先排查 Vite 配置内嵌提取与独立提取的差异，再重跑原 Desktop 场景，不删断言或忽略未知翻译。证据：`/tmp/ash-chat-quota-verified.log`、`/tmp/ash-chat-quota-localization-fix.log`、`/tmp/ash-chat-quota-desktop-verified.log`；中英文截图在 `.build/desktop/playwright/unit-browser-hAxd3m/`。成功复验后移除此项。
