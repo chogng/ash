@@ -880,6 +880,7 @@ part = resources.add(services.createInstance(ChatInputPart, document.querySelect
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
+	configureModelInMenu: new URLSearchParams(location.search).has('modelMenuConfiguration'),
 	renderSecondaryToolbar: !cowork,
 	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
 		getWorkspaces: () => workspaceChoices,

@@ -43,6 +43,8 @@ export interface ContextViewOptions {
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
 	/** For a side-by-side view, align this content element with the anchor’s top edge. */
 	readonly alignTopTo?: Element;
+	/** For a side-by-side view, align this content element with the anchor’s bottom edge. */
+	readonly alignBottomTo?: Element;
 	readonly gap?: number;
 	readonly presentation?: ContextViewPresentation;
 	readonly focusRestore?: ContextViewFocusRestore;
@@ -257,13 +259,19 @@ export class ContextView
 		const bounds = this.element.getBoundingClientRect();
 		const viewport = getViewport(targetWindow);
 		// Account for the surface inset before viewport fitting so rows can line up.
-		const topInset = options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && options.alignTopTo
-			? options.alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop
-			: 0;
+		let top = anchor.top;
+		if (options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal) {
+			if (options.alignBottomTo) {
+				const rowBottom = options.alignBottomTo.getBoundingClientRect().bottom - bounds.top + options.content.scrollTop;
+				top += anchor.height - rowBottom;
+			} else if (options.alignTopTo) {
+				top -= options.alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop;
+			}
+		}
 		const result = layout2d(
 			viewport,
 			{ width: bounds.width, height: bounds.height },
-			{ ...anchor, top: anchor.top - topInset },
+			{ ...anchor, top },
 			options,
 		);
 		const titlebar = getVisibleWCOTitlebarAreaRect(targetWindow);

@@ -7,6 +7,7 @@ import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
+	readonly configureInMenu?: boolean;
 	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;

@@ -240,17 +240,16 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 			throw new Error('Context view container belongs to another document');
 		}
 		const root = container.getRootNode();
-		this.contextView = this._register(new ContextView(
+		const sharedView = this.options.submenuOptions?.submenuContextView;
+		this.contextView = sharedView ?? this._register(new ContextView(
 			this.contextViewContainer ?? (root.nodeType === 11 && 'host' in root ? root as ShadowRoot
 				: container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body),
 		));
-		this._register(this.contextView.onDidHide((reason) => {
-			this.showScheduler.cancel();
-			this.hideScheduler.cancel();
-			this.menu?.closeSubmenus();
-			this.button.domNode.setAttribute('aria-expanded', 'false');
-			if (reason === ContextViewHideReason.Escape) this.button.focus();
-		}));
+		if (sharedView) {
+			this._register(toDisposable(() => this.close()));
+		} else {
+			this._register(this.contextView.onDidHide(reason => this.onSubmenuHidden(reason)));
+		}
 		this.button.domNode.setAttribute('role', 'menuitem');
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
@@ -298,7 +297,9 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		if (!this.contextView) return;
 		// Build only the requested level instead of eagerly traversing the action graph.
 		if (!this.menu) {
-			this.menu = this._register(new Menu(this.contextView.element, this.submenuAction.actions, {
+			const sharedView = this.options.submenuOptions?.submenuContextView;
+			const host = sharedView ? h(this.button.domNode.ownerDocument, 'div') : this.contextView.element;
+			this.menu = this._register(new Menu(host, this.submenuAction.actions, {
 				...this.options.submenuOptions,
 				buttonStyles: this.options.buttonStyles,
 				keybindingLabelStyles: this.options.keybindingLabelStyles,
@@ -310,6 +311,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				ariaLabel: cleanMnemonic(this.action.label),
 				className: this.options.submenuOptions?.submenuClassName,
 				openSubmenusImmediatelyOnHover: undefined,
+				submenuContextView: undefined,
 				submenuIds: new Set([...(this.options.submenuOptions?.submenuIds ?? []), this.action.id]),
 				onDidSelect: () => {
 					this.close();
@@ -317,25 +319,37 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 					this.onDidSelect?.();
 				},
 			}, this.options.menuStyles ?? unthemedMenuStyles));
+			if (this.options.submenuOptions?.tabLeavesSubmenu) {
+				this._register(addDisposableListener(this.menu.getContainer(), 'keydown', event => {
+					if (event.key !== 'Tab' || event.isComposing || event.defaultPrevented) return;
+					this.close();
+					// Resume native tab navigation from the trigger in its parent DOM order.
+					this.button.focus();
+					event.stopPropagation();
+				}, true));
+			}
 			this._register(this.menu.onDidCancel(() => {
 				this.close();
 				this.button.focus();
 			}));
 		}
 		this.showScheduler.cancel();
-		if (!this.contextView.visible) {
+		if (!this.isExpanded) {
 			// A popup can be rendered before it mounts. Use its overlay host once the anchor is attached.
 			const overlayHost = this.button.domNode.closest('.ash-context-view')?.parentNode;
-			if (!this.contextViewContainer && overlayHost && this.contextView.element.parentNode !== overlayHost) {
+			if (!this.options.submenuOptions?.submenuContextView && !this.contextViewContainer && overlayHost && this.contextView.element.parentNode !== overlayHost) {
 				overlayHost.appendChild(this.contextView.element);
 			}
 			this.onWillOpenSubmenu?.(this);
 			const content = this.menu.getContainer();
+			const rows = content.querySelectorAll(':scope > .ash-action-view-item > .ash-button');
+			const alignBottom = this.options.submenuOptions?.submenuVerticalAlignment === 'bottom';
 			const shown = this.contextView.show({
 				anchor: this.button.domNode,
 				content,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
-				alignTopTo: content.querySelector(':scope > .ash-action-view-item > .ash-button') ?? undefined,
+				alignTopTo: alignBottom ? undefined : rows[0],
+				alignBottomTo: alignBottom ? rows[rows.length - 1] : undefined,
 				// Nested menus align to the parent row; vertical direction positions the MenuBar popup.
 				anchorAlignment: AnchorAlignment.Left,
 				anchorPosition: (this.options.submenuOptions?.expandDirection?.horizontal ??
@@ -346,6 +360,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				layer: this.submenuLayer,
 				focusRestore: ContextViewFocusRestore.None,
 				isTargetWithin: (target) => this.menu?.contains(target) ?? false,
+				onHide: this.options.submenuOptions?.submenuContextView ? reason => this.onSubmenuHidden(reason) : undefined,
 			});
 			if (!shown) return;
 			this.button.domNode.setAttribute('aria-expanded', 'true');
@@ -367,11 +382,20 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	close(): void {
 		this.showScheduler.cancel();
 		this.hideScheduler.cancel();
-		this.contextView?.hide();
+		if (!this.options.submenuOptions?.submenuContextView || this.isExpanded) { this.contextView?.hide(); }
+	}
+
+	private onSubmenuHidden(reason: ContextViewHideReason): void {
+		this.showScheduler.cancel();
+		this.hideScheduler.cancel();
+		this.menu?.closeSubmenus();
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+		if (reason === ContextViewHideReason.Escape) this.button.focus();
 	}
 
 	get isExpanded(): boolean {
-		return this.contextView?.visible === true;
+		return this.contextView?.visible === true && (!this.options.submenuOptions?.submenuContextView ||
+			(!!this.menu && this.contextView.element.contains(this.menu.getContainer())));
 	}
 
 	override update(): boolean {
@@ -381,8 +405,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	}
 
 	contains(target: Node): boolean {
-		return this.contextView?.element.contains(target) === true ||
-			this.menu?.contains(target) === true;
+		if (this.options.submenuOptions?.submenuContextView && !this.isExpanded) return false;
+		return this.contextView?.element.contains(target) === true || this.menu?.contains(target) === true;
 	}
 
 	ownsTrigger(target: Element | null): boolean {
@@ -441,6 +465,11 @@ export interface IMenuOptions {
 	readonly expandDirection?: IMenuDirection;
 	readonly submenuIds?: Set<string>;
 	readonly submenuClassName?: string;
+	readonly submenuVerticalAlignment?: 'bottom';
+	/** Resume native tab navigation from the parent trigger when leaving a submenu. */
+	readonly tabLeavesSubmenu?: boolean;
+	/** A caller-owned surface shared with other panels in the same widget. */
+	readonly submenuContextView?: ContextView;
 	readonly buttonStyles?: IButtonStyles;
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
@@ -579,6 +608,11 @@ export class Menu extends ActionBar {
 		let handled = true;
 		switch (event.key) {
 			case 'Tab':
+				if (this.options.tabLeavesSubmenu) {
+					this.closeSubmenus();
+					return;
+				}
+				break;
 			case 'Escape':
 				if (event.key === 'Escape') this.cancel();
 				break;

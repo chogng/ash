@@ -78,7 +78,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				height: { minimum: 0, maximum: 240 },
 			}),
 		}, [], {
-			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host',
+			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
 			primaryPermissionPicker: {
 				action: {

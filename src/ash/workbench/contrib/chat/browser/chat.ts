@@ -49,6 +49,7 @@ export interface IWorkspacePickerDelegate {
 
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
+	readonly configureModelInMenu?: boolean;
 	readonly promptTimelineFiles?: (prompt: IChatListItem) => readonly PromptFileDiff[];
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;

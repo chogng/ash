@@ -168,6 +168,7 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
+	readonly configureModelInMenu?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
@@ -1866,6 +1867,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
+				configureInMenu: this.options.configureModelInMenu,
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,

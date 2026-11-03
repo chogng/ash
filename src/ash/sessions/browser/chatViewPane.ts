@@ -384,7 +384,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.openerService,
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-				undefined, options,
+				undefined, { ...options, configureModelInMenu: true },
 			);
 			this.paneScopes.set(pane, resources);
 			return pane;

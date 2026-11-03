@@ -11,7 +11,7 @@ import '../../../base/browser/ui/dialog/dialog.css';
 import '../../../base/browser/ui/menu/menu.css';
 import '../../../base/browser/ui/toggle/toggle.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
-import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
+import type { AnchorPosition, ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
@@ -219,6 +219,7 @@ export class ActionList<T> extends Disposable {
 		ariaHint: string | undefined,
 		private readonly supportsPreview: boolean,
 		private readonly options: IActionListOptions,
+		private readonly sidePanel?: ContextView,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
@@ -432,6 +433,8 @@ export class ActionList<T> extends Disposable {
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			className: 'ash-action-widget-menu',
 			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
+			submenuContextView: this.sidePanel,
+			tabLeavesSubmenu: !!this.sidePanel,
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),

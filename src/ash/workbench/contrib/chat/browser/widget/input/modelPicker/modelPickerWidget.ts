@@ -95,7 +95,7 @@ export class ModelPickerWidget extends Disposable {
 		this.nameButton!.setAttribute('aria-label', label);
 		this.nameHover.clear();
 		this.nameHover.value = getHoverDelegate().setupHover({ target: this.nameButton!, content: label, groupId: this.hoverGroupId });
-		renderModelConfigurationButton(this.configurationButton!, model, this.delegate.getSelectedReasoningEffort(), this.delegate.isAutomaticModel(),
+		renderModelConfigurationButton(this.configurationButton!, model, this.delegate.getSelectedReasoningEffort(), this.delegate.configureInMenu === true || this.delegate.isAutomaticModel(),
 			this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration));
 		this.configurationHover.clear();
 		this.configurationHover.value = getHoverDelegate().setupHover({
@@ -111,6 +111,6 @@ export class ModelPickerWidget extends Disposable {
 
 	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef): void {
 		if (!this.enabled || this.visible) { return; }
-		this.picker?.show(anchor, detailsModel);
+		this.picker?.show(anchor, detailsModel, this.delegate.configureInMenu === true);
 	}
 }
