@@ -115,18 +115,25 @@ fn workspace_worktrees_can_be_listed_without_managed_thread_directories() {
         "initialize",
         serde_json::json!({"clientInfo": {"name": "desktop", "version": "1"}, "capabilities": {"directoryGrantsHost": {"version": 1}}}),
     );
+    for (id, params) in [
+        (2, serde_json::json!({})),
+        (3, serde_json::json!({"folders": [], "includeStatus": true})),
+    ] {
+        let initial = call(id, "git/repositories", params);
+        assert_eq!(initial["result"], serde_json::json!({"repositories": []}));
+    }
     let bound = call(
-        2,
+        4,
         "env/dirs/set",
         serde_json::json!({"dirs": [{"id": "project", "path": source.path, "grant": {"type": "host", "permissions": ["readFiles", "inspectRepository"]}}]}),
     );
     assert!(bound.get("error").is_none(), "{bound}");
-    let repositories = call(3, "git/repositories", serde_json::json!({}));
+    let repositories = call(5, "git/repositories", serde_json::json!({}));
     let repository_id = repositories["result"]["repositories"][0]["id"]
         .as_str()
         .expect("project repository");
     let inventory = call(
-        4,
+        6,
         "git/worktree/list",
         serde_json::json!({"repositoryId": repository_id}),
     );

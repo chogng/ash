@@ -59,6 +59,7 @@ use ash_app_server_protocol::protocol::git::GitOperationResult;
 use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitPullModeDto;
 use ash_app_server_protocol::protocol::git::GitPullParams;
+use ash_app_server_protocol::protocol::git::GitRepositoriesResult;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_app_server_protocol::protocol::git::GitStashDto;
 use ash_app_server_protocol::protocol::git::GitStashModeDto;
@@ -777,7 +778,20 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                     .collect::<Result<Vec<_>, RpcError>>()
             })
             .transpose()?;
-        let runtime = self.context.git_runtime_service()?;
+        let runtime = match self.context.git_runtime_service() {
+            Ok(runtime) => runtime,
+            Err(error)
+                if error.message == AppServerErrorName::GitUnavailable
+                    && folders.as_ref().is_none_or(Vec::is_empty) =>
+            {
+                // The host may query the catalog before any workspace directory is bound.
+                return result(&GitRepositoriesResult {
+                    repositories: Vec::new(),
+                    statuses: None,
+                });
+            }
+            Err(error) => return Err(error),
+        };
         let mut discovered = runtime
             .discover_for(connection.connection_id, folders)
             .map_err(git_error)?;

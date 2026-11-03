@@ -23,6 +23,9 @@ import { IDecorationsService } from '../../services/decorations/common/decoratio
 import { ITimelineService } from '../../contrib/timeline/common/timeline.js';
 import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
 import { isResourceDiffEditorInput } from '../../common/editor.js';
+import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
+
 class SCMRegistration extends Disposable {
 	public revision = 0;
 	public initialization: 'initializing' | 'ready' | 'failed' = 'initializing';
@@ -42,6 +45,7 @@ export class MainThreadSCM extends Disposable {
 	private nextDecorationQueue = 0;
 	private timelineSequence = 0;
 	private readonly initializationContexts = new Map<string, IContextKey<string>>();
+	private readonly unregisteredStates = new Map<string, SCMRegistration['initialization']>();
 	private readonly registrations = this._register(new DisposableMap<string, SCMRegistration>());
 	constructor(private readonly timeout: number, private readonly reportError: (error: unknown) => void, private readonly commandRegistry: CommandRegistry,
 		@IExtensionHostApi
@@ -60,8 +64,20 @@ export class MainThreadSCM extends Disposable {
 		private readonly decorations: IDecorationsService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@ITimelineService private readonly timeline: ITimelineService,
-		@IEditorPart private readonly editorPart: IEditorPart) {
+		@IEditorPart private readonly editorPart: IEditorPart,
+		@IAppServerApi private readonly connection: IAppServerApi,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService) {
 		super();
+		const recovery = connection.recovery;
+		if (recovery) {
+			this._register(recovery.onDidChange(() => {
+				this.updateInitializationContexts();
+				if (recovery.status !== 'recovering') return;
+				for (const [, owner] of this.registrations) {
+					if (this.usesWorkspaceGit(owner)) void this.initialize(owner);
+				}
+			}));
+		}
 		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', async () => {
 			const registered = new Set([...this.registrations].map(([, owner]) => owner.source.extensionId));
 			if ([...this.initializationContexts].some(([id, context]) => context.get() === 'failed' && !registered.has(id))) {
@@ -134,6 +150,8 @@ export class MainThreadSCM extends Disposable {
 					try { await raceCancellationError(waiting, signal); }
 					finally { waiting.cancel(); }
 				}
+				if (this.usesWorkspaceGit(owner) && this.connection.recovery && this.connection.recovery.status !== 'idle'
+					&& !await this.waitForWorkspace(owner)) break;
 				await this.invoke(owner, 'initialize', {});
 				owner.initialization = 'ready';
 				this.updateInitializationContexts();
@@ -146,6 +164,22 @@ export class MainThreadSCM extends Disposable {
 		owner.initialization = 'failed';
 		this.updateInitializationContexts();
 	}
+	private usesWorkspaceGit(owner: SCMRegistration): boolean {
+		return owner.source.extensionId === 'ash.git' && this.workspace.getWorkspace().folders.length > 0;
+	}
+	private async waitForWorkspace(owner: SCMRegistration): Promise<boolean> {
+		const recovery = this.connection.recovery;
+		if (!recovery || !this.usesWorkspaceGit(owner)) return true;
+		let settle!: () => void;
+		const pending = new Promise<void>(resolve => { settle = resolve; });
+		const check = () => {
+			if (!this.usesWorkspaceGit(owner) || (recovery.status !== 'recovering' && recovery.status !== 'suspended')) settle();
+		};
+		using changed = Event.any(recovery.onDidChange, this.workspace.onDidChangeWorkspace)(check);
+		check();
+		await raceCancellationError(pending, owner.controller.signal);
+		return !this.usesWorkspaceGit(owner) || recovery.status === 'idle';
+	}
 	private updateInitializationContexts(snapshot?: ExtensionHostFleetSnapshot): void {
 		if (this.isDisposed) return;
 		const states = new Map<string, SCMRegistration['initialization'][]>();
@@ -154,20 +188,25 @@ export class MainThreadSCM extends Disposable {
 			values.push(owner.initialization);
 			states.set(owner.source.extensionId, values);
 		}
-		// Failed activation has no SCM registration to initialize or retry. Include
-		// the runtime lifecycle so the welcome view cannot remain "scanning" forever.
 		if (snapshot) {
+			this.unregisteredStates.clear();
+			// An extension can fail activation before publishing a registration.
 			for (const runtime of snapshot.extensions) {
 				if (states.has(runtime.id) || runtime.lifecycle === 'ready') continue;
 				const failed = runtime.lifecycle === 'failed' || runtime.lifecycle === 'crashLoop' || runtime.lifecycle === 'stopped';
-				states.set(runtime.id, [failed ? 'failed' : 'initializing']);
+				this.unregisteredStates.set(runtime.id, failed ? 'failed' : 'initializing');
 			}
 		}
+		for (const [id, state] of this.unregisteredStates) {
+			if (!states.has(id)) states.set(id, [state]);
+		}
+		// A workspace may recover after Git failed activation against the old binding.
+		if (this.connection.recovery?.status === 'recovering' && this.workspace.getWorkspace().folders.length > 0) {
+			states.set('ash.git', ['initializing']);
+		}
 		this.contextKeys.bufferChangeEvents(() => {
-			if (snapshot) {
-				for (const [id, context] of this.initializationContexts) {
-					if (!states.has(id)) { context.reset(); this.initializationContexts.delete(id); }
-				}
+			for (const [id, context] of this.initializationContexts) {
+				if (!states.has(id)) { context.reset(); this.initializationContexts.delete(id); }
 			}
 			for (const [id, values] of states) {
 				let context = this.initializationContexts.get(id);

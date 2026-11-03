@@ -60,6 +60,16 @@ export class MainThreadExtensionBackend extends Disposable {
 		};
 		const connectionChanged = connection.onConnectionState(invalidateDiscovery);
 		this._register(toDisposable(() => connectionChanged.dispose()));
+		const recovery = connection.recovery;
+		if (recovery) {
+			let status = recovery.status;
+			this._register(recovery.onDidChange(() => {
+				if (status === recovery.status) return;
+				status = recovery.status;
+				// Protocol readiness can precede the window's directory binding.
+				invalidateDiscovery();
+			}));
+		}
 		this._register(workspace.onDidChangeWorkspace(invalidateDiscovery));
 		this._register(configuration.onDidChangeConfiguration(invalidateDiscovery));
 		// Cursor and text changes wake blame without invalidating repository discovery.
@@ -116,12 +126,16 @@ export class MainThreadExtensionBackend extends Disposable {
 			if (waitForChange) await this.waitForStateChange(after, grant.notifications ?? [], signal);
 			const state = await this.connection.getConnectionState();
 			signal.throwIfAborted();
+			const folders = this.workspace.getWorkspace().folders;
+			const recoveryStatus = this.connection.recovery?.status;
+			const gitWorkspacePending = source.extensionId === 'ash.git' && capability === 'git.repository'
+				&& folders.length > 0 && recoveryStatus !== undefined && recoveryStatus !== 'idle' && recoveryStatus !== 'suspended';
 			return normalizeExtensionHostPayload({
-				sequence: this.sequence, connection: state, generation: this.connection.connectionGeneration,
+				sequence: this.sequence, connection: state === 'ready' && gitWorkspacePending ? 'initializing' : state, generation: this.connection.connectionGeneration,
 				reset: after < this.resetAfter || after < this.discardedThrough,
 				editorFoldersChanged: after < this.editorFoldersChangedAfter,
 				events: this.events.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method)).map(entry => entry.event),
-				folders: this.workspace.getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
+				folders: folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
 			});
 		}
 		const route = grant.methods?.[method];
