@@ -90,6 +90,7 @@
 	white-space: nowrap;
 }
 
+.ash-sessions-environment,
 .ash-sessions-chat-input-workspace {
 	display: flex;
 	align-items: center;
@@ -99,10 +100,12 @@
 	color: var(--ash-description-foreground);
 }
 
+.ash-sessions-environment,
 .ash-sessions-chat-input-footer > .ash-sessions-chat-input-workspace {
 	flex: 0 1 auto;
 }
 
+.ash-sessions-environment[hidden],
 .ash-sessions-chat-input-workspace[hidden] {
 	display: none;
 }
@@ -115,6 +118,7 @@
 	border-radius: var(--ash-cornerRadius-xxLarge);
 }
 
+.ash-sessions-environment-picker.ash-button,
 .ash-sessions-workspace-picker.ash-button {
 	min-width: 0;
 	max-width: 100%;

@@ -108,6 +108,24 @@ export class SessionsList extends DomWidget {
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
+		const more = this._register(new Button(this.domNode, {
+			...defaultButtonStyles, icon: Lxicon.ellipsis, iconOnly: true, presentation: 'quiet', size: 'small',
+			label: localize('sessions.list.moreActions', 'More Sessions Actions'),
+			onClick: () => {
+				more.domNode.setAttribute('aria-expanded', 'true');
+				this.contextMenus.showContextMenu({
+					getAnchor: () => more.domNode,
+					getActions: () => menu.getActions().filter(([group]) => group !== 'navigation').flatMap(([, actions]) => actions),
+					getMenuClassName: () => 'ash-sessions-list-menu',
+					autoSelectFirstItem: true,
+					onHide: () => more.domNode.setAttribute('aria-expanded', 'false'),
+				});
+			},
+		}));
+		this.domNode.insertBefore(more.domNode, this.list);
+		more.domNode.classList.add('ash-sessions-list-more');
+		more.domNode.setAttribute('aria-haspopup', 'menu');
+		more.domNode.setAttribute('aria-expanded', 'false');
 		const updateNavigation = (): void => {
 			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
 			this.navigationActions.clear();
@@ -128,6 +146,7 @@ export class SessionsList extends DomWidget {
 			}
 			for (const id of this.navigationButtons.keys()) if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
 			this.navigation.hidden = actions.length === 0;
+			more.hidden = !menu.getActions().some(([group, actions]) => group !== 'navigation' && actions.length > 0);
 		};
 		this._register(menu.onDidChange(updateNavigation));
 		updateNavigation();

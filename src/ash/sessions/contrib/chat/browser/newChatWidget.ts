@@ -18,6 +18,7 @@ import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agent
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { NewChatInputWidget } from './newChatInput.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
+import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import './media/chatInput.css';
@@ -27,6 +28,7 @@ import '../../../common/theme.js';
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	declare readonly input: NewChatInputWidget;
 	private readonly tips: ChatInputTipPresenter;
+	private readonly environmentPicker: SessionEnvironmentPicker;
 	private readonly workspacePicker: SessionWorkspacePicker;
 	private submittedInput = false;
 	private composerThreadId: string | undefined;
@@ -116,6 +118,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		}, this.input.noticeHost));
 		footer.classList.add('ash-sessions-chat-input-footer');
 		this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
+		this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, footer, model, () => this.input.persistDraftForHostChange()));
 		parent.append(footer);
 		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
@@ -138,5 +141,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.workspacePicker.setVisible(visible);
+		this.environmentPicker.setVisible(visible);
 	}
 }

@@ -38,6 +38,10 @@
 	background: var(--ash-sessions-selectionBackground);
 }
 
+.ash-sessions-list-more {
+	align-self: flex-end;
+}
+
 .ash-sessions-list-items {
 	display: flex;
 	min-height: 0;

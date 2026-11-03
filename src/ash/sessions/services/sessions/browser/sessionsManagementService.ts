@@ -279,13 +279,20 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection, options?: { readonly devContainer?: boolean; readonly branchName?: string; }): void {
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; }): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		// Once creation starts, its command identity and execution directory are immutable.
 		if (this.materializations.has(untitledSessionId)) throw new Error(localize('sessions.workspace.preparing', 'Wait for session preparation to finish before changing its workspace.'));
+		const providerId = options?.providerId ?? current.providerId;
+		const changedHost = providerId !== current.providerId;
+		const selection = workspace ?? this.creationProvider(undefined, providerId).currentWorkspace();
 		this._untitledSessions = this._untitledSessions.map(session => session === current
-			? { ...session, workspace, devContainer: options?.devContainer === true, branchName: options?.branchName } : session);
+			? {
+				...session, providerId, workspace: selection,
+				devContainer: options?.devContainer === true, branchName: options?.branchName,
+				...(changedHost ? { model: undefined, agent: undefined } : {}),
+			} : session);
 		this._onDidChange.fire();
 	}
 

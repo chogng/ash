@@ -53,7 +53,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@INotificationService notifications: INotificationService,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IStorageService storage: IStorageService,
+		@IStorageService private readonly storage: IStorageService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
@@ -123,6 +123,13 @@ export class NewChatInputWidget extends ChatInputPart {
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
+	}
+
+	public async persistDraftForHostChange(): Promise<void> {
+		const id = this.model.untitledSessionId;
+		const snapshot = await this.captureDraft();
+		if (this.isDisposed || !id || this.model.untitledSessionId !== id) return;
+		if (snapshot) writeNewChatDraftState(this.storage, snapshot.draft, `untitled:${id}`, chatInputStatePersistence);
 	}
 
 	protected override getAccessibilityHelpContent(): string {

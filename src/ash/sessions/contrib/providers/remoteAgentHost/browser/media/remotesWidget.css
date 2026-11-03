@@ -1,0 +1,33 @@
+.ash-remote-environments-dialog.ash-dialog {
+	width: 640px;
+}
+
+.ash-remote-environments-address {
+	color: var(--ash-description-foreground);
+	font-weight: normal;
+}
+
+.ash-remote-environments table {
+	width: 100%;
+	border-collapse: collapse;
+	text-align: start;
+}
+
+.ash-remote-environments th,
+.ash-remote-environments td {
+	padding: var(--ash-spacing-size80);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-widget-border, transparent);
+	text-align: start;
+	overflow-wrap: anywhere;
+}
+
+.ash-remote-environments-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-remote-environments [role="status"]:empty {
+	display: none;
+}

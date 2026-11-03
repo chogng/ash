@@ -1,5 +1,4 @@
 import { applyAgentHostCompletionAction } from '../../../workbench/contrib/chat/browser/agentHostCompletionAction.js';
-import { ISessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
@@ -126,19 +125,7 @@ export class NewSessionsChatAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<IUntitledChatSession | undefined> {
-		const view = accessor.get(ISessionsService);
-		const providers = accessor.get(ISessionsProvidersService).getProviders();
-		if (providers.length < 2) { return view.openNewSession(localize('chat.sessions.new', 'New Session')); }
-		using picker = accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { providerId: string; }>();
-		picker.placeholder = localize('sessions.new.chooseHost', 'Choose a host for the new session');
-		picker.items = providers.map(provider => ({ label: provider.label, providerId: provider.id }));
-		const chosen = await new Promise<(IQuickPickItem & { providerId: string; }) | undefined>(resolve => {
-			const lifetime = new DisposableStore();
-			lifetime.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item); picker.hide(); lifetime.dispose(); } }));
-			lifetime.add(picker.onDidHide(() => { resolve(undefined); lifetime.dispose(); }));
-			picker.show();
-		});
-		if (chosen) { return view.openNewSession(localize('chat.sessions.new', 'New Session'), { providerId: chosen.providerId }); }
+		return accessor.get(ISessionsService).openNewSession(localize('chat.sessions.new', 'New Session'));
 	}
 }
 registerAction2(NewSessionsChatAction);

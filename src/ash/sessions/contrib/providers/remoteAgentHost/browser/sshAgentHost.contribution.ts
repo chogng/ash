@@ -1,21 +1,18 @@
+import { Dialog } from '../../../../../base/browser/ui/dialog/dialog.js';
+import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { isSSHAgentHost } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { agentHostConnectionAddress, IAgentHostConnectionsService, type IAgentHostConnectionInfo } from '../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { RemotesWidget } from './remotesWidget.js';
+import { canonicalRemoteConnectionDefinition, IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { Menus } from '../../../../browser/menus.js';
-
-interface HostPickItem extends IQuickPickItem {
-	readonly info?: IAgentHostConnectionInfo;
-	readonly command?: string;
-	readonly reconnect?: boolean;
-}
 
 function hostStatus(state: IAgentHostConnectionInfo['state']): string {
 	switch (state) {
@@ -39,14 +36,15 @@ const manageHostsCommand = 'sessions.action.manageAgentHosts';
 export class SSHAgentHostContribution extends Disposable {
 	static readonly ID = 'sessions.contrib.sshAgentHostContribution';
 	private readonly pendingConnections = this._register(new DisposableStore());
-	private readonly pickers = this._register(new DisposableStore());
+	private readonly newEnvironment = this._register(new MutableDisposable<Dialog>());
+	private readonly manager = this._register(new MutableDisposable<RemotesWidget>());
 
 	constructor(
 		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IAgentHostConnectionsService private readonly hosts: IAgentHostConnectionsService,
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
+		@ILayoutService private readonly layout: ILayoutService,
 		@ICommandService private readonly commands: ICommandService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
@@ -55,87 +53,91 @@ export class SSHAgentHostContribution extends Disposable {
 			try { await this.showHosts(); }
 			catch (error) { if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error)); }
 		}));
+		this._register(CommandsRegistry.register('sessions.action.newRemoteEnvironment', () => this.addEnvironment()));
 		const command = { id: manageHostsCommand, title: localize2({ bundle: 'ash.workbench', key: 'agentHosts.manage' }, 'Agents: Manage Connected Hosts') };
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command }));
-		this._register(MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: 'navigation', order: 90 }));
+		this._register(MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: '2_manage' }));
+	}
+
+	private async addEnvironment(): Promise<boolean> {
+		if (this.newEnvironment.value) return false;
+		const cancel = localize('sessions.environment.cancel', 'Cancel');
+		const transports = this.connections.available ? [
+			localize('sessions.environment.ssh', 'SSH'),
+			localize('sessions.environment.tunnel', 'Ash Tunnel'),
+		] : [localize('sessions.environment.tunnel', 'Ash Tunnel')];
+		const dialogStyles = { buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles, dialogStyles: defaultDialogStyles };
+		const choose = new Dialog(this.layout.activeContainer, localize('sessions.environment.newRemote', 'New Remote Environment'), [...transports, cancel], {
+			...dialogStyles,
+			cancelId: transports.length,
+			detail: localize('sessions.environment.transportHelp', 'Save an SSH connection or connect using an authenticated Ash Tunnel URL.'),
+		});
+		this.newEnvironment.value = choose;
+		try {
+			const choice = await choose.show();
+			if (this.isDisposed || choice.button === transports.length) return false;
+			this.newEnvironment.clear();
+			if (!this.connections.available || choice.button === 1) {
+				return !!await this.commands.executeCommand<string>('sessions.action.connectTunnelAgentHost');
+			}
+			const ssh = new Dialog(this.layout.activeContainer, localize('sessions.environment.newSSH', 'New SSH Connection'), [localize('sessions.environment.save', 'Save'), cancel], {
+				...dialogStyles, cancelId: 1,
+				inputs: [
+					{ placeholder: localize('sessions.environment.connectionName', 'Connection name') },
+					{ placeholder: localize('sessions.environment.sshHost', 'OpenSSH host alias') },
+					{ placeholder: localize('sessions.environment.workspacePath', 'Absolute workspace path') },
+				],
+			});
+			this.newEnvironment.value = ssh;
+			const result = await ssh.show();
+			if (this.isDisposed || result.button !== 0 || !result.values) return false;
+			const [name, host, workspace] = result.values;
+			await this.connections.save(canonicalRemoteConnectionDefinition({ name: name!, host: host!, workspace: workspace! }));
+			return !this.isDisposed;
+		} finally {
+			this.newEnvironment.clear();
+		}
 	}
 
 	private async showHosts(): Promise<void> {
-		const add: IQuickPickItem = { label: localize({ bundle: 'ash.workbench', key: 'agentHosts.add' }, 'Connect a Saved SSH Host…') };
-		const hostItems = () => this.hosts.connections.flatMap<HostPickItem>(info => {
-			const connection = info.remoteConnection;
-			if (info.isAmbient || !connection) return [];
-			const address = isSSHAgentHost(connection) ? connection.host : connection.type === 'wsl' ? connection.distro : connection.endpoint;
-			const detail = [address, connection.workspace].filter(Boolean).join(' · ');
-			const description = hostStatus(info.state);
-			const item = { id: info.id, label: info.name, description, detail, info };
-			return canReconnect(info) ? [item, {
-				id: `reconnect:${info.id}`,
-				label: localize({ bundle: 'ash.workbench', key: 'agentHosts.reconnect' }, 'Reconnect to {0}', info.name),
-				description, detail, info, reconnect: true,
-			}] : [item];
-		});
-		const connectItems: readonly HostPickItem[] = [
-			add,
-			{ label: localize('sessions.hosts.connectWSL', 'Agents: Connect to WSL…'), command: 'sessions.action.connectWSLAgentHost' },
-			{ label: localize('sessions.hosts.connectTunnel', 'Agents: Connect to Ash Tunnel…'), command: 'sessions.action.connectTunnelAgentHost' },
-		];
-		const selected = await this.pick<HostPickItem>(
-			() => [...connectItems, ...hostItems()],
-			localize({ bundle: 'ash.workbench', key: 'agentHosts.select' }, 'Connect a host, select a host to disconnect, or choose its Reconnect action'),
-		);
-		if (!selected || this.isDisposed) { return; }
-		if (selected.command) { await this.commands.executeCommand(selected.command); return; }
-		const hostId = selected.info?.id;
-		if (hostId !== undefined) {
-			const current = this.hosts.connections.find(info => info.id === hostId);
-			if (!current) return;
-			if (selected.reconnect) {
-				if (canReconnect(current)) await this.remoteHosts.reconnect(current.id);
-			} else {
-				this.remoteHosts.disconnect(current.id);
-			}
-			return;
+		if (this.manager.value) return;
+		let saved: readonly RemoteConnectionDefinition[] = [];
+		const reportError = (error: unknown): void => {
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+		};
+		const manager = new RemotesWidget(this.layout.activeContainer, () => {
+			const connected = this.hosts.connections.flatMap(info => {
+				const target = info.remoteConnection;
+				if (info.isAmbient || !target) return [];
+				const address = isSSHAgentHost(target) ? target.host : target.type === 'wsl' ? target.distro : target.endpoint;
+				return [{
+					id: agentHostConnectionAddress(target), name: info.name, address: `${address} · ${target.workspace}`,
+					status: hostStatus(info.state),
+					actions: [
+						...(canReconnect(info) ? [{
+							id: 'reconnect', label: localize('sessions.remotes.reconnect', 'Reconnect'),
+							run: () => this.remoteHosts.reconnect(info.id),
+						}] : []),
+						{
+							id: 'disconnect', label: localize('sessions.remotes.disconnect', 'Disconnect'),
+							run: () => this.remoteHosts.disconnect(info.id),
+						},
+					],
+				}];
+			});
+			return [...connected, ...saved.filter(target => !connected.some(row => row.id === agentHostConnectionAddress(target))).map(target => ({
+				id: agentHostConnectionAddress(target), name: target.name, address: `${target.host} · ${target.workspace}`, status: hostStatus('stopped'),
+				actions: [{ id: 'connect', label: localize('sessions.remotes.connect', 'Connect'), run: () => this.connect(target) }],
+			}))];
+		}, this.hosts.onDidChangeConnections, reportError);
+		this.manager.value = manager;
+		try {
+			const closed = manager.show();
+			void this.connections.list().then(targets => { saved = targets; }, reportError).finally(() => manager.finishLoading());
+			await closed;
+		} finally {
+			if (this.manager.value === manager) this.manager.clear();
 		}
-		const available = await this.connections.list();
-		if (this.isDisposed) { return; }
-		const target = await this.pick(
-			available.map(connection => ({ label: connection.name, description: connection.host, detail: connection.workspace, connection })),
-			localize({ bundle: 'ash.workbench', key: 'agentHosts.target' }, 'Select a saved SSH host to connect in this window'),
-		);
-		if (target && !this.isDisposed) { await this.connect(target.connection); }
-	}
-
-	private pick<T extends IQuickPickItem>(items: readonly T[] | (() => readonly T[]), placeholder: string): Promise<T | undefined> {
-		this.assertNotDisposed();
-		const resources = new DisposableStore();
-		this.pickers.add(resources);
-		const picker = resources.add(this.quickInput.createQuickPick<T>());
-		picker.items = typeof items === 'function' ? items() : items;
-		if (typeof items === 'function') {
-			resources.add(this.hosts.onDidChangeConnections(() => {
-				const previous = picker.activeItems[0];
-				const updated = items();
-				picker.items = updated;
-				const active = updated.find(item => previous?.id ? item.id === previous.id : item === previous);
-				if (active) picker.activeItems = [active];
-			}));
-		}
-		picker.placeholder = picker.ariaLabel = placeholder;
-		return new Promise(resolve => {
-			let settled = false;
-			const finish = (selected?: T): void => {
-				if (settled) { return; }
-				settled = true;
-				this.pickers.delete(resources);
-				resources.dispose();
-				resolve(selected);
-			};
-			resources.add(toDisposable(() => finish()));
-			resources.add(picker.onDidAccept(() => finish(picker.selectedItems[0])));
-			resources.add(picker.onDidHide(() => finish()));
-			picker.show();
-		});
 	}
 
 	private async connect(connection: RemoteConnectionDefinition): Promise<void> {
