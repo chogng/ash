@@ -1,3 +1,4 @@
+import { SessionModelSelection } from '../../../browser/sessionModelSelection.js';
 import { ChatRequestQueueKind } from '../../../../workbench/services/chat/common/chatService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -68,12 +69,11 @@ export class CoworkWidgetModel extends Disposable {
 	private readonly selectedModes = new Map<string, ChatMode>();
 	private queuedMessages = 0;
 	private queueGeneration = 0;
-	private readonly selectedModels = new Map<string, ModelRef>();
-	private readonly hasManualUntitledModel = observableValue(this, false);
+	private readonly threadModelSelection = new SessionModelSelection();
+	private readonly draftModelSelection = observableValue<{ readonly model?: ModelRef; readonly manual: boolean; }>(this, { manual: false });
 	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
 	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
-	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
@@ -217,16 +217,14 @@ export class CoworkWidgetModel extends Disposable {
 
 	get selectedModel(): ModelRef | undefined {
 		return this.selection.kind === 'untitled'
-			? this.selectedModels.get(this.composerIdentity)
-			: this.selectedModels.get(this.selection.active.threadId)
-			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model : undefined)
-			?? this.selection.active.session.model ?? undefined;
+			? this.draftModelSelection.get().model
+			: this.threadModelSelection.resolveModel(this.selection.active, this._thread);
 	}
 
 	get isAutomaticModel(): boolean {
 		return this.selection.kind === 'untitled'
-			? !this.selectedModels.has(this.composerIdentity)
-			: this.automaticModels.has(this.selection.active.threadId);
+			? this.draftModelSelection.get().model === undefined
+			: this.threadModelSelection.isAutomatic(this.selection.active.threadId);
 	}
 
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
@@ -347,20 +345,20 @@ export class CoworkWidgetModel extends Disposable {
 
 	async selectModel(model: ModelRef): Promise<void> {
 		if (this.selection.kind === 'untitled') {
-			this.hasManualUntitledModel.set(true, undefined);
+			this.draftModelSelection.set({ model, manual: true });
+		} else {
+			this.threadModelSelection.select(this.selection.active.threadId, model);
 		}
-		this.selectedModels.set(this.composerIdentity, model);
-		this.automaticModels.delete(this.composerIdentity);
 		this.modelPreferences.rememberSelectedModel(model);
 		this._onDidChange.fire();
 	}
 
 	async selectAutomaticModel(): Promise<void> {
 		if (this.selection.kind === 'untitled') {
-			this.hasManualUntitledModel.set(true, undefined);
+			this.draftModelSelection.set({ manual: true });
+		} else {
+			this.threadModelSelection.select(this.selection.active.threadId, undefined);
 		}
-		this.selectedModels.delete(this.composerIdentity);
-		this.automaticModels.add(this.composerIdentity);
 		this.modelPreferences.rememberSelectedModel(undefined);
 		this._onDidChange.fire();
 	}
@@ -413,9 +411,12 @@ export class CoworkWidgetModel extends Disposable {
 			this.requireCurrentOperation(operation);
 			await this.initialize();
 			this.requireCurrentOperation(operation);
+			// Once accepted, this request keeps its model even if the picker changes during preparation.
+			const model = this.isAutomaticModel ? undefined : this.selectedModel;
+			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
-			const active = await this.ensureActiveSession();
+			const active = await this.ensureActiveSession(operation.signal);
 			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
@@ -438,8 +439,8 @@ export class CoworkWidgetModel extends Disposable {
 				mode,
 				commandInterpretation: 'literal' as const,
 				approvalMode: this.inputState.approvalMode,
-				model: this.isAutomaticModel ? undefined : this.selectedModel,
-				reasoningEffort: this.selectedReasoningEffort,
+				model,
+				reasoningEffort,
 				contexts,
 				signal: operation.signal,
 				commandId: options?.commandId,
@@ -610,11 +611,10 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private applyDefaultNewChatModel(): void {
-		if (this.selection.kind !== 'untitled' || this.hasManualUntitledModel.get()) return;
+		if (this.selection.kind !== 'untitled' || this.draftModelSelection.get().manual) return;
 		const model = this.modelPreferences.getDefaultNewChatModel(this._models);
 		// The draft identity and text are shared with Code; its model choice is owned by that UI.
-		if (model) { this.selectedModels.set(this.composerIdentity, model); }
-		else { this.selectedModels.delete(this.composerIdentity); }
+		this.draftModelSelection.set({ model, manual: false });
 	}
 
 	private async loadSkillSelectors(): Promise<void> {
@@ -1023,10 +1023,8 @@ export class CoworkWidgetModel extends Disposable {
 		this.selectedApprovalModes.set(approvalModes);
 		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
-		if (selectedModel) this.selectedModels.set(created.threadId, selectedModel);
-		else this.automaticModels.add(created.threadId);
-		this.selectedModels.delete(untitledSession.untitledSessionId);
-		this.automaticModels.delete(untitledSession.untitledSessionId);
+		this.threadModelSelection.select(created.threadId, selectedModel);
+		this.draftModelSelection.set({ manual: false });
 	}
 
 }

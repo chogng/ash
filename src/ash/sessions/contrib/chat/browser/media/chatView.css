@@ -1,0 +1,14 @@
+.ash-code-conversation {
+	display: flex;
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-code-conversation > .ash-chat {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}

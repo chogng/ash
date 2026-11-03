@@ -32,6 +32,9 @@ impl ThreadBinding {
             ThreadOrigin::Fork {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::Comparison {
+                parent_thread_id, ..
+            }
             | ThreadOrigin::Message {
                 parent_thread_id, ..
             }
@@ -61,18 +64,24 @@ impl ThreadBinding {
 
     /// Checks the immutable relationship against its already committed source branch.
     pub fn validate_source(&self, source: &Self) -> Result<(), AgentGraphStoreError> {
+        let comparison = matches!(self.origin, ThreadOrigin::Comparison { .. });
+        let session_root = self.thread_id.as_str() == self.session_id.as_str();
         if self.source_thread_id() != Some(&source.thread_id)
             || self.thread_id == source.thread_id
             || (self.session_id != source.session_id
-                && !(matches!(self.origin, ThreadOrigin::Fork { .. })
-                    && self.thread_id.as_str() == self.session_id.as_str()))
+                && !(session_root
+                    && (comparison || matches!(self.origin, ThreadOrigin::Fork { .. }))))
+            || (comparison
+                && (!session_root
+                    || self.session_id == source.session_id
+                    || self.agent_id == source.agent_id))
         {
             return Err(AgentGraphStoreError(
-                "Thread origin must refer to another branch; only a fork may create a Session root"
+                "Thread origin must refer to another branch; only a fork or comparison may create a Session root"
                     .into(),
             ));
         }
-        if self.spawn_parent().is_none() && self.agent_id != source.agent_id {
+        if !comparison && self.spawn_parent().is_none() && self.agent_id != source.agent_id {
             return Err(AgentGraphStoreError(
                 "fork, rewind and replacement must preserve Agent identity".into(),
             ));

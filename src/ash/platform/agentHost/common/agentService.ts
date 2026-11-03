@@ -189,8 +189,10 @@ export interface IAgentThreadService {
 	fork(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly title: string;
-		readonly target: 'session' | 'thread';
-	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	} & ({ readonly target: 'thread'; } | {
+		readonly target: 'session';
+		readonly comparison?: { readonly sourceSequence: number; readonly agent: { readonly sourceId: string; readonly name: string; }; readonly branchName: string; };
+	})): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	rewrite(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly beforeTurnId: string;

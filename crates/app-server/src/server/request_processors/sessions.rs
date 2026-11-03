@@ -483,18 +483,44 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         mutation: SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, RpcError> {
         self.context
             .read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
-        let forked = self
-            .context
-            .agent_runtime()
-            .fork_session(core_api::ForkThreadRequest {
-                command_id: mutation.command_id,
-                source_thread_id: parent_thread_id,
-                title,
-            })
-            .map_err(core_error)?;
+        let request = core_api::ForkThreadRequest {
+            command_id: mutation.command_id,
+            source_thread_id: parent_thread_id,
+            title,
+        };
+        let runtime = self.context.agent_runtime();
+        let forked = match comparison {
+            None => runtime.fork_session(request),
+            Some(comparison) => {
+                if self.git_turn_changes.is_none() {
+                    return Err(core_error(core_api::CoreError::InvalidInput(
+                        "comparison requires a Git worktree runtime".into(),
+                    )));
+                }
+                let agent = self
+                    .context
+                    .resolve_root_agent(&comparison.agent)
+                    .map_err(core_error)?
+                    .ok_or_else(|| {
+                        core_error(core_api::CoreError::InvalidInput(
+                            "comparison requires an exact Agent".into(),
+                        ))
+                    })?;
+                runtime.fork_comparison(
+                    request,
+                    core_api::ComparisonFork {
+                        source_sequence: comparison.source_sequence,
+                        branch_name: comparison.branch_name,
+                        agent,
+                    },
+                )
+            }
+        }
+        .map_err(core_error)?;
         self.context
             .bind_session_runtime(&forked.session_id)
             .map_err(core_error)?;

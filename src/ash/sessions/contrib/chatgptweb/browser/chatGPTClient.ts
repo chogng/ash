@@ -1,9 +1,11 @@
+import type { ChatReplyRequest, ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage as ChatGPTMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
+export type { ChatReplyAttachment as ChatGPTFile, ChatReplyResource as ChatGPTResource, ChatReplyReference as ChatGPTReference, ChatReplyMessage as ChatGPTMessage, ChatReplyUpdate as ChatGPTStreamUpdate } from '../../../common/chatReplyBackend.js';
 import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
-export interface ChatGPTConversation { readonly id: string; readonly title: string; readonly pinned?: boolean; readonly projectId?: string; }
+export interface ChatGPTConversation { readonly id: string; readonly title: string; readonly pinned?: boolean; readonly projectId?: string; readonly local?: boolean; }
 export interface ChatGPTProject { readonly id: string; readonly title: string; }
 
 /** A product model family and its selectable presets from the web model picker. */
@@ -21,36 +23,10 @@ export interface ChatGPTModel {
 	}[];
 	readonly defaultPreset: string;
 }
-/** A confirmed ChatGPT file reference; signed upload URLs never enter conversation state. */
-export interface ChatGPTFile {
-	readonly id: string;
-	readonly name: string;
-	readonly mimeType: string;
-	readonly size: number;
-	readonly width?: number;
-	readonly height?: number;
-}
 export interface ChatGPTVoiceUpdate {
 	readonly conversationId?: string;
 	readonly parentId?: string;
 	readonly message?: ChatGPTMessage;
-}
-export interface ChatGPTResource {
-	readonly uri: string;
-	readonly name: string;
-	readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
-	readonly mimeType?: string;
-	readonly frameOrigin?: string;
-}
-export interface ChatGPTReference { readonly id: string; readonly url: string; readonly title: string; readonly snippet: string; }
-export interface ChatGPTMessage {
-	readonly id: string;
-	readonly role: 'user' | 'assistant';
-	readonly text: string;
-	readonly resources?: readonly ChatGPTResource[];
-	readonly references?: readonly ChatGPTReference[];
-	/** Execution content stays in the conversation record, separate from answer Markdown. */
-	readonly activity?: { readonly kind: 'call' | 'result' | 'progress'; readonly tool?: string; readonly failed: boolean; };
 }
 export interface ChatGPTHistory {
 	readonly id: string;
@@ -60,7 +36,6 @@ export interface ChatGPTHistory {
 	readonly thinkingEffort?: string;
 	readonly messages: readonly ChatGPTMessage[];
 }
-export interface ChatGPTStreamUpdate { readonly conversationId?: string; readonly message?: ChatGPTMessage; }
 interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
 
 /** An explicit HTTP rejection is different from an interrupted, possibly accepted message. */
@@ -283,7 +258,7 @@ export class ChatGPTClient {
 		}
 	}
 
-	async *send(input: { text: string; model: string; thinkingEffort?: string; parentId: string; conversationId?: string; messageId: string; files?: readonly ChatGPTFile[]; }, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+	async *send(input: ChatReplyRequest, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [

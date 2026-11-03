@@ -1,3 +1,4 @@
+import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { IChatContextService } from '../../../../workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
@@ -117,6 +118,13 @@ export class NewChatInputWidget extends ChatInputPart {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
 			if (hint) announceStatus(hint);
+		}));
+		const updateHistoryScope = () => this.setHistoryScope(configuration.getValue<boolean>(AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING) === false
+			? undefined : JSON.stringify(model.sessionId ? ['sessions', model.sessionId] : ['sessions-draft', model.untitledSessionId]));
+		updateHistoryScope();
+		this._register(model.onDidChange(updateHistoryScope));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING)) updateHistoryScope();
 		}));
 		this.bindDraftStorage(model, {
 			read: identity => readNewChatDraftState(storage, identity, chatInputStatePersistence),

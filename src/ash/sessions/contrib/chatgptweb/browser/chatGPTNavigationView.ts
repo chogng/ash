@@ -28,7 +28,7 @@ import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { ChatGPTConversation } from './chatGPTClient.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { IChatGPTService, chatGPTNavigationContainerId, type ChatGPTState } from './chatGPTService.js';
+import { IChatGPTService, chatGPTNavigationContainerId, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
@@ -255,7 +255,7 @@ export class ChatGPTNavigationView extends ViewPane {
 			const conversation = conversations[index]!;
 			for (const button of row.querySelectorAll('button')) {
 				button.disabled = state.sending || state.managing || (state.busy && !button.classList.contains('ash-chatgpt-conversation'));
-				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === state.conversationId) { button.setAttribute('aria-current', 'page'); }
+				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === selectedChatConversationId(state)) { button.setAttribute('aria-current', 'page'); }
 				else { button.removeAttribute('aria-current'); }
 			}
 		}
@@ -321,7 +321,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		trigger.setAttribute('aria-expanded', 'true');
 		let projects: readonly IAction[];
 		try {
-			projects = (await this.chat.listProjects(controller.signal)).map(project => ({
+			projects = (conversation.local ? [] : await this.chat.listProjects(controller.signal)).map(project => ({
 				...this.action(`move.${project.id}`, project.title, () => this.chat.moveToProject(conversation.id, project.id)),
 				checked: project.id === conversation.projectId,
 			}));
@@ -347,10 +347,10 @@ export class ChatGPTNavigationView extends ViewPane {
 			getAnchor: () => trigger,
 			getActions: () => [
 				this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), () => this.rename(conversation)),
-				this.action('share', localize('sessions.chatgpt.share', 'Share'), () => this.share(conversation)),
+				...(conversation.local ? [] : [this.action('share', localize('sessions.chatgpt.share', 'Share'), () => this.share(conversation))]),
 				this.action('archive', localize('sessions.chatgpt.archive', 'Archive'), () => this.chat.archive(conversation.id)),
 				this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), () => this.deleteConversation(conversation)),
-				new SubmenuAction('sessions.chatgpt.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), projects),
+				...(conversation.local ? [] : [new SubmenuAction('sessions.chatgpt.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), projects)]),
 			],
 			onHide: cancelled => {
 				if (this.menuRow === row) { this.menuRow = undefined; }

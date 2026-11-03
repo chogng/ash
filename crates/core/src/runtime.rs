@@ -825,6 +825,15 @@ impl AgentRuntime for Runtime<'_> {
             .fork_session(self.binder, request)
             .map(Into::into)
     }
+    fn fork_comparison(
+        &self,
+        request: ForkThreadRequest,
+        comparison: core_api::ComparisonFork,
+    ) -> Result<ThreadView, CoreError> {
+        self.threads
+            .fork_comparison(self.binder, request, comparison)
+            .map(Into::into)
+    }
     fn replace_thread(&self, request: ReplaceThreadRequest) -> Result<ThreadView, CoreError> {
         self.threads
             .replace_thread(self.binder, request)

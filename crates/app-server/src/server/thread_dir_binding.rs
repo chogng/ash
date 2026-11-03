@@ -393,6 +393,9 @@ impl GitTurnChangesRuntime {
             ThreadOrigin::Fork {
                 parent_thread_id, ..
             }
+            | ThreadOrigin::Comparison {
+                parent_thread_id, ..
+            }
             | ThreadOrigin::Message {
                 parent_thread_id, ..
             }
@@ -417,6 +420,11 @@ impl GitTurnChangesRuntime {
             (ThreadOrigin::Rewind { .. }, ManagedDirKind::Directory) => {
                 return Err(CoreError::Journal(
                     "non-Git Threads do not have immutable Turn checkpoints".into(),
+                ));
+            }
+            (ThreadOrigin::Comparison { .. }, ManagedDirKind::Directory) => {
+                return Err(CoreError::InvalidInput(
+                    "comparison requires an immutable Git checkpoint".into(),
                 ));
             }
             (ThreadOrigin::Fork { .. }, ManagedDirKind::Directory)
@@ -453,6 +461,12 @@ impl GitTurnChangesRuntime {
             }
             (
                 ThreadOrigin::Fork {
+                    parent_sequence, ..
+                },
+                ManagedDirKind::Git,
+            )
+            | (
+                ThreadOrigin::Comparison {
                     parent_sequence, ..
                 },
                 ManagedDirKind::Git,
@@ -601,11 +615,6 @@ impl ThreadWorktreeBinder for GitRuntimeHandle {
 
 impl ThreadWorktreeBinder for GitTurnChangesRuntime {
     fn provision(&self, request: &ThreadWorktreeBindingRequest) -> Result<(), CoreError> {
-        if request.branch_name.is_some() && !matches!(&request.origin, ThreadOrigin::Root) {
-            return Err(CoreError::InvalidInput(
-                "only a root Thread can create a worktree branch".into(),
-            ));
-        }
         if let Some(binding) = self.binding(&request.thread_id) {
             if request
                 .branch_name
@@ -619,7 +628,31 @@ impl ThreadWorktreeBinder for GitTurnChangesRuntime {
         }
         let (source, mut target) = self.source_for(request)?;
         if let Some(name) = &request.branch_name {
-            target = ManagedDirTarget::NewBranch { name: name.clone() };
+            let base_object_id = match (&request.origin, &source, target) {
+                (ThreadOrigin::Root, _, _) => None,
+                (
+                    ThreadOrigin::Comparison { .. },
+                    ManagedDirSource::ImmutableTree { .. },
+                    ManagedDirTarget::Branch { object_id, .. }
+                    | ManagedDirTarget::Detached { object_id },
+                ) => Some(object_id),
+                (
+                    ThreadOrigin::Comparison { .. },
+                    ManagedDirSource::ImmutableTree { .. },
+                    ManagedDirTarget::UnbornBranch {
+                        anchor_object_id, ..
+                    },
+                ) => Some(anchor_object_id),
+                _ => {
+                    return Err(CoreError::InvalidInput(
+                        "comparison requires an immutable Git checkpoint".into(),
+                    ));
+                }
+            };
+            target = ManagedDirTarget::NewBranch {
+                name: name.clone(),
+                base_object_id,
+            };
         }
         self.provision_source(request, source, target)
     }

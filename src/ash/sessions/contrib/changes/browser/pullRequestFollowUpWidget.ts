@@ -1,3 +1,4 @@
+import { ArtifactActivities } from '../../chat/browser/artifactActivities.js';
 import { h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
@@ -37,7 +38,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 	private readonly rows = observableValue<readonly FollowUpRow[]>(this, []);
 	private readonly controls = this._register(new DisposableStore());
 	private readonly subscriptions = this._register(new DisposableStore());
-	private readonly rendered = new Map<string, { element: HTMLElement; button: Button; row: FollowUpRow; busy: boolean; store: DisposableStore; }>();
+	private readonly rendered = new Map<string, { element: HTMLElement; button: Button; row: FollowUpRow; busy: boolean; activities?: ArtifactActivities; store: DisposableStore; }>();
 	private epoch = 0;
 	private selectionKey: string | undefined;
 	private observedBackend: IAutomationBackendService | undefined;
@@ -46,6 +47,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 
 	constructor(
 		container: HTMLElement,
+		private readonly artifact: { readonly sessionId: string; readonly id: string; } | undefined,
 		@ISessionsService private readonly sessions: ISessionsService,
 		@IGitHubService private readonly associations: IGitHubService,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
@@ -89,8 +91,8 @@ export class PullRequestFollowUpWidget extends Disposable {
 			this.loadAgain = false;
 			const epoch = this.epoch;
 			const selected = this.sessions.activeSelection;
-			if (selected?.kind !== 'session') { this.rows.set([], undefined); continue; }
-			const { session, threadId } = selected.active;
+			if (selected?.kind !== 'session' || this.artifact && selected.active.session.sessionId !== this.artifact.sessionId) { this.rows.set([], undefined); continue; }
+			const { session } = selected.active;
 			const directory = session.workspace ? sessionWorkspaceUri(session.workspace).path : undefined;
 			const scope = this.scopes.getScope(session.sessionId);
 			const backend = scope.services.host.automation;
@@ -104,8 +106,9 @@ export class PullRequestFollowUpWidget extends Disposable {
 			if (this.isDisposed || epoch !== this.epoch) continue;
 			scope.assertCurrent();
 			const sessionId = scope.backendIdentity(session.sessionId);
+			const threadId = scope.backendIdentity(selected.active.threadId);
 			const rows = this.associations.getSessionPullRequests(session.sessionId)
-				.filter(pr => pr.state === 'open' || pr.state === 'draft')
+				.filter(pr => (pr.state === 'open' || pr.state === 'draft') && (!this.artifact || pr.artifact?.id === this.artifact.id))
 				.map(pr => {
 					const host = pr.uri.authority.toLowerCase();
 					const owner = pr.owner.toLowerCase();
@@ -124,7 +127,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 			for (const plan of plans) {
 				const target = plan.definition.session;
 				const condition = plan.definition.condition;
-				if (target.type !== 'continue' || target.sessionId !== sessionId || target.threadId !== threadId
+				if (this.artifact && condition?.artifactId !== this.artifact.id || target.type !== 'continue' || target.sessionId !== sessionId || target.threadId !== threadId
 					|| !condition || rows.some(row => row.id === plan.id)) continue;
 				rows.push({
 					id: plan.id, label: `${condition.owner}/${condition.repository} #${condition.number}`,
@@ -170,10 +173,12 @@ export class PullRequestFollowUpWidget extends Disposable {
 					label: localize('sessions.changes.followUpHistory', 'Follow-up history'),
 					onClick: () => this.customViews.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID)
 				}));
-				control = { element, button, row, busy: false, store };
+				const activities = this.artifact ? store.add(new ArtifactActivities(element, row.backend)) : undefined;
+				control = { element, button, row, busy: false, activities, store };
 				this.rendered.set(row.id, control);
 			}
 			control.row = row;
+			control.activities?.setPlan(row.plan);
 			const enabled = row.plan?.status === 'enabled';
 			control.button.label = row.artifactId
 				? (enabled ? localize('sessions.changes.stopArtifactAutopilot', 'Stop PR Autopilot') : localize('sessions.changes.startArtifactAutopilot', 'Enable PR Autopilot'))

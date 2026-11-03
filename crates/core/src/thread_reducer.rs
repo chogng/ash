@@ -638,6 +638,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     && !(snapshot.thread_id.as_str() == snapshot.session_id.as_str()
                         && matches!(&snapshot.origin, ash_protocol::ThreadOrigin::Fork {
                             parent_thread_id, parent_sequence
+                        } | ash_protocol::ThreadOrigin::Comparison {
+                            parent_thread_id, parent_sequence
                         } if parent_thread_id == &source.thread_id && *parent_sequence == source.sequence)
                         || matches!(&snapshot.origin, ash_protocol::ThreadOrigin::SideChat {
                             context_thread_id, context_sequence, ..

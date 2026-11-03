@@ -435,3 +435,121 @@ fn parallel_spawn_uses_the_durable_frozen_tree_after_the_parent_changes() {
         "worker drift\n"
     );
 }
+
+#[test]
+fn comparison_forks_share_the_source_checkpoint_in_distinct_named_worktrees() {
+    use serde_json::json;
+
+    let profile = tempfile::tempdir().unwrap();
+    let repository = tempfile::tempdir().unwrap();
+    let root = repository.path();
+    git(root, &["init", "--quiet", "--initial-branch=main"]);
+    std::fs::create_dir_all(root.join(".ash/agents")).unwrap();
+    for name in ["alpha", "beta"] {
+        std::fs::write(
+            root.join(format!(".ash/agents/{name}.md")),
+            format!("---\nname: {name}\ndescription: Compares changes\n---\n\nCompare changes."),
+        )
+        .unwrap();
+    }
+    std::fs::write(root.join("tracked.txt"), "original\n").unwrap();
+    git(root, &["add", "."]);
+    git(root, &["commit", "--quiet", "-m", "baseline"]);
+    std::fs::write(root.join("tracked.txt"), "source checkpoint\n").unwrap();
+
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_dir_root(root),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let mut call = |id, method, params| {
+        let response: serde_json::Value = serde_json::from_str(&server.handle_json(
+            &mut connection,
+            &json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+        ))
+        .unwrap();
+        assert!(response.get("error").is_none(), "{response}");
+        response["result"].clone()
+    };
+    call(
+        1,
+        "initialize",
+        json!({"clientInfo":{"name":"comparison-test","version":"1"},"capabilities":{}}),
+    );
+    let roles = call(2, "agent/roles/list", json!({}));
+    let source = call(
+        3,
+        "session/create",
+        json!({"commandId":"comparison-source","title":"Source","executionTarget":{"type":"local","root":root}}),
+    );
+    let session = source["session"]["sessionId"].as_str().unwrap();
+    let thread = source["session"]["threads"][0]["threadId"]
+        .as_str()
+        .unwrap();
+    let id = ThreadId::new(thread).unwrap();
+    let sequence = server.threads.read_thread(&id).unwrap().sequence;
+    let runtime = server.git_turn_changes.as_ref().unwrap();
+    let source_dir = runtime.binding(&id).unwrap();
+    std::fs::write(root.join("tracked.txt"), "project changed\n").unwrap();
+    std::fs::write(source_dir.dir().join("tracked.txt"), "source changed\n").unwrap();
+
+    let mut checkouts = Vec::new();
+    for (index, name) in ["alpha", "beta"].into_iter().enumerate() {
+        let role = roles["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|role| role["name"] == name)
+            .unwrap();
+        let branch = format!("ash/compare-{name}");
+        let fork = call(
+            index + 4,
+            "session/request",
+            json!({
+                "sessionId":session,"commandId":format!("comparison-{name}"),
+                "request":{"type":"forkComparison","parentThreadId":thread,"title":name,
+                    "comparison":{"sourceSequence":sequence,"branchName":branch,"agent":{"type":"exact","source":role["source"],"name":name}}}
+            }),
+        );
+        let fork_id = ThreadId::new(fork["value"]["threadId"].as_str().unwrap()).unwrap();
+        let forked = server.threads.read_thread(&fork_id).unwrap();
+        assert_ne!(
+            forked.agent_id,
+            server.threads.read_thread(&id).unwrap().agent_id
+        );
+        assert_eq!(
+            forked
+                .agent_configuration()
+                .unwrap()
+                .role
+                .as_ref()
+                .unwrap()
+                .name,
+            name
+        );
+        let binding = runtime.binding(&fork_id).unwrap();
+        assert_eq!(binding.target_branch(), Some(branch.as_str()));
+        assert_eq!(
+            std::fs::read_to_string(binding.dir().join("tracked.txt")).unwrap(),
+            "source checkpoint\n"
+        );
+        checkouts.push(binding.checkout_root().to_path_buf());
+        if index == 0 {
+            git(source_dir.dir(), &["add", "tracked.txt"]);
+            git(
+                source_dir.dir(),
+                &["commit", "--quiet", "-m", "advance source HEAD"],
+            );
+        }
+    }
+    assert_ne!(checkouts[0], checkouts[1]);
+    assert_eq!(
+        git(&checkouts[0], &["rev-parse", "HEAD"]),
+        git(&checkouts[1], &["rev-parse", "HEAD"]),
+    );
+}

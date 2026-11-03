@@ -52,6 +52,7 @@ export interface IActionListOptions {
 	readonly presentation?: 'menu' | 'details';
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
+	readonly onDidChangeFilter?: (text: string) => void;
 	readonly focusFilterOnOpen?: boolean;
 	readonly filterAsCombobox?: boolean;
 	readonly ariaMultiselectable?: boolean;
@@ -204,7 +205,12 @@ export class ActionList<T> extends Disposable {
 				this.filter.inputElement.setAttribute('aria-haspopup', 'dialog');
 				this.filter.inputElement.setAttribute('aria-controls', this.domNode.id);
 			}
-			this._register(this.filter.onDidChange(() => this.renderItems()));
+			this._register(this.filter.onDidChange(text => {
+				const items = this.items;
+				options.onDidChangeFilter?.(text);
+				// A consumer that replaced the items has already rendered with this filter.
+				if (this.items === items) { this.renderItems(); }
+			}));
 			this._register(this.filter.onKeyDown(event => {
 				if (event.isComposing) {
 					return;

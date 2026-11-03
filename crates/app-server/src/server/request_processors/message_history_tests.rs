@@ -23,7 +23,7 @@ fn message_history_processors_share_profile_inputs_across_trusted_authorities() 
         let entry = writer
             .append(
                 ConnectionAuthority::ProductHost,
-                &json!({"text":"未提交\n输入","kind":kind,"threadId":"informational-origin"}),
+                &json!({"text":"未提交\n输入","kind":kind,"threadId":"informational-origin","scope":if kind == "agent" { Some("session-a") } else { None }}),
             )
             .unwrap();
         assert!(entry["id"].is_string());
@@ -35,6 +35,16 @@ fn message_history_processors_share_profile_inputs_across_trusted_authorities() 
     assert_eq!(history["entries"].as_array().unwrap().len(), 3);
     assert_eq!(history["entries"][0]["kind"], "command");
     assert_eq!(history["entries"][0]["text"], "未提交\n输入");
+    let scoped = reader
+        .read(
+            ConnectionAuthority::Browser,
+            &json!({
+                "scope":"session-a","text":"","limit":20
+            }),
+        )
+        .unwrap();
+    assert_eq!(scoped["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(scoped["entries"][0]["kind"], "agent");
     assert_eq!(
         reader.clear(ConnectionAuthority::Browser).unwrap(),
         Value::Null

@@ -50,7 +50,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		this._register(toDisposable(() => this.host.remove()));
 		this.button = this._register(new Button(this.host, {
 			...defaultButtonStyles, presentation: 'quiet', size: 'small', label: '',
-			onClick: () => this.open(),
+			onClick: () => this.showPicker(),
 		}));
 		this.button.domNode.classList.add('ash-sessions-environment-picker');
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
@@ -58,7 +58,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
 			if (!event.isComposing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
 				stopEvent(event);
-				this.open();
+				this.showPicker();
 			}
 		}));
 		this._register(sessions.onDidChange(() => this.update()));
@@ -110,7 +110,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		this.popup.clear();
 	}
 
-	private open(): void {
+	public showPicker(): void {
 		void this.show().catch(error => {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 		});
@@ -120,18 +120,21 @@ export class SessionEnvironmentPicker extends Disposable {
 		const draft = this.draft;
 		if (!draft || !this.button.enabled) return;
 		if (this.popup.value) { this.close(); return; }
+		if (this.menus.isVisible) return;
+		this.button.focus();
 		const popup = new CancellationTokenSource();
 		this.popup.value = popup;
 		const [savedResult, wslResult] = await Promise.allSettled([
 			this.remoteHosts.isAvailable && this.connections.available ? this.connections.list() : [],
 			this.remoteHosts.isAvailable ? this.remoteHosts.listWSLDistros() : [],
 		]);
+		if (this.popup.value !== popup) return;
+		// Remote discovery can finish after another picker has taken the shared menu.
+		if (this.menus.isVisible || !this.isCurrent(draft)) { this.close(); return; }
 		const saved = savedResult.status === 'fulfilled' ? savedResult.value : [];
-		if (savedResult.status === 'rejected' && this.popup.value === popup && !isCancellationError(savedResult.reason)) {
+		if (savedResult.status === 'rejected' && !isCancellationError(savedResult.reason)) {
 			this.notifications.error(savedResult.reason instanceof Error ? savedResult.reason : String(savedResult.reason));
 		}
-		if (this.popup.value !== popup) return;
-		if (!this.isCurrent(draft)) { this.close(); return; }
 		const providers = this.providers.getProviders();
 		const disconnected = saved.filter(target => !this.findSSHProvider(target, providers));
 		const distros = wslResult.status === 'fulfilled' ? wslResult.value : [];
@@ -219,7 +222,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				kind: ActionListItemKind.Action, label: localize('sessions.environment.newRemote', 'New Remote Environment'),
 				item: async () => {
 					const saved = await this.commands.executeCommand<boolean>('sessions.action.newRemoteEnvironment');
-					if (saved && this.isCurrent(draft) && !this.popup.value) this.open();
+					if (saved && this.isCurrent(draft) && !this.popup.value) this.showPicker();
 				},
 			});
 		}
@@ -237,7 +240,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		});
 		this.menuOpen = true;
 		this.button.domNode.setAttribute('aria-expanded', 'true');
-		this.menus.show('sessionEnvironment', false, items, {
+		this.menus.show('sessionEnvironmentPicker', false, items, {
 			onSelect: async run => {
 				this.menus.hide(false);
 				try { await run(); }

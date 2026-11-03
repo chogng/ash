@@ -143,7 +143,8 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
-import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
+import { ShowSessionsChatHistoryAction } from './actions/sessionsChatActions.js';
+import { NewChatInSessionsWindowAction } from '../contrib/chat/browser/newSessionAction.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -865,6 +866,10 @@ export abstract class Workbench extends Disposable {
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
 		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
+		const focusConversation = (sessionId: string, threadId: string): void => {
+			const selected = view.activeSelection;
+			if (selected?.kind === 'session' && selected.active.session.sessionId === sessionId && selected.active.threadId === threadId) sessionsPart!.focus();
+		};
 		services.registerInstance(IChatSessionNavigationService, {
 			openToolResult: async (sourceSessionId, target, signal) => {
 				const scope = providerScopes.getScope(sourceSessionId);
@@ -899,9 +904,7 @@ export abstract class Workbench extends Disposable {
 				if (!options) { await commandService.executeCommand('sessions.newSession'); return true; }
 				// Select the Agent presentation before creating its mode-scoped draft.
 				if (options?.focus) await commandService.executeCommand('sessions.open.code');
-				const created = options?.providerId
-					? view.openNewSession(localize('chat.sessions.new', 'New Session'), { providerId: options.providerId })
-					: await commandService.executeCommand<IUntitledChatSession | undefined>(NewSessionsChatAction.ID);
+				const created = await commandService.executeCommand<IUntitledChatSession | undefined>(NewChatInSessionsWindowAction.ID, options.providerId);
 				if (!created) return false;
 				if (options?.agent) sessions.setUntitledSessionAgent(created.untitledSessionId, options.agent);
 				if (options?.focus) sessionsPart!.focus();
@@ -911,7 +914,13 @@ export abstract class Workbench extends Disposable {
 			get revision() { return view.navigationRevision; },
 			captureConnection: sessionId => conversationLinks.captureConnection(sessionId),
 			prepareConversationLink: (sessionId, threadId) => conversationLinks.prepare(sessionId, threadId),
-			openConversationLink: async address => { await conversationLinks.open(address, view); },
+			openConversationLink: async (address, options) => {
+				const { sessionId, threadId } = await conversationLinks.open(address, view, options);
+				const selected = view.activeSelection;
+				if (selected?.kind !== 'session' || selected.active.session.sessionId !== sessionId || selected.active.threadId !== threadId) return;
+				if (!layout.isPartVisible('sessions')) await this.showChat();
+				focusConversation(sessionId, threadId);
+			},
 			getActiveConversation: () => {
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
@@ -932,8 +941,12 @@ export abstract class Workbench extends Disposable {
 				// Visible Code and Cowork panes keep their current composition and draft owner.
 				if (!layout.isPartVisible('sessions')) await this.showChat();
 				await view.openThread(sessionId, threadId);
-				const selected = view.activeSelection;
-				if (selected?.kind === 'session' && selected.active.session.sessionId === sessionId && selected.active.threadId === threadId) sessionsPart!.focus();
+				focusConversation(sessionId, threadId);
+			},
+			openSideConversation: async (sessionId, threadId) => {
+				if (!layout.isPartVisible('sessions')) await this.showChat();
+				await view.openThread(sessionId, threadId, { sideBySide: true });
+				focusConversation(sessionId, threadId);
 			},
 			startVoiceConversation: () => sessionsPart!.startVoiceConversation(),
 		});

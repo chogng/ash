@@ -1,5 +1,4 @@
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
+import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitiesControl.js';
 import { h } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -18,6 +17,8 @@ import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agent
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { NewChatInputWidget } from './newChatInput.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
+import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
+import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
 import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
@@ -49,8 +50,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IChatWidgetService widgets: IChatWidgetService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
-		@IEditorService editors: IEditorService,
 	) {
+		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
 			(inputContainer, delegate) => instantiationService.createInstance(NewChatInputWidget, inputContainer, {
@@ -76,36 +77,16 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 					}
 				},
 			}, model), {
-			promptTimelineFiles: prompt => {
-				const source = prompt.requestSource;
-				if (!source || source.sessionId !== model.sessionId || source.threadId !== model.threadId) return [];
-				return model.changeSets.filter(summary => summary.turnId === source.turnId && summary.captureState !== 'discarded')
-					.flatMap(summary => model.turnChangeDetails(summary.changeSetId)?.files.map(file => ({
-						id: JSON.stringify([summary.changeSetId, file.path]),
-						path: file.path,
-						review: async () => {
-							try {
-								const review = await model.createPromptChangeReview(summary, file.path);
-								if (!review) return;
-								await editors.openEditor(review.input, {
-									pinned: true, viewState: {
-										revealData: { resource: { original: review.item.original.resource, modified: review.item.modified.resource } },
-									}
-								});
-							} catch (error) {
-								if (!isCancellationError(error)) notifications.error(error instanceof Error ? error : String(error));
-							}
-						},
-					})) ?? []);
-			},
+			promptTimelineFiles: prompt => turnChanges.getChangesForRequest(prompt),
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;
 		parent.classList.add('ash-sessions-chat-input', 'floating-card', 'chat-composer');
-		const pullRequests = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, model));
-		parent.insertBefore(pullRequests.domNode, inputContainer);
-		pullRequests.render();
+		const toolbar = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, model, () => this.input.focus()));
+		parent.insertBefore(toolbar.element, inputContainer);
+		const activities = this._register(instantiationService.createInstance(SessionBackgroundActivitiesControl, parent, model));
+		parent.insertBefore(activities.element, inputContainer);
 		const tipContainer = h(parent.ownerDocument, 'div', { className: 'ash-sessions-chat-tip-slot' });
 		parent.insertBefore(tipContainer, inputContainer);
 		this._register(toDisposable(() => tipContainer.remove()));
@@ -122,14 +103,28 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		parent.append(footer);
 		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
+		const pickersAvailable = NewSessionPickersAvailableContext.bindTo(this.scopedContextKeys);
+		const updatePickerAvailability = () => pickersAvailable.set(this.visible && !!model.untitledSessionId
+			&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting');
+		this._register(this.onDidChangeVisibility(updatePickerAvailability));
 		this._register(model.onDidChange(() => {
+			updatePickerAvailability();
 			if (this.composerThreadId !== model.threadId && this.composerThreadId !== undefined) {
 				this.submittedInput = false;
 			}
 			this.composerThreadId = model.threadId;
 			this.updateComposer();
 		}));
+		updatePickerAvailability();
 		this.updateComposer();
+	}
+
+	focusWorkspacePicker(): void {
+		if (this.visible) { this.workspacePicker.showPicker(); }
+	}
+
+	focusEnvironmentPicker(): void {
+		if (this.visible) { this.environmentPicker.showPicker(); }
 	}
 
 	private updateComposer(): void {

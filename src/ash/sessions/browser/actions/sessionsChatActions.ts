@@ -6,17 +6,13 @@ import { Action2, registerAction2 } from '../../../platform/actions/common/actio
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
-import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
-import type { IUntitledChatSession, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import type { SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
-import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
-import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
@@ -115,45 +111,6 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 		picker.show();
 	});
 }
-
-// Shared Chat actions reach this window's creation policy through its navigation service.
-export class NewSessionsChatAction extends Action2 {
-	static readonly ID = 'sessions.chat.new';
-
-	constructor() {
-		super({ id: NewSessionsChatAction.ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<IUntitledChatSession | undefined> {
-		return accessor.get(ISessionsService).openNewSession(localize('chat.sessions.new', 'New Session'));
-	}
-}
-registerAction2(NewSessionsChatAction);
-
-registerAction2(class NewSessionFromNavigationAction extends Action2 {
-	constructor() {
-		super({ id: 'sessions.newSession', title: localize2('sessions.activity.new', 'New') });
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const commands = accessor.get(ICommandService);
-		const mode = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key);
-		const entryCommand = accessor.get(ISessionsLayoutService).newSessionCommand;
-		if (entryCommand) {
-			await commands.executeCommand(entryCommand);
-			return;
-		}
-		if (mode !== 'code' && CommandsRegistry.hasCommand('sessions.open.new')) {
-			await commands.executeCommand('sessions.open.new');
-			return;
-		}
-		const created = await commands.executeCommand<IUntitledChatSession | undefined>(NewSessionsChatAction.ID);
-		if (created) {
-			await commands.executeCommand(mode === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
-			accessor.get(ILayoutService).focus();
-		}
-	}
-});
 
 interface SessionsHistoryQuickPickItem extends IQuickPickItem {
 	readonly sessionId: SessionId;

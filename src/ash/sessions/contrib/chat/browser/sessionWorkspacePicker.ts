@@ -1,3 +1,4 @@
+import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
 import { URI } from '../../../../base/common/uri.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
@@ -31,7 +32,14 @@ import { ISessionsProvidersService } from '../../../services/sessions/browser/se
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession, SessionExecutionTarget } from '../../../services/sessions/common/session.js';
 
+const MAX_NEW_PICKER_RECENT_WORKSPACES = 10;
+
+interface IWorkspacePickerAction extends IAction {
+	readonly recent?: boolean;
+}
+
 interface IWorkspaceModeItem {
+	readonly recent?: boolean;
 	readonly label: string;
 	readonly description?: string;
 	readonly picked?: boolean;
@@ -42,6 +50,7 @@ interface IWorkspaceModeItem {
 /** Edits the owning draft; container startup remains part of first-send preparation. */
 export class SessionWorkspacePicker extends Disposable {
 	private readonly picker: WorkspacePicker;
+	private readonly workspaceFallback: SessionWorkspaceFallback;
 	private readonly presentationChanged = this._register(new Emitter<void>());
 	private label = '';
 	private tooltip = '';
@@ -69,6 +78,7 @@ export class SessionWorkspacePicker extends Disposable {
 		container.prepend(host);
 		this._register(toDisposable(() => host.remove()));
 		const owner = this;
+		this.workspaceFallback = instantiation.createInstance(SessionWorkspaceFallback);
 		this.picker = this._register(instantiation.createInstance(WorkspacePicker, {
 			trigger: {
 				actionWidget,
@@ -77,7 +87,7 @@ export class SessionWorkspacePicker extends Disposable {
 					get label() { return owner.label; },
 					get tooltip() { return owner.tooltip; },
 					get enabled() { return owner.enabled; },
-					run: () => this.show(),
+					run: () => this.showPicker(),
 				},
 				onDidChange: this.presentationChanged.event,
 				placeholder: localize('sessions.workspace.searchFolders', 'Search folders'),
@@ -122,14 +132,16 @@ export class SessionWorkspacePicker extends Disposable {
 		this.presentationChanged.fire();
 	}
 
-	private show(): void {
+	public showPicker(): void {
 		const draft = this.draft;
 		if (!draft || !this.enabled || !this.visible) { return; }
 		this.pending.clear();
+		this.picker.focus();
 		this.pickerDraft = draft;
 		const selected = draft.workspace.type === 'current' ? selectionFromWorkspace(this.workspace.getWorkspace()) : draft.workspace;
 		const source = selected.type === 'local' || selected.type === 'ssh' || selected.type === 'remote' ? selected : undefined;
-		const toAction = (item: IWorkspaceModeItem): IAction => ({
+		const toAction = (item: IWorkspaceModeItem): IWorkspacePickerAction => ({
+			recent: item.recent,
 			id: `sessions.workspace.${item.mode}.${item.target?.root ?? ''}`,
 			label: item.label, tooltip: item.description ?? '', enabled: true, checked: item.picked,
 			icon: item.mode === 'folder' || item.mode === 'browse' ? Lxicon.folder : undefined,
@@ -179,12 +191,19 @@ export class SessionWorkspacePicker extends Disposable {
 			for (const result of [containerResult, worktreeResult]) {
 				if (result.status === 'rejected' && !isCancellationError(result.reason)) { this.notifications.error(result.reason); }
 			}
-			const foldersToShow = historyResult.status === 'fulfilled' ? [...candidates, ...historyResult.value] : candidates;
-			const folderActions = foldersToShow.map(folder => toAction({
-				label: folder.label, description: folder.target.root, mode: 'folder', target: folder.target,
+			const folderAction = (folder: typeof candidates[number], recent: boolean) => toAction({
+				recent, label: folder.label, description: folder.target.root, mode: 'folder', target: folder.target,
 				picked: source?.type === folder.target.type && source.root === folder.target.root,
-			}));
-			return [...folderActions, ...actions, ...items.map(toAction)];
+			});
+			const recents = historyResult.status === 'fulfilled' ? historyResult.value : [];
+			const known = new Set([...candidates, ...recents].map(({ target }) => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!).toString()));
+			const sessionFolders = this.workspaceFallback.getWorkspaces(draft.providerId, known, accepts);
+			return [
+				...candidates.map(folder => folderAction(folder, false)),
+				...[...recents, ...sessionFolders].map(folder => folderAction(folder, true)),
+				...actions,
+				...items.map(toAction),
+			];
 		});
 	}
 
@@ -314,25 +333,31 @@ export class WorkspacePicker extends Disposable {
 	}
 
 	/** Show immediate choices while loading provider capabilities within this popup's cancellation scope. */
-	public showPicker(actions: readonly IAction[], loadActions?: (token: CancellationToken) => Promise<readonly IAction[]>): void {
+	public showPicker(actions: readonly IWorkspacePickerAction[], loadActions?: (token: CancellationToken) => Promise<readonly IWorkspacePickerAction[]>): void {
 		if (this.isDisposed || !this.options.trigger!.action.enabled || this.popup.value) { return; }
 		const lifetime = new DisposableStore();
 		this.popup.value = lifetime;
 		const cancellation = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => cancellation.dispose(true)));
 		const widget = this.options.trigger!.actionWidget;
-		const toItems = (choices: readonly IAction[]): IActionListItem<IAction>[] => choices.map(action => ({
-			kind: ActionListItemKind.Action, id: action.id, label: action.label, description: action.tooltip,
-			disabled: !action.enabled, checked: action.checked, item: action,
-			group: action.icon ? { title: '', icon: action.icon } : undefined,
-		}));
+		let choices = actions;
+		let searching = false;
+		const toItems = (): IActionListItem<IAction>[] => {
+			let recentCount = 0;
+			return choices.filter(action => searching || !action.recent || ++recentCount <= MAX_NEW_PICKER_RECENT_WORKSPACES).map(action => ({
+				kind: ActionListItemKind.Action, id: action.id, label: action.label, description: action.tooltip,
+				disabled: !action.enabled, checked: action.checked, item: action,
+				group: action.icon ? { title: '', icon: action.icon } : undefined,
+			}));
+		};
+		const refresh = (): void => widget.updateItems(toItems(), { preserveScrollPosition: true });
 		this.button.domNode.setAttribute('aria-expanded', 'true');
 		lifetime.add(toDisposable(() => {
 			this.button.domNode.setAttribute('aria-expanded', 'false');
 			widget.hide();
 			if (this.restoreFocus && !this.isDisposed && this.button.domNode.isConnected) { this.focus(); }
 		}));
-		widget.show('sessionWorkspacePicker', false, toItems(actions), {
+		widget.show('sessionWorkspacePicker', false, toItems(), {
 			onHide: () => {
 				if (this.popup.value === lifetime) { this.hide(); }
 			},
@@ -344,13 +369,21 @@ export class WorkspacePicker extends Disposable {
 			},
 		}, this.button.domNode, {
 			showFilter: true,
+			onDidChangeFilter: text => {
+				const nextSearching = text.trim().length > 0;
+				if (searching === nextSearching || cancellation.token.isCancellationRequested) { return; }
+				searching = nextSearching;
+				refresh();
+			},
 			focusFilterOnOpen: true,
 			filterPlaceholder: this.options.trigger!.placeholder,
 			ariaLabel: this.options.trigger!.placeholder,
 		});
 		if (loadActions) {
-			void loadActions(cancellation.token).then(choices => {
-				if (!cancellation.token.isCancellationRequested) { widget.updateItems(toItems(choices), { preserveScrollPosition: true }); }
+			void loadActions(cancellation.token).then(loaded => {
+				if (cancellation.token.isCancellationRequested) { return; }
+				choices = loaded;
+				refresh();
 			}).catch(error => {
 				if (!cancellation.token.isCancellationRequested) { this.reportError(error); }
 			});

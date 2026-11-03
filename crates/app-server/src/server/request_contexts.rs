@@ -801,10 +801,11 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         mutation: super::operations::SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>
     {
         self.session_processor()
-            .fork_session_request(mutation, parent_thread_id, title)
+            .fork_session_request(mutation, parent_thread_id, title, comparison)
     }
     fn local_env_tool_ports(
         &self,
@@ -909,7 +910,7 @@ impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer 
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>
     {
         self.session_processor()
-            .fork_session_request(mutation, parent_thread_id, title)
+            .fork_session_request(mutation, parent_thread_id, title, None)
     }
     fn read_session_thread_snapshot(
         &self,

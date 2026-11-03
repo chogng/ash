@@ -832,6 +832,30 @@ suite('sessionGitHub browser component', () => {
 		await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
 	});
 
+	test('recorded PR artifact details describe the authorized effect and cancel without merging', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?artifactDetails');
+		const trigger = page.getByRole('button', { name: 'Pull request actions for team/one #7', exact: true });
+		await trigger.focus();
+		await trigger.press('Enter');
+		const panel = page.getByRole('dialog', { name: 'Merge actions for team/one #7' });
+		const merge = panel.getByRole('button', { name: 'Create a merge commit', exact: true });
+		await panel.getByText('Activities', { exact: true }).click();
+		await expect(panel.getByText('No activities yet.')).toBeVisible();
+		await panel.getByRole('button', { name: 'Enable PR Autopilot' }).click();
+		await expect(panel.getByRole('button', { name: 'Stop PR Autopilot' })).toBeVisible();
+		await expect(panel.getByRole('listitem')).toHaveText(/Completed/);
+		await expect(merge).toHaveAccessibleDescription(/Merge commit .* into main now/);
+		await page.keyboard.press('Escape');
+		await expect(panel).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge'))).toHaveLength(0);
+
+		await trigger.press('Enter');
+		await merge.click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').length)).toBe(1);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`PR follow-up persists its source, stops from the keyboard and opens history in ${locale}`, async function () {
 			const { page } = browserTests;

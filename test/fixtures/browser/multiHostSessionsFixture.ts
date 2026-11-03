@@ -15,14 +15,19 @@ import { ISessionsManagementService } from '../../../src/ash/sessions/services/s
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import type { ISessionsProvider } from '../../../src/ash/sessions/services/sessions/common/sessionsProvider.js';
 import type { ISession, SessionWorkspaceSelection } from '../../../src/ash/sessions/services/sessions/common/session.js';
-import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { buildOpenSessionLinkUri } from '../../../src/ash/platform/agentHost/common/openSessionLink.js';
+import { sessionIdentity, sessionProviderAuthority } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import type { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 
 /** Exercises the complete browser Workbench bootstrap with domain-owned fake hosts. */
-export function installMultiHostSessionsFixture(): { open(host: string, sideBySide?: boolean): Promise<void>; disconnect(host: string): void; activeProvider(): string | undefined; calls: { host: string; method: string; sessionId: string; threadId: string; }[]; } {
+export function installMultiHostSessionsFixture(): { open(host: string, sideBySide?: boolean): Promise<void>; openLink(host: string, sideBySide?: boolean, threadId?: string): Promise<boolean>; disconnect(host: string): void; activeProvider(): string | undefined; calls: { host: string; method: string; sessionId: string; threadId: string; }[]; } {
 	const calls: { host: string; method: string; sessionId: string; threadId: string; }[] = [];
 	let services: InstantiationService;
 	const registrations = new Map<string, { dispose(): void; }>();
+	const params = new URL(location.href).searchParams;
+	const sideThreads = params.has('sideThreads');
+	const background = params.has('backgroundActivities');
 	registerWorkbenchServiceContribution({
 		service: createServiceIdentifier<object>('test.multiHostSessionsFixture'),
 		dependencies: [ISessionsProvidersService, ISessionsManagementService, ISessionsService],
@@ -36,7 +41,7 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 				const model: ModelCatalogEntry = { model: { provider: 'fixture', model: name }, displayName: `${name} model`, longContext: null };
 				const usage: Thread['usage'] = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
 				const read = (sessionId: string, threadId: string): ThreadRead => ({ thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId, threadId, title: name, status: 'active', sequence: 1, usage, turns: [] }, transcript: { sessionId, threadId, durableSequence: 1, revision: 1, entries: [] } });
-				const record = (method: string, sessionId: string, threadId: string): void => { if (sessionId !== 'same' || threadId !== 'same') throw new Error('A qualified identity reached a host'); calls.push({ host: name, method, sessionId, threadId }); };
+				const record = (method: string, sessionId: string, threadId: string): void => { if (sessionId !== 'same' || (threadId !== 'same' && !(sideThreads && threadId === 'side'))) throw new Error('A qualified identity reached a host'); calls.push({ host: name, method, sessionId, threadId }); };
 				const chat = {
 					onDidSubmitRequest: Event.None, onDidChangeSession: Event.None, onDidUpdateThread: Event.None, onDidUpdateThreadTranscript: Event.None, onDidUpdateGoal: Event.None, onDidBecomeReady: Event.None, onDidUpdateTurnChanges: Event.None, onDidChangeQueue: Event.None, onDidChangeInteractionOffer: Event.None,
 					getInteractionOffer: () => undefined, listSlashCommands: async () => [], readAdvisorDefault: async () => null,
@@ -60,6 +65,7 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 				const automation = name === 'Host A' && new URL(location.href).searchParams.has('search') ? globalThis.ashWebWorkbenchHost?.api.automation : undefined;
 				child.registerInstance(IAgentConnection, {
 					...host,
+					appServer: { ...host.appServer, getConnectionState: async () => 'ready' },
 					automation,
 					agentCapabilities: {
 						isAvailable: true,
@@ -72,7 +78,15 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
 				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
-				const session: ISession = { sessionId: 'same', title: `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }], agentTree: [] };
+				const session: ISession = { sessionId: 'same', title: `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }, ...(sideThreads ? [{ threadId: 'side', status: 'active' as const, origin: { type: 'root' as const } }] : [])], agentTree: background ? [{
+					threadId: 'side', threadSequence: 1, title: 'Research worker',
+					origin: { type: 'agentSpawn', parentThreadId: 'same', parentSequence: 1, delegationId: 'delegate' },
+					membershipStatus: 'active', executionStatus: 'running', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [{
+						threadId: 'nested', threadSequence: 1, title: 'Nested worker',
+						origin: { type: 'agentSpawn', parentThreadId: 'side', parentSequence: 1, delegationId: 'nested' },
+						membershipStatus: 'active', executionStatus: 'queued', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [],
+					}],
+				}] : [] };
 				const provider = Object.assign(lifetime.add(new class extends Disposable { }()), {
 					automations,
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
@@ -99,6 +113,8 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 			}
 			await view.openThread(sessionIdentity(name, 'same', 'local-agent-host'), sessionIdentity(name, 'same', 'local-agent-host'));
 		},
+		openLink: (name, sideBySide, threadId = 'same') => services.get(IOpenerService).open(
+			buildOpenSessionLinkUri('same', threadId, sessionProviderAuthority(name, 'local-agent-host')), { openToSide: sideBySide }),
 		disconnect: name => registrations.get(name)?.dispose(),
 	};
 }

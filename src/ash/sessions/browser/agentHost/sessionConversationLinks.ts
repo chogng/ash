@@ -48,7 +48,10 @@ export class SessionConversationLinks {
 	async open(
 		address: OpenSessionLink,
 		navigation: Pick<ISessionsService, 'navigationRevision' | 'openThread'>,
-		connectMissingHost?: (providerId: string, assertCurrent: () => void) => Promise<boolean>,
+		options?: {
+			readonly connectMissingHost?: (providerId: string, assertCurrent: () => void) => Promise<boolean>;
+			readonly sideBySide?: boolean;
+		},
 	): Promise<{ readonly sessionId: string; readonly threadId: string; }> {
 		const providerId = parseSessionProviderAuthority(address.connectionAuthority, this.defaultProviderId);
 		const revision = navigation.navigationRevision;
@@ -59,7 +62,7 @@ export class SessionConversationLinks {
 			this.scopes.getProviderScope(providerId);
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
-			if (!await connectMissingHost?.(providerId, assertCurrent)) {
+			if (!await options?.connectMissingHost?.(providerId, assertCurrent)) {
 				throw new Error(localize('chat.sessionLink.connection', 'The connection for this conversation link is unavailable.'));
 			}
 			assertCurrent();
@@ -69,7 +72,7 @@ export class SessionConversationLinks {
 		const threadId = sessionIdentity(providerId, address.threadId, this.defaultProviderId);
 		await this.prepare(sessionId, threadId);
 		assertCurrent();
-		await navigation.openThread(sessionId, threadId);
+		await navigation.openThread(sessionId, threadId, options?.sideBySide ? { sideBySide: true } : undefined);
 		return { sessionId, threadId };
 	}
 }

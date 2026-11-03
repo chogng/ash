@@ -27,6 +27,7 @@ pub struct MessageHistorySubmission {
     pub kind: MessageHistoryKind,
     /// Informational origin; records are not owned by, or foreign-keyed to, a Thread.
     pub thread_id: Option<String>,
+    pub scope: Option<String>,
 }
 
 impl MessageHistorySubmission {
@@ -44,7 +45,7 @@ impl MessageHistorySubmission {
         {
             return Err("Input history Thread identity is invalid".into());
         }
-        Ok(())
+        validate_scope(self.scope.as_deref())
     }
 }
 
@@ -58,6 +59,7 @@ pub struct MessageHistoryEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MessageHistoryQuery {
+    pub scope: Option<String>,
     /// Exclusive older-page boundary. New appends do not change an existing cursor.
     pub before: Option<u64>,
     /// Literal, Unicode-lowercased substring matching; empty text selects all entries.
@@ -69,6 +71,7 @@ pub struct MessageHistoryQuery {
 impl Default for MessageHistoryQuery {
     fn default() -> Self {
         Self {
+            scope: None,
             before: None,
             text: String::new(),
             kind: None,
@@ -88,8 +91,15 @@ impl MessageHistoryQuery {
         {
             return Err("Input history cursor is invalid".into());
         }
-        Ok(())
+        validate_scope(self.scope.as_deref())
     }
+}
+
+fn validate_scope(scope: Option<&str>) -> Result<(), String> {
+    if scope.is_some_and(|scope| scope.is_empty() || scope.len() > 4096) {
+        return Err("Input history scope is invalid".into());
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

@@ -2252,6 +2252,8 @@ use crate::protocol::secrets::SecretStorageType;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::AdvisorConfigureResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ComparisonForkParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsResult;
@@ -7075,6 +7077,7 @@ typescript_bindings! {
     SessionExecutionTarget,
     ApprovalMode,
     SessionCreateParams,
+    ComparisonForkParams,
     SessionRuntimeParams,
     SessionRuntimeCancelParams,
     SessionRuntimeResult,

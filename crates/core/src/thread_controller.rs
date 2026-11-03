@@ -231,6 +231,7 @@ pub struct CreateThreadRequest {
 enum ForkDestination {
     CurrentSession,
     NewSession,
+    Comparison(core_api::ComparisonFork),
 }
 
 pub struct CreateRewoundThreadRequest {
@@ -944,6 +945,19 @@ impl ThreadController {
         self.fork_into(binder, request, ForkDestination::NewSession)
     }
 
+    pub fn fork_comparison(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+        comparison: core_api::ComparisonFork,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        comparison
+            .agent
+            .validate()
+            .map_err(|error| CoreError::InvalidInput(error.into()))?;
+        self.fork_into(binder, request, ForkDestination::Comparison(comparison))
+    }
+
     fn fork_into(
         &self,
         binder: &dyn ThreadWorktreeBinder,
@@ -951,43 +965,85 @@ impl ThreadController {
         destination: ForkDestination,
     ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
-        let prefix = match destination {
+        let prefix = match &destination {
             ForkDestination::CurrentSession => "fork",
             ForkDestination::NewSession => "session-fork",
+            ForkDestination::Comparison(_) => "comparison-fork",
+        };
+        let comparison = match &destination {
+            ForkDestination::Comparison(comparison) => Some(comparison),
+            _ => None,
         };
         let thread_id = command_thread_id(prefix, &request.command_id)?;
         if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
-            if matches!(&binding.origin, ThreadOrigin::Fork { parent_thread_id, .. } if parent_thread_id == &request.source_thread_id)
-            {
+            let matches_source = match (&binding.origin, comparison) {
+                (
+                    ThreadOrigin::Fork {
+                        parent_thread_id, ..
+                    },
+                    None,
+                ) => parent_thread_id == &request.source_thread_id,
+                (
+                    ThreadOrigin::Comparison {
+                        parent_thread_id,
+                        parent_sequence,
+                    },
+                    Some(options),
+                ) => {
+                    parent_thread_id == &request.source_thread_id
+                        && *parent_sequence == options.source_sequence
+                }
+                _ => false,
+            };
+            if matches_source {
                 let snapshot = self.read_thread(&thread_id)?;
-                if snapshot.title == request.title {
+                if snapshot.title == request.title
+                    && comparison.is_none_or(|options| {
+                        snapshot.agent_configuration() == Some(&options.agent)
+                    })
+                {
+                    if let Some(options) = comparison {
+                        binder.provision(&ThreadWorktreeBindingRequest {
+                            session_id: snapshot.session_id.clone(),
+                            thread_id,
+                            origin: binding.origin,
+                            branch_name: Some(options.branch_name.clone()),
+                        })?;
+                    }
                     return Ok(snapshot);
                 }
             }
             return Err(CoreError::CommandConflict);
         }
-        let source = self.read_thread(&request.source_thread_id)?;
-        let session_id = match destination {
+        let source = match comparison {
+            Some(options) => {
+                self.load_snapshot_at_sequence(&request.source_thread_id, options.source_sequence)?
+            }
+            None => self.read_thread(&request.source_thread_id)?,
+        };
+        let session_id = match &destination {
             ForkDestination::CurrentSession => source.session_id.clone(),
-            ForkDestination::NewSession => SessionId::new(thread_id.as_str())
-                .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+            ForkDestination::NewSession | ForkDestination::Comparison(_) => {
+                SessionId::new(thread_id.as_str())
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?
+            }
         };
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
-            branch_name: None,
-            origin: ThreadOrigin::Fork {
-                parent_thread_id: source.thread_id.clone(),
-                parent_sequence: source.sequence,
-            },
+            branch_name: comparison.map(|options| options.branch_name.clone()),
+            origin: fork_origin(&source.thread_id, source.sequence, comparison.is_some()),
         })?;
-        self.create_forked_thread(CreateForkedThreadRequest {
-            session_id,
-            thread_id,
-            title: request.title,
-            source_thread_id: source.thread_id,
-            source_sequence: source.sequence,
-        })
+        self.create_forked_thread_with_agent(
+            CreateForkedThreadRequest {
+                session_id,
+                thread_id,
+                title: request.title,
+                source_thread_id: source.thread_id,
+                source_sequence: source.sequence,
+            },
+            comparison.map(|options| &options.agent),
+        )
     }
 
     /// Rewinds one durable Thread into a new branch before the selected Turn.
@@ -1083,6 +1139,14 @@ impl ThreadController {
         &self,
         request: CreateForkedThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
+        self.create_forked_thread_with_agent(request, None)
+    }
+
+    fn create_forked_thread_with_agent(
+        &self,
+        request: CreateForkedThreadRequest,
+        agent: Option<&ash_protocol::AgentConfiguration>,
+    ) -> Result<ThreadSnapshot, CoreError> {
         let source =
             self.load_snapshot_at_sequence(&request.source_thread_id, request.source_sequence)?;
         if source.session_id != request.session_id
@@ -1103,12 +1167,13 @@ impl ThreadController {
         let reference = prefix.reference().map_err(CoreError::Journal)?;
         self.create_thread_with_history(
             CreateThreadRequest {
-                agent_id: source.agent_id.clone(),
-                origin: ThreadOrigin::Fork {
-                    parent_thread_id: source.thread_id.clone(),
-                    parent_sequence: request.source_sequence,
+                agent_id: if agent.is_some() {
+                    self.select_agent_id(None, &request.thread_id)?
+                } else {
+                    source.agent_id.clone()
                 },
-                agent: source.agent_configuration().cloned(),
+                origin: fork_origin(&source.thread_id, request.source_sequence, agent.is_some()),
+                agent: agent.or_else(|| source.agent_configuration()).cloned(),
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
@@ -3743,6 +3808,25 @@ fn validate_thread_expectation(
                 expected,
                 actual,
             }))
+        }
+    }
+}
+
+fn fork_origin(
+    source_thread_id: &ThreadId,
+    parent_sequence: u64,
+    comparison: bool,
+) -> ThreadOrigin {
+    let parent_thread_id = source_thread_id.clone();
+    if comparison {
+        ThreadOrigin::Comparison {
+            parent_thread_id,
+            parent_sequence,
+        }
+    } else {
+        ThreadOrigin::Fork {
+            parent_thread_id,
+            parent_sequence,
         }
     }
 }

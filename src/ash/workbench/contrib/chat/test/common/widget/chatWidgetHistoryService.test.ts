@@ -77,3 +77,27 @@ test('Chat history search selection does not append or send and keeps the origin
 	await navigator.record('/config', 'command');
 	assert.deepEqual(appended, ['/config']);
 });
+
+test('Chat history uses the active Session scope for recall, search and recording', async () => {
+	const reads: MessageHistoryQuery[] = [];
+	const api = service(async query => {
+		reads.push(query);
+		return { entries: [entry('1')] };
+	});
+	const scopes: (string | undefined)[] = [];
+	api.append = async submission => {
+		scopes.push(submission.scope);
+		return { ...submission, id: 'new', submittedAtMs: 1 };
+	};
+	using navigator = new ChatHistoryNavigator<string>(api);
+	navigator.setScope('host-a/session');
+	await navigator.previous('draft');
+	navigator.setScope('host-b/session');
+	assert.equal(navigator.active, false);
+	await navigator.search('question');
+	await navigator.record('answer', 'agent');
+	navigator.setScope(undefined);
+	await navigator.search('');
+	assert.deepEqual(reads.map(query => query.scope), ['host-a/session', 'host-b/session', undefined]);
+	assert.deepEqual(scopes, ['host-b/session']);
+});

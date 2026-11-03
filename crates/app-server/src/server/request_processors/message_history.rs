@@ -43,6 +43,7 @@ impl MessageHistoryRequestProcessor {
             text: params.text,
             kind: kind(params.kind),
             thread_id: params.thread_id,
+            scope: params.scope,
         };
         submission.validate().map_err(|_| invalid())?;
         result(&entry(
@@ -67,6 +68,7 @@ impl MessageHistoryRequestProcessor {
             })
             .transpose()?;
         let query = MessageHistoryQuery {
+            scope: params.scope,
             before,
             text: params.text,
             kind: params.kind.map(kind),

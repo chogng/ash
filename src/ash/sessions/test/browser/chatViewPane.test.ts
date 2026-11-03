@@ -18,6 +18,8 @@ import { emptyEditorGroupsService } from '../../../workbench/test/common/testWor
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { ISessionChangesService } from '../../contrib/changes/common/sessionChangesService.js';
+import { IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../platform/remote/common/remoteConnectionService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
@@ -86,7 +88,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
@@ -1170,6 +1172,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const parentServices = resources.add(createInputServices(contextView, chat));
 		const services = resources.add(parentServices.createChild());
 		services.registerInstance(ISessionsManagementService, sessions);
+		services.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 		const storage = resources.add(createTestStorage());
 		const notices = resources.add(new TestNotificationService());
 		services.registerInstance(IStorageService, storage);
@@ -1198,6 +1201,8 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 	const fixture = await sessionsInputFixture();
 	try {
 		fixture.input.dispose();
+		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
+		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
@@ -1513,6 +1518,8 @@ test('sending from one session preserves a later draft during first-session crea
 	registerTestExtensionService(editorResources, editorRoot);
 	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
+	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
@@ -3537,13 +3544,32 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 	await assert.rejects(model.selectReasoningEffort('medium'), /Select a model/);
 });
 
-test('New Chat keeps its thinking effort when it creates a Thread', async () => {
+for (const phase of ['creating the Session', 'loading the Thread'] as const) test(`New Chat keeps its accepted model and effort while ${phase}`, async () => {
 	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }] as const };
 	const fake = fakeApi({
 		models: [entry],
 		createSession: session('session-1', undefined, 'New Chat'),
 		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
 	});
+	const preparing = new DeferredPromise<void>();
+	const finishPreparation = new DeferredPromise<void>();
+	const pause = async () => {
+		await preparing.complete();
+		await finishPreparation.p;
+	};
+	if (phase === 'creating the Session') {
+		const create = fake.api.session.create;
+		fake.api.session.create = async (...args) => {
+			await pause();
+			return create(...args);
+		};
+	} else {
+		const subscribe = fake.api.thread.subscribe;
+		fake.api.thread.subscribe = async (...args) => {
+			await pause();
+			return subscribe(...args);
+		};
+	}
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
@@ -3553,10 +3579,20 @@ test('New Chat keeps its thinking effort when it creates a Thread', async () => 
 	await model.selectModel(entry.model);
 	model.selectUntitledSession(sessions.untitledSessions.find(session => session.untitledSessionId === untitled.untitledSessionId)!);
 	await model.selectReasoningEffort('high');
-	await model.send('Use high effort');
+	const sending = model.send('Use high effort');
+	await Promise.race([preparing.p, sending]);
+	assert.equal(preparing.isResolved, true);
+	try {
+		await model.selectAutomaticModel();
+	} finally {
+		await finishPreparation.complete();
+		await sending;
+	}
 
+	assert.deepEqual(fake.turnStartRequests[0]?.model, entry.model);
 	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
-	assert.equal(model.inputState.selectedReasoningEffort, 'high');
+	assert.equal(model.inputState.isAutomaticModel, true);
+	assert.equal(model.inputState.selectedReasoningEffort, undefined);
 });
 
 test('ChatWidgetModel Auto retains the configured profile model and leaves Turn resolution to the backend', async () => {
@@ -5962,6 +5998,7 @@ for (const kind of ['session', 'untitled'] as const) {
 }
 
 test('Chat restores opened tabs and leaves closed sessions available in the catalog', async () => {
+	using tracking = installDisposableTracker(new DisposableTracker());
 	using storage = createTestStorage();
 	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
 	const { pane, sessions, dom } = fixture;

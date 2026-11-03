@@ -29,6 +29,12 @@ pub enum ThreadOrigin {
         #[ts(type = "number")]
         parent_sequence: u64,
     },
+    /// A separate Session and Agent using the same immutable source history and code checkpoint.
+    Comparison {
+        parent_thread_id: ThreadId,
+        #[ts(type = "number")]
+        parent_sequence: u64,
+    },
     /// A user side question, with a visible source and an immutable inherited context.
     SideChat {
         parent_thread_id: ThreadId,

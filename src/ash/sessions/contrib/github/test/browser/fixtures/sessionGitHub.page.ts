@@ -1,3 +1,4 @@
+import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
 import type { Automation } from '../../../../../../platform/automations/common/automation.js';
 import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
@@ -130,7 +131,16 @@ class Transport implements AppServerTransport {
 				break;
 			}
             case 'automation/list': this.reply(request, { automations: this.plans }); break;
-            case 'automation/runs': this.reply(request, { runs: [] }); break;
+            case 'automation/runs': {
+				const plan = this.plans.find(value => value.id === request.params.id);
+				const time = Date.now();
+				this.reply(request, { runs: plan && new URL(location.href).searchParams.has('artifactDetails') ? [{
+					id: 'fixture-run', automationId: plan.id, revision: plan.revision, definition: plan.definition,
+					scheduledAt: time, createdAt: time, startedAt: time, finishedAt: time,
+					status: 'completed', sessionId: 'session', threadId: 'thread', turnId: null, message: null,
+				}] : [] });
+				break;
+			}
             case 'automation/write': {
                 const p = request.params;
                 const previous = this.plans.find(plan => plan.id === p.id);
@@ -194,7 +204,14 @@ resources.add(setARIAContainer(document.body));
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
+if (new URL(location.href).searchParams.has('artifactDetails')) {
+	sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
+		repository: { host: 'github.com', owner: 'team', name: 'one' },
+		number: 7, isArtifact: true, artifactId: 'a'.repeat(32),
+	} satisfies GitHubPullRequestReference]));
+}
 const transport = new Transport();
+if (new URL(location.href).searchParams.has('artifactDetails')) transport.mergeable = true;
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
 await client.connect();
@@ -246,12 +263,17 @@ const toolbarModel = inputStack ? {
 	get sessionId() { return selection?.kind === 'session' ? selection.active.session.sessionId : undefined; },
 	onDidChange: selected.event,
 } : { sessionId: 'session', onDidChange: Event.None };
-const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
-toolbar.render();
+const input = document.createElement('textarea');
+const toolbarServices = resources.add(new InstantiationService());
+toolbarServices.registerInstance(ISessionsService, sessions);
+toolbarServices.registerInstance(ISessionProviderScopeService, scopes);
+toolbarServices.registerInstance(ICustomViewService, listCustomViews);
+toolbarServices.registerInstance(ISessionGitHubService, github);
+toolbarServices.registerInstance(INotificationService, notifications);
+const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, () => input.focus(), github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);
-	const input = document.createElement('textarea');
 	input.classList.add('ash-chat-input-container', chatInputStackSlotClass);
 	input.value = 'Retained PR draft';
 	main.append(input);

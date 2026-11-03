@@ -24,6 +24,16 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+/// Selects an Agent and the immutable source history for an isolated comparison fork.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ComparisonForkParams {
+    #[ts(type = "number")]
+    pub source_sequence: u64,
+    pub agent: ash_protocol::AgentRoleSelection,
+    pub branch_name: String,
+}
+
 /// Selects an admitted runtime Provider, never an executable supplied by the client.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -221,6 +231,11 @@ pub enum SessionRequest {
     ForkSession {
         parent_thread_id: ThreadId,
         title: String,
+    },
+    ForkComparison {
+        parent_thread_id: ThreadId,
+        title: String,
+        comparison: ComparisonForkParams,
     },
     ForkThread {
         parent_thread_id: ThreadId,

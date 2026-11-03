@@ -50,6 +50,7 @@ fn entry(id: u64, text: &str) -> MessageHistoryEntry {
             text: text.into(),
             kind: MessageHistoryKind::Agent,
             thread_id: None,
+            scope: None,
         },
     }
 }

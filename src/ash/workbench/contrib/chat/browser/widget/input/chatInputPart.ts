@@ -644,6 +644,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation().catch(() => undefined); }));
 	}
 
+	protected setHistoryScope(scope: string | undefined): void {
+		if (!this.history.setScope(scope)) return;
+		this.historyInputRevision++;
+		this.historySearch.clear();
+	}
+
 	private captureHistoryDraft(): InputHistoryDraft {
 		return { text: this.input.value, selection: this.input.getSelection(), attachments: this.contexts, skills: this.draftSkills?.text === this.input.value ? this.draftSkills.references : this.skills.referencesIn(this.input.value) };
 	}
@@ -778,9 +784,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
 		if (this.input.codeEditor) notifyDictationSubmitted(this.input.codeEditor);
 		this.logDictationSample(true, draft.text);
-		void this.history.record(draft.text, this.parseInput(this.commandText(draft.text, draft.attachments)).kind === 'command' ? 'command' : 'agent').catch(error => {
+		const kind = this.parseInput(this.commandText(draft.text, draft.attachments)).kind === 'command' ? 'command' : 'agent';
+		const recordHistory = () => void this.history.record(draft.text, kind).catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
 		});
+		const recordAfterMaterialization = kind === 'agent' && this.history.scope !== undefined && !this.executionContext().widget?.sessionId;
+		if (!recordAfterMaterialization) recordHistory();
 		// Preparation can finish after the user has started another input; never erase that text.
 		const cleared = this.textRevision === textRevision;
 		let revision = this.draftRevision;
@@ -804,7 +813,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			await operation();
 			if (this.isDisposed || lifecycle.aborted) return;
-
+			if (recordAfterMaterialization && this.history.scope !== undefined) recordHistory();
 		} catch (error) {
 			if (!this.isDisposed && !lifecycle.aborted && cleared && this.draftRevision === revision) {
 				this.applyHistoryDraft(draft);

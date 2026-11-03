@@ -25,7 +25,7 @@ export interface IChatSessionNavigationService {
 	/** Multi-host owners validate and return backend coordinates on the captured connection. */
 	prepareConversationLink?(sessionId: string, threadId: string): Promise<OpenSessionLink>;
 	/** Resolves an opaque authority without interpreting it in shared Workbench code. */
-	openConversationLink?(address: OpenSessionLink): Promise<void>;
+	openConversationLink?(address: OpenSessionLink, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	/** Creates and selects an unsent draft; focus reveals its presentation. False means the host picker was canceled. */
 	createNewConversation(options?: { readonly focus?: boolean; readonly providerId?: string; readonly agent?: ChatAgent; }): boolean | void | Promise<boolean | void>;
 	/** Hosts with their own conversation presentation also own its history picker. */
@@ -37,6 +37,7 @@ export interface IChatSessionNavigationService {
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
 	/** A supplied provider must be resolved before any host-local Session ID is used. */
 	openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void>;
+	openSideConversation?(sessionId: string, threadId: string): Promise<void>;
 	/** Starts voice through the visible Chat's controller, preserving its composer and submission policy. */
 	startVoiceConversation(): Promise<void>;
 }

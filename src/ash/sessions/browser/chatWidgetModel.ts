@@ -1,4 +1,4 @@
-import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
+import { SessionModelSelection } from './sessionModelSelection.js';
 import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../base/common/async.js';
@@ -86,11 +86,10 @@ export class ChatWidgetModel extends Disposable {
 	private readonly selectedModes = new Map<string, ChatMode>();
 	private queuedMessages = 0;
 	private queueGeneration = 0;
-	private readonly selectedModels = new Map<ThreadId, ModelRef>();
+	private readonly threadModelSelection = new SessionModelSelection();
 	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
 	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
-	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
@@ -302,15 +301,13 @@ export class ChatWidgetModel extends Disposable {
 	get selectedModel(): ModelRef | undefined {
 		return this.selection.kind === 'untitled'
 			? this.selection.session.model
-			: this.selectedModels.get(this.selection.active.threadId)
-			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model : undefined)
-			?? this.selection.active.session.model ?? undefined;
+			: this.threadModelSelection.resolveModel(this.selection.active, this._thread);
 	}
 
 	get isAutomaticModel(): boolean {
 		return this.selection.kind === 'untitled'
 			? this.selection.session.model === undefined
-			: this.automaticModels.has(this.selection.active.threadId);
+			: this.threadModelSelection.isAutomatic(this.selection.active.threadId);
 	}
 
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
@@ -341,22 +338,16 @@ export class ChatWidgetModel extends Disposable {
 		return offer?.interaction;
 	}
 
+	get agentTree() {
+		return this.activeSession?.session.agentTree ?? [];
+	}
+
 	get changeSets(): readonly TurnChangeSetSummary[] {
 		return this._changeSets;
 	}
 
 	turnChangeDetails(changeSetId: string): TurnChangeDetails | undefined {
 		return this.changeDetails.get(changeSetId);
-	}
-
-	async createPromptChangeReview(summary: TurnChangeSetSummary, path: string) {
-		const active = this.activeSession;
-		if (!active || active.session.sessionId !== summary.sessionId || active.threadId !== summary.threadId) return undefined;
-		const operation = this.captureOperation();
-		const input = await createTurnMultiDiffEditorInput(this.chatService, active, 'currentTurn', [summary.changeSetId]);
-		this.requireCurrentOperation(operation);
-		const item = input.items.find(item => item.modified.resource.path === `/${summary.changeSetId}/${path}`);
-		return item ? { input, item } : undefined;
 	}
 
 	async generateChangeMessage(changeSet: TurnChangeSetSummary): Promise<void> {
@@ -454,8 +445,7 @@ export class ChatWidgetModel extends Disposable {
 				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
 				this.refreshUntitledSelection();
 			} else {
-				this.selectedModels.set(this.selection.active.threadId, model);
-				this.automaticModels.delete(this.selection.active.threadId);
+				this.threadModelSelection.select(this.selection.active.threadId, model);
 			}
 			this._onDidChange.fire();
 		});
@@ -469,8 +459,7 @@ export class ChatWidgetModel extends Disposable {
 				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
 				this.refreshUntitledSelection();
 			} else {
-				this.selectedModels.delete(this.selection.active.threadId);
-				this.automaticModels.add(this.selection.active.threadId);
+				this.threadModelSelection.select(this.selection.active.threadId, undefined);
 			}
 			this.selectedReasoningEfforts.delete(identity);
 			this._onDidChange.fire();
@@ -524,8 +513,15 @@ export class ChatWidgetModel extends Disposable {
 			this.requireCurrentOperation(operation);
 			await this.initialize();
 			this.requireCurrentOperation(operation);
+			if (this.pendingModelSelection) {
+				await this.waitForModelSelection(operation);
+				this.requireCurrentOperation(operation);
+			}
 			if (this.historyStatus) throw new Error(this.historyStatus.message);
 			this.assertAIEnabled();
+			// Once accepted, this request keeps its model even if the picker changes during preparation.
+			const model = this.isAutomaticModel ? undefined : this.selectedModel;
+			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
 			const active = await this.ensureActiveSession(operation.signal);
@@ -552,8 +548,8 @@ export class ChatWidgetModel extends Disposable {
 				mode,
 				// An unknown/default choice stays with the backend authority; only conversation choices override it.
 				approvalMode: this.selectedApprovalModes.get().get(this.composerIdentity) ?? this._thread?.turns.at(-1)?.approvalMode,
-				model: this.isAutomaticModel ? undefined : this.selectedModel,
-				reasoningEffort: this.selectedReasoningEffort,
+				model,
+				reasoningEffort,
 				contexts,
 				signal: operation.signal,
 				commandId: options?.commandId,
@@ -1386,6 +1382,7 @@ export class ChatWidgetModel extends Disposable {
 
 	/** Keep this composer's choices when organization gives its draft a durable identity. */
 	private adoptUntitledSession(untitledSession: IUntitledChatSession, created: IActiveSessionThread): void {
+		const currentDraft = this.sessionService.untitledSessions.find(draft => draft.untitledSessionId === untitledSession.untitledSessionId) ?? untitledSession;
 		this.selection = { kind: 'session', active: created };
 		// The durable Session may authorize directory Skills absent from the untitled catalog.
 		this._skillSelectors = [];
@@ -1401,8 +1398,7 @@ export class ChatWidgetModel extends Disposable {
 		this.selectedApprovalModes.set(approvalModes);
 		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
-		if (untitledSession.model) this.selectedModels.set(created.threadId, untitledSession.model);
-		else this.automaticModels.add(created.threadId);
+		this.threadModelSelection.select(created.threadId, currentDraft.model);
 	}
 
 }

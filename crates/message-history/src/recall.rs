@@ -62,6 +62,7 @@ impl MessageHistoryRecall {
             text,
             kind,
             thread_id: self.thread_id.clone(),
+            scope: None,
         };
         if self.local.back() != Some(&submission) {
             self.local.push_back(submission.clone());

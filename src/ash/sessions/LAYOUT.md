@@ -75,8 +75,10 @@ Entry switching reuses the existing Parts, container instances and editor lifecy
 
 ### Implementation decisions
 
-SessionsPart owns one conversation grid and one retained SessionView per visible
-Session. Code uses the Chat widget; Chat, Collaboration and conversations beside
+SessionsPart owns one conversation grid. Each Session has one ordinary slot, and
+explicit side opens can retain a second Thread of that Session in its own slot.
+The visible slots and active Thread persist with the workspace. Code uses the
+Chat widget; Chat, Collaboration and conversations beside
 product editors use Cowork. Entry navigation selects the renderer through
 `ISessionsConversationService` before revealing or focusing the Part. SessionView
 retains both renderers' DOM and attaches the active renderer inside the same slot.

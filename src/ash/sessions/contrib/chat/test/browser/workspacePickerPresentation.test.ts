@@ -8,13 +8,17 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import type { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
+import { ActionWidgetService, type IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
 import type { IActionListDelegate, IActionListItem } from '../../../../../platform/actionWidget/browser/actionList.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { WorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 
-function fixture() {
+function fixture(useRealWidget = false) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	lifetime.add(toDisposable(() => dom.window.close()));
@@ -34,7 +38,7 @@ function fixture() {
 		closed++;
 		current.onHide();
 	};
-	const actionWidget = {
+	const stubWidget = {
 		show: (_user: string, _preview: boolean, choices: typeof items, callbacks: IActionListDelegate<IAction>) => {
 			shown++;
 			items = choices;
@@ -43,6 +47,9 @@ function fixture() {
 		updateItems: (choices: typeof items) => { items = choices; },
 		hide: dismiss,
 	} as unknown as IActionWidgetService;
+	services.registerInstance(IContextViewService, lifetime.add(new BrowserContextViewService(dom.window.document.body)));
+	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
+	const actionWidget = useRealWidget ? lifetime.add(services.createInstance(ActionWidgetService)) : stubWidget;
 	services.registerInstance(INotificationService, { error: (error: unknown) => errors.push(error) } as unknown as INotificationService);
 	const choices: IAction[] = [{ id: 'folder', label: 'Folder', tooltip: '/project', enabled: true, checked: true, run: () => { selected++; } }];
 	const action = { id: 'workspace', label: 'Project', tooltip: 'Workspace: Project', enabled: true, run: (): void => control.showPicker(choices) };
@@ -51,8 +58,13 @@ function fixture() {
 	control.render(dom.window.document.body);
 	const button = dom.window.document.querySelector('button')!;
 	return {
-		control, action, changed, choices, dismiss, button, errors,
+		control, action, changed, choices, dismiss, button, errors, actionWidget,
 		get items() { return items; },
+		filter(text: string) {
+			const input = dom.window.document.querySelector<HTMLInputElement>('.ash-action-widget-filter input')!;
+			input.value = text;
+			input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		},
 		select(item: IActionListItem<IAction>) { if (item.item) { void delegate?.onSelect(item.item); } },
 		get shown() { return shown; }, get closed() { return closed; }, get selected() { return selected; },
 		press(key: string) { button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); },
@@ -127,4 +139,30 @@ test('Workspace provider failure leaves immediate choices usable and reports the
 	assert.ok(choice && !('type' in choice));
 	f.select(choice);
 	assert.equal(f.selected, 1);
+});
+
+test('Workspace picker limits unfiltered recents and finds older folders while searching', async () => {
+	using f = fixture(true);
+	const recents = Array.from({ length: 12 }, (_, index) => ({
+		...f.choices[0]!, id: `recent-${index}`, label: `Recent folder ${index}`, recent: true,
+	}));
+	const visibleLabels = () => [...f.button.ownerDocument.querySelectorAll('.ash-action-widget [role=menuitemradio]')]
+		.map(row => row.getAttribute('aria-label'));
+	const defaultLabels = ['Folder', ...recents.slice(0, 10).map(action => action.label)];
+	const load = async () => [...f.choices, ...recents];
+
+	f.control.showPicker(f.choices, load);
+	f.filter('Recent folder 11');
+	await Promise.resolve();
+	assert.deepEqual(visibleLabels(), ['Recent folder 11']);
+	f.filter('  ');
+	assert.deepEqual(visibleLabels(), defaultLabels);
+	f.filter('Recent folder 10');
+	assert.deepEqual(visibleLabels(), ['Recent folder 10']);
+
+	f.actionWidget.hide();
+	assert.equal(f.button.ownerDocument.activeElement, f.button);
+	f.control.showPicker(f.choices, load);
+	await Promise.resolve();
+	assert.deepEqual(visibleLabels(), defaultLabels);
 });

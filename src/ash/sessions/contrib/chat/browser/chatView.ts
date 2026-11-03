@@ -1,3 +1,4 @@
+import './media/chatView.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';

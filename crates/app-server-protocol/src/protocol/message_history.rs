@@ -17,6 +17,8 @@ pub struct MessageHistoryAppendParams {
     pub text: String,
     pub kind: MessageHistoryKind,
     pub thread_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -34,6 +36,8 @@ pub struct MessageHistoryEntry {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHistoryReadParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     pub before: Option<String>,
     pub text: String,
     pub kind: Option<MessageHistoryKind>,

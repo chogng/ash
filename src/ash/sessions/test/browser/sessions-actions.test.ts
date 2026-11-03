@@ -9,7 +9,8 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
-import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from '../../browser/actions/sessionsChatActions.js';
+import { ShowSessionsChatHistoryAction } from '../../browser/actions/sessionsChatActions.js';
+import { NewChatInSessionsWindowAction } from '../../contrib/chat/browser/newSessionAction.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -65,9 +66,9 @@ test('permission commands use shared Chinese copy and require confirmation only 
 	} finally { resetNlsResolver(); }
 });
 
-test('Sessions owns its New Session command without requiring regular Workbench Views', async () => {
+test('Sessions owns its New Session command and routes explicit provider choices', async () => {
 	const onDidChange = new Emitter<void>();
-	let created = 0;
+	const created: Array<string | undefined> = [];
 	const viewService: ISessionsService = {
 		navigationRevision: 0,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
@@ -80,9 +81,9 @@ test('Sessions owns its New Session command without requiring regular Workbench 
 		async initialize() { },
 		openSession() { },
 		openUntitledSession() { },
-		openNewSession() {
-			created += 1;
-			return { untitledSessionId: `untitled-${created}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
+		openNewSession(_title, options) {
+			created.push(options?.providerId);
+			return { untitledSessionId: `untitled-${created.length}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
 		},
 		activateSelection() { },
 		closeVisibleSelection() { },
@@ -95,9 +96,11 @@ test('Sessions owns its New Session command without requiring regular Workbench 
 	services.registerInstance(ISessionsProvidersService, providers);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(NewSessionsChatAction.ID);
+	await commands.executeCommand(NewChatInSessionsWindowAction.ID);
 
-	assert.equal(created, 1);
+	await commands.executeCommand(NewChatInSessionsWindowAction.ID, 'ssh-host');
+	await assert.rejects(commands.executeCommand(NewChatInSessionsWindowAction.ID, {}), TypeError);
+	assert.deepEqual(created, [undefined, 'ssh-host']);
 	onDidChange.dispose();
 });
 
@@ -138,11 +141,8 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	const created: Array<string | undefined> = [];
 	const opened: string[] = [];
 	const focus: string[] = [];
-	const input = new TestQuickInputService(['Remote']);
+	const input = new TestQuickInputService();
 	services.registerInstance(IQuickInputService, input);
-	services.registerInstance(ISessionsProvidersService, {
-		getProviders: () => [{ id: 'local', label: 'Local' }, { id: 'remote', label: 'Remote' }],
-	} as unknown as ISessionsProvidersService);
 	services.registerInstance(ISessionsService, {
 		openNewSession: (_title: string, options?: { providerId?: string; }) => { created.push(options?.providerId); return { untitledSessionId: 'draft' }; },
 		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
@@ -163,7 +163,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as IChatSessionNavigationService);
 	assert.equal(NEW_CHAT_COMMAND_ID, 'workbench.action.chat.newChat');
 	assert.equal(await commands.executeCommand('workbench.action.chat.newChat'), true);
-	assert.deepEqual(created, ['remote']);
+	assert.deepEqual(created, [undefined]);
 	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);

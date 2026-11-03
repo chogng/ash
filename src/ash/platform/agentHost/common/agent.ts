@@ -586,6 +586,7 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: 'comparison'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| {
 		readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number;
 		readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number;

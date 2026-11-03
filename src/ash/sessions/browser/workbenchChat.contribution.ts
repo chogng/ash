@@ -57,9 +57,11 @@ class ChatSessionNavigationService extends Disposable implements IChatSessionNav
 	}
 
 	async openConversationLink(address: OpenSessionLink): Promise<void> {
-		const { sessionId, threadId } = await this.links.open(address, this.sessions, async (providerId, assertCurrent) => {
-			if (!providerId.startsWith(SSH_AGENT_HOST_PROVIDER_PREFIX)) return false;
-			return this.instantiation.createInstance(SavedSSHConversationHost).connect(providerId, assertCurrent, this.linkLifetime.signal);
+		const { sessionId, threadId } = await this.links.open(address, this.sessions, {
+			connectMissingHost: async (providerId, assertCurrent) => {
+				if (!providerId.startsWith(SSH_AGENT_HOST_PROVIDER_PREFIX)) return false;
+				return this.instantiation.createInstance(SavedSSHConversationHost).connect(providerId, assertCurrent, this.linkLifetime.signal);
+			},
 		});
 		await this.focusConversation(sessionId, threadId);
 	}

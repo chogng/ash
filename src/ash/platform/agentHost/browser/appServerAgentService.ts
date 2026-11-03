@@ -338,7 +338,16 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		fork: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
-				type: params.target === 'session' ? 'forkSession' : 'forkThread', parentThreadId: params.threadId, title: params.title,
+				...(params.target === 'session' && params.comparison
+					? {
+						type: 'forkComparison' as const, comparison: {
+							sourceSequence: params.comparison.sourceSequence,
+							branchName: params.comparison.branchName,
+							agent: { type: 'exact' as const, source: { type: 'directory' as const, id: params.comparison.agent.sourceId }, name: params.comparison.agent.name },
+						}
+					}
+					: { type: params.target === 'session' ? 'forkSession' as const : 'forkThread' as const }),
+				parentThreadId: params.threadId, title: params.title,
 			})));
 			if (params.target === 'thread' && result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.session.sessionId, threadId: result.threadId };

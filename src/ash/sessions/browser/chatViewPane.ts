@@ -362,9 +362,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 		const services = providerId && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID
 			? resources.add(this.providerScopes.createScope(undefined, providerId))
 			: this.instantiationService;
+		let model: ChatWidgetModel | undefined;
 		try {
-			const model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
-			resources.add(model);
+			model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
 			const pane = services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 				this.paneHost,
 				`ash-chat-pane-${++chatPaneInstanceId}`,
@@ -380,12 +380,15 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
 				undefined, options,
 			);
-			resources.delete(model);
-			setDisposableOwner(model, pane);
 			this.paneScopes.set(pane, resources);
 			return pane;
 		} catch (error) {
-			resources.dispose();
+			// Widget construction may fail before it can return an owner for the model.
+			try {
+				model?.dispose();
+			} finally {
+				resources.dispose();
+			}
 			throw error;
 		}
 	}

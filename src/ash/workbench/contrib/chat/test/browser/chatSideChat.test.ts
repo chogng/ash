@@ -18,7 +18,7 @@ import { IChatSideChatService, ChatSideChatService, type IChatSideChatOrigin, ty
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 
-function fixture() {
+function fixture(openToSide = false) {
 	const lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
 	const changed = lifetime.add(new Emitter<void>());
@@ -34,7 +34,11 @@ function fixture() {
 	services.registerInstance(IAgentThreadService, threads as unknown as IAgentThreadService);
 	services.registerInstance(IChatWidgetService, { getAllWidgets: () => widgets, onDidChangeWidgets: changed.event } as unknown as IChatWidgetService);
 	services.registerInstance(IChatService, { readThread: async () => ({ thread: { sequence: 4 } }), startTurn: async (options: unknown) => { calls.start.push(options); } } as unknown as IChatService);
-	services.registerInstance(IChatSessionNavigationService, { getConversations: () => [{ sessionId: 'session', threadId: 'source', title: 'Source title' }], openConversation: async (...args: unknown[]) => { calls.navigate.push(args); } } as unknown as IChatSessionNavigationService);
+	services.registerInstance(IChatSessionNavigationService, {
+		getConversations: () => [{ sessionId: 'session', threadId: 'source', title: 'Source title' }],
+		openConversation: async (...args: unknown[]) => { calls.navigate.push(args); },
+		openSideConversation: openToSide ? async (...args: unknown[]) => { calls.navigate.push(['side', ...args]); } : undefined,
+	} as unknown as IChatSessionNavigationService);
 	const sideChats = lifetime.add(new ChatSideChatService());
 	const commands = lifetime.add(new ChatSlashCommandService());
 	services.registerInstance(IChatSideChatService, sideChats);
@@ -57,6 +61,13 @@ test('/btw is a registered client command and submits to the captured source wit
 	assert.deepEqual(f.calls.start[0], { sessionId: 'session', threadId: 'side', commandId: (f.calls.start[0] as { commandId: string; }).commandId, expectedSequence: 4, text: 'Question\nsecond line', mode: 'ask', model: f.state.selectedModel, reasoningEffort: 'high', approvalMode: 'manual', contexts: [{ name: 'frozen', content: 'captured bytes' }], signal: undefined });
 	assert.deepEqual(f.calls.navigate, [['session', 'side']]);
 	assert.equal(f.model.thread.turns[0].status, 'running');
+});
+
+test('Side Chat uses the host’s side slot when available', async () => {
+	using f = fixture(true);
+	await f.commands.executeCommand('btw', 'Side question', f.resource);
+	assert.equal(f.calls.start.length, 1);
+	assert.deepEqual(f.calls.navigate, [['side', 'session', 'side']]);
 });
 
 test('Side Chat rejects stale source lifetimes after branch creation without submitting or navigating elsewhere', async () => {

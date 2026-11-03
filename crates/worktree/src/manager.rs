@@ -139,6 +139,8 @@ pub enum ManagedDirTarget {
     SourceHead,
     NewBranch {
         name: String,
+        /// A frozen target for a fork. Root Sessions use the source checkout's HEAD.
+        base_object_id: Option<String>,
     },
     Branch {
         name: String,
@@ -767,19 +769,26 @@ impl WorktreeManager {
                     ),
                 }
             }
-            ManagedDirTarget::NewBranch { name } => {
+            ManagedDirTarget::NewBranch {
+                name,
+                base_object_id,
+            } => {
                 if name.trim().is_empty() {
                     bail!("managed worktree branch name cannot be empty");
                 }
-                let snapshot = self.git.snapshot(&source_repository).await?;
-                let head = match snapshot.head() {
-                    GitHead::Branch { object_id, .. } | GitHead::Detached { object_id } => {
-                        object_id.clone()
-                    }
-                    GitHead::Unborn { .. } => {
-                        self.git
-                            .create_worktree_anchor(&source_repository, &baseline_tree)
-                            .await?
+                let head = if let Some(object_id) = base_object_id {
+                    object_id.clone()
+                } else {
+                    let snapshot = self.git.snapshot(&source_repository).await?;
+                    match snapshot.head() {
+                        GitHead::Branch { object_id, .. } | GitHead::Detached { object_id } => {
+                            object_id.clone()
+                        }
+                        GitHead::Unborn { .. } => {
+                            self.git
+                                .create_worktree_anchor(&source_repository, &baseline_tree)
+                                .await?
+                        }
                     }
                 };
                 (Some(name.clone()), head, false)
@@ -805,7 +814,7 @@ impl WorktreeManager {
         let checkout_root = self.settings.root.join(&digest[..4]).join(&digest);
         if checkout_root.exists() {
             let binding = self.recover(&checkout_root, &request.owner).await?;
-            if let ManagedDirTarget::NewBranch { name } = &request.target
+            if let ManagedDirTarget::NewBranch { name, .. } = &request.target
                 && binding.target_branch() != Some(name.as_str())
             {
                 bail!("existing managed worktree uses a different branch");
@@ -822,7 +831,7 @@ impl WorktreeManager {
             .pin_private_ref(&source_repository, &baseline_ref, &baseline_tree)
             .await?;
         let created = match &request.target {
-            ManagedDirTarget::NewBranch { name } => {
+            ManagedDirTarget::NewBranch { name, .. } => {
                 let creation = GitNamedWorktreeRequest::new(
                     checkout_root.clone(),
                     target_head.clone(),
@@ -891,7 +900,7 @@ impl WorktreeManager {
                     GitWorktreeRemovalMode::DiscardVerifiedContents,
                 )
                 .await;
-            if let ManagedDirTarget::NewBranch { name } = &request.target {
+            if let ManagedDirTarget::NewBranch { name, .. } = &request.target {
                 let _ = self
                     .git
                     .delete_branch_at(&source_repository, name, &target_head)
@@ -940,7 +949,7 @@ impl WorktreeManager {
                         GitWorktreeRemovalMode::DiscardVerifiedContents,
                     )
                     .await;
-                if let ManagedDirTarget::NewBranch { name } = &request.target {
+                if let ManagedDirTarget::NewBranch { name, .. } = &request.target {
                     let _ = self
                         .git
                         .delete_branch_at(&source_repository, name, &target_head)

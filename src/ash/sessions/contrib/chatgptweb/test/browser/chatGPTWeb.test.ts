@@ -8,7 +8,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../browser/chatGPTWeb.js';
-import { IChatGPTService, chatGPTNavigationContainerId } from '../../browser/chatGPTService.js';
+import { IChatGPTService, chatGPTNavigationContainerId, coworkTaskStatus } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
 import '../../browser/chatGPTWeb.contribution.js';
@@ -26,6 +26,7 @@ suite('ChatGPT entry', () => {
 		try {
 			assert.equal(localize('sessions.chatgpt.toggleOptimization', 'ChatGPT: Toggle Scrolling Optimization'), 'ChatGPT：切换滚动优化');
 			assert.equal(localize('sessions.chatgpt.reloadShort', 'Reload'), '刷新');
+			assert.equal(coworkTaskStatus({ sessionId: 'session', threadId: 'thread', prompt: '任务' }), '正在准备 Cowork 任务…');
 			const { createSettingsLayout, SettingsNavigation } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
 			const defaults = new DefaultSettings();
 			const browser = createSettingsLayout([defaults.get(chatGPTScrollOptimization)]).find(category => category.id === 'browser')!;

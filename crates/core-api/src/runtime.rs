@@ -181,6 +181,11 @@ pub trait AgentRuntime {
     fn fork_thread(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
     fn create_side_chat(&self, request: CreateSideChatRequest) -> Result<ThreadView, CoreError>;
     fn fork_session(&self, request: ForkThreadRequest) -> Result<ThreadView, CoreError>;
+    fn fork_comparison(
+        &self,
+        request: ForkThreadRequest,
+        comparison: crate::ComparisonFork,
+    ) -> Result<ThreadView, CoreError>;
     fn replace_thread(&self, request: ReplaceThreadRequest) -> Result<ThreadView, CoreError>;
     fn rewind_thread(&self, request: RewindThreadRequest) -> Result<ThreadView, CoreError>;
     fn restore_message(&self, request: RestoreMessageRequest) -> Result<ThreadView, CoreError>;

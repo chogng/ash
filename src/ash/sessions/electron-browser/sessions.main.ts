@@ -221,6 +221,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'terminal.native',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
+					'sessions.openSessionLinkOpener',
 					'sessions.contrib.remoteAgentHostContribution',
 					'sessions.contrib.sshAgentHostContribution',
 					'sessions.contrib.wslAgentHostContribution',

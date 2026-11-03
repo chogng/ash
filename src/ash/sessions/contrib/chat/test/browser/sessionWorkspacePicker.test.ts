@@ -20,10 +20,10 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import type { IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
+import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = []) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	lifetime.add(toDisposable(() => dom.window.close()));
@@ -53,7 +53,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	const errors: unknown[] = [];
 	services.registerInstance(INotificationService, { error: (error: unknown) => { errors.push(error); } } as unknown as INotificationService);
 	services.registerInstance(ISessionsManagementService, {
-		get untitledSessions() { return drafts; }, sessions: [], onDidChange: changed.event,
+		get untitledSessions() { return drafts; }, sessions: catalog, onDidChange: changed.event,
 		setUntitledSessionWorkspace(id: string, workspace: SessionWorkspaceSelection, options?: Parameters<ISessionsManagementService['setUntitledSessionWorkspace']>[2]) {
 			drafts = drafts.map(draft => draft.untitledSessionId === id ? { ...draft, workspace, ...options } : draft);
 			changed.fire();
@@ -114,6 +114,22 @@ test('Recent folders are selectable in the first menu before Open Folder', async
 	assert.ok(f.labels.indexOf('Recent project') < f.labels.indexOf('Open Folder…'));
 	f.choose('Recent project');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/recent').fsPath });
+});
+
+test('Workspace includes recent active Session folders from the draft host after explicit recents', async () => {
+	const session = (id: string, lastActivity: number, providerId = 'host', status: ISession['status'] = 'active'): ISession => ({
+		sessionId: id, title: id, status, providerId, nextApprovalMode: 'manual',
+		workspace: { authorityId: 'local', root: URI.file(`/${id}`).fsPath },
+		chats: [{ threadId: id, status: 'active', origin: { type: 'root' }, updatedAt: new Date(lastActivity) }],
+	});
+	using f = fixture(undefined, [
+		session('earlier', 10), session('latest', 20), session('recent', 30),
+		session('archived', 40, 'host', 'archived'), session('other-host', 50, 'another-host'),
+	]);
+	await f.open();
+	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('Open Folder…')), ['Recent project', 'latest', 'earlier']);
+	f.choose('latest');
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/latest').fsPath });
 });
 
 test('New worktree validates a branch and changes the draft without creating a conversation', async () => {

@@ -13,7 +13,7 @@ import { ICustomViewService } from '../../customView/browser/customViewService.j
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =
-	| { readonly kind: 'session'; readonly active: IActiveSessionThread; }
+	| { readonly kind: 'session'; readonly active: IActiveSessionThread; readonly sideThread?: true; }
 	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
 
 export interface SessionsSelection {
@@ -32,7 +32,7 @@ export interface ISessionsService {
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
 	initialize(): Promise<void>;
-	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
+	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
 	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession;
@@ -45,7 +45,7 @@ export interface ISessionsService {
 export const ISessionsService = createServiceIdentifier<ISessionsService>('sessionsService');
 
 type SessionsViewReference =
-	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
+	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly sideThread?: true; }
 	| { readonly kind: 'untitled'; readonly untitledSessionId: string; };
 
 type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; readonly state?: string; };
@@ -137,11 +137,14 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	openSession(sessionId: SessionId, threadId: ThreadId): void { this.activate({ kind: 'session', sessionId, threadId }); }
-	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+	async openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void> {
 		const revision = ++this._navigationRevision;
 		await this.sessionService.openThread(sessionId, threadId);
 		if (this.isDisposed) throw canceled();
-		if (revision === this._navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
+		if (revision !== this._navigationRevision) return;
+		const sideBySide = options?.sideBySide === true;
+		const sideThread = sideBySide && this.current.visibleReferences.some(reference => reference.kind === 'session' && reference.sessionId === sessionId && reference.threadId !== threadId);
+		this.activate({ kind: 'session', sessionId, threadId, ...(sideThread ? { sideThread: true } : {}) }, this.current, sideBySide ? 'add' : 'open');
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
 	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession {
@@ -316,8 +319,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 
 	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' | 'add' = 'open', intent: 'explicit' | 'automatic' = 'explicit'): void {
-		this.updateManagementSelection(reference);
-		this.select(this.resolve(reference)!, state, mode, intent);
+		// Ordinary navigation to an already visible side Thread keeps that slot.
+		const visible = state.visibleReferences.find(candidate => referenceKey(candidate) === referenceKey(reference)) ?? reference;
+		this.updateManagementSelection(visible);
+		this.select(this.resolve(visible)!, state, mode, intent);
 	}
 
 	private updateManagementSelection(reference: SessionsViewReference): void {
@@ -333,7 +338,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
-		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId } } : undefined;
+		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}
 }
 
@@ -359,7 +364,7 @@ function activeSelection(sessionService: ISessionsManagementService): SessionsVi
 
 function referenceForSelection(selection: SessionsViewSelection): SessionsViewReference {
 	return selection.kind === 'session'
-		? { kind: 'session', sessionId: selection.active.session.sessionId, threadId: selection.active.threadId }
+		? { kind: 'session', sessionId: selection.active.session.sessionId, threadId: selection.active.threadId, ...(selection.sideThread ? { sideThread: true } : {}) }
 		: { kind: 'untitled', untitledSessionId: selection.session.untitledSessionId };
 }
 
@@ -373,13 +378,17 @@ function navigationKey(entry: NavigationEntry | undefined): string | undefined {
 
 function referenceKey(reference: SessionsViewReference | undefined): string | undefined {
 	return reference?.kind === 'session'
-		? `session:${reference.sessionId}:${reference.threadId}`
+		? `session:${JSON.stringify([reference.sessionId, reference.threadId])}`
 		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
+}
+
+export function sessionViewSelectionKey(selection: SessionsViewSelection): string {
+	return visibilityKey(referenceForSelection(selection))!;
 }
 
 function visibilityKey(reference: SessionsViewReference | undefined): string | undefined {
 	return reference?.kind === 'session'
-		? `session:${reference.sessionId}`
+		? reference.sideThread ? `sideThread:${JSON.stringify([reference.sessionId, reference.threadId])}` : `session:${reference.sessionId}`
 		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
 }
 
@@ -419,7 +428,7 @@ function parseStoredSessionsViewState(value: unknown, preferCode: boolean): Stor
 				throw new TypeError('Invalid stored Sessions reference');
 			}
 			if (reference.kind === 'session') {
-				if (!nonEmptyString(reference.sessionId) || !nonEmptyString(reference.threadId)) {
+				if (!nonEmptyString(reference.sessionId) || !nonEmptyString(reference.threadId) || reference.sideThread !== undefined && reference.sideThread !== true) {
 					throw new TypeError('Invalid stored Session identity');
 				}
 			} else if (reference.kind === 'untitled') {

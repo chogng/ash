@@ -1,3 +1,7 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { PullRequestFollowUpWidget } from '../../changes/browser/pullRequestFollowUpWidget.js';
+import { ArtifactDetailsPanel } from './artifactDetailsPanel.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createUuid } from '../../../../base/common/uuid.js';
@@ -9,7 +13,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { autorun, type IReader } from '../../../../base/common/observable.js';
 import { computeAggregateIssueIcon, computeIssueIcon } from '../../../../workbench/common/chatIssue.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -24,7 +28,7 @@ import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } fr
 
 /** Shows durable Issue associations and PRs resolved for the active Session. */
 export class SessionChatInputToolbar extends Disposable {
-	public readonly domNode: HTMLDivElement;
+	public readonly element: HTMLDivElement;
 	private readonly entries = this._register(new DisposableMap<string, PullRequestEntry>());
 	private readonly attachDomNode: HTMLButtonElement;
 	private readonly attachIssueDomNode: HTMLButtonElement;
@@ -33,34 +37,38 @@ export class SessionChatInputToolbar extends Disposable {
 	private readonly issueIconDomNode: HTMLSpanElement;
 	private readonly issueLabelDomNode: HTMLSpanElement;
 	private readonly issueListDomNode: HTMLDivElement;
+	private renderedSessionId: string | undefined;
 	private readonly issueEntries = this._register(new DisposableMap<string, IssueEntry>());
 
 	constructor(
 		container: HTMLElement,
 		private readonly model: { readonly sessionId: string | undefined; readonly onDidChange: Event<void>; },
+		private readonly focusFallback: () => void,
 		@IGitHubService private readonly github: IGitHubService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IEditorService private readonly editors: IEditorService,
+		@IContextViewService private readonly contextViews: IContextViewService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
-		this.domNode = h(container.ownerDocument, 'div');
-		this.domNode.className = `ash-session-chat-input-prs ${chatInputStackSlotClass}`;
-		this.domNode.setAttribute('role', 'group');
-		this.domNode.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
-		container.append(this.domNode);
-		this.attachDomNode = this._register(new Button(this.domNode, {
+		this.element = h(container.ownerDocument, 'div');
+		this.element.className = `ash-session-chat-input-prs ${chatInputStackSlotClass}`;
+		this.element.setAttribute('role', 'group');
+		this.element.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
+		container.append(this.element);
+		this.attachDomNode = this._register(new Button(this.element, {
 			...defaultButtonStyles, label: localize('sessions.github.attach', 'Attach PR'), presentation: 'secondary', size: 'small',
 		})).domNode;
 		this.attachDomNode.classList.add('ash-session-chat-input-pr-action');
-		this.domNode.append(this.attachDomNode);
+		this.element.append(this.attachDomNode);
 		this._register(addDisposableListener(this.attachDomNode, 'click', () => { void this.attach().catch(error => this.notifications.error(error)); }));
-		this.attachIssueDomNode = this._register(new Button(this.domNode, {
+		this.attachIssueDomNode = this._register(new Button(this.element, {
 			...defaultButtonStyles, label: localize('sessions.github.attachIssue', 'Attach issue'), presentation: 'secondary', size: 'small',
 		})).domNode;
 		this.attachIssueDomNode.classList.add('ash-session-chat-input-pr-action');
-		this.domNode.append(this.attachIssueDomNode);
+		this.element.append(this.attachIssueDomNode);
 		this._register(addDisposableListener(this.attachIssueDomNode, 'click', () => { void this.attachIssue().catch(error => this.notifications.error(error)); }));
 		this.issuesDomNode = h(container.ownerDocument, 'div');
 		this.issuesDomNode.className = 'ash-session-chat-input-issues';
@@ -77,7 +85,7 @@ export class SessionChatInputToolbar extends Disposable {
 		this.issueListDomNode.className = 'ash-session-chat-input-issue-list';
 		this.issueListDomNode.hidden = true;
 		this.issuesDomNode.append(this.issueSummaryDomNode, this.issueListDomNode);
-		this.domNode.append(this.issuesDomNode);
+		this.element.append(this.issuesDomNode);
 		this._register(addDisposableListener(this.issueSummaryDomNode, 'click', () => {
 			const expanded = this.issueListDomNode.hidden;
 			this.issueListDomNode.hidden = !expanded;
@@ -95,7 +103,7 @@ export class SessionChatInputToolbar extends Disposable {
 		this._register(AccessibleViewRegistry.register({
 			name: `sessionIssues-${createUuid()}`, type: AccessibleViewType.View, priority: 95,
 			getProvider: () => {
-				const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+				const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
 				if (!focused || !this.issuesDomNode.contains(focused)) { return undefined; }
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsChat,
@@ -107,15 +115,25 @@ export class SessionChatInputToolbar extends Disposable {
 			},
 		}));
 		this._register(toDisposable(() => {
-			setChatInputStackSlot(this.domNode, ChatInputStackSlot.Empty);
-			this.domNode.remove();
+			setChatInputStackSlot(this.element, ChatInputStackSlot.Empty);
+			this.element.remove();
 		}));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(model.onDidChange(() => this.render()));
+		this.render();
 	}
 
-	public render(): void {
+	private render(): void {
 		const sessionId = this.model.sessionId;
+		const focused = this.element.ownerDocument.activeElement;
+		const focusWithin = this.element.contains(focused);
+		const sessionChanged = this.renderedSessionId !== sessionId;
+		this.renderedSessionId = sessionId;
+		if (sessionChanged) {
+			this.issueEntries.clearAndDisposeAll();
+			this.issueListDomNode.hidden = true;
+			this.issueSummaryDomNode.setAttribute('aria-expanded', 'false');
+		}
 		const requests = sessionId ? this.github.getSessionPullRequests(sessionId) : [];
 		const present = new Set<string>();
 		for (const request of requests) {
@@ -123,17 +141,17 @@ export class SessionChatInputToolbar extends Disposable {
 			present.add(key);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = this.entries.set(key, new PullRequestEntry(this.domNode, request, this.opener, this.notifications, this.editors, async reference => {
+				entry = this.entries.set(key, new PullRequestEntry(this.element, request, this.opener, this.notifications, this.editors, async reference => {
 					if (!sessionId) { return; }
 					await this.github.detachPullRequest(sessionId, reference);
 					if (!this.isDisposed) {
 						this.attachDomNode.focus();
 						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
 					}
-				}, this.quickInput, async (request, select) => {
+				}, this.contextViews, (container, binding) => this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId: sessionId!, id: binding.artifact.id }), async (request, select) => {
 					if (sessionId) { await this.github.invokePullRequestArtifact(sessionId, request, select); }
 				}));
-				this.domNode.insertBefore(entry.containerDomNode, this.attachDomNode);
+				this.element.insertBefore(entry.containerDomNode, this.attachDomNode);
 			}
 			entry.update(request);
 		}
@@ -143,12 +161,18 @@ export class SessionChatInputToolbar extends Disposable {
 			}
 		}
 		this.renderIssues();
-		this.domNode.hidden = !this.model.sessionId;
-		setChatInputStackSlot(this.domNode, this.model.sessionId ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
+		this.element.hidden = !sessionId;
+		setChatInputStackSlot(this.element, sessionId ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
+		if (focusWithin && (sessionChanged || !focused?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body)) {
+			if (sessionId) { this.attachDomNode.focus(); }
+			else { this.focusFallback(); }
+		}
 	}
 
 	private renderIssues(reader?: IReader): void {
 		const issues = this.model.sessionId ? this.github.getSessionIssues(this.model.sessionId, reader) : [];
+		const focused = this.element.ownerDocument.activeElement;
+		const focusWithin = this.issuesDomNode.contains(focused);
 		this.issuesDomNode.hidden = issues.length === 0;
 		const icon = computeAggregateIssueIcon(issues.map(entry => entry.issue));
 		this.issueIconDomNode.replaceChildren();
@@ -181,6 +205,8 @@ export class SessionChatInputToolbar extends Disposable {
 		for (const key of this.issueEntries.keys()) {
 			if (!present.has(key)) { this.issueEntries.deleteAndDispose(key); }
 		}
+		if (focusWithin && !issues.length) { this.attachIssueDomNode.focus(); }
+		else if (focusWithin && !focused?.isConnected) { this.issueSummaryDomNode.focus(); }
 	}
 
 	private async attachIssue(): Promise<void> {
@@ -221,7 +247,7 @@ class PullRequestEntry extends Disposable {
 	private readonly labelDomNode: HTMLSpanElement;
 	private readonly removeDomNode: HTMLButtonElement;
 	private readonly actionsDomNode: HTMLButtonElement;
-	private readonly pickerLifetime = this._register(new DisposableStore());
+	private readonly artifactDetails: ArtifactDetailsPanel;
 	private request: IResolvedSessionPullRequest;
 
 	constructor(
@@ -231,7 +257,8 @@ class PullRequestEntry extends Disposable {
 		notifications: INotificationService,
 		editors: IEditorService,
 		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
-		private readonly quickInput: IQuickInputService,
+		contextViews: IContextViewService,
+		private readonly renderFollowUp: (container: HTMLElement, binding: IArtifactIntegrationBinding) => Disposable,
 		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => Promise<void>,
 	) {
 		super();
@@ -262,6 +289,7 @@ class PullRequestEntry extends Disposable {
 			...defaultButtonStyles, label: localize('sessions.github.artifactActions', 'PR Actions'), presentation: 'secondary', size: 'small',
 		})).domNode;
 		this.actionsDomNode.classList.add('ash-session-chat-input-pr-action');
+		this.artifactDetails = this._register(new ArtifactDetailsPanel(this.actionsDomNode, contextViews));
 		this._register(addDisposableListener(this.actionsDomNode, 'click', () => {
 			if (this.actionsDomNode.disabled) { return; }
 			this.actionsDomNode.disabled = true;
@@ -288,35 +316,17 @@ class PullRequestEntry extends Disposable {
 	}
 
 	private async selectAction(binding: IArtifactIntegrationBinding): Promise<ArtifactAction | undefined> {
-		if (this.isDisposed) { return undefined; }
-		if (!binding.actions.length) {
-			status(localize('sessions.github.artifactNoActions', 'No merge actions are currently available for this pull request.'));
-			return undefined;
-		}
-		const picker = this.pickerLifetime.add(this.quickInput.createQuickPick<ArtifactAction>());
-		picker.items = binding.actions;
-		picker.title = picker.ariaLabel = localize('sessions.github.artifactActionPicker', 'Merge actions for {0}', binding.artifact.label);
-		picker.placeholder = localize('sessions.github.artifactActionConsent', 'Select an action to authorize its described effect');
-		return new Promise(resolve => {
-			this.pickerLifetime.add(toDisposable(() => resolve(undefined)));
-			this.pickerLifetime.add(picker.onDidHide(() => this.pickerLifetime.clear()));
-			this.pickerLifetime.add(picker.onDidAccept(() => {
-				const action = picker.selectedItems[0];
-				if (action) {
-					resolve(action);
-					picker.hide();
-				}
-			}));
-			picker.show();
-		});
+		if (this.isDisposed || this.actionsDomNode.hidden || this.request.artifact?.id !== binding.artifact.id) return undefined;
+		return this.artifactDetails.choose(binding, container => this.renderFollowUp(container, binding));
 	}
 
 	public update(request: IResolvedSessionPullRequest): void {
+		if (this.request.artifact?.id !== request.artifact?.id) this.artifactDetails.close();
 		this.request = request;
 		const actionsAvailable = !!request.artifact && request.state === 'open';
 		if (!actionsAvailable) {
 			if (this.actionsDomNode.ownerDocument.activeElement === this.actionsDomNode) { this.domNode.focus(); }
-			this.pickerLifetime.clear();
+			this.artifactDetails.close();
 		}
 		this.actionsDomNode.hidden = !actionsAvailable;
 		this.actionsDomNode.setAttribute('aria-label', localize('sessions.github.artifactActionsLabel', 'Pull request actions for {0}/{1} #{2}', request.owner, request.repo, request.number));

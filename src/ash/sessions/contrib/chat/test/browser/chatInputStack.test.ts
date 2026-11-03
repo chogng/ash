@@ -24,8 +24,10 @@ suite('Sessions input stack browser layout', () => {
 		expect(lower!.y - upper!.y - upper!.height).toBeCloseTo(8, 0);
 		await link.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toEqual(['https://github.com/team/one/pull/7']);
+		await link.focus();
 		await page.evaluate(() => window.ashSessionGitHub.selectDraft());
 		await expect(prs).toBeHidden();
+		await expect(input).toBeFocused();
 		await expect(input).toHaveCSS('margin-top', '0px');
 		await expect(input).toHaveValue('Retained PR draft');
 		await page.evaluate(() => window.ashSessionGitHub.dispose());

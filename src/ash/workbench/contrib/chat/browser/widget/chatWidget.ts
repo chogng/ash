@@ -17,7 +17,7 @@ import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
@@ -94,6 +94,7 @@ export interface IChatWidgetModel extends IDisposable {
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable implements IChatWidget {
 	readonly element: HTMLElement;
+	protected readonly scopedContextKeys: IScopedContextKeyService;
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidHide = this.hidden.event;
 	private readonly visibilityChanged = this._register(new Emitter<void>());
@@ -155,7 +156,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.element.setAttribute('role', 'tabpanel');
 		this.element.hidden = true;
 		container.append(this.element);
-		const context = this._register(contextKeys.createScoped(this.element));
+		const context = this.scopedContextKeys = this._register(contextKeys.createScoped(this.element));
 		ChatContextKeys.inChatSession.bindTo(context).set(true);
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);

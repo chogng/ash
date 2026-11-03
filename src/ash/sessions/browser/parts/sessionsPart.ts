@@ -14,6 +14,7 @@ import { Dimension, h } from '../../../base/browser/dom.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
+import { sessionViewSelectionKey } from '../../services/sessions/browser/sessionsService.js';
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
 import { SessionGridLayout } from './sessionGridLayout.js';
@@ -156,7 +157,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 
 	async openInNewWindow(selection: SessionsViewSelection): Promise<void> {
 		await this.switching;
-		const view = this.entries.get(selectionKey(selection));
+		const view = this.entries.get(sessionViewSelectionKey(selection));
 		if (!view) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		const existing = this.popouts.get(view);
 		if (existing) {
@@ -305,19 +306,17 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		// Materializing a draft changes its identity, not its view or live input.
 		for (const [key, view] of [...this.entries]) {
 			const selection = view.currentSelection;
+			if (selection.kind === 'session') continue;
 			const id =
 				view.activeChat.sessionId ??
-				(selection.kind === 'untitled'
-					? this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)
-						?.sessionId
-					: undefined);
+				this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)?.sessionId;
 			if (!id || key === sessionKey(id) || this.entries.has(sessionKey(id))) continue;
 			this.entries.delete(key);
 			this.entries.set(sessionKey(id), view);
 		}
 		this.content.classList.toggle('single-chat', selections.length === 1);
 		this.empty.update(this.options.sessionService.state, this.options.sessionService.error);
-		this.mainKeys = selections.map(selectionKey);
+		this.mainKeys = selections.map(sessionViewSelectionKey);
 		const desired = new Set(this.mainKeys);
 		const removed: SessionView[] = [];
 		for (const [key, view] of this.entries) {
@@ -366,7 +365,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			removed.push(view);
 		}
 		for (const selection of selections) {
-			const id = selectionKey(selection);
+			const id = sessionViewSelectionKey(selection);
 			let view = this.entries.get(id);
 			if (!view) {
 				view = new SessionView(this.content, {
@@ -389,7 +388,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			}
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}
-		this.activeView = active ? this.entries.get(selectionKey(active)) : undefined;
+		this.activeView = active ? this.entries.get(sessionViewSelectionKey(active)) : undefined;
 		this.updateInfoContext();
 		this.reconcileGrid();
 		for (const view of removed) {
@@ -481,12 +480,6 @@ class SessionsChatEmptyView extends Disposable implements IView {
 				);
 		}
 	}
-}
-
-function selectionKey(selection: SessionsViewSelection): string {
-	return selection.kind === 'session'
-		? sessionKey(selection.active.session.sessionId)
-		: `untitled:${selection.session.untitledSessionId}`;
 }
 
 function sessionKey(sessionId: SessionId): string {

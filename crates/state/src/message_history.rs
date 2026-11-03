@@ -63,12 +63,21 @@ impl SqliteMessageHistory {
                     )
                     .map_err(sql_error)?;
             }
-            Some(1) => {}
+            Some(1) | Some(2) => {}
             Some(version) => {
                 return Err(format!(
                     "Unsupported input history schema version {version}"
                 ));
             }
+        }
+        if version != Some(2) {
+            transaction
+                .execute_batch(
+                    "ALTER TABLE message_history ADD COLUMN scope TEXT;
+                 CREATE INDEX message_history_scope ON message_history(scope, id);
+                 UPDATE ash_schema_migrations SET version = 2 WHERE component = 'message-history';",
+                )
+                .map_err(sql_error)?;
         }
         prune(&transaction, retention)?;
         transaction.commit().map_err(sql_error)?;
@@ -97,10 +106,10 @@ impl MessageHistoryStore for SqliteMessageHistory {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql_error)?;
         transaction.execute(
-            "INSERT INTO message_history(submitted_at_ms, kind, thread_id, text, search_text, text_bytes)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO message_history(submitted_at_ms, kind, thread_id, text, search_text, text_bytes, scope)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             (i64::try_from(submitted_at_ms).map_err(|_| "Input history timestamp is out of range")?, kind_name(submission.kind), &submission.thread_id,
-             &submission.text, submission.text.to_lowercase(), submission.text.len() as i64),
+             &submission.text, submission.text.to_lowercase(), submission.text.len() as i64, &submission.scope),
         ).map_err(sql_error)?;
         let id = u64::try_from(transaction.last_insert_rowid())
             .map_err(|_| "Invalid input history identity")?;
@@ -121,10 +130,11 @@ impl MessageHistoryStore for SqliteMessageHistory {
             .map_err(|_| "Input history lock poisoned")?;
         let mut statement = connection
             .prepare(
-                "SELECT id, submitted_at_ms, kind, thread_id, text FROM message_history
+                "SELECT id, submitted_at_ms, kind, thread_id, text, scope FROM message_history
              WHERE (?1 IS NULL OR id < ?1)
                AND (?2 IS NULL OR kind = ?2)
                AND instr(search_text, ?3) > 0
+               AND (?5 IS NULL OR scope = ?5)
              ORDER BY id DESC LIMIT ?4",
             )
             .map_err(sql_error)?;
@@ -134,6 +144,7 @@ impl MessageHistoryStore for SqliteMessageHistory {
                 query.kind.map(kind_name),
                 query.text.to_lowercase(),
                 query.limit + 1,
+                query.scope.as_deref(),
             ))
             .map_err(sql_error)?;
         let mut page = Page::default();
@@ -159,6 +170,7 @@ impl MessageHistoryStore for SqliteMessageHistory {
                 text,
                 kind,
                 thread_id: row.get(3).map_err(sql_error)?,
+                scope: row.get(5).map_err(sql_error)?,
             };
             submission.validate()?;
             page.entries.push(Entry {

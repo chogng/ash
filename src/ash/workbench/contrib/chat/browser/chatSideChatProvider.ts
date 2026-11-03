@@ -75,7 +75,11 @@ export class ChatSideChatProvider extends Disposable implements IChatSideChatPro
 			approvalMode: state.approvalMode, contexts, signal: options?.signal,
 		});
 		current();
-		await this.navigation.openConversation(branch.sessionId, branch.threadId);
+		if (this.navigation.openSideConversation) {
+			await this.navigation.openSideConversation(branch.sessionId, branch.threadId);
+		} else {
+			await this.navigation.openConversation(branch.sessionId, branch.threadId);
+		}
 	}
 
 	observeSideChatOrigin(resource: URI): IObservable<IChatSideChatOrigin | undefined> {

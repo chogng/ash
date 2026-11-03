@@ -169,6 +169,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         mutation: super::operations::SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>;
     fn local_env_tool_ports(
         &self,
@@ -663,7 +664,19 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 title,
             } => result(&SessionRequestResult::Thread(
                 self.context
-                    .fork_session_request(mutation, parent_thread_id, title)?,
+                    .fork_session_request(mutation, parent_thread_id, title, None)?,
+            )),
+            SessionRequest::ForkComparison {
+                parent_thread_id,
+                title,
+                comparison,
+            } => result(&SessionRequestResult::Thread(
+                self.context.fork_session_request(
+                    mutation,
+                    parent_thread_id,
+                    title,
+                    Some(comparison),
+                )?,
             )),
             SessionRequest::CreateSideChat {
                 parent_thread_id,

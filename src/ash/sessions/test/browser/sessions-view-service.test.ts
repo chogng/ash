@@ -243,6 +243,30 @@ test('Sessions view service replaces visible sessions on open and Back/Forward n
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
 });
 
+test('a side Thread retains its source slot and restores both slots from workspace state', async () => {
+	const root = session('session', 'source');
+	using sessions = new FakeSessionService([{
+		...root,
+		chats: [...root.chats, { threadId: 'side', origin: { type: 'root' }, status: 'active' }],
+	}]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.openThread('session', 'side', { sideBySide: true });
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	assert.equal(selectionId(view.activeSelection), 'session:session:side');
+
+	view.openSession('session', 'source');
+	await view.openThread('session', 'side');
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	using restored = createView(sessions, storage);
+	await restored.initialize();
+	assert.deepEqual(restored.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	assert.equal(selectionId(restored.activeSelection), 'session:session:side');
+	restored.closeVisibleSelection(restored.activeSelection!);
+	assert.deepEqual(restored.visibleSelections.map(selectionId), ['session:session:source']);
+});
+
 test('Sessions view navigation skips references that are no longer available', async () => {
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();

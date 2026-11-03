@@ -516,6 +516,7 @@ async fn named_provision_creates_the_requested_branch_only_in_the_new_worktree()
         },
         target: ManagedDirTarget::NewBranch {
             name: "ash/topic".into(),
+            base_object_id: None,
         },
         repository_targets: BTreeMap::new(),
         source_dir_id: "dir-named".into(),
@@ -540,6 +541,7 @@ async fn named_provision_creates_the_requested_branch_only_in_the_new_worktree()
     let renamed_retry = ManagedDirProvisionRequest {
         target: ManagedDirTarget::NewBranch {
             name: "ash/other".into(),
+            base_object_id: None,
         },
         ..request.clone()
     };

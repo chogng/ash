@@ -104,6 +104,7 @@ export class SessionsBrowserMain extends Disposable {
 					'sessions.contrib.filesView',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
+					'sessions.openSessionLinkOpener',
 					'sessions.contrib.automationsCustomView',
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
