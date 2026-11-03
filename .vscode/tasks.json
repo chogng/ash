@@ -12,6 +12,7 @@
 		},
 		{
 			"label": "Build Ash Debug Backend",
+			"dependsOn": "Prepare Ash Backend",
 			"type": "shell",
 			"command": "pnpm debug:backend",
 			"options": {

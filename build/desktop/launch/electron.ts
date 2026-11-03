@@ -12,12 +12,15 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const child = spawn(process.execPath, [resolve(import.meta.dirname, 'supervisor.ts'), ...process.argv.slice(2)], {
 		cwd: resolve(import.meta.dirname, '../../..'),
 		env: process.env,
-		stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+		stdio: ['inherit', 'pipe', 'pipe', 'ipc'],
 		// Windows also needs the supervisor outside the launcher's kill-on-close job.
 		// Its IPC disconnect handler must survive a forcibly terminated launcher.
 		detached: true,
 		windowsHide: true,
 	});
+	// A detached supervisor must write through the launcher that owns the debug terminal.
+	child.stdout.pipe(process.stdout, { end: false });
+	child.stderr.pipe(process.stderr, { end: false });
 	const interrupt = (): void => { child.kill('SIGINT'); };
 	const terminate = (): void => { child.kill('SIGTERM'); };
 	process.on('SIGINT', interrupt);
@@ -25,7 +28,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	try {
 		process.exitCode = await new Promise<number>((resolveExit, reject) => {
 			child.once('error', reject);
-			child.once('exit', (code, signal) => resolveExit(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1));
+			child.once('close', (code, signal) => resolveExit(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1));
 		});
 	} finally {
 		process.off('SIGINT', interrupt);
@@ -51,11 +54,13 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const developmentServices = args[0] === '--dev-services';
 	if (developmentServices) args.shift();
 	if (developmentServices && !watch) throw new Error('--dev-services requires --watch');
+	const backendPrepared = args[0] === '--backend-prepared';
+	if (backendPrepared) args.shift();
 	const environment = { ...process.env };
 	const subsecond = environment.ASH_DEV_SUBSECOND === '1';
 	let subsecondSession: string | undefined;
 	if (subsecond) {
-		if (process.platform !== 'darwin' || process.arch !== 'arm64' || !developmentServices || environment.ASH_DEV_APP_SERVER_RELOAD !== '1' || environment.ASH_DESKTOP_UI_ONLY === '1' || environment.ASH_RUST_LIVE_DIRECTORY) {
+		if (process.platform !== 'darwin' || process.arch !== 'arm64' || !developmentServices || backendPrepared || environment.ASH_DEV_APP_SERVER_RELOAD !== '1' || environment.ASH_DESKTOP_UI_ONLY === '1' || environment.ASH_RUST_LIVE_DIRECTORY) {
 			throw new Error('Subsecond development requires Apple Silicon macOS and pnpm dev:subsecond without ASH_RUST_LIVE_DIRECTORY');
 		}
 		if (args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir='))) throw new Error('Subsecond development owns its isolated user-data directory');
@@ -134,12 +139,6 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let relaunch = false;
 		let busy = false;
 		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: detachedProcess() });
-		const inspector = args.find(argument => /^--inspect(?:-brk)?=/u.test(argument));
-		if (inspector) {
-			// js-debug can suppress the runtime's Inspector stderr. Publish from the
-			// launcher instead; attach owns waiting for the new process to listen.
-			child.once('spawn', () => console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`));
-		}
 		child.on('message', message => {
 			if (message === 'ash:dev:ready') { ready = true; busySince = undefined; }
 			if (message === 'ash:dev:relaunch') relaunch = true;
@@ -226,7 +225,8 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (process.connected) process.send!('ash:dev:heartbeat', () => { });
 	}, 1_000).unref() : undefined;
 	process.once('exit', () => clearInterval(heartbeat));
-	if (environment.ASH_DESKTOP_UI_ONLY !== '1') {
+	if (!backendPrepared && environment.ASH_DESKTOP_UI_ONLY !== '1') {
+		console.log('[app-server] Preparing the development backend (builds Rust binaries if needed)...');
 		try { await prepareAppServer('host-provided-node', cancellation.signal, subsecond ? serviceEnvironment : undefined); }
 		catch (error) { if (!stopped) throw error; }
 	}

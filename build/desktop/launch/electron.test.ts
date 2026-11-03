@@ -311,6 +311,7 @@ child = subprocess.Popen([sys.executable, '-c', 'import os, signal, time; signal
 compiler = int(child.stdout.readline())
 Path('preparation.tmp').write_text(json.dumps({'parent': os.getpid(), 'compiler': compiler}))
 os.replace('preparation.tmp', 'preparation.json')
+print('compiler progress', file=sys.stderr, flush=True)
 time.sleep(300)
 `);
 	const environment: NodeJS.ProcessEnv = { ...process.env, ASH_ELECTRON_LAUNCH_WORKER: '1', PYTHON: pythonCommand([]).command };
@@ -332,6 +333,9 @@ time.sleep(300)
 		if (!preparation) await delay(50);
 	}
 	assert.ok(preparation, output);
+	while (!output.includes('compiler progress') && Date.now() < deadline) await delay(50);
+	assert.match(output, /Preparing the development backend/);
+	assert.match(output, /compiler progress/);
 	// Signal only the launcher: its cancellation owner must reclaim preparation
 	// before this test's fallback ProcessRun performs cleanup.
 	child.kill('SIGTERM');
@@ -463,8 +467,8 @@ setInterval(() => {}, 1000);
 			const run = new ProcessRun(root, undefined, 100);
 			runs.push(run);
 			const previousCount = (await pids()).length;
-			const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services'], {
-				cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: '1', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RENDERER_URL: `http://127.0.0.1:${port}` },
+			const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services', '--backend-prepared'], {
+				cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: undefined, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RENDERER_URL: `http://127.0.0.1:${port}` },
 			});
 			let output = '';
 			child.stdout.on('data', chunk => { output += chunk; });
