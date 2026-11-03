@@ -39,7 +39,7 @@ export interface IActionWidgetDropdownOptions {
 
 interface IActionWidgetDropdownItems<T> {
 	readonly load: (token: CancellationToken) => readonly IActionListItem<T>[] | Promise<readonly IActionListItem<T>[]>;
-	readonly refresh?: (token: CancellationToken) => Promise<readonly IActionListItem<T>[]>;
+	readonly refresh?: (token: CancellationToken, publish: (items: readonly IActionListItem<T>[]) => void) => Promise<readonly IActionListItem<T>[] | void>;
 	readonly filterItems?: (items: readonly IActionListItem<T>[], query: string) => readonly IActionListItem<T>[];
 	readonly select: (item: T) => unknown;
 	readonly requireIdle?: boolean;
@@ -219,11 +219,12 @@ export class ActionWidgetDropdown extends Disposable {
 				className: [this.options.listOptions?.className, !this.options.onOpen && ACTION_WIDGET_DROPDOWN_MOTION_CLASS].filter(Boolean).join(' '),
 			});
 			if (this.request === request && options.refresh) {
-				void options.refresh(request.token).then(loaded => {
+				const publish = (loaded: readonly IActionListItem<T>[]): void => {
 					if (this.request !== request || request.token.isCancellationRequested) { return; }
 					items = loaded;
 					update();
-				}).catch(fail);
+				};
+				void options.refresh(request.token, publish).then(loaded => { if (loaded) publish(loaded); }).catch(fail);
 			}
 		};
 		try {

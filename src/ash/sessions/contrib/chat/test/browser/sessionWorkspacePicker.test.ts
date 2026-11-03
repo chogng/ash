@@ -13,9 +13,10 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { ILocalGitService } from '../../../../../platform/git/common/localGitService.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
-import type { IActionListItem, IActionListDelegate } from '../../../../../platform/actionWidget/browser/actionList.js';
+import { ActionListItemKind, type IActionListItem, type IActionListDelegate } from '../../../../../platform/actionWidget/browser/actionList.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { IQuickInputService, type IInputOptions } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspacesService, type IRecent } from '../../../../../platform/workspaces/common/workspaces.js';
@@ -27,13 +28,14 @@ import { ISessionsManagementService } from '../../../../services/sessions/common
 import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWorkspaceSelection } from '../../../../services/sessions/common/session.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[]) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
+	services.registerInstance(ILabelService, { getUriLabel: (uri: URI) => uri.fsPath } as ILabelService);
 	const changed = lifetime.add(new Emitter<void>());
 	const updated = lifetime.add(new Emitter<void>());
 	const loaded = lifetime.add(new Emitter<void>());
@@ -74,18 +76,24 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 			changed.fire();
 		},
 	} as unknown as ISessionsManagementService);
+	let worktreeRequests = 0;
+	const provider = {
+		isDevContainerWorkspaceAvailable: async () => gates?.container ?? false,
+		getWorktrees: async () => {
+			worktreeRequests++;
+			await gates?.worktrees;
+			return worktrees ?? [{ label: 'main', target }, { label: 'review', target: { ...target, root: '/checkouts/review' } }];
+		},
+	};
 	services.registerInstance(ISessionsProvidersService, {
-		getProvider: () => ({
-			isDevContainerWorkspaceAvailable: async () => false,
-			getWorktrees: async () => worktrees ?? [{ label: 'review', target: { ...target, root: '/checkouts/review' } }],
-		}),
+		getProvider: () => provider, onDidChangeProviders: Event.None,
 	} as unknown as ISessionsProvidersService);
 	services.registerInstance(IWorkspaceContextService, {
-		getWorkspace: () => ({ id: 'project', folders: [] }), onDidChangeWorkspaceFolders: Event.None,
+		getWorkspace: () => ({ id: 'project', folders: windowFolder ? [windowFolder] : [] }), onDidChangeWorkspaceFolders: Event.None,
 	} as unknown as IWorkspaceContextService);
 	let history: readonly IRecent[] = [{ folderUri: URI.file('/recent'), label: 'Recent project' }, ...additionalRecents];
 	services.registerInstance(IWorkspacesService, {
-		getRecentlyOpened: async () => ({ workspaces: history }),
+		getRecentlyOpened: async () => { await gates?.history; return { workspaces: history }; },
 		addRecentlyOpened: async (entries: readonly IRecent[]) => { history = [...entries, ...history]; },
 	} as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, { showOpenDialog: () => dialog.p } as unknown as IFileDialogService);
@@ -97,13 +105,19 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	return {
 		button, control, model, changed, updated, loaded: loaded.event, dialog, branch, errors, checkout, cloneStarted, cancelled,
 		get history() { return history; },
+		get worktreeRequests() { return worktreeRequests; },
+		get items() { return items; },
 		get labels() { return items.map(item => item.label); }, get drafts() { return drafts; }, get inputOptions() { return inputOptions; }, get disposed() { return disposed; },
 		async open() {
 			button.click();
-			await new Promise<void>(resolve => lifetime.add(Event.once(loaded.event)(resolve)));
+			await new Promise<void>(resolve => setImmediate(resolve));
 		},
 		choose(label: string) {
-			const action = items.find(item => item.label === label)?.item;
+			const entry = items.flatMap(item => item.submenu ?? [item]).find(item => item.label === label);
+			if (entry?.standaloneToggle) {
+				return entry.standaloneToggle.onChange(!entry.standaloneToggle.checked);
+			}
+			const action = entry?.item;
 			assert.ok(action && delegate, `Missing choice: ${label}`);
 			return delegate.onSelect(action);
 		},
@@ -124,7 +138,7 @@ test('Workspace picker hides when the composer moves from a draft to a session',
 test('Workspace picks an existing worktree for only its owning independent conversation', async () => {
 	using f = fixture();
 	await f.open();
-	f.choose('Worktree · review');
+	f.choose('review');
 	assert.equal(f.drafts[0]?.workspace.type, 'local');
 	assert.equal((f.drafts[0]?.workspace as SessionExecutionTarget).root, '/checkouts/review');
 	assert.equal((f.drafts[1]?.workspace as SessionExecutionTarget).root, URI.file('/project').fsPath);
@@ -133,13 +147,61 @@ test('Workspace picks an existing worktree for only its owning independent conve
 	assert.deepEqual(f.errors, []);
 });
 
-test('Recent folders are selectable in the first menu before Open Folder', async () => {
+test('Worktree controls are present while loading and become ready independently', async () => {
+	const worktrees = new DeferredPromise<void>();
+	const container = new DeferredPromise<boolean>();
+	const history = new DeferredPromise<void>();
+	using f = fixture(undefined, [], [], undefined, undefined, { worktrees: worktrees.p, container: container.p, history: history.p });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(f.worktreeRequests, 1);
+	await f.open();
+	assert.equal(f.worktreeRequests, 1);
+	assert.deepEqual(f.labels.slice(-2), ['Loading branches…', 'New worktree']);
+	assert.equal(f.items.at(-1)?.disabled, true);
+
+	const updated = new Promise<void>(resolve => Event.once(f.loaded)(resolve));
+	await worktrees.complete();
+	await updated;
+	assert.deepEqual(f.labels.slice(-2), ['main', 'New worktree']);
+	assert.equal(f.items.at(-1)?.disabled, false);
+	assert.ok(!f.labels.includes('Recent project'));
+	await container.complete(false);
+	await history.complete();
+});
+
+test('Branches and the worktree toggle form the last group', async () => {
 	using f = fixture();
 	await f.open();
-	assert.ok(f.labels.indexOf('Recent project') >= 0);
-	assert.ok(f.labels.indexOf('Recent project') < f.labels.indexOf('Open Folder…'));
+	assert.deepEqual(f.items.map(item => item.kind === ActionListItemKind.Separator ? null : item.label), [
+		'Recent project', null,
+		'Clone Repository…', 'Manage Recent Folders…', 'Open Folder…', null,
+		'main', 'New worktree',
+	]);
+	const branches = f.items.find(item => item.label === 'main');
+	assert.equal(branches?.group?.icon?.id, 'git-branch');
+	assert.deepEqual(branches?.submenu?.map(item => [item.label, item.checked]), [['main', true], ['review', false]]);
+	const toggle = f.items.find(item => item.label === 'New worktree');
+	assert.equal(toggle?.group?.icon?.id, 'worktree');
+	assert.equal(toggle?.standaloneToggle?.label, 'New worktree');
+	assert.equal(toggle?.standaloneToggle?.checked, false);
 	f.choose('Recent project');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/recent').fsPath });
+});
+
+test('Workspace rows provide folder names and parent directory metadata while selecting the full folder path', async () => {
+	const project = URI.file('/work/project');
+	const checkout = URI.file('/work/checkout');
+	const archive = URI.file('/work/archive');
+	using f = fixture(undefined, [], [
+		{ folderUri: checkout },
+		{ folderUri: archive, label: archive.fsPath },
+	], undefined, { name: 'project', uri: project });
+	await f.open();
+	for (const name of ['project', 'checkout', 'archive']) {
+		assert.equal(f.items.find(item => item.label === name)?.description, URI.file('/work').fsPath);
+	}
+	f.choose('project');
+	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: project.fsPath });
 });
 
 test('Hiding a recent folder applies to another draft and restoring leaves shared history intact', async () => {
@@ -171,7 +233,7 @@ test('A recent checkout verified by the current host appears once as a worktree'
 		{ folderUri: URI.file('/other.worktrees/review'), label: 'Unverified folder' },
 	]);
 	await f.open();
-	assert.ok(f.labels.includes('Worktree · review'));
+	assert.ok(f.items.some(item => item.submenu?.some(branch => branch.label === 'review')));
 	assert.ok(!f.labels.includes('Duplicate checkout'));
 	assert.ok(f.labels.includes('Unverified folder'));
 });
@@ -189,7 +251,7 @@ test('Recents fold a verified checkout under a different visible repository', as
 	await f.open();
 	assert.ok(f.labels.includes('Another repository'));
 	assert.ok(!f.labels.includes('Another checkout'));
-	assert.ok(!f.labels.includes('Worktree · another'));
+	assert.ok(!f.items.some(item => item.submenu?.some(branch => branch.label === 'another')));
 	assert.ok(f.labels.includes('Standalone checkout'));
 });
 
@@ -204,23 +266,28 @@ test('Workspace includes recent active Session folders from the draft host after
 		session('archived', 40, LOCAL_AGENT_HOST_PROVIDER_ID, 'archived'), session('other-host', 50, 'another-host'),
 	]);
 	await f.open();
-	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('Open Folder…')), ['Recent project', 'latest', 'earlier']);
+	assert.deepEqual(f.labels.slice(0, f.labels.indexOf('')), ['Recent project', 'latest', 'earlier']);
 	f.choose('latest');
 	assert.deepEqual(f.drafts[0]?.workspace, { type: 'local', root: URI.file('/latest').fsPath });
 });
 
-test('New worktree validates a branch and changes the draft without creating a conversation', async () => {
+test('New worktree toggles the draft without prompting and retains the selected branch checkout', async () => {
 	using f = fixture();
 	await f.open();
-	f.choose('New worktree…');
-	assert.equal(await f.inputOptions?.validateInput?.('../escape'), 'Enter a valid new Git branch name.');
-	assert.equal(await f.inputOptions?.validateInput?.('review/topic'), undefined);
-	const updated = new Promise<void>(resolve => Event.once(f.changed.event)(resolve));
-	await f.branch.complete('review/topic');
-	await updated;
-	assert.equal(f.drafts[0]?.branchName, 'review/topic');
+	await f.choose('New worktree');
+	const generatedBranch = f.drafts[0]?.branchName;
+	assert.match(generatedBranch ?? '', /^ash\/[a-f0-9-]{36}$/u);
+	assert.equal(f.inputOptions, undefined);
 	assert.equal(f.drafts[1]?.branchName, undefined);
-	assert.equal(f.button.textContent, 'Worktree · review/topic');
+	assert.equal(f.button.getAttribute('aria-expanded'), 'true');
+	assert.equal(f.items.find(item => item.label === 'New worktree')?.standaloneToggle?.checked, true);
+	await f.choose('review');
+	assert.equal((f.drafts[0]?.workspace as SessionExecutionTarget).root, '/checkouts/review');
+	assert.equal(f.drafts[0]?.branchName, generatedBranch);
+	await f.open();
+	await f.choose('New worktree');
+	assert.equal(f.items.find(item => item.label === 'New worktree')?.standaloneToggle?.checked, false);
+	assert.equal(f.drafts[0]?.branchName, undefined);
 });
 
 test('A native folder dialog cannot publish after its conversation was switched or disposed', async () => {
@@ -278,12 +345,10 @@ test('Workspace cancellation keeps the draft and the Chinese picker exposes tran
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(f.button.ownerDocument.activeElement, f.button);
 		await f.open();
-		f.choose('新建 worktree…');
-		assert.equal(f.inputOptions?.placeHolder, '新分支名；首次发送消息时创建');
-		await f.branch.complete(undefined);
-		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.equal(f.drafts[0]?.branchName, undefined);
-		assert.equal(f.button.ownerDocument.activeElement, f.button);
+		await f.choose('新建工作树');
+		assert.equal(f.inputOptions, undefined);
+		assert.equal(f.items.find(item => item.label === '新建工作树')?.standaloneToggle?.checked, true);
+		assert.equal(f.button.getAttribute('aria-expanded'), 'true');
 	} finally {
 		resetNlsResolver();
 	}

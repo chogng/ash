@@ -1264,7 +1264,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderStatus();
 		if (visible) {
 			this.input.layout();
-			this.contextUsageWidget?.update(this.state.contextUsage);
 		}
 		if (!visible) {
 			this.invalidatePendingInput();

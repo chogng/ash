@@ -714,6 +714,49 @@ suite('actionWidget browser component', () => {
 		await expect(page.getByRole('button', { name: 'Open actions' })).toBeFocused();
 	});
 
+	test('menu switches fit inside the trailing edge and toggle in place', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		await page.evaluate(() => window.ashActionWidgetIntegration.showToggle());
+		await page.keyboard.press('ArrowDown');
+		const row = page.getByRole('menuitemcheckbox', { name: 'New worktree' });
+		await expect(row).toBeFocused();
+		await expect(row).toHaveAttribute('aria-checked', 'false');
+		const track = row.locator('.ash-switch-track');
+		await expect(track).toHaveCSS('width', '34px');
+		const fits = await track.evaluate(element => {
+			const trackBounds = element.getBoundingClientRect();
+			const rowBounds = element.closest('button')!.getBoundingClientRect();
+			const labelBounds = element.closest('button')!.querySelector('.ash-button-label')!.getBoundingClientRect();
+			return trackBounds.left > labelBounds.right && trackBounds.right < rowBounds.right;
+		});
+		expect(fits).toBe(true);
+		const originalTrack = (await track.elementHandle())!;
+		await page.keyboard.press('Space');
+		await expect(row).toHaveAttribute('aria-checked', 'true');
+		await expect(row).toBeFocused();
+		expect(await originalTrack.evaluate(element => element.isConnected)).toBe(true);
+		await track.click();
+		await expect(row).toHaveAttribute('aria-checked', 'false');
+		expect(await originalTrack.evaluate(element => element.isConnected)).toBe(true);
+	});
+
+	test('menu descriptions appear in row tooltips and remain accessible without inline text', async function () {
+		const { page } = browserTests;
+		const parent = '/a/long/parent/directory/for/a/workspace';
+		await page.goto('/actionWidget.html');
+		await page.evaluate(description => window.ashActionWidgetIntegration.show(
+			['Project'], { showRowTooltips: true }, description,
+		), parent);
+		const row = page.getByRole('menuitemradio', { name: 'Project' });
+		await expect(row).toBeFocused();
+		await expect(row).toHaveAttribute('aria-description', parent);
+		await expect(row).toHaveText('Project');
+		await expect(row).toHaveAttribute('title', `Project · ${parent}`);
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('status', { name: 'Selection' })).toHaveText('Project');
+	});
+
 	test('action menu follows the viewport width when the window shrinks and grows', async function () {
 		const { page } = browserTests;
 
