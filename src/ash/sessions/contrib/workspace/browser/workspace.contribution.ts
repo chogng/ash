@@ -4,7 +4,7 @@ import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '.
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { isHTMLElement } from '../../../../base/browser/dom.js';
+import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import {
 	IAppServerApi,
@@ -41,22 +41,34 @@ export function createSessionFolderTrustRequestService(
 ): IDirectoryPermissionRequestService & {
 	confirmFolderTrust(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean>;
 } {
-	const handler = new BrowserDialogHandler(container, {
-		messageAsTitle: true,
-		extraClasses: ['ash-sessions-directory-permission-dialog'],
-		disableCloseButton: true,
-		disableDefaultAction: true,
-		focusCancelButton: true,
-		buttonOptions: [undefined, { presentation: 'quiet' }],
-	});
 	const confirmFolderTrust = async (request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<boolean> => {
-		const location = request.remoteHostLabel
-			? localize('sessions.workspace.remoteTrustLocation', 'Folder on {0}: {1}', request.remoteHostLabel, request.path)
-			: localize('sessions.workspace.trustLocation', 'Folder: {0}', request.path);
+		const document = container.ownerDocument;
+		const detail = h(document, 'div', { className: 'ash-sessions-directory-permission-detail' });
+		const explanation = h(document, 'div');
+		explanation.textContent = localize(
+			'sessions.workspace.trustDetail',
+			'Trust allows Agents to read and edit files, run commands, and load project instructions and integrations in this folder.',
+		);
+		detail.append(explanation);
+		if (request.remoteHostLabel) {
+			const host = h(document, 'div');
+			host.textContent = localize('sessions.workspace.remoteTrustHost', 'Remote environment: {0}', request.remoteHostLabel);
+			detail.append(host);
+		}
+		const path = h(document, 'div', { className: 'ash-sessions-directory-permission-path' });
+		path.textContent = request.path;
+		detail.append(path);
+		const handler = new BrowserDialogHandler(container, {
+			messageAsTitle: true,
+			extraClasses: ['ash-sessions-directory-permission-dialog'],
+			detailElement: detail,
+			disableCloseButton: true,
+			disableDefaultAction: true,
+			focusCancelButton: true,
+		});
 		const outcome = await showPrompt(async () => ({
 			kind: 'confirmation',
-			message: localize('sessions.workspace.trustQuestion', 'Trust this folder for Agents?'),
-			detail: location + '\n\n' + localize('sessions.workspace.trustDetail', 'Trust allows Agents to read and edit files, run commands, and load project instructions and integrations in this folder.'),
+			message: localize('sessions.workspace.trustQuestion', 'Trust this workspace?'),
 			primaryButton: localize('sessions.workspace.trustAndOpen', 'Trust and Open'),
 		}), handler, signal);
 		return outcome.button === DialogResult.Primary;

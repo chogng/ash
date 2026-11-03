@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 
-export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
+export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
 	readonly messageAsTitle?: boolean;
 }
 
