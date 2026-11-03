@@ -12,26 +12,30 @@ export interface RebuildServer {
 }
 
 /** Coalesces changes for generators that reread all their inputs on every run. */
-export function watchRebuild(server: RebuildServer, accepts: (path: string) => boolean, build: () => Promise<boolean>, debounceMilliseconds = 50): () => Promise<void> {
+export function watchRebuild(server: RebuildServer, accepts: (path: string) => boolean, build: (paths: ReadonlySet<string>) => Promise<boolean>, debounceMilliseconds = 50): () => Promise<void> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let running = false;
 	let completion: Promise<void> = Promise.resolve();
 	let changed = false;
 	let dirty = false;
+	let paths = new Set<string>();
 	let closed = false;
 
 	async function rebuild(): Promise<void> {
 		if (closed || running || !dirty) { return; }
 		dirty = false;
 		running = true;
+		const batch = paths;
+		paths = new Set();
 		try {
-			changed = await build() || changed;
+			changed = await build(batch) || changed;
 			// Keep changes from earlier passes, including when the final pass is a no-op.
 			if (!closed && !dirty && changed) {
 				server.ws.send({ type: 'full-reload' });
 				changed = false;
 			}
 		} catch (error) {
+			for (const path of batch) paths.add(path);
 			if (!closed) { server.config.logger.error(error instanceof Error ? error.message : String(error), { error }); }
 		} finally {
 			running = false;
@@ -43,6 +47,7 @@ export function watchRebuild(server: RebuildServer, accepts: (path: string) => b
 	function onChange(event: string, path: string): void {
 		if (closed || !['add', 'change', 'unlink'].includes(event) || !accepts(path)) { return; }
 		dirty = true;
+		paths.add(path);
 		clearTimeout(timer);
 		timer = setTimeout(() => {
 			timer = undefined;

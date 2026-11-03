@@ -4,12 +4,13 @@ import { pathToFileURL } from 'node:url';
 import type { Plugin } from 'vite';
 import { browserExtensionRoots, browserExtensionWatchFiles, prepareBuiltinExtensions } from '../../builtin/extensions.ts';
 import { watchRebuild } from '../../lib/watchRebuild.ts';
-import { generateLocalization, isLocalizationInput, localizationWatchRoots } from '../../resources/localization.ts';
+import { createLocalizationWatchFilter, generateLocalization, isLocalizationInput, localizationWatchRoots } from '../../resources/localization.ts';
 
 /** Publishes package snapshots before compilation and reloads after an extension source changes. */
 export function browserExtensionsPlugin(): Plugin {
 	let stopWatching: (() => Promise<void>) | undefined;
 	let development = false;
+	let localizationFilter: Awaited<ReturnType<typeof createLocalizationWatchFilter>> | undefined;
 	return {
 		name: 'ash-browser-extensions',
 		async config(_config, environment) {
@@ -18,6 +19,7 @@ export function browserExtensionsPlugin(): Plugin {
 			if (development) {
 				// Preflight resources while Vite still serves the previous configuration.
 				// A failed buildStart would run after that server has already closed.
+				localizationFilter = await createLocalizationWatchFilter();
 				await generateLocalization();
 				await prepareBuiltinExtensions();
 				for (const entry of await readdir(browserExtensionRoots[0], { withFileTypes: true })) {
@@ -67,15 +69,21 @@ export function browserExtensionsPlugin(): Plugin {
 			};
 			await updateWatchFiles();
 			server.watcher.add([...browserExtensionRoots, ...localizationWatchRoots]);
-			stopWatching = watchRebuild(server, path => dependencies.has(resolve(path)) || isLocalizationInput(path) || browserExtensionRoots.some(root => {
+			const shouldPrepareLocalization = localizationFilter ?? await createLocalizationWatchFilter();
+			const isExtensionInput = (path: string) => dependencies.has(resolve(path)) || browserExtensionRoots.some(root => {
 				const inside = relative(root, path);
 				return !isAbsolute(inside) && inside !== '..' && !inside.startsWith('..\\') && !inside.startsWith('../')
 					&& !inside.split(/[\\/]/).some(part => part.startsWith('.') || ['node_modules', 'test', 'target'].includes(part));
-			}), async () => {
-				const localized = await generateLocalization();
+			});
+			let localizationPublished = false;
+			stopWatching = watchRebuild(server, path => isLocalizationInput(path) || isExtensionInput(path), async paths => {
+				localizationPublished = await shouldPrepareLocalization(paths, generateLocalization) || localizationPublished;
+				if (!localizationPublished && ![...paths].some(isExtensionInput)) return false;
 				const extensions = await prepareBuiltinExtensions();
 				await updateWatchFiles();
-				return localized || extensions;
+				const changed = localizationPublished || extensions;
+				localizationPublished = false;
+				return changed;
 			});
 		},
 	};

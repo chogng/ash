@@ -283,7 +283,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const clientDormant = join(root, 'extensions/document-client/common/dormant.ts');
 	await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package before');`);
 	await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit');`);
-	const { localizationPlugin } = await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href) as typeof import('./localization.ts');
+	const { createLocalizationWatchFilter, localizationPlugin } = await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href) as typeof import('./localization.ts');
 	const events = new EventEmitter();
 	const logger = createLogger('silent');
 	logger.error = message => { events.emit('failure', message); };
@@ -300,6 +300,9 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		assert.ok(server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts'));
 		await server.environments.client.transformRequest('/entry.js');
 		assert.equal(server.environments.client.moduleGraph.getModuleById(dormant.replaceAll('\\', '/')), undefined);
+		const filter = await createLocalizationWatchFilter();
+		await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit'); export const unrelated = 42;`);
+		assert.equal(await filter(new Set([dormant]), async () => assert.fail('An unchanged message must skip preparation')), false);
 		await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'After edit');`);
 		await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package after');`);
 		const updatedBy = Date.now() + 5_000;
