@@ -100,9 +100,32 @@
 	grid-template-columns: minmax(0, 1fr);
 }
 
+/* A hidden header may sit between the search field and the results. */
+.ash-action-widget-filter:not([hidden])
+	~ .ash-action-widget-items:not([hidden])
+	> .ash-action-widget-menu.ash-menu {
+	padding-block-start: var(--ash-menu-divider-gap, var(--ash-menu-padding));
+}
+
 .ash-action-widget-menu.ash-menu .ash-button {
 	position: relative;
-	padding-right: var(--ash-spacing-size280);
+	padding-inline-end: var(
+		--ash-menu-item-padding-end,
+		var(--ash-menu-item-padding-inline, var(--ash-spacing-size280))
+	);
+}
+
+/* Pointer opening can focus a row before the menu receives pointer input. */
+.ash-action-widget-menu.ash-menu
+	> .ash-action-view-item.focused
+	> .ash-button:focus:not(:focus-visible) {
+	outline-color: var(
+		--ash-action-widget-pointer-focus-outline-color,
+		var(
+			--ash-menu-style-selection-border-color,
+			var(--ash-menu-selectionBorder, transparent)
+		)
+	);
 }
 
 .ash-action-widget-menu .ash-menu-leading-check > .ash-icon {
@@ -152,6 +175,13 @@
 	overflow: auto;
 }
 
+/* The popup paints the surface so the scrolling menu cannot cover its rounded corners. */
+.ash-action-widget-details
+	.ash-action-widget-items
+	> .ash-action-widget-menu.ash-menu {
+	background: transparent;
+}
+
 .ash-action-widget-details > .ash-action-widget-filter {
 	flex-shrink: 0;
 }
@@ -185,4 +215,43 @@
 	text-overflow: ellipsis;
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-action-widget-details
+	.ash-menu
+	.ash-action-widget-primary:has(> .ash-action-widget-summary) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: var(--ash-spacing-size20) var(--ash-spacing-size40);
+	height: auto;
+	padding-block: var(--ash-spacing-size60);
+}
+
+.ash-action-widget-details
+	.ash-action-widget-primary:has(> .ash-action-widget-summary)
+	> .ash-button-content {
+	grid-area: 1 / 1;
+	justify-content: start;
+}
+
+.ash-action-widget-details
+	.ash-action-widget-primary
+	> .ash-action-widget-summary {
+	grid-area: 2 / 1;
+	overflow: visible;
+	white-space: normal;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.ash-action-widget-details
+	.ash-action-widget-primary:has(> .ash-action-widget-summary)
+	> .ash-action-widget-check {
+	grid-area: 1 / 2 / span 2;
+}
+
+.ash-action-widget-details
+	.ash-action-widget-primary:has(> .ash-action-widget-summary)
+	> .ash-menu-badge {
+	grid-area: 1 / 3 / span 2;
 }

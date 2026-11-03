@@ -43,7 +43,11 @@
 	width: 100%;
 	height: var(--ash-list-rowHeight);
 	min-height: var(--ash-list-rowHeight);
-	padding: 0 var(--ash-spacing-size80);
+	padding: 0 var(--ash-menu-item-padding-inline, var(--ash-spacing-size80));
+	padding-inline-end: var(
+		--ash-menu-item-padding-end,
+		var(--ash-menu-item-padding-inline, var(--ash-spacing-size80))
+	);
 	border: 0;
 	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
@@ -127,7 +131,7 @@
 .ash-menu .ash-action-view-item-separator {
 	width: auto;
 	height: var(--ash-strokeThickness);
-	margin-block: var(--ash-spacing-size40);
+	margin-block: var(--ash-menu-divider-gap, var(--ash-spacing-size40));
 	margin-inline: var(--ash-menu-divider-margin, var(--ash-spacing-size80));
 	background: var(
 		--ash-menu-divider-color,
@@ -135,6 +139,11 @@
 	);
 	opacity: 1;
 }
+.ash-menu .ash-button:has(> .ash-submenu-indicator) {
+	position: relative;
+	--ash-menu-item-padding-end: var(--ash-menu-submenu-padding-end);
+}
+
 .ash-menu .ash-submenu-indicator {
 	position: var(--ash-menu-submenu-position, static);
 	inset-inline-end: var(--ash-menu-submenu-inset, auto);

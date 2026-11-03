@@ -200,6 +200,7 @@ export class TabbedModelPicker extends Disposable {
 				const refreshAutomatic = (): void => {
 					const hasModels = this.delegate.getModels().length > 0;
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
+					container.classList.toggle('has-divider', hasModels);
 					automatic.element.hidden = !hasModels;
 					automatic.checked = this.delegate.isAutomaticModel();
 					menu.getContainer().hidden = !hasModels || this.delegate.isAutomaticModel();

@@ -48,53 +48,6 @@
 	padding-inline: var(--ash-spacing-size60);
 }
 
-.ash-chat-permission-menu {
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
-}
-
-.ash-chat-permission-menu .ash-action-widget-menu.ash-menu {
-	--ash-menu-padding: 0px;
-}
-
-.ash-chat-permission-menu .ash-action-widget-menu.ash-menu .ash-button {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	gap: var(--ash-spacing-size20) var(--ash-spacing-size80);
-	height: auto;
-	padding: var(--ash-spacing-size80);
-	font: inherit;
-	text-align: start;
-}
-
-.ash-chat-permission-menu .ash-button-content {
-	grid-column: 1;
-	grid-row: 1;
-	justify-content: start;
-	font-weight: var(--ash-fontWeight-regular);
-}
-
-.ash-chat-permission-menu .ash-action-widget-summary {
-	grid-column: 1;
-	grid-row: 2;
-	overflow: visible;
-	white-space: normal;
-	font-size: var(--ash-fontSize-label1);
-	line-height: 1.5;
-	overflow-wrap: anywhere;
-}
-
-.ash-chat-permission-menu .ash-action-widget-check {
-	display: flex;
-	grid-column: 2;
-	grid-row: 1 / 3;
-	margin: 0;
-}
-
-.ash-chat-permission-menu .ash-action-widget-check[hidden] {
-	display: flex;
-	visibility: hidden;
-}
-
 .ash-chat-input-workspace-slot {
 	display: flex;
 	min-width: 0;

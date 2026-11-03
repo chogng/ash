@@ -27,6 +27,21 @@
 	flex-shrink: 0;
 }
 
+.ash-tabbed-action-list-footer.has-divider {
+	position: relative;
+	padding-block-start: var(--ash-strokeThickness);
+}
+
+.ash-tabbed-action-list-footer.has-divider::before {
+	content: "";
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset, 0px);
+	inset-block-start: 0;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	pointer-events: none;
+}
+
 .ash-tabbed-action-list-details {
 	min-height: 0;
 	overflow: auto;

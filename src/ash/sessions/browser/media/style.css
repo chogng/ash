@@ -12,10 +12,16 @@
 	--ash-fontSize-label2: 11px;
 	--ash-fontSize-label3: 10px;
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
+	--ash-menu-divider-gap: var(--ash-spacing-size40);
 	--ash-menu-divider-inset: var(--ash-spacing-size80);
 	--ash-menu-trailing-icon-size: var(--ash-lxiconFontSize-large);
 	--ash-menu-submenu-icon-size: var(--ash-lxiconFontSize);
 	--ash-menu-submenu-position: absolute;
+	--ash-menu-item-padding-inline: var(--ash-spacing-size120);
+	--ash-action-widget-pointer-focus-outline-color: var(
+		--ash-contrastBorder,
+		transparent
+	);
 	--ash-action-widget-filter-position: relative;
 	--ash-action-widget-filter-divider-content: "";
 	--ash-icon-font-family: "Ash UI Variable";
@@ -141,37 +147,11 @@
 		var(--ash-menu-style-separator-color, var(--ash-border))
 	);
 	--ash-menu-submenu-inset: var(--ash-menu-trailing-inset);
-	min-width: 160px;
-}
-
-/* Pointer opening can focus the current item before the menu receives pointer input. */
-.ash-sessions-window
-	.ash-action-widget-menu.ash-menu
-	> .ash-action-view-item.focused
-	> .ash-button:focus:not(:focus-visible) {
-	outline-color: var(--ash-contrastBorder, transparent);
-}
-
-.ash-sessions-window .ash-menu .ash-button:has(> .ash-submenu-indicator) {
-	position: relative;
-	padding-inline-end: calc(
-		var(--ash-menu-trailing-inset) + var(--ash-menu-trailing-icon-size) +
+	--ash-menu-submenu-padding-end: calc(
+		var(--ash-menu-submenu-inset) + var(--ash-menu-trailing-icon-size) +
 			var(--ash-spacing-size20)
 	);
-}
-
-.ash-sessions-window .ash-chat-model-picker-footer {
-	position: relative;
-	border-top: 0;
-}
-
-.ash-sessions-window .ash-chat-model-picker-footer::before {
-	content: "";
-	position: absolute;
-	inset-inline: var(--ash-menu-divider-inset);
-	inset-block-start: 0;
-	border-block-start: var(--ash-action-widget-divider);
-	pointer-events: none;
+	min-width: 160px;
 }
 
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
@@ -179,10 +159,6 @@
 	.ash-context-view
 	.ash-menu:not(.ash-design-menu) {
 	--ash-menu-selectionBackground: var(--ash-menu-hoverBackground);
-}
-
-.ash-sessions-window .ash-menu .ash-button {
-	padding-inline: var(--ash-spacing-size120);
 }
 
 .ash-sessions-window

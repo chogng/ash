@@ -297,6 +297,7 @@
 		"--ash-workbench-background"
 	],
 	"others": [
+		"--ash-action-widget-pointer-focus-outline-color",
 		"--ash-activity-bar-icon-size",
 		"--ash-badge-style-badge-background",
 		"--ash-badge-style-badge-border",
@@ -399,6 +400,11 @@
 		"--ash-markdown-preview-font-family",
 		"--ash-markdown-preview-font-size",
 		"--ash-markdown-preview-line-height",
+		"--ash-menu-divider-gap",
+		"--ash-menu-divider-inset",
+		"--ash-menu-item-padding-end",
+		"--ash-menu-item-padding-inline",
+		"--ash-menu-padding",
 		"--ash-menu-style-background-color",
 		"--ash-menu-style-border-color",
 		"--ash-menu-style-foreground-color",
@@ -411,6 +417,8 @@
 		"--ash-menu-style-selection-foreground-color",
 		"--ash-menu-style-separator-color",
 		"--ash-menu-style-shadow-color",
+		"--ash-menu-submenu-inset",
+		"--ash-menu-submenu-padding-end",
 		"--ash-menubar-action-radius",
 		"--ash-menubar-hover-background",
 		"--ash-model-picker-position",

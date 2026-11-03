@@ -94,7 +94,6 @@
 }
 
 .ash-chat-model-picker-footer {
-	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	/* Clip the footer menu's background without clipping the popup's details flyout. */
 	border-radius: 0 0 var(--ash-cornerRadius-large)
 		var(--ash-cornerRadius-large);
