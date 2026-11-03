@@ -202,16 +202,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "chat-mode",
-      "file": "chat-mode.svg",
-      "rendering": "symbolic"
-    },
-    {
-      "id": "chat-mode-filled",
-      "file": "chat-mode-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "chat-session",
       "file": "chat-session.svg",
       "rendering": "symbolic"
@@ -329,6 +319,11 @@
     {
       "id": "command",
       "file": "command.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "comment",
+      "file": "comment.svg",
       "rendering": "symbolic"
     },
     {
@@ -1209,6 +1204,11 @@
     {
       "id": "quotes",
       "file": "quotes.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "rail-session",
+      "file": "rail-session.svg",
       "rendering": "symbolic"
     },
     {
