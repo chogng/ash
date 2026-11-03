@@ -49,6 +49,9 @@ import { createTestEditorServices } from '../../../../test/common/testEditorServ
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import type { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { openChatMarkdownLink } from '../../browser/widget/chatWidget.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import '../../browser/chat.shared.contribution.js';
 import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
@@ -74,6 +77,30 @@ test('Chat renders connection-qualified conversation links without permitting sc
 	anchor.click();
 	assert.deepEqual(opened, [link]);
 	assert.equal(widget.element.querySelector('a[href^="javascript:"]'), null);
+});
+
+test('Chat exposes explicit file references as streamed destinations complete', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const opened: string[] = [];
+	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestLink: (target: string) => opened.push(target) });
+	const href = 'file:///workspace/src/main.ts#L12';
+	const item = { id: 'stream', type: 'agentMessage' as const, transient: true };
+	widget.render([{ ...item, text: '[Source](file:///workspace/src/main' }]);
+	assert.equal(widget.element.querySelector('a[href^="file:"]'), null);
+
+	widget.render([{ ...item, text: `[Source](${href}) [Network](file://other-host/share) \`[Code](${href})\`` }]);
+	const anchors = widget.element.querySelectorAll<HTMLAnchorElement>('a[href^="file:"]');
+	assert.equal(anchors.length, 1);
+	assert.equal(anchors[0]!.textContent, 'Source');
+	anchors[0]!.click();
+	assert.deepEqual(opened, [href]);
+	const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
+	await openChatMarkdownLink(opened[0]!, undefined, { openEditor });
+	assert.deepEqual(openEditor.mock.calls[0]?.arguments, [
+		{ resource: URI.parse('file:///workspace/src/main.ts') },
+		{ selection: new Range(12, 1, 12, 1) },
+	]);
 });
 
 test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {

@@ -67,6 +67,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workben
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -209,6 +210,7 @@ function createInputServices(
 	services.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	registerTestDictationOnboarding(services);
 	// Command actions validate membership against the registry that owns this composer.
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
@@ -1170,7 +1172,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
 		services.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
-			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { },
+			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },
 		});
 		const identity = `untitled:${draft.untitledSessionId}`;
 		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -1501,7 +1503,9 @@ test('sending from one session preserves a later draft during first-session crea
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
-	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	const editorRoot = createCodeEditorServices(editorResources);
+	registerTestExtensionService(editorResources, editorRoot);
+	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
@@ -1519,6 +1523,7 @@ test('sending from one session preserves a later draft during first-session crea
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+		invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
 	});
 	editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
@@ -1789,7 +1794,8 @@ test('the New Chat slash command opens an untitled session', async () => {
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
-	const paneChat = createChatService(fake.api);
+	using paneChat = createChatService(fake.api);
+	services.registerInstance(IChatService, paneChat);
 	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
@@ -1831,7 +1837,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	assert.equal(focusedView, CHAT_VIEW_ID);
+	assert.equal(focusedView, undefined);
 
 	dom.window.close();
 });
@@ -2016,6 +2022,8 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
+	using chat = createChatService(api);
+	services.registerInstance(IChatService, chat);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({
 		instantiationService: services,
@@ -2083,7 +2091,10 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			using services = new InstantiationService();
 			using configuration = new WorkbenchConfigurationService({ source: JSON.stringify({ 'chat.experimental.sessionArchiveActionWording': wording }) });
 			using storage = createTestStorage();
-			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
+			const { api } = fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] });
+			using sessions = new SessionsManagementService(api);
+			using chat = createChatService(api);
+			services.registerInstance(IChatService, chat);
 			await sessions.initialize();
 			const draft = sessions.createUntitledSession('Unsent draft');
 			using hidden = new Emitter<IQuickInputHideEvent>();
@@ -4785,7 +4796,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
 	assert.equal(model.interaction, undefined);
 	fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
-	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, capabilities: interaction.request.request.capabilities } });
+	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
 	await nextTask();
 });
 
@@ -5239,6 +5250,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	commandServices.registerInstance(IWorkbenchLayoutService, layout);
 	const viewServices = resources.add(inputServices.createChild());
 	viewServices.registerInstance(IChatService, chat);
+	commandServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessions);
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1]));
 	viewServices.registerInstance(ICommandService, commands);

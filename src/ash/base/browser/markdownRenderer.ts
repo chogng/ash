@@ -46,6 +46,7 @@ export interface MarkdownSanitizerConfig {
 	readonly replaceWithPlaintext?: boolean;
 	readonly allowedTags?: { readonly override: readonly string[]; };
 	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
+	readonly resolveFileLink?: (href: string) => string | undefined;
 	readonly allowedLinkSchemes?: { readonly augment: readonly string[]; };
 	readonly remoteImageIsAllowed?: (uri: URI) => boolean;
 }
@@ -634,6 +635,9 @@ export function resolveMarkdownLinkTarget(href: string, markdown?: IMarkdownStri
 		if (url.protocol === `${Schemas.mailto}:`) {
 			return url.pathname.length > 0 ? url.toString() : undefined;
 		}
+		if (url.protocol === `${Schemas.file}:` && config?.resolveFileLink) {
+			return config.resolveFileLink(href);
+		}
 		if (url.protocol === `${Schemas.file}:` && (markdown?.baseUri?.scheme === Schemas.file || markdown?.isTrusted === true)) {
 			return url.toString();
 		}
@@ -821,7 +825,10 @@ function completeInlineTail(raw: string): string {
 	const codeDelimiter = findUnclosedBacktick(raw);
 	if (codeDelimiter) return codeDelimiter;
 	let completion = '';
-	if (raw.lastIndexOf('](') > raw.lastIndexOf(')')) {
+	const linkStart = raw.lastIndexOf('](');
+	if (linkStart > raw.lastIndexOf(')')) {
+		// A partial file destination can point at a different resource than the completed link.
+		if (/^\s*<?file:/iu.test(raw.slice(linkStart + 2))) return '';
 		completion = ')';
 	} else {
 		const openLabel = raw.lastIndexOf('[');

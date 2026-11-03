@@ -1,3 +1,10 @@
+import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
+import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
+
+import { ISearchService } from '../../../workbench/services/search/common/search.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { registerTestWorkbenchHostServices } from '../../../workbench/test/common/workbenchHostTestServices.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
@@ -7,7 +14,7 @@ import { IImageEditorService } from '../../../workbench/services/imageEditor/com
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -34,6 +41,7 @@ import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
@@ -272,7 +280,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	};
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	registerTestExtensionService(resources, editorRoot);
 	const services = resources.add(editorRoot.createChild());
+
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
@@ -285,6 +295,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+		invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -294,6 +305,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	using notifications = new TestNotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -337,6 +349,15 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+
+
+	paneServices.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
+		fileSearch: async () => ({ results: [], messages: [] }),
+		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
+	});
 	paneServices.registerSingleton(ISCMService, () => paneServices.createInstance(SCMService));
 	paneServices.registerInstance(IEditorService, {
 		...emptyEditorServiceState,

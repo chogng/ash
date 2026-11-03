@@ -1,4 +1,5 @@
 import './chatFindWidget.css';
+import '../../../common/widget/chatColors.js';
 import { addDisposableListener, isHTMLElement, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../../base/browser/ui/inputbox/inputbox.js';

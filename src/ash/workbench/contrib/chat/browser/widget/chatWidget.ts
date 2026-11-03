@@ -1,3 +1,5 @@
+import { Range } from '../../../../../editor/common/core/range.js';
+import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { readWorkspaceChanges } from './input/chatInput.js';
@@ -628,11 +630,21 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 export async function openChatMarkdownLink(
 	target: string,
 	openerService: IOpenerService | undefined,
-	editorService: IEditorService | undefined,
+	editorService: Pick<IEditorService, 'openEditor'> | undefined,
 ): Promise<void> {
 	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
 		if (openerService) await openerService.open(target, { allowCommands: true, fromUserGesture: true });
+		return;
+	}
+	if (/^file:/iu.test(target)) {
+		const reference = parseInlineFileReference(target);
+		if (reference && editorService) {
+			const selection = reference.selection;
+			const range = selection && new Range(selection.startLineNumber, selection.startColumn,
+				selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
+			await editorService.openEditor({ resource: reference.uri }, { selection: range });
+		}
 		return;
 	}
 	const resource = URI.parse(target);

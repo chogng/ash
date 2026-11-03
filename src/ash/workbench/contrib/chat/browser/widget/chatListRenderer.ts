@@ -1,3 +1,4 @@
+import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -495,7 +496,12 @@ export class ChatListItemRenderer extends Disposable {
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
 				actionHandler: this.options.onDidRequestLink ? (target: string) => this.options.onDidRequestLink!(target) : undefined,
-				sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
+				sanitizerConfig: {
+					allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] },
+					resolveFileLink: item.type === 'agentMessage' && this.options.onDidRequestLink
+						? (href: string) => parseInlineFileReference(href) ? href : undefined
+						: undefined,
+				},
 				imageResourceLoader: this.options.imageResourceLoader,
 			}));
 			disposables.add(markdown.onDidChangeHeight(() => {

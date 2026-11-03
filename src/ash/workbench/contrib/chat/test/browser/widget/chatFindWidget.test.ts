@@ -269,15 +269,23 @@ suite('Chat Find browser presentation', () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
 		await page.evaluate(() => {
-			const oldCode = Array.from({ length: 80 }, (_, index) => index === 69 ? 'const old_code_needle = 42;' : `const line${index} = ${index};`).join('\n');
+			const oldCode = Array.from({ length: 80 }, (_, index) => index === 69 ? 'const old_code_needle = "old_code_needle";' : `const line${index} = ${index};`).join('\n');
 			window.ashChatTranscriptIntegration.renderItems([
 				{ id: 'old-code', type: 'agentMessage', text: '```ts\n' + oldCode + '\n```', transient: false },
 				...Array.from({ length: 24 }, (_, index) => ({ id: `later-${index}`, type: 'agentMessage' as const, text: '```ts\n' + 'const ordinary = 1;\n'.repeat(60) + '```', transient: false })),
 			]);
 		});
 		await page.evaluate(() => window.ashChatTranscriptIntegration.showFind('old_code_needle'));
-		await expect(page.locator('.ash-chat-find-status')).toHaveText('1 of 1 matches');
-		await expect(page.locator('[data-item-id="old-code"] .ash-chat-find-code-current')).toBeVisible();
+		await expect(page.locator('.ash-chat-find-status')).toHaveText('1 of 2 matches');
+		const current = page.locator('[data-item-id="old-code"] .ash-chat-find-code-current');
+		const other = page.locator('[data-item-id="old-code"] .ash-chat-find-code-match');
+		await expect(current).toBeVisible();
+		await page.evaluate(() => {
+			document.body.style.setProperty('--ash-chat-findMatchBackground', 'rgb(230, 180, 70)');
+			document.body.style.setProperty('--ash-chat-findMatchHighlightBackground', 'rgb(190, 150, 60)');
+		});
+		await expect(current).toHaveCSS('background-color', 'rgb(230, 180, 70)');
+		await expect(other).toHaveCSS('background-color', 'rgb(190, 150, 60)');
 		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBeLessThan(12);
 		const match = await page.locator('[data-item-id="old-code"] .ash-chat-find-code-current').boundingBox();
 		const viewport = await page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport').boundingBox();

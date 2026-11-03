@@ -31,6 +31,8 @@
 		"--ash-charts-purple",
 		"--ash-charts-red",
 		"--ash-charts-yellow",
+		"--ash-chat-findMatchBackground",
+		"--ash-chat-findMatchHighlightBackground",
 		"--ash-chat-slashCommandBackground",
 		"--ash-chat-slashCommandForeground",
 		"--ash-chat-tabBackground",

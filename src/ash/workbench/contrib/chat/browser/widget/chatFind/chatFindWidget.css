@@ -50,11 +50,11 @@
 }
 
 ::highlight(ash-chat-find-match) {
-	background-color: var(--ash-search-matchBackground);
+	background-color: var(--ash-chat-findMatchHighlightBackground);
 }
 
 ::highlight(ash-chat-find-current-match) {
-	background-color: var(--ash-search-matchBackground);
+	background-color: var(--ash-chat-findMatchBackground);
 	text-decoration: underline;
 	text-decoration-color: var(--ash-focusBorder);
 	text-decoration-thickness: 2px;
@@ -66,10 +66,10 @@
 }
 
 .stanza-editor .ash-chat-find-code-match {
-	background: var(--ash-search-matchBackground);
+	background: var(--ash-chat-findMatchHighlightBackground);
 }
 
 .stanza-editor .ash-chat-find-code-current {
-	background: var(--ash-search-matchBackground);
+	background: var(--ash-chat-findMatchBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }

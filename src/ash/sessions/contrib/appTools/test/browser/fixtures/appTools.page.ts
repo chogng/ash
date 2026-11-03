@@ -142,7 +142,7 @@ const management = { sessions, untitledSessions: [], state: 'ready', onDidChange
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);
-resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
+resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
 services.registerInstance(IDialogService, resources.add(new DialogService()));
