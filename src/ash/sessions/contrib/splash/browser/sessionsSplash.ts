@@ -4,6 +4,7 @@ import { showPartsSplash } from '../../../../workbench/contrib/splash/browser/sp
 import { SessionsLayoutPolicy } from '../../../browser/layoutPolicy.js';
 
 export function showSessionsSplash(document: Document, splash: IPartsSplash): void {
+	splash = identifyLegacyChrome(splash);
 	const shell = showPartsSplash(document, splash);
 	shell.classList.add('ash-sessions-splash');
 	shell.style.color = splash.colorInfo.foreground;
@@ -11,6 +12,19 @@ export function showSessionsSplash(document: Document, splash: IPartsSplash): vo
 	const cached = splash.layoutInfo?.partBounds ?? [];
 	const regions = Array.from(shell.querySelectorAll<HTMLElement>(':scope > [data-part]'));
 	if (regions.length) {
+		const sidebar = cached.find(part => part.id === 'sidebar');
+		const titlebar = cached.find(part => part.id === 'titlebar');
+		const titlebarRegion = regions.find(region => region.dataset.part === 'titlebar');
+		const border = sidebar?.borders[1];
+		if (sidebar && titlebar && titlebarRegion && border?.width && border.style !== 'none'
+			&& titlebar.top + titlebar.height === sidebar.top) {
+			// The live titlebar continues the sidebar border with a pseudo-element.
+			const separator = document.createElement('div');
+			separator.className = 'ash-sessions-splash-titlebar-separator';
+			separator.style.left = `${sidebar.left + sidebar.width - titlebar.left - border.width}px`;
+			separator.style.borderRight = `${border.width}px ${border.style} ${border.color}`;
+			titlebarRegion.append(separator);
+		}
 		for (const region of regions) {
 			const part = cached.find(part => part.id === region.dataset.part);
 			if (part?.skeleton) {
@@ -54,6 +68,30 @@ export function showSessionsSplash(document: Document, splash: IPartsSplash): vo
 	shell.append(fallback);
 }
 
+function identifyLegacyChrome(splash: IPartsSplash): IPartsSplash {
+	const layout = splash.layoutInfo;
+	if (!layout || layout.partBounds.some(part => part.id)) return splash;
+	// Older desktop caches recorded paint and bounds without Part IDs.
+	const titlebar = layout.partBounds.find(part => part.top === 0 && part.left === 0 && part.width === layout.width);
+	if (!titlebar) return splash;
+	const sidebar = layout.partBounds.find(part => part.left === titlebar.left
+		&& part.top === titlebar.top + titlebar.height && part.width < titlebar.width && part.borders[1].width > 0);
+	const main = layout.partBounds.find(part => part.top === titlebar.top + titlebar.height
+		&& part.left === (sidebar ? sidebar.left + sidebar.width : titlebar.left));
+	return {
+		...splash,
+		layoutInfo: {
+			...layout,
+			partBounds: layout.partBounds.map(part => {
+				if (part === titlebar) return { ...part, id: 'titlebar' };
+				if (part === sidebar) return { ...part, id: 'sidebar' };
+				if (part === main) return { ...part, id: 'legacy-main' };
+				return part;
+			}),
+		},
+	};
+}
+
 /** Fill an uncached main region only after navigation has resolved the actual restore target. */
 export function showSessionsSplashForRestore(document: Document, command: string): void {
 	const shell = document.querySelector<HTMLElement>('#ash-parts-splash.ash-sessions-splash');
@@ -64,7 +102,7 @@ export function showSessionsSplashForRestore(document: Document, command: string
 		|| command === 'sessions.show.chatgptNative' || command === 'sessions.open.chatgptNative';
 	if (!projects && !agentChat && !desktopChat) return;
 	const part = agentChat ? 'sessions' : 'editor';
-	const region = shell.querySelector<HTMLElement>(`.ash-sessions-splash-uncached-main, [data-part="${part}"]`);
+	const region = shell.querySelector<HTMLElement>(`.ash-sessions-splash-uncached-main, [data-part="${part}"], [data-part="legacy-main"]`);
 	if (!region) return;
 	if (projects) appendCards(region);
 	else appendDefaultChat(region);

@@ -138,6 +138,43 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 	}
 });
 
+test('Agent Window uses the sidebar bounds and border from a cache without Part IDs', () => {
+	const dom = new JSDOM();
+	try {
+		const { document, innerWidth, innerHeight, performance } = dom.window;
+		Object.defineProperty(performance, 'mark', { value: () => undefined });
+		const emptyBorder = { width: 0, style: 'none', color: '#ffffff' };
+		const sidebarBorder = { width: 1, style: 'solid', color: '#dddddd' };
+		const paint = {
+			background: '#ffffff',
+			borders: Array.from({ length: 4 }, () => emptyBorder),
+			borderRadii: Array.from({ length: 4 }, () => [0, 0] as const),
+		};
+		showSessionsSplash(document, {
+			baseTheme: ColorScheme.Light,
+			colorInfo: { background: '#ffffff', foreground: '#000000' },
+			layoutInfo: {
+				version: 2, width: innerWidth, height: innerHeight,
+				partBounds: [
+					{ ...paint, left: 0, top: 0, width: innerWidth, height: 35 },
+					{ ...paint, left: 0, top: 35, width: 225, height: innerHeight - 35, borders: [emptyBorder, sidebarBorder, emptyBorder, emptyBorder] },
+					{ ...paint, left: 225, top: 35, width: innerWidth - 225, height: innerHeight - 35 },
+				],
+			},
+		});
+		const shell = document.querySelector('#ash-parts-splash')!;
+		assert.equal(shell.querySelector('.ash-sessions-splash-fallback'), null);
+		assert.equal(shell.querySelectorAll('[data-part="sidebar"] .ash-sessions-splash-sidebar > div').length, 3);
+		const separator = shell.querySelector<HTMLElement>('[data-part="titlebar"] .ash-sessions-splash-titlebar-separator')!;
+		assert.equal(separator.style.left, '224px');
+		assert.equal(separator.style.borderRightWidth, '1px');
+		showSessionsSplashForRestore(document, 'sessions.open.new');
+		assert.ok(shell.querySelector('[data-part="legacy-main"] .ash-sessions-splash-chat'));
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Agent Window splash requires the shared runtime storage registration', () => {
 	using themes = new TestThemeService(createColorTheme({ id: 'test', label: 'Test', colorScheme: ColorScheme.Light }));
 	using services = new InstantiationService();

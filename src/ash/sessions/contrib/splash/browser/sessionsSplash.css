@@ -15,6 +15,11 @@
 	display: flex;
 }
 
+.ash-sessions-splash-titlebar-separator {
+	position: absolute;
+	inset-block: 0;
+}
+
 .ash-sessions-splash-uncached-main {
 	flex: 1;
 	min-width: 0;
