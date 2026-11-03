@@ -1,3 +1,6 @@
+import { Event } from '../../../../../base/common/event.js';
+import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
+import { TextFileContentSource } from '../../../textfile/common/textFileService.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { strict as assert } from 'node:assert';
@@ -147,6 +150,60 @@ test('the renderer loads a portable Extensions theme and rejects invalid declara
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.colorScheme, ColorScheme.Light);
 	}
 	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId), undefined);
+});
+
+test('a missing or denied checkout theme resource falls back to one complete package theme', async () => {
+	const extensionId = 'ash.checkout-theme';
+	const themeId = 'extension-ash-checkout-theme-example';
+	const manifestJson = JSON.stringify({
+		name: 'checkout-theme', publisher: 'ash', version: '1.0.0',
+		contributes: { themes: [{ id: 'Example', label: 'Example', uiTheme: 'vs-dark', path: 'themes/theme.json' }] },
+	});
+	const packageReads: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({
+			generation: 7, diagnostics: [], extensions: [{
+				id: extensionId, name: 'checkout-theme', publisher: 'ash', version: '1.0.0', displayName: 'Checkout Theme', sourceKind: 'builtIn',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`,
+				packageSha256: `sha256:${'a'.repeat(64)}`,
+			}],
+		}),
+		resources: new ExtensionResourceLoaderService(async ({ generation, path }) => {
+			assert.equal(generation, 7);
+			packageReads.push(path);
+			return new TextEncoder().encode(path === 'themes/theme.json'
+				? '{"include":"./package-base.json"}'
+				: '{"colors":{"editor.background":"#123456"}}');
+		}),
+	};
+	let deniedPath: string | undefined = 'theme.json';
+	let denial = FileSystemProviderErrorCode.NoPermissions;
+	let checkoutTheme = '{"include":"./checkout-base.json","colors":{"editor.background":"#654321"}}';
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) }, { [extensionId]: 'file:///checkout' });
+	service.watchSourceSaves({
+		onDidSave: Event.None,
+		onDidChangeFiles: Event.None,
+		async resolve({ resource }) {
+			if (resource.path.endsWith(`/${deniedPath}`)) throw createFileSystemProviderError('Checkout resource unavailable', denial);
+			const text = resource.path.endsWith('/theme.json') ? checkoutTheme : '{}';
+			return { resource, text, source: TextFileContentSource.FileSystem, revision: undefined, encoding: 'utf8' };
+		},
+		async save() { throw new Error('Unexpected save'); },
+	});
+	for (const code of [FileSystemProviderErrorCode.NoPermissions, FileSystemProviderErrorCode.FileNotFound]) {
+		denial = code;
+		await service.reload();
+		assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#123456');
+		assert.deepEqual(packageReads.splice(0), ['themes/theme.json', 'themes/package-base.json']);
+		deniedPath = 'checkout-base.json';
+	}
+	deniedPath = undefined;
+	await service.reload();
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#654321');
+	checkoutTheme = '{ invalid';
+	await assert.rejects(service.reload());
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#654321');
+	assert.deepEqual(packageReads, []);
 });
 
 test('independent themes load concurrently with includes and publish once in manifest order', async () => {

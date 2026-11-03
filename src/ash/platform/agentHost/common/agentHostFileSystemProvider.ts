@@ -505,7 +505,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (this.isConfiguration(resource)) return (await this.configurationFiles!.read(resource)).stat;
 		let result;
 		try { result = await this.onFileTarget(resource, target => this.api.getMetadata(target), assertScope); }
-		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
+		catch (error) { throw fileReadError(resource, error); }
 		return {
 			resource,
 			kind: fileKind(result.fileType),
@@ -580,9 +580,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			const result = await this.onFileTarget(resource, target => this.api.readFile({ ...target, encoding, ...options }));
 			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
 		} catch (error) {
-			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
 			if (error instanceof AppServerRemoteError && error.errorName === 'FileSystemInvalidText') throw createFileSystemProviderError(localize('files.invalidTextEncoding', 'The file is not text in the selected encoding.'), FileSystemProviderErrorCode.FileNotText);
-			throw error;
+			throw fileReadError(resource, error);
 		}
 	}
 
@@ -983,6 +982,14 @@ function isRevisionConflict(error: unknown): boolean {
 
 function isFileNotFound(error: unknown): boolean {
 	return error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound';
+}
+
+function fileReadError(resource: URI, error: unknown): unknown {
+	if (isFileNotFound(error)) return new FileNotFoundError(resource);
+	if (error instanceof AppServerRemoteError && (error.errorName === 'PermissionRequired' || error.errorName === 'FileSystemPermissionDenied')) {
+		return createFileSystemProviderError(error, FileSystemProviderErrorCode.NoPermissions);
+	}
+	return error;
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;

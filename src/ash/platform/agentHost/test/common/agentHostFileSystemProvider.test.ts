@@ -11,9 +11,11 @@ import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { createDisconnectedFileApi } from '../../../files/browser/fileApi.js';
 import type { IFileApi, IFileSystemDirectory } from '../../../files/common/fileApi.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../files/common/files.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { createDisconnectedResourceApi } from '../../browser/appServerApi.js';
 import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../common/agentHostFileSystemProvider.js';
+import { AppServerRemoteError } from '../../common/appServerError.js';
 import type { IResourceApi } from '../../common/appServerApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 
@@ -35,6 +37,17 @@ function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, r
 
 suite('Agent Host filesystem authority routes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('surfaces scoped filesystem denials as file provider permissions errors', async () => {
+		const workspace = URI.file('/workspace');
+		using provider = new AgentHostFileSystemProvider(connection(workspace, 'primary', {
+			resolvePath: async () => { throw new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' }); },
+			readFile: async () => { throw new AppServerRemoteError(-32043, 'FileSystemPermissionDenied', { kind: 'FileSystemPermissionDenied' }); },
+		}));
+		const isPermissionError = (error: Error) => toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.NoPermissions;
+		await assert.rejects(provider.stat(URI.file('/checkout/themes/theme.json')), isPermissionError);
+		await assert.rejects(provider.readTextFile(URI.joinPath(workspace, 'restricted.json'), 'utf8'), isPermissionError);
+	});
 
 	test('unbound workspace directories cancel file reads until authorization recovers', async () => {
 		const workspace = URI.file('/workspace');
