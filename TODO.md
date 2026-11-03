@@ -13,7 +13,12 @@
 - [ ] **产品基础设施迁入 Rust** · 沿实际消费者迁移日志、存储、文件与网络 IO、进程和后台资源管理。每个切片同时删除旧 Node owner、注册与线上消费者，覆盖启动失败、取消、重连、多窗口及退出；日志落盘不能依赖它所诊断的 App Server 业务连接。Electron 仅保留尚未迁走的宿主适配。
 - [ ] **扩展与工具运行时去 Node** · 逐项核对扩展、语言服务器及 Electron run-as-Node 的消费者，将已需能力迁到 Rust、Rust/V8、浏览器 Worker 或原生程序。保留作者契约、权限、调试和资源回收语义；无法等价支持的 Node API 依赖须明确迁移或支持范围，不能通过兼容层继续隐式启动 Node。
 - [ ] **Rust 产品宿主替换 Electron／Node 启动链** · 闭合窗口、浏览器嵌入、系统集成、原生 IPC、更新、打包和跨平台生命周期，再替换过渡宿主。日志等 Rust 基础模块由 Rust 宿主直接拥有；过渡期内部 helper 随之退出。验收默认产品启动与主要工作流不加载或启动 Node，不能以仍需 Electron Main 的实现宣称完成。
+  - 内置浏览器按基础网页浏览验收：打开网页、站内跳转、前进／后退、刷新，以及常见网页的输入和登录。Agent 浏览器自动化和 Electron 专用调试集成不作为退场前置。外部网页使用独立的浏览视图和存储分区，与 Ash 工作台的认证及宿主 IPC 隔离。普通浏览器中的 Ash 继续走独立 Web 入口。
+  - Windows Rust 预览可选 `ASH_NATIVE_DESKTOP_VIEW=composition`，由 Rust 持有 DirectComposition 视觉树。125% 显示缩放下已验证真实工作台渲染、鼠标点击、顶栏拖动、右边缘缩放和文件保存；编辑器采样区域与子窗口版逐像素一致。三个窗口按钮已通过 Win32 命中与鼠标操作实测，Windows 11 23H2 悬停最大化按钮仍未弹出贴靠布局。切换默认宿主前须补齐贴靠、系统无障碍、输入与缩放矩阵验收。实机记录在 `.build/ash-native-gpu-probe/composition-comparison/validation.json` 和 `.build/ash-native-gpu-probe/native-caption/validation.json`。
+  - 独立 AppWindow 原型已在 Windows 11 23H2、125% 缩放下把系统按钮合入真实 Ash 工作台。系统贴靠浮层和三个按钮的 UI Automation 识别均已验证。移除旧自绘按钮的鼠标消息拦截后，系统按钮的最小化、最大化、还原和关闭也已通过实机测试。并入正式宿主前须接入标题栏布局对系统保留区和高度的动态更新，并闭合 Windows App Runtime 打包与缺失时的启动策略。本机 bootstrapper 返回 `0x80670016`，原型通过系统的动态包依赖加载已安装的 1.8 运行时。实机截图在 `.build/ash-native-gpu-probe/appwindow-caption/`，按钮操作记录在 `.build/ash-native-gpu-probe/appwindow-caption-actions/validation.json`。
 - [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
+
+  - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
 
 ## Rust 后端生命周期 · Windows 验收
 
@@ -39,7 +44,11 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
 - [ ] **验收** · 将编辑器和会话分别弹出到辅助窗口，重复上述缩放与最大化恢复；检查编辑内容、状态栏与根容器边界对齐，切换紧凑模式后菜单、键盘操作和焦点恢复正常。记录 Windows 版本、显示缩放、应用缩放、窗口类型及复现步骤；验收通过后移除此节。
 
-同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。Windows 分数缩放实机尚未验证；本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
+同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。macOS 本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
+
+2026-11-03 Windows 11 23H2（22631）实机验收未通过。IDE 主窗在 100%、125%、150%、200% 连续拖动四边和四角时均测到右侧标题栏按钮短时偏移。最大化、恢复及应用缩放 0、+1、−1 的稳定状态下，主窗与原生客户区对齐。辅助编辑器在 125% 的右边和底边、150% 的右边、200% 的底边各出现 1 个物理像素的越界。紧凑模式键盘切换和焦点恢复通过，菜单和 Agents 会话弹窗仍待验收。复现步骤、采样日志和 IDE 录像索引见 [Windows 验收记录](.build/ash-playwright-mcp/windows-resize/validation.json)。
+
+主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
 
 ## Connectors 面板 · 点击后窗口无响应
 

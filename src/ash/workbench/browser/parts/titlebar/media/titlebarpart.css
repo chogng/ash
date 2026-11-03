@@ -20,13 +20,94 @@
 	gap: 8px;
 }
 
-.ash-web-titlebar-overlay {
+.ash-web-titlebar-overlay,
+.ash-native-titlebar {
 	-webkit-app-region: drag;
 }
 
 .ash-web-titlebar-overlay .ash-titlebar-interactive-region,
-.ash-web-titlebar-overlay .ash-titlebar-command-center {
+.ash-web-titlebar-overlay .ash-titlebar-command-center,
+.ash-native-titlebar
+	:is(
+		.ash-workbench-part-title,
+		.ash-titlebar-center,
+		.ash-workbench-part-content
+	) {
 	-webkit-app-region: no-drag;
+}
+
+.ash-native-window-controls {
+	display: flex;
+	align-self: stretch;
+	margin-inline: var(--ash-spacing-size80) -12px;
+}
+
+.ash-native-window-control {
+	display: grid;
+	place-items: center;
+	width: 36px;
+	padding: 0;
+	border: 0;
+	color: inherit;
+	background: transparent;
+}
+
+.ash-native-window-control:hover {
+	background: var(--ash-commandCenter-hoverBackground);
+}
+
+.ash-native-window-control:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-native-window-resize-handle {
+	position: fixed;
+	z-index: calc(var(--ash-z-index-sash, 35) + 2);
+	width: 5px;
+	height: 5px;
+	-webkit-app-region: no-drag;
+}
+
+.ash-native-window-resize-handle[hidden] {
+	display: none;
+}
+
+.ash-native-window-resize-handle[data-edge^="north"] {
+	top: 0;
+}
+.ash-native-window-resize-handle[data-edge^="south"] {
+	bottom: 0;
+}
+.ash-native-window-resize-handle[data-edge$="east"] {
+	right: 0;
+}
+.ash-native-window-resize-handle[data-edge$="west"] {
+	left: 0;
+}
+.ash-native-window-resize-handle:is([data-edge="north"], [data-edge="south"]) {
+	left: 5px;
+	right: 5px;
+	width: auto;
+	cursor: ns-resize;
+}
+.ash-native-window-resize-handle:is([data-edge="east"], [data-edge="west"]) {
+	top: 5px;
+	bottom: 5px;
+	height: auto;
+	cursor: ew-resize;
+}
+.ash-native-window-resize-handle:is(
+	[data-edge="north-east"],
+	[data-edge="south-west"]
+) {
+	cursor: nesw-resize;
+}
+.ash-native-window-resize-handle:is(
+	[data-edge="north-west"],
+	[data-edge="south-east"]
+) {
+	cursor: nwse-resize;
 }
 
 .ash-web-titlebar-overlay .ash-titlebar-center {

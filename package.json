@@ -127,6 +127,7 @@
     "build:web:full": "cross-env ASH_WEB_APP_SERVER=1 node build/desktop/build.ts web",
     "start:web": "cross-env ASH_WEB_APP_SERVER=0 node build/desktop/launch/web.ts .build/desktop/web/ash 5173",
     "start:web:full": "cross-env ASH_WEB_APP_SERVER=1 node build/desktop/launch/web.ts .build/desktop/web/ash 5174",
+    "dev:desktop:native": "node build/desktop/launch/native.ts",
     "dev:rust": "node build/desktop/watch-app-server.ts",
     "debug:backend": "node build/python.ts -B build/desktop/debug.py",
     "debug:backend:status": "node build/python.ts -B build/desktop/debug.py --status",
