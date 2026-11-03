@@ -94,8 +94,8 @@
 	display: flex;
 	flex: 1;
 	min-width: 0;
-	justify-content: center;
 	align-items: center;
+	padding-inline-start: var(--ash-spacing-size40);
 }
 
 .ash-sessions-titlebar-page-content:not(:empty)

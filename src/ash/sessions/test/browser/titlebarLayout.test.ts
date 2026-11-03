@@ -37,7 +37,8 @@ suite('Sessions native titlebar layout', () => {
 		await page.reload();
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.showAttentionDraft());
-		await expect(page.locator('.ash-sessions-titlebar-widget button')).toHaveAccessibleName(/Show Session History/);
+		await expect(page.locator('.ash-sessions-titlebar-title button')).toBeVisible();
+		await expect(attention).toHaveCount(0);
 	});
 
 	test('the attention list opens the blocked session on its host and clears the visible item', async () => {
@@ -58,18 +59,74 @@ suite('Sessions native titlebar layout', () => {
 		await expect(attention).toHaveCount(0);
 	});
 
-	test('the workspace button opens Session History from the keyboard in Chinese', async () => {
+	test('the titlebar renames the active session in Chinese', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host B'));
 		const widget = page.locator('.ash-sessions-titlebar-widget');
-		const button = widget.getByRole('button', { name: '显示会话历史（无工作区）' });
+		const button = widget.getByRole('button', { name: '重命名会话（Task from Host B）' });
+		const input = widget.getByRole('textbox', { name: '会话名称' });
+		const titlebarContent = page.locator('.ash-sessions-titlebar-session-content');
 		await expect(button).toBeVisible();
-		await button.focus();
+		const leftInset = (await button.boundingBox())!.x - (await titlebarContent.boundingBox())!.x;
+		expect(leftInset).toBeCloseTo(4, 0);
+		await expect(button.locator('.ash-icon')).toHaveCount(0);
+		await button.hover();
+		await expect(button).toHaveCSS('padding', '2px 4px');
+		const titleRadius = await button.evaluate(element => getComputedStyle(element).borderTopLeftRadius);
+		const titleTextLeft = await button.locator('.ash-button-label').evaluate(label => label.getBoundingClientRect().left);
 		await button.press('Enter');
-		await expect(page.locator('.ash-quick-input-host:visible')).toHaveCount(1);
-		await page.keyboard.press('Escape');
+		await expect(input).toHaveValue('Task from Host B');
+		await expect(input).toHaveCSS('padding', '2px 4px');
+		await expect(input).toHaveCSS('border-top-left-radius', titleRadius);
+		const inputTextLeft = await input.evaluate(element => {
+			const style = getComputedStyle(element);
+			return element.getBoundingClientRect().left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+		});
+		expect(inputTextLeft).toBeCloseTo(titleTextLeft, 0);
+		await expect(input).toBeFocused();
 		await expect(page.locator('.ash-quick-input-host:visible')).toHaveCount(0);
+		expect((await input.boundingBox())!.x - (await titlebarContent.boundingBox())!.x).toBe(leftInset);
+		const initialWidth = (await input.boundingBox())!.width;
+		await input.fill('短');
+		expect((await input.boundingBox())!.width).toBeLessThan(initialWidth);
+		await input.fill('取消此名称'.repeat(40));
+		const expandedBounds = (await input.boundingBox())!;
+		const availableBounds = (await titlebarContent.boundingBox())!;
+		expect(expandedBounds.width).toBeGreaterThan(initialWidth);
+		expect(expandedBounds.x + expandedBounds.width).toBeLessThanOrEqual(availableBounds.x + availableBounds.width);
+		await input.fill('取消此名称');
+		await input.press('Escape');
+		await expect(button).toBeFocused();
+		const actions = widget.getByRole('button', { name: '更多会话操作' });
+		const menuBounds = (await actions.boundingBox())!;
+		expect(menuBounds.width).toBe(menuBounds.height);
+		await actions.press('Enter');
+		await expect(actions).toHaveAttribute('aria-expanded', 'true');
+		await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+		await expect(actions).toHaveAttribute('aria-expanded', 'false');
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('Task from Host B');
+		await input.press('Escape');
+		await expect(button).toBeFocused();
+		await button.click();
+		const longTitle = '新的会话名称'.repeat(35);
+		await input.fill(longTitle);
+		await input.press('Enter');
+		const renamedButton = widget.getByRole('button', { name: `重命名会话（${longTitle}）` });
+		await expect(renamedButton).toBeVisible();
+		await expect(renamedButton).not.toBeFocused();
+		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]')).toContainText(longTitle);
+		const titleLabel = renamedButton.locator('.ash-button-label');
+		expect(await titleLabel.evaluate(label => label.scrollWidth > label.clientWidth)).toBe(true);
+		await renamedButton.hover();
+		const tooltip = page.getByRole('tooltip').filter({ hasText: longTitle });
+		await expect(tooltip).toBeVisible();
+		await expect(tooltip).toHaveCSS('overflow-wrap', 'anywhere');
+		const renamedHosts = await page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls
+			.filter(call => call.method === 'rename').map(call => call.host));
+		expect(renamedHosts).toEqual(['Host B']);
 	});
 
 	for (const os of ['windows', 'mac']) {

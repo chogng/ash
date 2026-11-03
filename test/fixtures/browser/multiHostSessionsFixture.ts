@@ -98,6 +98,11 @@ export function installMultiHostSessionsFixture(): { open(host: string, sideBySi
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
 					list: async () => [session], listAgents: async () => [], currentWorkspace: (): SessionWorkspaceSelection => ({ type: 'current' }),
 					readCatalog: async () => session, subscribe: async () => session, unsubscribe: async () => { },
+					renameSession: async (target: ISession, title: string) => {
+						record('rename', target.sessionId, 'same');
+						session = { ...session, title };
+						return session;
+					},
 					create: async () => ({ session, threadId: 'same' }), setModel: async () => { },
 					forkChat: nestedDraft ? async (sessionId: string, source: string, title: string) => {
 						record('fork', sessionId, source);
