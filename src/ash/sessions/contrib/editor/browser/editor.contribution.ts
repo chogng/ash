@@ -1,5 +1,4 @@
-import { canceled, isCancellationError } from '../../../../base/common/errors.js';
-import { Direction } from '../../../../base/browser/ui/grid/grid.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -7,7 +6,8 @@ import { resolveCommandsContext } from '../../../../workbench/browser/parts/edit
 import { AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../workbench/common/contextkeys.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
-import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditor } from '../../../../workbench/contrib/terminal/browser/terminalEditor.js';
 import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import type { SessionsPart } from '../../../browser/parts/sessionsPart.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -37,7 +37,7 @@ const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDe
 const terminalTool = ContextKeyExpr.equals('sessions.editorTool', 'terminal');
 const nonTerminalTool = ContextKeyExpr.notEquals('sessions.editorTool', 'terminal');
 const splitTerminalDown = 'ash.sessions.splitTerminalDown';
-const splitTerminalRight = 'ash.sessions.splitTerminalRight';
+const closeTerminalPane = 'ash.sessions.closeTerminalPane';
 
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
@@ -59,16 +59,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				if ('command' in item && navigationCommands.has(item.command.id)) { continue; }
 				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
 				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
-				if ('command' in item && item.command.id === 'workbench.action.splitEditor' && item.alt) {
-					const down = item.alt.id === 'workbench.action.splitEditorRight';
-					const precondition = AppServerAvailableContext.isEqualTo(true);
-					mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
-						...item,
-						group: '9_layout',
-						when: ContextKeyExpr.and(item.when, terminalTool),
-						command: { ...item.command, id: down ? splitTerminalDown : splitTerminalRight, precondition },
-						alt: { ...item.alt, id: down ? splitTerminalRight : splitTerminalDown, precondition },
-					}));
+				if ('command' in item && item.command.id === 'workbench.action.splitEditor') {
 					mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
 						...item, group: '9_layout', when: ContextKeyExpr.and(item.when, nonTerminalTool),
 					}));
@@ -121,26 +112,40 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
 			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
-		for (const [id, direction] of [[splitTerminalDown, Direction.Down], [splitTerminalRight, Direction.Right]] as const) {
-			this._register(CommandsRegistry.register(id, async (accessor, ...args) => {
-				const { groupedEditors: [source], preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
-				if (!source?.editors.some(input => input instanceof TerminalEditorInput)) return;
-				const terminals = accessor.get(ITerminalService);
-				const destination = editor.addGroup(source.group.id, direction);
-				try {
-					const instance = await terminals.createTerminal({ location: { viewColumn: destination.id, preserveFocus } });
-					// The target can disappear during profile selection. Discard any fallback placement.
-					if (!editor.groups.includes(destination) || !destination.inputs.some(input =>
-						input instanceof TerminalEditorInput && input.resource.path === instance.resource?.path)) {
-						await terminals.closeTerminal(instance);
-						throw canceled();
-					}
-				} catch (error) {
-					if (editor.groups.includes(destination) && destination.inputs.length === 0) await editor.removeGroup(destination);
-					throw error;
-				}
-			}));
-		}
+		this._register(CommandsRegistry.register(splitTerminalDown, async (accessor, ...args) => {
+			const { groupedEditors: [source], preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const input = source?.group.activeInput;
+			if (input instanceof TerminalEditorInput) await accessor.get(ITerminalEditorService).splitPane(input, preserveFocus);
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			command: {
+				id: splitTerminalDown,
+				title: localize2('workbench.splitEditorDown', 'Split Down'),
+				icon: Lxicon.splitVertical,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			},
+			when: ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool),
+			group: '9_layout',
+			order: 100000,
+		}));
+		this._register(CommandsRegistry.register(closeTerminalPane, async (accessor, ...args) => {
+			const { groupedEditors: [source] } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const pane = editor.groups.find(group => group.id === source?.group.id)?.activePane;
+			if (!(pane instanceof TerminalEditor)) return;
+			const instance = pane.getControl();
+			if (instance) await accessor.get(ITerminalService).safeDisposeTerminal(instance);
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			command: {
+				id: closeTerminalPane,
+				title: localize2('terminal.editor.closePane', 'Close Current Pane'),
+				icon: Lxicon.close,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			},
+			when: ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool, ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 0)),
+			group: '9_layout',
+			order: 100001,
+		}));
 		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', arg => {
 			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
 			if (pane instanceof SessionChangesEditor) { pane.toggleFileList(); }

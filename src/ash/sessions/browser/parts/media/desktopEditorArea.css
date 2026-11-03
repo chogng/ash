@@ -11,6 +11,62 @@
 	box-sizing: border-box;
 }
 
+.ash-desktop-editor-area .ash-editor-tabs-and-actions.ash-editor-group-header {
+	background: var(
+		--ash-editor-group-header-surface,
+		var(--ash-editor-background)
+	);
+}
+
+.ash-desktop-editor-area
+	.ash-editor-title-control:has(> .ash-editor-group-header)::after {
+	content: none;
+}
+
+.ash-desktop-editor-area .ash-editor-group-header .ash-tab-list-inset {
+	--ash-tabList-activeBackground: color-mix(
+		in srgb,
+		var(--ash-editorGroupHeader-tabsBackground) 94%,
+		var(--ash-foreground)
+	);
+	--ash-tab-list-inactive-background: transparent;
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+}
+
+.ash-desktop-editor-area
+	.ash-editor-group-header
+	.ash-tab-list-inset
+	.ash-tab-list-scroll-content
+	> .ash-action-bar {
+	padding-inline-start: 0;
+}
+
+.ash-desktop-editor-area .ash-editor-group-header .ash-tab-list-inset .ash-tab {
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-desktop-editor-area
+	.ash-editor-group-header
+	.ash-tab-list-inset
+	.ash-tab:not(.checked, .selected):hover {
+	background-color: var(--ash-editorGroupHeader-tabsBackground);
+}
+
+.ash-desktop-editor-area
+	.ash-editor-group-header
+	.ash-tab-list-inset
+	.ash-tab.checked {
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-desktop-editor-area [data-editor-tool="terminal"] {
+	--ash-editor-group-header-surface: var(
+		--ash-terminal-background,
+		var(--ash-editor-background)
+	);
+}
+
 .ash-desktop-editor-area
 	.ash-tool-editor-workspace
 	> .ash-workbench-part-frame {

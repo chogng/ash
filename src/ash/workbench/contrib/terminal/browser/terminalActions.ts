@@ -1,6 +1,8 @@
 import { getWindow } from '../../../../base/browser/dom.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
 import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { TerminalEditor } from './terminalEditor.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { TerminalChatCommandId } from '../terminalContribChatExports.js';
@@ -413,6 +415,11 @@ export function registerTerminalActions(): void {
 				});
 			}
 			override run(accessor: ServicesAccessor): void {
+				const pane = accessor.get(IEditorService).activeEditorPane;
+				if (pane instanceof TerminalEditor && pane.getControl() === accessor.get(ITerminalService).activeInstance) {
+					pane.focusAdjacentPane(direction === 'next' ? 1 : -1);
+					return;
+				}
 				const group = accessor.get(ITerminalGroupService).activeGroup;
 				if (direction === 'next') group?.focusNextPane();
 				else group?.focusPreviousPane();

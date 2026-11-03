@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Direction } from '../../../../../base/browser/ui/grid/grid.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -13,7 +12,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { ITerminalService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
@@ -193,53 +192,34 @@ test('editor contributions follow layout state, serialize open commands without 
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 		assert.equal(changesAction().label, '更改');
+		contextKeys.setContext('sessions.editorTool', 'terminal');
+		assert.equal(desktopTitle.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.splitTerminalDown')?.label, '向下拆分');
+		contextKeys.setContext('groupEditorsCount', 1);
+		assert.equal(desktopTitle.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.closeTerminalPane')?.label, '关闭当前窗格');
 	} finally {
 		resetNlsResolver();
 	}
 });
 
-test('the Terminal title split opens a fresh shell below the selected group and cleans up on launch failure', async () => {
+test('the Terminal title split targets the current tab without creating an editor group', async () => {
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
 	contextKeys.setContext('sessions.editorTool', 'terminal');
 	contextKeys.setContext('appServerAvailable', true);
 	services.registerInstance(IContextKeyService, contextKeys);
-	const unavailable = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
-	const source = { id: 1, activeInput: unavailable, inputs: [unavailable], selectedInputs: [unavailable] };
-	const destination = { id: 2, inputs: [] as TerminalEditorInput[] };
-	const groups: { id: number; inputs: TerminalEditorInput[]; }[] = [source];
-	let failLaunch = false;
-	services.registerInstance(IEditorGroupsService, { getGroup: (id: number) => groups.find(group => group.id === id) } as IEditorGroupsService);
+	const input = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
+	const source = { id: 1, activeInput: input, inputs: [input], selectedInputs: [input] };
+	services.registerInstance(IEditorGroupsService, { getGroup: () => source } as unknown as IEditorGroupsService);
 	services.registerInstance(ILayoutService, { isPartVisible: () => false, onDidLayoutMainContainer: Event.None } as unknown as IAgentWorkbenchLayoutService);
-	services.registerInstance(IEditorPart, {
-		groups,
-		onDidChangeEditors: Event.None,
-		addGroup(id: number, direction: Direction) {
-			assert.equal(id, source.id);
-			assert.equal(direction, Direction.Down);
-			groups.push(destination);
-			return destination;
+	services.registerInstance(IEditorPart, { groups: [source], onDidChangeEditors: Event.None } as unknown as IEditorPart);
+	let splitInput: TerminalEditorInput | undefined;
+	services.registerInstance(ITerminalEditorService, {
+		async splitPane(input: TerminalEditorInput, preserveFocus: boolean) {
+			assert.equal(preserveFocus, false);
+			splitInput = input;
 		},
-		async removeGroup(group: typeof destination) {
-			assert.equal(group, destination);
-			groups.splice(groups.indexOf(group), 1);
-			return true;
-		},
-	} as unknown as IEditorPart);
-	const fresh = new TerminalEditorInput(URI.parse('vscode-terminal:/test/2'));
-	services.registerInstance(ITerminalService, {
-		async createTerminal(options: unknown) {
-			assert.deepEqual(options, { location: { viewColumn: destination.id, preserveFocus: false } });
-			if (failLaunch) throw new Error('launch failed');
-			destination.inputs.push(fresh);
-			return { resource: fresh.resource };
-		},
-	} as ITerminalService);
-	using splitMenu = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
-		command: { id: 'workbench.action.splitEditor', title: 'Split Down' },
-		alt: { id: 'workbench.action.splitEditorRight', title: 'Split Right' },
-	});
+	} as ITerminalEditorService);
 	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, { supportsDetails: true }, {
 		isDocumentContent: true,
 		documentContent: observableValue('document content', true),
@@ -250,11 +230,6 @@ test('the Terminal title split opens a fresh shell below the selected group and 
 		.find(action => action instanceof MenuItemAction && action.id === 'ash.sessions.splitTerminalDown');
 	assert.ok(split instanceof MenuItemAction);
 	assert.equal(split.label, 'Split Down');
-	failLaunch = true;
-	await assert.rejects(split.run(), /launch failed/);
-	assert.deepEqual(groups, [source]);
-	failLaunch = false;
 	await split.run();
-	assert.deepEqual(source.inputs, [unavailable]);
-	assert.deepEqual(destination.inputs, [fresh]);
+	assert.equal(splitInput, input);
 });
